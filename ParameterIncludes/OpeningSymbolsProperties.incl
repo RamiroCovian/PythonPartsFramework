@@ -1,0 +1,57 @@
+<Include>
+    <Parameter>
+        <Name>OpeningObjectExp</Name>
+        <Text>Opening object</Text>
+        <ValueType>Expander</ValueType>
+
+        <Parameter>
+            <Name>DynamicSymbolListIndexRow</Name>
+            <Text>Symbol index</Text>
+            <ValueType>Row</ValueType>
+            <Value>OVERALL:1</Value>
+
+            <Parameter>
+                <Name>SmartSymbolInfoPictureSymbol</Name>
+                <Text>Select the position you want to modify. You can
+select several positions to remove or replace
+existing symbols. The last available position
+is always empty. Select it to add an additional
+symbol.</Text>
+                <Value>AllplanSettings.PictResPalette.eHotinfo</Value>
+                <ValueType>Picture</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>SymbolIndex</Name>
+                <Text></Text>
+                <Value>1</Value>
+                <ValueType>MultiIndex</ValueType>
+                <MinValue>1</MinValue>
+                <MaxValue>len(SmartSymbolGroup) + 1</MaxValue>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>SmartSymbolGroup</Name>
+            <Text>Select symbol</Text>
+            <Value>[_]</Value>
+            <ValueType>DynamicList(String)</ValueType>
+            <ValueDialog>OpeningSymbolDialog</ValueDialog>
+            <ValueIndexName>SymbolIndex</ValueIndexName>
+        </Parameter>
+        <Parameter>
+            <Name>OpeningSymbolTierIndex</Name>
+            <Text>Tier index</Text>
+            <Value>1</Value>
+            <ValueType>Integer</ValueType>
+            <MinValue>1</MinValue>
+            <MaxValue>ElementTierCount</MaxValue>
+        </Parameter>
+        <Parameter>
+            <Name>OpeningSymbolRefPntIndex</Name>
+            <Text>Reference point</Text>
+            <Value>AllplanPalette.RefPointPosition.eBottomLeft</Value>
+            <ValueType>RefPointButton</ValueType>
+            <EnumList2>AllplanPalette.RefPointButtonType.eCorners</EnumList2>
+        </Parameter>
+    </Parameter>
+</Include>

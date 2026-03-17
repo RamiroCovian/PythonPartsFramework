@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>DENHorInt</Name>
+        <Text>DenHorInt</Text>
+        <Value>This is a string</Value>
+        <ValueType>String</ValueType>
+    </Parameter>
+
+
+    <!-- Llista de indexació a la BarresHoritzontals-->
+    <Parameter>
+        <Name>nListBarresHor</Name>
+        <Text>Posicio,nTotal</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Integer,Integer)</ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Posicio,nTotal</FieldNames>
+        </NamedTuple>
+        <Visible> False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <!-- valors Barra Horitzontal Intermitja-->
+    <Parameter>
+        <Name>dadesTubHor</Name>
+        <Text>Mostrar, Ample, Altura, Llargada, LlargadaAut, Gruix,
+            desplX, desplY,
+            mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,
+            Is Global Prop Vert, Color, Layer,
+            Ample_forat_femella, Altura_forat_femella, Separacio_forat_femella,
+            PestanyaSup, PestanyaInf,FemellaSup, FemellaInf, Canviar Pestanyes,
+            esProvisional,
+            provSupEsq, provSupDre, provInfEsq, provInfDre, provInfCen,
+            linia, layer , TipusTub, rotar, tipusTubAuto,
+            tubInferior, tubSuperior, posAutomatica,
+            retallInicial, retallFinal
+        </Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox, Length,Length,Length,Checkbox,Length,
+                            Length,Length,
+                            Checkbox,Length, Checkbox,Length,
+                            Checkbox, Color, Layer,
+                            Length, Length, Length,
+                            Checkbox, Checkbox, Checkbox, Checkbox, Checkbox,
+                            Checkbox,
+                            Checkbox, Checkbox, Checkbox, Checkbox, Checkbox,
+                            String, String, String, Checkbox, Checkbox,
+                            String, String, Checkbox,
+                            Length, Length)
+        </ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Mostrar, Ample, Altura, Llargada, LlargadaAut, Gruix,
+                        desplX, desplY,
+                        mostrarLiniaA,desplLinA,mostrarLiniaB,desplLinB,
+                        IsUseGlobalProp, FounColor, BarraLayer,
+                        Ample_forat_femella, Altura_forat_femella, Separacio_forat_femella,
+                        PestanyaSuperior, PestanyaInferior, femellaSup, femellaInf, PestanyesInv,
+                        esProvisional,
+                        provSupEsq, provSupDre, provInfEsq, provInfDre, provInfCen,
+                        linia, layer, TipusTub, RotarTub, tipusTubAuto,
+                        tubInferior, tubSuperior, posAutomatica,
+                        retallInicial, retallFinal
+            </FieldNames>
+        </NamedTuple>
+        <Visible>False, False,  False, False,False, False, False,False, False, False, False, False, False, False,False,False,False,False,False,False,False, False, False,False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>DadesVertCopy</Name>
+        <Text> </Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Integer,Length,Length,Length,Length,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox)</ValueType><!-- ,Separator-->
+        <ValueList>,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>nBarraGuardada,BarraAmple,BarraAltura,BarraLlargada,desplY,esProvisional,LlargadaAut,TreureEncaixSup,TreureEncaixInf,FemellaSup,FemellaInf,invertirEncaixSup,invertirEncaixInf</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False,False, False, False, False, False, False, False, False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>ForatsVertListCopy</Name>
+        <Text>Forat,Orientació,Posició,Llargada,Amplada,Completa,Llargada,Amplada, TFF</Text>
+        <Value>[]
+        </Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Length,Length,Checkbox)</ValueType><!-- ,Separator-->
+        <ValueList>,Esq|Dre|Sup|Inf,,,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>UShape</TypeName>
+            <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox</FieldNames>
+        </NamedTuple>
+        <MinValue>,,0</MinValue>
+        <!-- <Visible>False, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True,ForatsVertListCopy[$list_row][0] == True and ForatsVertListCopy[$list_row][5] == True,ForatsVertListCopy[$list_row][0] == True and ForatsVertListCopy[$list_row][5] == True, ForatsVertListCopy[$list_row][0] == True, False</Visible>-->
+        <Visible>False, False, False, False, False, False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>BarresFrontListCopy</Name>
+        <Text>TIS,Ample,Forat,Orientació,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar</Text>
+        <Value>[]
+        </Value>
+        <ValueType>namedtuple(Checkbox,Length,Length,StringComboBox,Length,Length,Length,Checkbox,Checkbox,Checkbox)</ValueType><!-- ,Separator-->
+        <ValueList>,,,Esq|Dre|Sup|Inf,,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>BarraFront,Amplitud,Altura,Orientacio,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False,False, False, False, False, False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- *******************  Barres Interiors Ref **************************-->
+    <Parameter>
+        <Name>LengthListBarresIntRef</Name>
+        <Text>LengthListBarresIntRef</Text>
+        <Value>5</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Llista de indexació a la BarresRefitzontals-->
+    <Parameter>
+        <Name>nListBarresRef</Name>
+        <Text>Posicio,nTotal</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Integer,Integer)</ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Posicio,nTotal</FieldNames>
+        </NamedTuple>
+        <Visible> False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+</Include>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+    <Parameter>
+        <Name>EncaixExpander</Name>
+        <Text>Encaix</Text>
+        <ValueType>Expander</ValueType>
+
+        <Parameter>
+            <Name>PestanyaSuperior</Name>
+            <Text>Pestanya Superior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>PestanyaInferior</Name>
+            <Text>Pestanya Inferior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>PestanyesInv</Name>
+            <Text>Pestanya Invertides</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>False</Visible>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+
+    </Parameter>
+
+</Include>

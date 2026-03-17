@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <!--Collisos i Potes HOR INFERIOR-->
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Colis</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+
+
+        <Parameter>
+            <Name>ColisParINF</Name>
+            <Text>Colis,Orientacio,Posicio,Llargada,Amplada,Reforç Colis,Separator</Text>
+            <!-- <Value>[False|Sup|400.|150|12|True;
+                    False|Sup|800.|150|12|True;
+                    False|Sup|1200.|150|12|True;
+                    False|Sup|1600.|150|12|True]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Colis,orientacio,Posicio,Llargada,Amplada,MostrarBox,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ColisParINF[$list_row][0] == True, ColisParINF[$list_row][0] == True, ColisParINF[$list_row][0] == True, ColisParINF[$list_row][0] == True,ColisParINF[$list_row][0] == True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Potes</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+
+
+        <Parameter>
+            <Name>PotaParINF</Name>
+            <Text>Pota,Posicio,Separator</Text>
+            <!--
+            <Value>[False|400.;
+                    False|800.;
+                    False|1200.;
+                    False|1600.]
+            </Value>
+            -->
+            <Value>[]</Value>
+            <EventId>,,</EventId>
+            <ValueType>namedtuple(Checkbox,Length,Separator)</ValueType>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Pota,Posicio,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,0,</MinValue>
+            <Visible>True, PotaParINF[$list_row][0] == True,True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Forats</Text>
+        <ValueType>Expander</ValueType>
+
+        <Parameter>
+            <Name>ForatsParINF</Name>
+            <Text>Forat,Orientacio,Posicio,Llargada,Amplada,Completa,Llargada,Amplada</Text>
+            <!--
+            <Value>[False|Sup|200.|40|15|True|20|10;
+                    False|Sup|400.|40|15|True|20|10;
+                    False|Sup|600.|40|15|True|20|10;
+                    False|Sup|800.|40|15|True|20|10;
+                    False|Sup|1200.|40|15|True|20|10;
+                    False|Sup|1200.|40|15|True|20|10;
+                    False|Sup|1400.|40|15|True|20|10;
+                    False|Sup|1600.|40|15|True|20|10;
+                    False|Sup|1800.|40|15|True|20|10;
+                    False|Sup|2000.|40|15|True|20|10]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ForatsParINF[$list_row][0] == True, ForatsParINF[$list_row][0] == True, ForatsParINF[$list_row][0] == True, ForatsParINF[$list_row][0] == True, ForatsParINF[$list_row][0] == True, ForatsParINF[$list_row][0] == True and ForatsParINF[$list_row][5] == True,ForatsParINF[$list_row][0] == True and ForatsParINF[$list_row][5] == True, False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+</Include>

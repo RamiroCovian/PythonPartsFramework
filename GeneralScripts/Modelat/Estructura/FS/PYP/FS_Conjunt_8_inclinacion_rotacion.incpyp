@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+        <Name>Parent:PythonPartConnection</Name>
+        <Text>GIRS FS</Text>
+        <Visible>True</Visible>
+
+        <Parameter>
+            <Name>zUnique</Name>
+            <Text>Unic</Text>
+            <Value>0.0</Value>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>Double</ValueType>
+        </Parameter>
+
+        <Name>GIRSFS</Name>
+        <Text>GIRS FS</Text>
+        <Visible>True</Visible>
+
+        <!-- Control de rotación en el eje Z -->
+        <Parameter>
+            <Name>AngulosRotacion</Name>
+            <Text>Ángulos de rotación</Text>
+            <ValueType>Expander</ValueType>
+
+            <!-- Nuevo parámetro de entrada para rotación Z con valores negativos -->
+            <Parameter>
+                <Name>ZRotationInput</Name>
+                <Text>Rotación Z (-360° a 360°)</Text>
+                <Value>0</Value>
+                <ValueType>Integer</ValueType>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+            </Parameter>
+        </Parameter>
+        <!-- End control rotacion-->
+
+        <Parameter>
+            <Name>AngulosRotacion</Name>
+            <Text>Ángulos de inclinación</Text>
+            <ValueType>Expander</ValueType>
+
+            <!-- Lado A -->
+            <!-- Nuevo parámetro de entrada para rotación Z con valores negativos -->
+            <Parameter>
+                <Name>LadoARotationInputAngle</Name>
+                <Text>Lado A</Text>
+                <Value>0</Value>
+                <ValueType>Integer</ValueType>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+            </Parameter>
+
+            <!-- End Lado A -->
+
+            <!-- Lado B -->
+            <!-- Nuevo parámetro de entrada para rotación Z con valores negativos -->
+            <Parameter>
+                <Name>LadoBRotationInputAngle</Name>
+                <Text>Lado B</Text>
+                <Value>0</Value>
+                <ValueType>Integer</ValueType>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+            </Parameter>
+
+            <!-- End Lado B -->
+
+            <!-- Lado C -->
+            <!-- Nuevo parámetro de entrada para rotación Z con valores negativos -->
+            <Parameter>
+                <Name>LadoCRotationInputAngle</Name>
+                <Text>Lado C</Text>
+                <Value>0</Value>
+                <ValueType>Integer</ValueType>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+            </Parameter>
+
+             <!-- End Lado C -->
+
+            <!-- Lado D -->
+            <!-- Nuevo parámetro de entrada para rotación Z con valores negativos -->
+            <Parameter>
+                <Name>LadoDRotationInputAngle</Name>
+                <Text>Lado D</Text>
+                <Value>0</Value>
+                <ValueType>Integer</ValueType>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+            </Parameter>
+
+        </Parameter>
+
+        <Parameter>
+            <Name>OrderInclinationList</Name>
+            <Text>selector de Python Fills</Text>
+            <Value>[]</Value>
+            <ValueType>String</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+
+</Include>

@@ -1,0 +1,31 @@
+<?xml version="1.0"?><Element>
+    <StringTable>Allplan PythonParts Materials Stringtable</StringTable>
+    <Item>
+        <TextId>mat_ALU</TextId>
+        <Text>Alu</Text>
+    </Item>
+    <Item>
+        <TextId>mat_GLASS</TextId>
+        <Text>Üveg</Text>
+    </Item>
+    <Item>
+        <TextId>mat_OAK 3, PORTRAIT</TextId>
+        <Text>Tölgy 3, fekvő</Text>
+    </Item>    
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\EXPOSED CONCRETE\\EXP_CONCRETE_DETAIL_01</TextId>
+        <Text>30YearEdition anyagok\\Látszóbeton\\Exp_Concrete_Detail_01</Text>
+    </Item>    
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\MASONRY\\BRICK_WALL_08</TextId>
+        <Text>30YearEdition anyagok\\Téglaszerkezet\\Brick_wall_08</Text>
+    </Item>
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\WOODEN FACADES\\WOOD_BOARDING_01</TextId>
+        <Text>30YearEdition anyagok\\Fa homlokzatok\\Wood_Boarding_01</Text>
+    </Item>
+    <Item>
+        <TextId>mat_DEFAULT\\BUILDING\\FINISHES\\METAL\\METAL 3</TextId>
+        <Text>Default\\Building\\Finishes\\Metal\\Metal 3</Text>
+    </Item>
+</Element>

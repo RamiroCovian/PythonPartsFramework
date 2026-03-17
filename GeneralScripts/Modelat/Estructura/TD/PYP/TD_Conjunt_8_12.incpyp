@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <!--Collisos i Potes Vert -->
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Colis</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <!-- <Persistent>Model</Persistent> -->
+
+
+        <Parameter>
+            <Name>ColisVertListToShow</Name>
+            <Text>Colis,Orientacio,Posicio,Llargada,Amplada,MostrarTFF,Separator</Text>
+            <!-- <Value>[False|Sup|400.|150|12;
+                    False|Sup|800.|150|12;
+                    False|Sup|1200.|150|12;
+                    False|Sup|1600.|150|12]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Colis,orientacio,Posicio,Llargada,Amplada,MostrarBox,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ColisVertListToShow[$list_row][0] == True, ColisVertListToShow[$list_row][0] == True, ColisVertListToShow[$list_row][0] == True, ColisVertListToShow[$list_row][0] == True, ColisVertListToShow[$list_row][0] == True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Potes</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+
+        <Parameter>
+            <Name>PotesVertListToShow</Name>
+            <Text>Pota,Posicio,Separator</Text>
+            <!-- <Text>Pota,Posicio</Text>-->
+            <!-- <Value>[False|400.;
+                False|1200.;
+                False|2400.;
+                False|4600.]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,Length,Separator)</ValueType>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Pota,Posicio,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,</MinValue>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>True, PotesVertListToShow[$list_row][0] == True,True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Forats</Text>
+        <ValueType>Expander</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+
+        <Parameter>
+            <Name>tipusCavitatTFFVert</Name>
+            <Text>Tipus Cavitat TFF</Text>
+            <Value>40</Value>
+            <ValueList>40|60</ValueList>
+            <ValueType>StringComboBox</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>ForatsVertListToShow</Name>
+            <Text>Forat,Orientacio,Posicio,Llargada,Amplada,Completa,Llargada,Amplada,TFF,Profunditat TFF,Separator</Text>
+            <Value>[False|Sup|200.|10|10|True|50|20|True|15;
+                    False|Sup|400.|10|10|True|50|20|True|15;
+                    False|Sup|600.|10|10|True|50|20|True|15;
+                    False|Sup|800.|10|10|True|50|20|True|15;
+                    False|Sup|1000.|10|10|True|50|20|True|15;
+                    False|Sup|1200.|10|10|True|50|20|True|15;
+                    False|Sup|1400.|10|10|True|50|20|True|15;
+                    False|Sup|1600.|10|10|True|50|20|True|15;
+                    False|Sup|1800.|10|10|True|50|20|True|15;
+                    False|Sup|2000.|10|10|True|50|20|True|15]
+            </Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Length,Length,Checkbox,Length,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,ProfunditatTFF,Separator</FieldNames><!-- ,Separator-->
+            </NamedTuple>
+            <MinValue>,,0,,,,,,,,</MinValue>
+            <Visible>True, ForatsVertListToShow[$list_row][0] == True, ForatsVertListToShow[$list_row][0] == True, ForatsVertListToShow[$list_row][0] == True, ForatsVertListToShow[$list_row][0] == True, ForatsVertListToShow[$list_row][0] == True,ForatsVertListToShow[$list_row][0] == True and ForatsVertListToShow[$list_row][5] == True,ForatsVertListToShow[$list_row][0] == True and ForatsVertListToShow[$list_row][5] == True, ForatsVertListToShow[$list_row][0] == True, ForatsVertListToShow[$list_row][0] == True and ForatsVertListToShow[$list_row][8] == True </Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Forats</Text>
+        <ValueType>Expander</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."</Visible>
+
+        <Parameter>
+            <Name>tipusCavitatTFFHor</Name>
+            <Text>Tipus Cavitat TFF</Text>
+            <Value>40</Value>
+            <ValueList>40|60</ValueList>
+            <ValueType>StringComboBox</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>ForatsHorListToShow</Name>
+            <Text>Forat,Orientacio,Posicio,Llargada,Amplada,Completa,Llargada,Amplada,TFF,Profunditat TFF,Separator</Text>
+            <Value>[False|Sup|200|10|10|True|50|20|True|15;
+                    False|Sup|400|10|10|True|50|20|True|15;
+                    False|Sup|600|10|10|True|50|20|True|15;
+                    False|Sup|800|10|10|True|50|20|True|15;
+                    False|Sup|1000|10|10|True|50|20|True|15;
+                    False|Sup|1200|10|10|True|50|20|True|15;
+                    False|Sup|1400|10|10|True|50|20|True|15;
+                    False|Sup|1600|10|10|True|50|20|True|15;
+                    False|Sup|1800|10|10|True|50|20|True|15;
+                    False|Sup|2000|10|10|True|50|20|True|15]
+            </Value>
+            <!-- <Value>[]</Value>-->
+            <ValueType>namedtuple(CheckBox,StringComboBox,Length,Length,Length,CheckBox,Length,Length,CheckBox,Length,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,ProfunditatTFF,Separator</FieldNames><!-- ,Separator-->
+            </NamedTuple>
+            <MinValue>,,0,,,,,,,</MinValue>
+            <Visible>True, ForatsHorListToShow[$list_row][0] == True, ForatsHorListToShow[$list_row][0] == True, ForatsHorListToShow[$list_row][0] == True, ForatsHorListToShow[$list_row][0] == True, ForatsHorListToShow[$list_row][0] == True,ForatsHorListToShow[$list_row][0] == True and ForatsHorListToShow[$list_row][5] == True,ForatsHorListToShow[$list_row][0] == True and ForatsHorListToShow[$list_row][5] == True, ForatsHorListToShow[$list_row][0] == True, ForatsHorListToShow[$list_row][0] == True and ForatsHorListToShow[$list_row][8] == True, True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+</Include>

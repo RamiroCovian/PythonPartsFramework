@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Mesures Barra</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+
+
+        <!-- ##################################################-->
+        <Parameter>
+            <Name>llargadaAutomatica</Name>
+            <Text>Llargada Automatica</Text>
+            <Value>True</Value>
+            <ValueType>Checkbox</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>BarraLlargadaIS</Name>
+            <Text>Llargada</Text>
+            <Value>5550.0</Value>
+            <MinValue>1</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPIS == 1</Visible>
+            <Enable>llargadaAutomatica == False</Enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraLlargadaReal</Name>
+            <Text>Llargada Real</Text>
+            <Value>5550.0</Value>
+            <MinValue>1</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPIS == 1</Visible>
+            <Enable>False</Enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraLlargadaOriginal</Name>
+            <Text>Llargada Original Tub</Text>
+            <Value>5550.0</Value>
+            <MinValue>1</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPIS == 1</Visible>
+            <Enable>False</Enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>PropertiesExpander</Name>
+            <Text>Retalls</Text>
+            <value>True</value>
+            <ValueType>Expander</ValueType>
+            <Visible>IsUseGlobalProp == False and SelectorPPIS == 1</Visible>
+
+            <Parameter>
+                <Name>retallInicial</Name>
+                <Text>Retall Inicial</Text>
+                <Value>0</Value>
+                <ValueType>Double</ValueType>
+                <Visible>True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>retallFinal</Name>
+                <Text>Retall Final</Text>
+                <Value>0</Value>
+                <ValueType>Double</ValueType>
+                <Visible>True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>PropertiesExpander</Name>
+            <Text>Properties</Text>
+            <value>True</value>
+            <ValueType>Expander</ValueType>
+            <Visible>IsUseGlobalProp == False and SelectorPPIS == 1</Visible>
+
+            <Parameter>
+                <Name>IsUseGlobalProp</Name>
+                <Text>Use Global Propierties</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>False</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>FounColor</Name>
+                <Text>Color</Text>
+                <Value>1</Value>
+                <ValueType>Color</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>BarraLayer</Name>
+                <Text>Layer</Text>
+                <Value>40068</Value>
+                <ValueType>Layer</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>TipusLinia</Name>
+                <Text>Tipus Eix</Text>
+                <Value>Tipus 1</Value>
+                <ValueList>Tipus 1|Tipus 2</ValueList>
+                <ValueType>StringComboBox</ValueType>
+                <Visible>True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+
+        </Parameter>
+
+
+
+    </Parameter>
+
+    <Parameter>
+        <Name>Separator</Name>
+        <ValueType>Separator</ValueType>
+    </Parameter>
+
+    <Parameter>
+        <Name>desplX</Name>
+        <Text>despl X</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>True</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>desplY</Name>
+        <Text>despl Y</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>True</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>Separator</Name>
+        <ValueType>Separator</ValueType>
+    </Parameter>
+
+    <Parameter>
+        <Name>mostrarEix</Name>
+        <Text>Mostrar tots els eixos</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>True</Visible>
+    </Parameter>
+
+    <Parameter>
+        <Name>mostrarLiniaA</Name>
+        <Text>Linia Interior 1</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>mostrarEix</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Eix X Barra Vertical-->
+    <Parameter>
+        <Name>desplLinA</Name>
+        <Text>desplaçament linia 1</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>mostrarEix and mostrarLiniaA</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>mostrarLiniaB</Name>
+        <Text>Linia Interior 2</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>mostrarEix</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Eix Y Barra Vertical-->
+    <Parameter>
+        <Name>desplLinB</Name>
+        <Text>desplaçament linia 2</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>mostrarEix and mostrarLiniaB</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+</Include>

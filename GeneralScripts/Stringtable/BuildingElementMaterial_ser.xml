@@ -1,0 +1,31 @@
+<?xml version="1.0"?><Element>
+    <StringTable>Allplan PythonParts Materials Stringtable</StringTable>
+    <Item>
+        <TextId>mat_ALU</TextId>
+        <Text>Alu</Text>
+    </Item>
+    <Item>
+        <TextId>mat_GLASS</TextId>
+        <Text>Staklo</Text>
+    </Item>
+    <Item>
+        <TextId>mat_OAK 3, PORTRAIT</TextId>
+        <Text>Hrast 3, uzdužno</Text>
+    </Item>    
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\EXPOSED CONCRETE\\EXP_CONCRETE_DETAIL_01</TextId>
+        <Text>30YearEdition Materijali\\Vidljivi beton\\Beton_detalj_01</Text>
+    </Item>    
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\MASONRY\\BRICK_WALL_08</TextId>
+        <Text>30YearEdition Materijali\\Zidovi\\Zid_od_opeke_08</Text>
+    </Item>
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\WOODEN FACADES\\WOOD_BOARDING_01</TextId>
+        <Text>30YearEdition Materijali\\Drvene fasade\\Drvene_ploče_01</Text>
+    </Item>
+    <Item>
+        <TextId>mat_DEFAULT\\BUILDING\\FINISHES\\METAL\\METAL 3</TextId>
+        <Text>Default\\Zgrade\\Obrada\\Metal\\Metal 3</Text>
+    </Item>
+</Element>

@@ -1,0 +1,59 @@
+<Include>
+    <Parameter>
+        <Name>SillExp</Name>
+        <Text>Sill</Text>
+        <ValueType>Expander</ValueType>
+
+        <Parameter>
+            <Name>Sill</Name>
+            <Text>Type of sill</Text>
+            <Value>AllplanArchEle.VerticalOpeningSillType.eBothsides</Value>
+            <EnumList>AllplanArchEle.VerticalOpeningSillType.eNone|
+                      AllplanArchEle.VerticalOpeningSillType.eOuter|
+                      AllplanArchEle.VerticalOpeningSillType.eInner|
+                      AllplanArchEle.VerticalOpeningSillType.eBothsides</EnumList>
+            <ValueTextIdList>AllplanSettings.TextResSillType.eNone|
+                             AllplanSettings.TextResSillType.eOuter|
+                             AllplanSettings.TextResSillType.eInner|
+                             AllplanSettings.TextResSillType.eBothsides</ValueTextIdList>
+            <EnumList2>AllplanSettings.PictResSillType.eNone|
+                       AllplanSettings.PictResSillType.eOuter|
+                       AllplanSettings.PictResSillType.eInner|
+                       AllplanSettings.PictResSillType.eBothsides</EnumList2>
+            <ValueType>PictureResourceButtonList</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <ValueType>ConditionGroup</ValueType>
+            <Visible>Sill != AllplanArchEle.VerticalOpeningSillType.eNone</Visible>
+
+            <Parameter>
+                <Name>Layer</Name>
+                <Text>Layer</Text>
+                <Value></Value>
+                <ValueType>Layer</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>Pen</Name>
+                <Text>Pen thickness</Text>
+                <Value>1</Value>
+                <ValueType>Pen</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>Stroke</Name>
+                <Text>Line type</Text>
+                <Value>1</Value>
+                <ValueType>Stroke</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>Color</Name>
+                <Text>Line color</Text>
+                <Value>1</Value>
+                <ValueType>Color</ValueType>
+            </Parameter>
+        </Parameter>
+    </Parameter>
+</Include>

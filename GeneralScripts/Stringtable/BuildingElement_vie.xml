@@ -1,0 +1,799 @@
+<?xml version="1.0"?><Element>
+    <StringTable>Allplan PythonParts Stringtable</StringTable>
+    <Item>
+        <TextId>e_SET_POINT_TO</TextId>
+        <Text>Start point or angle</Text>
+    </Item>
+    <Item>
+        <TextId>e_SELECT_HANDLE</TextId>
+        <Text>Select handle</Text>
+    </Item>
+    <Item>
+        <TextId>e_NEW_HANDLE_POSITION</TextId>
+        <Text>Set new position for handle</Text>
+    </Item>
+    <Item>
+        <TextId>e_LENGTH</TextId>
+        <Text>Length</Text>
+    </Item>
+    <Item>
+        <TextId>e_WIDTH</TextId>
+        <Text>Width</Text>
+    </Item>
+    <Item>
+        <TextId>e_HEIGHT</TextId>
+        <Text>Height</Text>
+    </Item>
+    <Item>
+        <TextId>e_LAYER</TextId>
+        <Text>Layer</Text>
+    </Item>
+    <Item>
+        <TextId>e_PEN</TextId>
+        <Text>Pen</Text>
+    </Item>
+    <Item>
+        <TextId>e_PEN_BY_LAYER</TextId>
+        <Text>Pen from layer</Text>
+    </Item>
+    <Item>
+        <TextId>e_LINETYPE</TextId>
+        <Text>Line</Text>
+    </Item>
+    <Item>
+        <TextId>e_LINETYPE_BY_LAYER</TextId>
+        <Text>Line from layer</Text>
+    </Item>
+    <Item>
+        <TextId>e_COLOR</TextId>
+        <Text>Color</Text>
+    </Item>
+    <Item>
+        <TextId>e_COLOR_BY_LAYER</TextId>
+        <Text>Color from layer</Text>
+    </Item>
+    <Item>
+        <TextId>e_DRAW_ORDER</TextId>
+        <Text>Sequence</Text>
+    </Item>
+    <Item>
+        <TextId>e_HELPCONSTRUCTION</TextId>
+        <Text>Construction lines</Text>
+    </Item>
+    <Item>
+        <TextId>e_USE_HELPCONSTRUCTION</TextId>
+        <Text>Use construction lines</Text>
+    </Item>
+    <Item>
+        <TextId>e_STAIR_FLIGHT_THICKNESS</TextId>
+        <Text>Stair flight - thickness</Text>
+    </Item>
+    <Item>
+        <TextId>e_STAIR__FLIGHT_WIDTH</TextId>
+        <Text>Stair flight - width</Text>
+    </Item>
+    <Item>
+        <TextId>e_NUMBER_OF_STEPS</TextId>
+        <Text>Number of steps</Text>
+    </Item>
+    <Item>
+        <TextId>e_STEP_WIDTH</TextId>
+        <Text>Step width</Text>
+    </Item>
+    <Item>
+        <TextId>e_STEP_HEIGHT</TextId>
+        <Text>Step height</Text>
+    </Item>
+    <Item>
+        <TextId>e_REINFORCEMENT</TextId>
+        <Text>Reinforcement</Text>
+    </Item>
+    <Item>
+        <TextId>e_STEEL_GRADE</TextId>
+        <Text>Steel grade</Text>
+    </Item>
+    <Item>
+        <TextId>e_CROSS_SECTION_CATALOG</TextId>
+        <Text>Cross-section catalog</Text>
+    </Item>
+    <Item>
+        <TextId>e_BAR_SPACING</TextId>
+        <Text>Bar spacing</Text>
+    </Item>
+    <Item>
+        <TextId>e_CONCRETE_COVER</TextId>
+        <Text>Concrete cover</Text>
+    </Item>
+    <Item>
+        <TextId>e_CONCRETE_COVER_BOTTOM</TextId>
+        <Text>Concrete cover at bottom</Text>
+    </Item>
+    <Item>
+        <TextId>e_CONCRETE_COVER_TOP</TextId>
+        <Text>Concrete cover at top</Text>
+    </Item>
+    <Item>
+        <TextId>e_CONCRETE_COVER_LEFT</TextId>
+        <Text>Concrete cover left</Text>
+    </Item>
+    <Item>
+        <TextId>e_CONCRETE_COVER_RIGHT</TextId>
+        <Text>Concrete cover right</Text>
+    </Item>
+    <Item>
+        <TextId>e_CONCRETE_COVER_LATERAL</TextId>
+        <Text>Concrete cover lateral</Text>
+    </Item>
+    <Item>
+        <TextId>e_OVERLAP_BOTTOM</TextId>
+        <Text>Overlap at bottom</Text>
+    </Item>
+    <Item>
+        <TextId>e_OVERLAP</TextId>
+        <Text>Overlap</Text>
+    </Item>
+    <Item>
+        <TextId>e_OVERLAP_TOP</TextId>
+        <Text>Overlap at top</Text>
+    </Item>
+    <Item>
+        <TextId>e_OVERLAP_START</TextId>
+        <Text>Overlap at start</Text>
+    </Item>
+    <Item>
+        <TextId>e_OVERLAP_END</TextId>
+        <Text>Overlap at end</Text>
+    </Item>
+    <Item>
+        <TextId>e_SEGMENT_LENGTH_START</TextId>
+        <Text>Segment length at start</Text>
+    </Item>
+    <Item>
+        <TextId>e_SEGMENT_LENGTH_END</TextId>
+        <Text>Segment length at end</Text>
+    </Item>
+    <Item>
+        <TextId>e_SEGMENT_LENGTH</TextId>
+        <Text>Segment length</Text>
+    </Item>
+    <Item>
+        <TextId>e_DISTANCE</TextId>
+        <Text>Distance</Text>
+    </Item>
+    <Item>
+        <TextId>e_SPACING</TextId>
+        <Text>Spacing</Text>
+    </Item>
+    <Item>
+        <TextId>e_BAR_DIAMETER</TextId>
+        <Text>Bar diameter</Text>
+    </Item>
+    <Item>
+        <TextId>e_MESH_TYPE</TextId>
+        <Text>Mesh type</Text>
+    </Item>
+    <Item>
+        <TextId>e_SURFACE</TextId>
+        <Text>Surface</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHOW_HANDLES</TextId>
+        <Text>Show handles ?</Text>
+    </Item>
+    <Item>
+        <TextId>e_THICKNESS</TextId>
+        <Text>Thickness</Text>
+    </Item>
+    <Item>
+        <TextId>e_ANGLE</TextId>
+        <Text>Angle</Text>
+    </Item>
+    <Item>
+        <TextId>e_ROTATION_ANGLE</TextId>
+        <Text>Angle of rotation</Text>
+    </Item>
+    <Item>
+        <TextId>e_SLOPE_ANGLE</TextId>
+        <Text>Angle of inclination</Text>
+    </Item>
+    <Item>
+        <TextId>e_START_ANGLE</TextId>
+        <Text>Starting angle</Text>
+    </Item>
+    <Item>
+        <TextId>e_END_ANGLE</TextId>
+        <Text>End angle</Text>
+    </Item>
+    <Item>
+        <TextId>e_CONCRETE_GRADE</TextId>
+        <Text>Concrete grade</Text>
+    </Item>
+    <Item>
+        <TextId>e_BENDING_ROLLER</TextId>
+        <Text>Bending pin diameter</Text>
+    </Item>  
+    <Item>
+        <TextId>e_MESH_GROUP</TextId>
+        <Text>Mesh group</Text>
+    </Item>
+    <Item>
+        <TextId>e_BOTTOM</TextId>
+        <Text>Bottom</Text>
+    </Item>
+    <Item>
+        <TextId>e_TOP</TextId>
+        <Text>Top</Text>
+    </Item>
+    <Item>
+        <TextId>e_SIDE1</TextId>
+        <Text>Page 1</Text>
+    </Item>
+    <Item>
+        <TextId>e_SIDE2</TextId>
+        <Text>Page 2</Text>
+    </Item>
+    <Item>
+        <TextId>e_SIDE3</TextId>
+        <Text>Page 3</Text>
+    </Item>
+    <Item>
+        <TextId>e_SIDE4</TextId>
+        <Text>Page 4</Text>
+    </Item>
+    <Item>
+        <TextId>e_PYTHONPART</TextId>
+        <Text>Create PythonPart</Text>
+    </Item>
+    <Item>
+        <TextId>e_LANDING_LENGTH_LEFT</TextId>
+        <Text>Landing length - left</Text>
+    </Item>
+    <Item>
+        <TextId>e_LANDING_THICKNESS_LEFT</TextId>
+        <Text>Landing thickness - left</Text>
+    </Item>
+    <Item>
+        <TextId>e_LANDING_LENGTH_RIGTH</TextId>
+        <Text>Landing length - right</Text>
+    </Item>
+    <Item>
+        <TextId>e_LANDING_THICKNESS_RIGHT</TextId>
+        <Text>Landing thickness - right</Text>
+    </Item>
+    <Item>
+        <TextId>e_CORBEL_LENGTH_LEFT</TextId>
+        <Text>Corbel length - left</Text>
+    </Item>
+    <Item>
+        <TextId>e_CORBEL_HEIGHT_LEFT</TextId>
+        <Text>Corbel height - left</Text>
+    </Item>
+    <Item>
+        <TextId>e_CORBEL_LENGTH_RIGHT</TextId>
+        <Text>Corbel length - right</Text>
+    </Item>
+    <Item>
+        <TextId>e_CORBEL_HEIGHT_RIGHT</TextId>
+        <Text>Corbel height - right</Text>
+    </Item>
+    <Item>
+        <TextId>e_GEOMETRY</TextId>
+        <Text>Dimensions</Text>
+    </Item>
+    <Item>
+        <TextId>e_FORMAT</TextId>
+        <Text>Format</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE1</TextId>
+        <Text>Shape 1</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE2</TextId>
+        <Text>Shape 2</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE3</TextId>
+        <Text>Shape 3</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE4</TextId>
+        <Text>Shape 4</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE5</TextId>
+        <Text>Shape 5</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE6</TextId>
+        <Text>Shape 6</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE7</TextId>
+        <Text>Shape 7</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE8</TextId>
+        <Text>Shape 8</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE9</TextId>
+        <Text>Shape 9</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE10</TextId>
+        <Text>Shape 10</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE11</TextId>
+        <Text>Shape 11</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE12</TextId>
+        <Text>Shape 12</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE13</TextId>
+        <Text>Shape 13</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE14</TextId>
+        <Text>Shape 14</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE15</TextId>
+        <Text>Shape 15</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE16</TextId>
+        <Text>Shape 16</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE17</TextId>
+        <Text>Shape 17</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE18</TextId>
+        <Text>Shape 18</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE19</TextId>
+        <Text>Shape 19</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE20</TextId>
+        <Text>Shape 20</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE21</TextId>
+        <Text>Shape 21</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE22</TextId>
+        <Text>Shape 22</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE23</TextId>
+        <Text>Shape 23</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE24</TextId>
+        <Text>Shape 24</Text>
+    </Item>
+    <Item>
+        <TextId>e_SHAPE25</TextId>
+        <Text>Shape 25</Text>
+    </Item>
+    <Item>
+        <Text>Spacer bars</Text>
+        <TextId>e_DISTRIBUTED_BARS</TextId>
+    </Item>
+    <Item>
+        <Text>Stair</Text>
+        <TextId>e_STAIR</TextId>
+    </Item>
+    <Item>
+        <Text>Radius</Text>
+        <TextId>e_RADIUS</TextId>
+    </Item>
+    <Item>
+        <Text>Orientation</Text>
+        <TextId>e_ORIENTATION</TextId>
+    </Item>
+    <Item>
+        <Text>Select shape</Text>
+        <TextId>e_SELECT_SHAPE</TextId>
+    </Item>
+    <Item>
+        <Text>Element index</Text>
+        <TextId>e_ELEMENT_INDEX</TextId>
+    </Item>
+    <Item>
+        <Text>Stirrups</Text>
+        <TextId>e_STIRRUPS</TextId>
+    </Item>
+    <Item>
+        <Text>Longitudinal bars</Text>
+        <TextId>e_LONGITUDINAL_BARS</TextId>
+    </Item>
+    <Item>
+        <Text>Global data</Text>
+        <TextId>e_GLOBAL_DATA</TextId>
+    </Item>
+    <Item>
+        <Text>Global data - stirrups</Text>
+        <TextId>e_GLOBAL_STIRRUP_DATA</TextId>
+    </Item>
+    <Item>
+        <Text>Global data - longitudinal bars</Text>
+        <TextId>e_GLOBAL_LONGITUDINAL_DATA</TextId>
+    </Item>
+    <Item>
+        <Text>Individual edge reinforcement</Text>
+        <TextId>e_EDGE_REINFORCEMENT</TextId>
+    </Item>
+    <Item>
+        <Text>Edge reinforcement</Text>
+        <TextId>e_BORDERING_REINFORCEMENT</TextId>
+    </Item>
+    <Item>
+        <Text>Inside radius</Text>
+        <TextId>e_RADIUS_INSIDE</TextId>
+    </Item>
+    <Item>
+        <Text>Outside radius</Text>
+        <TextId>e_RADIUS_OUTSIDE</TextId>
+    </Item>
+    <Item>
+        <Text>Settings</Text>
+        <TextId>e_PROPERTIES</TextId>
+    </Item>
+    <Item>
+        <Text>Rise</Text>
+        <TextId>e_RISE</TextId>
+    </Item>
+    <Item>
+        <Text>Start</Text>
+        <TextId>e_START</TextId>
+    </Item>
+    <Item>
+        <Text>End</Text>
+        <TextId>e_END</TextId>
+    </Item>
+    <Item>
+        <Text>Plan view</Text>
+        <TextId>e_GROUNDVIEW</TextId>
+    </Item>
+    <Item>
+        <Text>Section line</Text>
+        <TextId>e_SECTION_LINE</TextId>
+    </Item>
+    <Item>
+        <Text>Create</Text>
+        <TextId>e_CREATE</TextId>
+    </Item>
+    <Item>
+        <Text>Step</Text>
+        <TextId>e_STEP</TextId>
+    </Item>
+    <Item>
+        <Text>Offset</Text>
+        <TextId>e_OFFSET</TextId>
+    </Item>
+    <Item>
+        <Text>2D representation</Text>
+        <TextId>e_FORMAT_2D</TextId>
+    </Item>
+    <Item>
+        <Text>3D representation</Text>
+        <TextId>e_FORMAT_3D</TextId>
+    </Item>
+    <Item>
+        <Text>Direction</Text>
+        <TextId>e_DIRECTION</TextId>
+    </Item>
+    <Item>
+        <Text>Section display</Text>
+        <TextId>e_SECTION_DISPLAY</TextId>
+    </Item>
+    <Item>
+        <Text>Fill</Text>
+        <TextId>e_FILLING</TextId>
+    </Item>
+    <Item>
+        <Text>Hatching</Text>
+        <TextId>e_HATCH</TextId>
+    </Item>
+    <Item>
+        <Text>Pattern</Text>
+        <TextId>e_PATTERN</TextId>
+    </Item>
+        <Item>
+        <Text>Style area</Text>
+        <TextId>e_STYLE_AREA</TextId>
+    </Item>
+    <Item>
+        <Text>Left</Text>
+        <TextId>e_LEFT</TextId>
+    </Item>
+    <Item>
+        <Text>Right</Text>
+        <TextId>e_RIGHT</TextId>
+    </Item>
+    <Item>
+        <Text>Empty</Text>
+        <TextId>e_EMPTY</TextId>
+    </Item>
+    <Item>
+        <Text>Thickness at bottom</Text>
+        <TextId>e_THICKNESS_BOTTOM</TextId>
+    </Item>
+    <Item>
+        <Text>Thickness at top</Text>
+        <TextId>e_THICKNESS_TOP</TextId>
+    </Item>
+    <Item>
+        <Text>Middle</Text>
+        <TextId>e_MIDDLE</TextId>
+    </Item>
+    <Item>
+        <Text>Starting vector</Text>
+        <TextId>e_START_VECTOR</TextId>
+    </Item>
+    <Item>
+        <Text>End vector</Text>
+        <TextId>e_END_VECTOR</TextId>
+    </Item>
+    <Item>
+        <Text>Minimum radius</Text>
+        <TextId>e_MINOR</TextId>
+    </Item>
+    <Item>
+        <Text>Maximum radius</Text>
+        <TextId>e_MAJOR</TextId>
+    </Item>
+    <Item>
+        <Text>X-axis</Text>
+        <TextId>e_X_AXIS</TextId>
+    </Item>
+    <Item>
+        <Text>Z-axis</Text>
+        <TextId>e_Z_AXIS</TextId>
+    </Item>
+    <Item>
+        <Text>Number of points:</Text>
+        <TextId>e_POINT_COUNT</TextId>
+    </Item>
+    <Item>
+        <Text>Closed</Text>
+        <TextId>e_PERIODIC</TextId>
+    </Item>
+    <Item>
+        <Text>Degree</Text>
+        <TextId>e_DEGREE</TextId>
+    </Item>
+    <Item>
+        <Text>Number of nodes</Text>
+        <TextId>e_KNOTS_COUNT</TextId>
+    </Item>
+    <Item>
+        <Text>Number of weights</Text>
+        <TextId>e_WEIGHTS_COUNT</TextId>
+    </Item>
+    <Item>
+        <Text>Center</Text>
+        <TextId>e_CENTER_POINT</TextId>
+    </Item>
+    <Item>
+        <Text>Node</Text>
+        <TextId>e_KNOT</TextId>
+    </Item>
+    <Item>
+        <Text>Weight</Text>
+        <TextId>e_WEIGHT</TextId>
+    </Item>
+    <Item>
+        <Text>Path</Text>
+        <TextId>e_PATH</TextId>
+    </Item>
+    <Item>
+        <Text>File</Text>
+        <TextId>e_FILE</TextId>
+    </Item>
+    <Item>
+        <Text>Entry</Text>
+        <TextId>e_ENTRY</TextId>
+    </Item>
+    <Item>
+        <Text>Material</Text>
+        <TextId>e_MATERIAL</TextId>
+    </Item>
+    <Item>
+        <Text>Trade</Text>
+        <TextId>e_TRADE</TextId>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE1</TextId>
+        <Text>Loop vertical</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE2</TextId>
+        <Text>Loop inclined</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE3</TextId>
+        <Text>Stirrup large</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE4</TextId>
+        <Text>Stirrup small</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE5</TextId>
+        <Text>Stirrup closed</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE6</TextId>
+        <Text>straight bars</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE7</TextId>
+        <Text>straight bars </Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE8</TextId>
+        <Text>Supports</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE9</TextId>
+        <Text>Fillet</Text>
+    </Item>
+    <Item>
+        <TextId>e_DT_SHAPE10</TextId>
+        <Text>straight  bars</Text>
+    </Item>
+    <Item>
+        <TextId>e_VALUE_UPDATE_BY_MIN</TextId>
+        <Text>The value for %s was adjusted to the minimum value %s</Text>
+    </Item>
+    <Item>
+        <TextId>e_VALUE_UPDATE_BY_MAX</TextId>
+        <Text>The value for %s was adjusted to the maximum value %s</Text>
+    </Item>
+    <Item>
+        <TextId>e_USE_3D_REINFORCEMENT</TextId>
+        <Text>'reinforce with 3D model' is switched off: Turn on for PythonPart?</Text>
+    </Item>
+    <Item>
+        <TextId>e_OFFICE</TextId>
+        <Text>Office</Text>
+    </Item>
+    <Item>
+        <TextId>e_PRIVAT</TextId>
+        <Text>Private</Text>
+    </Item>
+    <Item>
+        <TextId>e_PROJECT</TextId>
+        <Text>Project</Text>
+    </Item>
+    <Item>
+        <TextId>e_STANDARD</TextId>
+        <Text>Default</Text>
+    </Item>
+    <Item>
+        <TextId>e_ADD_NEW_ATTRIBUTE</TextId>
+        <Text>Assign new attribute</Text>
+    </Item>
+    <Item>
+        <TextId>e_DELETE_ATTRIBUTE</TextId>
+        <Text>Remove attribute from entry list</Text>
+    </Item>
+    <Item>
+        <TextId>e_UNDEFINED</TextId>
+        <Text>Undefined</Text>
+    </Item>
+    <Item>
+        <TextId>e_LICENSE_UNAVAILABLE</TextId>
+        <Text>License not available</Text>
+    </Item>
+    <Item>
+        <TextId>e_TEXT_FRAME</TextId>
+        <Text>Text border</Text>
+    </Item>
+    <Item>
+        <TextId>e_HAS_TEXT_FRAME</TextId>
+        <Text>Border around paragraph text</Text>
+    </Item>
+    <Item>
+        <TextId>e_FRAME_COLOR</TextId>
+        <Text>Color for border</Text>
+    </Item>
+    <Item>
+        <TextId>e_FRAME_PEN</TextId>
+        <Text>Pen thickness for border</Text>
+    </Item>
+    <Item>
+        <TextId>e_FRAME_STROKE</TextId>
+        <Text>Line type for border</Text>
+    </Item>
+    <Item>
+        <TextId>e_TEXT_PROP</TextId>
+        <Text>Text properties</Text>
+        </Item>
+    <Item>
+        <TextId>e_FONT</TextId>
+        <Text>Font</Text>
+    </Item>
+    <Item>
+        <TextId>e_FONT_STYLES</TextId>
+        <Text>Emphasis</Text>
+    </Item>
+    <Item>
+        <TextId>e_FONT_ANGLE</TextId>
+        <Text>Angle for italic text</Text>
+    </Item>
+    <Item>
+        <TextId>e_COLUMN_SLOPE_ANGLE</TextId>
+        <Text>Column angle</Text>
+    </Item>
+    <Item>
+        <TextId>e_TEXT_ANGLE</TextId>
+        <Text>Text rotation angle</Text>
+    </Item>
+    <Item>
+        <TextId>e_ALIGNMENT</TextId>
+        <Text>Alignment</Text>
+    </Item>
+    <Item>
+        <TextId>e_BACKGROUND</TextId>
+        <Text>Background</Text>
+    </Item>
+    <Item>
+        <TextId>e_BACKGROUND_FILL_OF_VIEWPORT</TextId>
+        <Text>Background fill of viewport</Text>
+    </Item>
+    <Item>
+        <TextId>e_HAS_BACKGROUND_COLOR</TextId>
+        <Text>Background color</Text>
+    </Item>
+    <Item>
+        <TextId>e_BACKGROUND_COLOR</TextId>
+        <Text>Color</Text>
+    </Item>
+    <Item>
+        <TextId>e_LAYOUT</TextId>
+        <Text>Line feed</Text>
+    </Item>
+    <Item>
+        <TextId>e_LINE_FEED</TextId>
+        <Text>Line feed</Text>
+    </Item>
+    <Item>
+        <TextId>e_WRAPPED_TEXT</TextId>
+        <Text>Text wrapping</Text>
+    </Item>
+    <Item>
+        <TextId>e_IS_SCALE_DEPENDENT</TextId>
+        <Text>Scale dependent</Text>
+    </Item>
+    <Item>
+        <TextId>e_DATE_DIALOG</TextId>
+        <Text>Select date</Text>
+    </Item>
+    <Item>
+        <TextId>e_FILE_DIALOG_DEFAULT</TextId>
+        <Text>Search ...</Text>
+    </Item>
+    <Item>
+        <TextId>e_VARIED</TextId>
+        <Text>*varied*</Text>
+    </Item>
+    <Item>
+        <TextId>e_OF</TextId>
+        <Text>of</Text>
+    </Item>
+    <Item>
+        <TextId>e_DELETE_ITEM</TextId>
+        <Text>Delete item</Text>
+    </Item>
+</Element>

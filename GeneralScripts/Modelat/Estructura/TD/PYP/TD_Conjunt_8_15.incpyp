@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <!--Encaix Vert-->
+
+    <Parameter>
+        <Name>EncaixExpander</Name>
+        <Text>Encaix</Text>
+        <ValueType>Expander</ValueType>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>PestanyaSuperiorVert</Name>
+            <Text>Pestanya Superior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>PestanyaInferiorVert</Name>
+            <Text>Pestanya Inferior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Name>EncaixTransversal</Name>
+        <Text>Encaixos Tranversals</Text>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+        <!-- llista que es mostra per pantalla -->
+        <Parameter>
+            <Name>EncaixVertListToShow</Name>
+            <Text>Encaix ,Orientacio,Longitud,Amplitud,Posicio,Profunditat,Pestanya</Text>
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Encaix,EncaixOr,Longitud,Amplitud,Posicio,Profunditat,Pestanya,Separator</FieldNames>
+            </NamedTuple>
+            <Visible>True, EncaixVertListToShow[$list_row][0] == True,EncaixVertListToShow[$list_row][0] == True,EncaixVertListToShow[$list_row][0] == True, EncaixVertListToShow[$list_row][0] == True, EncaixVertListToShow[$list_row][0] == True, EncaixVertListToShow[$list_row][0] == True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+
+    </Parameter>
+
+</Include>

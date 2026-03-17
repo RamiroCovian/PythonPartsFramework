@@ -1,0 +1,822 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Element>
+    <Script>
+        <Title>Tub de Terra i Sostre</Title>
+    </Script>
+    <Page>
+        <Name>Page1</Name>
+        <Text>Dades Generals</Text>
+
+
+        <Parameter>
+            <Name>DimensionsParameterExpander</Name>
+            <Text>Mesures Barra</Text>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>DistanciaEntreTD</Name>
+                <Text>Dist. entre Barres Vert</Text>
+                <Value>1170.0</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>BarraAmple</Name>
+                <Text>Ample</Text>
+                <Value>30.</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'Tub' or SelectorTerraSostre == "TERRA"</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraAltura</Name>
+                <Text>Altura</Text>
+                <Value>30</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'Tub' or SelectorTerraSostre == "TERRA"</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>BarraLlargada</Name>
+                <Text>Llargada</Text>
+                <Value>1000.0</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraGruix</Name>
+                <Text>Gruix</Text>
+                <Value>1.5</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'Tub' or SelectorTerraSostre == "TERRA"</Visible>
+            </Parameter>
+
+
+            <Parameter>
+                <Name>BarraAmpleL</Name>
+                <Text>Ample</Text>
+                <Value>50.</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'L' and SelectorTerraSostre == "SOSTRE"</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraAlturaL</Name>
+                <Text>Altura</Text>
+                <Value>100</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'L' and SelectorTerraSostre == "SOSTRE"</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraGruixL</Name>
+                <Text>Gruix</Text>
+                <Value>3</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'L'and SelectorTerraSostre == "SOSTRE"</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>Separator</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+
+        </Parameter>
+
+        <Parameter>
+            <Name>SelectorLayersTDEN</Name>
+            <Text>Selector Layers</Text>
+            <Value>TD</Value>
+            <ValueList>TD|EN</ValueList>
+            <ValueType>StringComboBox</ValueType>
+            <Persistent>Model</Persistent>
+            <BackgroundColor>(255, 0, 0)</BackgroundColor>
+        </Parameter>
+
+        <Parameter>
+            <Name>SelectorTerraSostre</Name>
+            <Text>Selector Tipus Posionament</Text>
+            <TextId>e_SelectorTerraSostre</TextId>
+            <Value>TERRA</Value>
+            <ValueList>TERRA|SOSTRE</ValueList>
+            <ValueType>StringComboBox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>SelectorTipusTerra</Name>
+            <Text>Selector Terra</Text>
+            <Value>Parquet</Value>
+            <ValueList>Rajola|Parquet</ValueList>
+            <ValueType>StringComboBox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>SelectorTipusTub</Name>
+            <Text>Selector Tub</Text>
+            <Value>Tub</Value>
+            <ValueList>Tub|L</ValueList>
+            <ValueType>StringComboBox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorTerraSostre == "SOSTRE"</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>SelectorTipusTubENFalse</Name>
+            <Text>Selector Tub</Text>
+            <Value>Tub</Value>
+            <ValueList>Tub</ValueList>
+            <ValueType>StringComboBox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorTerraSostre == "TERRA"</Visible>
+            <Enable>False</Enable>
+        </Parameter>
+
+
+
+        <Parameter>
+            <Name>InvertirLEsqDre</Name>
+            <Text>Invertir Inf(←/→)</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Visible>SelectorTipusTub == 'L' and SelectorTerraSostre == "SOSTRE"</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>InvertirLSupInf</Name>
+            <Text>Invertir Inf(↑/↓)</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Visible>False</Visible><!-- <Visible>SelectorTipusTub == 'L'</Visible>-->
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>Layer</Name>
+            <Text>Layer</Text>
+            <TextId>e_LAYER</TextId>
+            <Value>-1</Value>
+            <ValueType>Layer</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>Pen</Name>
+            <Text>Pen</Text>
+            <TextId>e_PEN</TextId>
+            <Value>1</Value>
+            <ValueType>Pen</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>PenByLayer</Name>
+            <Text>Pen by layer</Text>
+            <TextId>e_PEN_BY_LAYER</TextId>
+            <Value>True</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>Stroke</Name>
+            <Text>Linetype</Text>
+            <TextId>e_LINETYPE</TextId>
+            <Value>1</Value>
+            <ValueType>Stroke</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>StrokeByLayer</Name>
+            <Text>Linetype by layer</Text>
+            <TextId>e_LINETYPE_BY_LAYER</TextId>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>Color</Name>
+            <Text>Color</Text>
+            <TextId>e_COLOR</TextId>
+            <Value>17</Value>
+            <ValueType>Color</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>ColorByLayer</Name>
+            <Text>Color by layer</Text>
+            <TextId>e_COLOR_BY_LAYER</TextId>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+        <!--
+        <Parameter>
+                <Name>botonsInvertCostat</Name>
+                <Text> Invertir Costat Linia </Text>
+                <ValueType>Row</ValueType>
+
+                <Parameter>
+                    <Name>CostatEsquerra</Name>
+                    <Text>Costat Esquerra</Text>
+                    <EventId>1008</EventId>
+                    <ValueType>Button</ValueType>
+                    <Visible>InvertirPos</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>CostatDreta</Name>
+                    <Text>Costat Dreta</Text>
+                    <EventId>1009</EventId>
+                    <ValueType>Button</ValueType>
+                    <Visible>not InvertirPos</Visible>
+                </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>InvertirPos</Name>
+            <Text>Invertir Posicio</Text>
+            <TextId>e_InvertirPos</TextId>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+            <Persistent>Model</Persistent>
+            <Enable>False</Enable>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+        -->
+        <Parameter>
+            <Name>PosicioZ</Name>
+            <Text>Posicio Z</Text>
+            <Value>0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>DistanciaMaxTub</Name>
+            <Text>Distancia Maxima de cada Tub</Text>
+            <Value>2000</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>True</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>SeparacioEntreTubs</Name>
+            <Text>Separació Auto entre tubs</Text>
+            <Value>20</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>True</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>foratsAutomatics</Name>
+            <Text>Conjunt Forats Automatics</Text>
+            <Value>True</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+        </Parameter>
+
+        <Parameter>
+            <Name>DimensionsParameterExpanderAuto</Name>
+            <Text>Automatitzacio Forats</Text>
+            <ValueType>Expander</ValueType>
+            <Visible>SelectorTipusTerra == "Parquet"</Visible><!-- <Visible>foratsAutomatics</Visible>-->
+
+
+            <Parameter>
+                <Name>nForatsAutoL</Name>
+                <Text>nForats</Text>
+                <Value>5</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Integer</ValueType>
+                <Persistent>Model</Persistent>
+                <Visible>False</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>LlargadaMinimaForats</Name>
+                <Text>Llargada minima per un Tub</Text>
+                <Value>160</Value>
+                <ValueType>Length</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>orientacioAutoL</Name>
+                <Text>Orientació</Text>
+                <Value>Sup</Value>
+                <ValueList>Esq|Dre|Sup|Inf</ValueList>
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>posIniAutoL</Name>
+                <Text>Posicio Inicial</Text>
+                <Value>50</Value>
+                <ValueType>Length</ValueType>
+            </Parameter>
+
+             <Parameter>
+                <Name>posFinAutoL</Name>
+                <Text>Posicio Final</Text>
+                <Value>50</Value>
+                <ValueType>Length</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>distanciaAutoL</Name>
+                <Text>Distancia entre Forats</Text>
+                <Value>200</Value>
+                <ValueType>Length</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>llargadaAutoL</Name>
+                <Text>Llargada Forats</Text>
+                <Value>40</Value>
+                <ValueType>Length</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>ampladaAutoL</Name>
+                <Text>Amplada Forats</Text>
+                <Value>25</Value>
+                <ValueType>Length</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>ForatComplet</Name>
+                <Text>segon Forat</Text>
+                <Value>True</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>True</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>llargadaAutoLB</Name>
+                <Text>Llargada Forats darrere</Text>
+                <Value>6</Value>
+                <ValueType>Length</ValueType>
+                <Visible>ForatComplet</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>ampladaAutoLB</Name>
+                <Text>Amplada Forats darrere</Text>
+                <Value>6</Value>
+                <ValueType>Length</ValueType>
+                <Visible>ForatComplet</Visible>
+            </Parameter>
+
+
+            <Parameter>
+                <Name>posYAutoL</Name>
+                <Text>posicio Altura</Text>
+                <Value>15</Value>
+                <ValueType>Length</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>ButtonRow2</Name>
+                <Text> Forats auto </Text>
+                <ValueType>Row</ValueType>
+                <Visible>False</Visible>
+
+                <Parameter>
+                    <Name>createAutoL</Name>
+                    <Text>Crear</Text>
+                    <EventId>1006</EventId>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>BorrarAutoL</Name>
+                    <Text>Borrar</Text>
+                    <EventId>1007</EventId>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+
+        </Parameter>
+
+        <Parameter>
+            <Name>ForatsParAut</Name>
+            <Text>Forat,Orientació,Posició,Posició Y, Ample,Llargada,Amplada,Completa,LLargada,Amplada, TFF</Text>
+            <Value>[False|Sup|200. |15|40|25|True|6|6|False;
+                    False|Sup|400. |15|40|25|True|6|6|False;
+                    False|Sup|600. |15|40|25|True|6|6|False;
+                    False|Sup|800. |15|40|25|True|6|6|False;
+                    False|Sup|1000.|15|40|25|True|6|6|False;
+                    False|Sup|1200.|15|40|25|True|6|6|False;
+                    False|Sup|1400.|15|40|25|True|6|6|False;
+                    False|Sup|1600.|15|40|25|True|6|6|False;
+                    False|Sup|1800.|15|40|25|True|6|6|False;
+                    False|Sup|2000.|15|40|25|True|6|6|False]
+            </Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Forat,orientacio,Posicio,PosicioY,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <!-- <Visible>True, ForatsParAut[$list_row][0] == True, ForatsParAut[$list_row][0] == True, ForatsParAut[$list_row][0] == True, ForatsParAut[$list_row][0] == True, ForatsParAut[$list_row][0] == True, False, False, False, False</Visible>-->
+            <Visible>False, False, False, False, False, False, False, False, False, False, False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+
+        <Parameter>
+                <Name>BotonsRecarregarTot</Name>
+                <Text> Recargar amb nous valors </Text>
+                <ValueType>Row</ValueType>
+
+                <Parameter>
+                    <Name>RecarregarTot</Name>
+                    <Text>Recarregar</Text>
+                    <EventId>1010</EventId>
+                    <ValueType>Button</ValueType>
+                    <Visible>True</Visible>
+                </Parameter>
+        </Parameter>
+
+    </Page>
+    <!--
+    <Page>
+        <Name>mesuresHoritzontal</Name>
+        <Text>Mesures Barra</Text>
+
+        <Parameter>
+            <Name>DimensionsParameterExpander</Name>
+            <Text>Mesures Barra</Text>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>DistanciaEntreTD</Name>
+                <Text>Dist. entre Barres Vert</Text>
+                <Value>1170.0</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>BarraAmple</Name>
+                <Text>Ample</Text>
+                <Value>30.</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'Tub' or SelectorTerraSostre == "TERRA"</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraAltura</Name>
+                <Text>Altura</Text>
+                <Value>30</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'Tub' or SelectorTerraSostre == "TERRA"</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>BarraLlargada</Name>
+                <Text>Llargada</Text>
+                <Value>1000.0</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraGruix</Name>
+                <Text>Gruix</Text>
+                <Value>1.5</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'Tub' or SelectorTerraSostre == "TERRA"</Visible>
+            </Parameter>
+
+
+            <Parameter>
+                <Name>BarraAmpleL</Name>
+                <Text>Ample</Text>
+                <Value>50.</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'L' and SelectorTerraSostre == "SOSTRE"</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraAlturaL</Name>
+                <Text>Altura</Text>
+                <Value>100</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'L' and SelectorTerraSostre == "SOSTRE"</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>BarraGruixL</Name>
+                <Text>Gruix</Text>
+                <Value>3</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorTipusTub == 'L'and SelectorTerraSostre == "SOSTRE"</Visible>
+            </Parameter>
+
+        </Parameter>
+
+    </Page>
+    -->
+
+    <!--Collisos i Potes-->
+    <Page>
+        <Name>CollisosPotes</Name>
+        <Text>Collisos i Potes</Text>
+        <Visible>False</Visible>
+
+        <Parameter>
+            <Name>DimensionsParameterExpander</Name>
+            <Text>Colís</Text>
+            <ValueType>Expander</ValueType>
+
+
+            <Parameter>
+                <Name>ColisPar</Name>
+                <Text>Colís,Orientació,Posició,Llargada,Amplada</Text>
+                <Value>[False|Sup|400.|170|12;
+                        False|Sup|800.|170|12;
+                        False|Sup|1200.|170|12;
+                        False|Sup|1600.|170|12]
+                </Value>
+                <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Separator)</ValueType>
+                <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+                <NamedTuple>
+                    <TypeName>UShape</TypeName>
+                    <FieldNames>Colis,orientacio,Posicio,Llargada,Amplada,Separator</FieldNames>
+                </NamedTuple>
+                <MinValue>,,0</MinValue>
+                <Visible>True, ColisPar[$list_row][0] == True, ColisPar[$list_row][0] == True, ColisPar[$list_row][0] == True, ColisPar[$list_row][0] == True</Visible>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>DimensionsParameterExpander</Name>
+            <Text>Potes</Text>
+            <ValueType>Expander</ValueType>
+
+
+            <Parameter>
+                <Name>PotaPar</Name>
+                <Text>Pota,Posició</Text>
+                <Value>[False|400.;
+                        False|800.;
+                        False|1200.;
+                        False|1600.]
+                </Value>
+                <EventId>0,0,0,0,0,1000,0</EventId>
+                <ValueType>namedtuple(Checkbox,Length,Separator)</ValueType>
+                <NamedTuple>
+                    <TypeName>UShape</TypeName>
+                    <FieldNames>Pota,Posicio,Separator</FieldNames>
+                </NamedTuple>
+                <MinValue>,0</MinValue>
+                <Visible>True, PotaPar[$list_row][0] == True</Visible>
+            </Parameter>
+
+        </Parameter>
+
+        <Parameter>
+            <Name>DimensionsParameterExpander</Name>
+            <Text>Forats</Text>
+            <ValueType>Expander</ValueType>
+
+
+            <Parameter>
+                <Name>ForatsPar</Name>
+                <Text>Forat,Orientació,Posició,Llargada,Amplada,Completa</Text>
+                <Value>[False|Sup|400.|20|15|True;
+                        False|Sup|800.|20|15|True;
+                        False|Sup|1200.|20|15|True;
+                        False|Sup|1600.|20|15|True]
+                </Value>
+                <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Separator)</ValueType>
+                <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+                <NamedTuple>
+                    <TypeName>UShape</TypeName>
+                    <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,Separator</FieldNames>
+                </NamedTuple>
+                <MinValue>,,0</MinValue>
+                <Visible>True, ForatsPar[$list_row][0] == True, ForatsPar[$list_row][0] == True, ForatsPar[$list_row][0] == True, ForatsPar[$list_row][0] == True, ForatsPar[$list_row][0] == True</Visible>
+            </Parameter>
+        </Parameter>
+    </Page>
+
+    <!--FEMELLES-->
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <Visible>False</Visible>
+
+        <Parameter>
+            <Name>FemellesExpander</Name>
+            <Text></Text>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>Ample_forat_femella</Name>
+                <Text>Ample Forat Femella</Text>
+                <Value>15</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>Altura_forat_femella</Name>
+                <Text>Altura Forat Femella</Text>
+                <Value>3.75</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>Separacio_forat_femella</Name>
+                <Text>Separació Forat Femella</Text>
+                <Value>30</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>FemellesExpander</Name>
+                <Text></Text>
+                <ValueType>Expander</ValueType>
+                <Name>PosicioExpander</Name>
+                <Text>Posició femelles</Text>
+                <ValueType>Expander</ValueType>
+                <!-- FEMELLES-->
+                <!-- *********************************** -->
+                <Parameter>
+                    <Name>Separator</Name>
+                    <ValueType>Separator</ValueType>
+                </Parameter>
+
+
+                <Parameter>
+                    <Name>Femelles</Name>
+                    <Text>Femella ,Orientació,Posició X,Posició Y,Separacio</Text>
+                    <Value>[False|Esq|400|0|0;
+                            False|Esq|800|0|0;
+                            False|Esq|1200|0|0]
+                    </Value>
+                    <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Separator)</ValueType>
+                    <ValueList>,Esq|Dre|Sup|Inf,,,</ValueList>
+                    <NamedTuple>
+                        <TypeName>StirrupList</TypeName>
+                        <FieldNames>Femella,FemellaOr,PosFemellaX,PosFemellaY,Separacio_forat_femella,Separator</FieldNames>
+                    </NamedTuple>
+                    <MinValue>,,0,0</MinValue>
+                    <Visible>True, Femelles[$list_row][0] == True, Femelles[$list_row][0] == True, Femelles[$list_row][0] == True, False, </Visible>
+                </Parameter>
+
+
+
+            </Parameter>
+        </Parameter>
+    </Page>
+
+    <!--CANCAMS-->
+    <Page>
+        <Name>Cancams</Name>
+        <Text>Cancams</Text>
+        <Visible>False</Visible>
+        <Parameter>
+            <Name>CancamsExpander</Name>
+            <Text>Cancams</Text>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>posicio_centre_masses</Name>
+                <Text>Posició centre de masses</Text>
+                <Value>500.00</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>CancamsExpander</Name>
+                <Text></Text>
+                <value>True</value>
+                <ValueType>Expander</ValueType>
+
+                <Parameter>
+                    <Name>IsFirstCancam</Name>
+                    <Text>1r cancam</Text>
+                    <Value>False</Value>
+                    <ValueType>Checkbox</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>Dis1cancam</Name>
+                    <Text>Distància</Text>
+                    <Value>100</Value>
+                    <Text>m.</Text>
+                    <ValueType>Length</ValueType>
+                    <Visible>IsFirstCancam == True</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>IsSecondCancam</Name>
+                    <Text>2n cancam</Text>
+                    <Value>False</Value>
+                    <ValueType>Checkbox</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>Dis2cancam</Name>
+                    <Text>Distància</Text>
+                    <Value>300</Value>
+                    <Text>m.</Text>
+                    <ValueType>Length</ValueType>
+                    <Visible>IsSecondCancam == True</Visible>
+                </Parameter>
+            </Parameter>
+        </Parameter>
+    </Page>
+
+    <!--Encaix-->
+    <Page>
+        <Name>Encaix</Name>
+        <Text>Encaix</Text>
+        <Visible>False</Visible>
+
+        <Parameter>
+            <Name>EncaixExpander</Name>
+            <Text>Encaix</Text>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>PestanyaSuperior</Name>
+                <Text>Pestanya Superior</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>PestanyaInferior</Name>
+                <Text>Pestanya Inferior</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+            </Parameter>
+
+            <Name>EncaixTransversal</Name>
+            <Text>Encaixos Tranversals</Text>
+
+
+            <Parameter>
+                <Name>Separator</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+
+
+            <Parameter>
+                <Name>EncaixosPar</Name>
+                <Text>Encaix,Orientació,Longitud,Amplitud,Posició,Profunditat,Pestanya</Text>
+                <Value>[False|Esq|31.|30|15.5|11|False;
+                        False|Esq|80.|30|15.5|11|False;
+                        False|Esq|120.|30|15.5|11|False]
+                </Value>
+                <EventId>0,0,0,0,0,0,1000,0</EventId>
+                <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox,Separator)</ValueType>
+                <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+                <NamedTuple>
+                    <TypeName>StirrupList</TypeName>
+                    <FieldNames>Encaix,EncaixOr,Longitud,Amplitud,Posicio,Profunditat,Pestanya,Separator</FieldNames>
+                </NamedTuple>
+                <MinValue>,,0,0,,1,</MinValue>
+                <Visible>True, EncaixosPar[$list_row][0] == True, EncaixosPar[$list_row][0] == True, EncaixosPar[$list_row][0] == True, EncaixosPar[$list_row][0] == True, EncaixosPar[$list_row][0] == True, EncaixosPar[$list_row][0] == True</Visible>
+            </Parameter>
+
+        </Parameter>
+    </Page>
+</Element>

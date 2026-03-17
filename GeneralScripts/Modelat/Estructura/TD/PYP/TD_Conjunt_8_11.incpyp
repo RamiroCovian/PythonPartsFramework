@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+    <!--Encaix HOR SUP-->
+    <Parameter>
+        <Name>EncaixExpander</Name>
+        <Text>Encaix</Text>
+        <ValueType>Expander</ValueType>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>PestanyaSuperiorSUP</Name>
+            <Text>Pestanya Superior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>PestanyaInferiorSUP</Name>
+            <Text>Pestanya Inferior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Name>EncaixTransversal</Name>
+        <Text>Encaixos Tranversals</Text>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>EncaixosParSUP</Name>
+            <Text>Encaix,Orientacio,Longitud,Amplitud,Posicio,Profunditat,Pestanya</Text>
+            <!-- <Value>[False|Esq|31.|30|15.5|11|False;
+                    False|Esq|80.|30|0.|11|False;
+                    False|Esq|120.|0.|30|11|False]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Encaix,EncaixOr,Longitud,Amplitud,Posicio,Profunditat,Pestanya,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0,,,</MinValue>
+            <Visible>True, EncaixosParSUP[$list_row][0] == True, EncaixosParSUP[$list_row][0] == True,EncaixosParSUP[$list_row][0] == True, EncaixosParSUP[$list_row][0] == True, EncaixosParSUP[$list_row][0] == True, EncaixosParSUP[$list_row][0] == True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+    </Parameter>
+
+</Include>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>EncaixExpander</Name>
+        <Text>Encaix</Text>
+        <ValueType>Expander</ValueType>
+
+        <Parameter>
+            <Name>PestanyaSuperiorINF</Name>
+            <Text>Pestanya Superior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>False</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>PestanyaInferiorINF</Name>
+            <Text>Pestanya Inferior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>False</Visible>
+        </Parameter>
+
+        <Name>EncaixTransversal</Name>
+        <Text>Encaixos Tranversals</Text>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>EncaixosParINF</Name>
+            <Text>Encaix,Orientació,Longitud,Amplitud,Posició,Profunditat,Pestanya,Despl</Text>
+            <Value>[False|Esq|31.|30|200|11|False|0;
+                    False|Esq|31.|30|400|11|False|0;
+                    False|Esq|31.|30|600|11|False|0]
+            </Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox,Length)</ValueType><!-- ,Separator-->
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Encaix,EncaixOr,Longitud,Amplitud,Posicio,Profunditat,Pestanya,PosY</FieldNames>
+            </NamedTuple>
+            <MinValue>,,,,,</MinValue>
+            <!-- <Visible>True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True</Visible>-->
+            <Visible>True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, EncaixosParINF[$list_row][0] == True, False</Visible> <!-- , EncaixosParINF[$list_row][0] == True-->
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+    </Parameter>
+
+</Include>

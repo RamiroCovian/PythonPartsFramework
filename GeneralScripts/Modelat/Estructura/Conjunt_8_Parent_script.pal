@@ -1,0 +1,640 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Element>
+    <Script>
+        <Name>Modelat\Estructura\Conjunt_8_Parent_Script.py</Name>
+        <Title>Python Part TD Parent Script</Title>
+        <Version>27.0</Version>
+        <ReadLastInput>True</ReadLastInput>
+        <DataColumnWidth>150</DataColumnWidth>
+
+    </Script>
+    <!-- ************* DADES GENERALS *************-->
+    <Page>
+        <Name>SelectorPythonPartTD</Name>
+        <Text>Selector Fill</Text>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>zUnique</Name>
+            <Text>Unic</Text>
+            <Value>0.0</Value>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>Double</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>FlagEntrada</Name>
+            <Text>FlagEntrada</Text>
+            <Value>1</Value>
+            <ValueType>Integer</ValueType>
+            <Visible>True</Visible>
+            <Enable>False</Enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <!-- #include TD_COnjunt_8_Parent_copy.pyp;-->
+
+        <Parameter>
+            <Name>SelectorPPPare</Name>
+            <Text>Selecciona PP per editar</Text>
+            <Value>1</Value>
+            <ValueType>RadioButtonGroup</ValueType>
+            <Persistent>Model</Persistent>
+
+
+            <Parameter>
+                <Name>Pare</Name>
+                <Text>Pare</Text>
+                <Value>1</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>TD</Name>
+                <Text>TD</Text>
+                <Value>2</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>EN</Name>
+                <Text>EN</Text>
+                <Value>3</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>IS</Name>
+                <Text>IS</Text>
+                <Value>4</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+
+        </Parameter>
+
+    </Page>
+
+    <Page>
+        <!--
+        <Parameter>
+            <Name>FirstPalette</Name>
+            <Text/>
+            <Value>TD_Conjunt_8_2.incpyp</Value>
+            <ValueType>Include</ValueType>
+            <Visible>SelectorPPPare == 2</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>SecondPalette</Name>
+            <Text/>
+            <Value>EN_Conjunt_8_2.incpyp</Value>
+            <ValueType>Include</ValueType>
+            <Visible>SelectorPPPare == 3</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>thirdPalette</Name>
+            <Text/>
+            <Value>IS_Conjunt_8_2.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+        -->
+    </Page>
+
+    <!-- #TD-->
+
+    <Page>
+        <Name>SelectorPythonPartTD</Name>
+        <Text>Selector</Text>
+        <Visible>SelectorPPPare == 2</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_1.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>PP TD Horitzontal</Name>
+        <Text>Desplaçament Horitzontal</Text>
+        <Visible>SelectorPPPare == 2 and (SelectorPP == 1 or SelectorPP == 2 or SelectorPP == 4)</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_2.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <!--
+    <Page>
+        <Name>mesuresbarra</Name>
+        <Text>Mesures Barra</Text>
+        <Visible>SelectorPPPare == 2 and (SelectorPP == 1 or (SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...")) or SelectorPP == 4)</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_3.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+    <Name>CollisosPotes</Name>
+        <Text>Collisos i Potes</Text>
+        <Visible>SelectorPPPare == 2 and (SelectorPP == 1 and SelectorTDH == 'TD Inferior')</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_4.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>CollisosPotes</Name>
+        <Text>Collisos i Potes</Text>
+        <Visible>SelectorPPPare == 2 and (SelectorPP == 1 and SelectorTDH == 'TD Superior')</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_5.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <Visible>SelectorPPPare == 2 and (SelectorPP == 1 and SelectorTDH == 'TD Inferior')</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_6.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <Visible>(SelectorPP == 1 and SelectorTDH == 'TD Superior') and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_7.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Cancams</Name>
+        <Text>Cancams</Text>
+        <Visible>(SelectorPP == 1 and SelectorTDH == 'TD Inferior') and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_8.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Cancams</Name>
+        <Text>Cancams</Text>
+        <Visible>(SelectorPP == 1 and SelectorTDH == 'TD Superior') and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_9.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Encaix</Name>
+        <Text>Encaix</Text>
+        <Visible>(SelectorPP == 1 and SelectorTDH == 'TD Inferior') and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_10.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Encaix</Name>
+        <Text>Encaix</Text>
+        <Visible>(SelectorPP == 1 and SelectorTDH == 'TD Superior') and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_11.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>CollisosPotes</Name>
+        <Text>Collisos i Potes</Text>
+        <Visible>(SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...")) and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_12.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <Visible>(SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...")) and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_13.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Cancams</Name>
+        <Text>Cancams</Text>
+        <Visible>(SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...")) and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_14.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>EncaixVert</Name>
+        <Text>Encaix</Text>
+        <Visible>(SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...")) and SelectorPPPare == 2 </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_15.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>__HiddenPage__</Name>
+        <Text></Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_16.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name></Name>
+        <Text></Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_17.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    -->
+    <Page>
+        <Name></Name>
+        <Text></Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\TD\TD_Conjunt_8_20_test.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <!-- #EN-->
+
+    <Page>
+        <Name>SelectorPythonPartEN</Name>
+        <Text>Selector</Text>
+        <Visible>SelectorPPPare == 3</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_1.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>PP EN Horitzontal</Name>
+        <Text>Desplaçament Horitzontal</Text>
+        <Visible>SelectorPPPare == 3 and (SelectorPP == 1 or SelectorPP == 2 or SelectorPP == 4 or SelectorPP == 5)</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_2.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>mesuresbarra</Name>
+        <Text>Mesures Barra</Text>
+        <Visible>(SelectorPP == 1 or SelectorPP == 2 or SelectorPP == 4 or SelectorPP == 5) and SelectorPPPare == 3</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_3.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>CollisosPotes</Name>
+        <Text>Collisos i Potes</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_4.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>CollisosPotes</Name>
+        <Text>Collisos i Potes</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_5.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_6.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_7.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Cancams</Name>
+        <Text>Cancams</Text>
+        <Visible>False </Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_8.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Cancams</Name>
+        <Text>Cancams</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_9.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Encaix</Name>
+        <Text>Encaix</Text>
+        <Visible>((SelectorPP == 1 and SelectorTDH == 'EN Inferior' and TubInferior == "L") or (SelectorPP == 5 and TubInferior == "L")) and SelectorPPPare == 3</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_10.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Encaix</Name>
+        <Text>Encaix</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_11.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Forats</Name>
+        <Text>Forats</Text>
+        <Visible>(SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...") )and SelectorPPPare == 3</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_12.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <Visible>(SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...") ) and SelectorPPPare == 3</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_13.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>Cancams</Name>
+        <Text>Cancams</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_14.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>EncaixVert</Name>
+        <Text>Encaix</Text>
+        <Visible>(SelectorPP == 2 or (SelectorPP == 1 and SelectorTDH == "Mes Tubs...")) and SelectorPPPare == 3</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_15.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>__HiddenPage__</Name>
+        <Text></Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_16.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>EN</Name>
+        <Text>EN</Text>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\EN\EN_Conjunt_8_17.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+    </Page>
+
+    <!-- #IS-->
+    <!-- ************* DADES GENERALS *************-->
+    <Page>
+        <Name>SelectorPythonPartIS</Name>
+        <Text>Selector Child</Text>
+        <Visible>SelectorPPPare == 4</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\IS\IS_Conjunt_8_31.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+
+    </Page>
+    <Page>
+        <Name>mesuresbarra</Name>
+        <Text>Mesures Barra</Text>
+        <Visible>SelectorPPPare == 4 and SelectorPP == 1</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\IS\IS_Conjunt_8_32.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+
+    </Page>
+    <Page>
+        <Name>Femelles</Name>
+        <Text>Femelles</Text>
+        <!-- <Visible>SelectorPPPare == 4 </Visible>-->
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\IS\IS_Conjunt_8_33.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+
+    </Page>
+    <Page>
+        <Name>Encaix</Name>
+        <Text>Encaix</Text>
+        <!-- <Visible>SelectorPPPare == 4</Visible>-->
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\IS\IS_Conjunt_8_34.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+
+    </Page>
+    <Page>
+        <Name>mesuresbarra</Name>
+        <Text>Mesures Barra</Text>
+        <!-- <Visible>SelectorPPPare == 4</Visible> -->
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+        <Parameter>
+            <Name></Name>
+            <Text/>
+            <Value>\IS\IS_Conjunt_8_35.incpyp</Value>
+            <ValueType>Include</ValueType>
+        </Parameter>
+
+    </Page>
+</Element>

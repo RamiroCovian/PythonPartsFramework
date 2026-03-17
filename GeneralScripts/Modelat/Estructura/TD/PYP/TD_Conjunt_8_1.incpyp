@@ -1,0 +1,1473 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+
+    <!-- ************* DADES GENERALS *************-->
+    <Parameter>
+        <Name>zUnique</Name>
+        <Text>Unic</Text>
+        <Value>0.0</Value>
+        <Visible>False</Visible>
+        <Enable>False</Enable>
+        <ValueType>Double</ValueType>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!--
+    <Parameter>
+        <Name>ElementAttributes</Name>
+        <Text>Element attribute</Text>
+        <Value>[(0,)]</Value>
+        <ValueType>AttributeIdValue</ValueType>
+        <ValueDialog>AttributeSelectionElements</ValueDialog>
+        <Visible>False</Visible>
+    </Parameter>
+    -->
+
+    <!--
+    <Parameter>
+        <Name>AttributeID</Name>
+        <Text>All attributes ID</Text>
+        <Value></Value>
+        <ValueType>AttributeID</ValueType>
+        <ValueDialog>AttributeSelection</ValueDialog>
+    </Parameter>
+    -->
+
+    <Parameter>
+        <Name>comprovarDEN</Name>
+        <Text>Comparar Atributs DEN</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <BackgroundColor>(255, 0, 0)</BackgroundColor>
+    </Parameter>
+
+    <!-- Selector Barra Horitzontals / Verticals-->
+    <Parameter>
+        <Name>NomTD</Name>
+        <Text>NomTD</Text>
+        <Value>TD</Value>
+        <ValueType>String</ValueType>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+    <!-- Distancia entre TD/Barres Verticals-->
+    <Parameter>
+        <Name>DistanciaEntreTDAnt</Name>
+        <Text>Dist. entre Barres Vert</Text>
+        <Value>100</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>False</Visible>
+    </Parameter>
+
+    <Parameter>
+        <Name>DistanciaEntreTD</Name>
+        <Text>Dist. entre Barres Vert</Text>
+        <Value>1170</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>SelectorPPAnt</Name>
+        <Text>Selecciona PP per editar</Text>
+        <Value>1</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorPPTD</Name>
+        <Text>Selecciona PP per editar</Text>
+        <Value>1</Value>
+        <ValueType>RadioButtonGroup</ValueType>
+        <Persistent>Model</Persistent>
+
+
+        <Parameter>
+            <Name>BarraHorTD</Name>
+            <Text>Horitzontal</Text>
+            <Value>1</Value>
+            <ValueType>RadioButton</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>BarraVerTD</Name>
+            <Text>Vertical</Text>
+            <Value>2</Value>
+            <ValueType>RadioButton</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>BalconeraFinestraTD</Name>
+            <Text>Balconera / Finestra</Text>
+            <Value>3</Value>
+            <ValueType>RadioButton</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>BarraReforcTD</Name>
+            <Text>Barra Reforç</Text>
+            <Value>4</Value>
+            <ValueType>RadioButton</ValueType>
+        </Parameter>
+
+    </Parameter>
+
+
+
+    <!-- Selector Barra Inferior / Superior -->
+    <Parameter>
+        <Name>SelectorTDHTD</Name>
+        <Text>Select TD Horitzontal</Text>
+        <Value>TD Inferior</Value>
+            <ValueList>TD Inferior|TD Superior|Mes Tubs...</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDHInf</Name>
+        <Text>Select Tipus Inf</Text>
+        <Value>Tub</Value>
+            <ValueList>Tub|L|</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>SelectorTDHSup</Name>
+        <Text>Select Tipus Sup</Text>
+        <Value>Tub</Value>
+            <ValueList>Tub|L|Tub + L</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>valueListBarresHorBalcOnlyNum</Name>
+        <Text>valueListBarresHorBalc</Text>
+        <Value>[]</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDHTotalAnt</Name>
+        <Text>valueListBarresHorBalc</Text>
+        <Value>-1</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDTipusHor</Name>
+        <Text>valueTipusListBarresHor</Text>
+        <Value>-1</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDHTotal</Name>
+        <Text>Select Horitzontal</Text>
+        <Value>TD Inferior</Value>
+        <ValueList>[str(value) for value in valueListBarresHorBalcOnlyNum]</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."</Visible>
+        <BackgroundColor>(0, 255, 0)</BackgroundColor>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Numero indicador de les Barres verticals-->
+    <Parameter>
+        <Name>IntegerTDSelector</Name>
+        <Text>Nº barres</Text>
+        <Value>10</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>SelectorPPTD == 1 or SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>esVermellHor</Name>
+        <Text>vermell</Text>
+        <Value>False</Value>
+        <ValueType>Checkbox</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."</Visible>
+    </Parameter>
+    <!-- Numero indicador de la Barra Anterior Seleccionada -->
+    <Parameter>
+        <Name>IntegerTDSelectorAnterior</Name>
+        <Text>length</Text>
+        <Value>-1</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Selector de Barra Vertical-->
+    <Parameter>
+        <Name>SelectorTDVAnt</Name>
+        <Text>Select Vertical</Text>
+        <Value>-1</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorTDV</Name>
+        <Text>Select Vertical</Text>
+        <Value>TDVer</Value>
+            <ValueList>['TDVer '+str(value) for value in range(0, IntegerTDSelector)]</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <BackgroundColor>(252, 186, 3)</BackgroundColor>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Selector Balconera / Finestra-->
+    <Parameter>
+        <Name>IntegerBalcFinSelector</Name>
+        <Text>Nº balconeres</Text>
+        <Value>1</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>SelectorPPTD == 3</Visible>
+        <!-- <Visible>False</Visible>-->
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorBalcFinAnt</Name>
+        <Text>Select Balc/Fin Anterior</Text>
+        <Value>-1</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorBalcFin</Name>
+        <Text>Select Balconera/Finestra</Text>
+        <Value>Balc/Fin</Value>
+            <ValueList>['Balc/Fin '+str(value) for value in range(0, IntegerBalcFinSelector)]</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 3</Visible>
+        <BackgroundColor>(191, 2, 119)</BackgroundColor>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>Separator</Name>
+        <ValueType>Separator</ValueType>
+        <Visible>True</Visible>
+    </Parameter>
+
+    <Parameter>
+        <Name>MesuraXPS</Name>
+        <Text>MesuraXPS</Text>
+        <Value>120</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+    <Parameter>
+        <Name>MostrarTDVertical</Name>
+        <Text>Mostrar Vertical</Text>
+        <Value>True</Value>
+        <ValueType>checkbox</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>valueVertListBarresHorInf</Name>
+        <Text>valueVertListBarresHorInf</Text>
+        <Value>[]</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDHorInf</Name>
+        <Text>Tub Hor Inferior</Text>
+        <Value>TD Inferior</Value>
+        <ValueList>[str(value) for value in valueVertListBarresHorInf]</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <BackgroundColor>(0, 255, 0)</BackgroundColor>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>valueVertListBarresHorSup</Name>
+        <Text>valueVertListBarresHorSup</Text>
+        <Value>[]</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDHorSup</Name>
+        <Text>Tub Hor Superior</Text>
+        <Value>TD Superior</Value>
+        <ValueList>[str(value) for value in valueVertListBarresHorSup]</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <BackgroundColor>(0, 255, 0)</BackgroundColor>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>MostrarTDHoritzontalSup</Name>
+        <Text>Mostrar Horitzontal Sup</Text>
+        <Value>True</Value>
+        <ValueType>checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>MostrarFemellesSup</Name>
+        <Text>Mostrar Femelles Sup</Text>
+        <Value>True</Value>
+        <ValueType>checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SelectorTDHSup == 'L'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>VermellSup</Name>
+        <Text>Vermell</Text>
+        <Value>False</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>MostrarTDHoritzontalInf</Name>
+        <Text>Mostrar Horitzontal Inf</Text>
+        <Value>True</Value>
+        <ValueType>checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>VermellInf</Name>
+        <Text>Vermell</Text>
+        <Value>False</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>InvertirTDHoritzontalInf</Name>
+        <Text>Invertir Inf(ESQ/DRE)</Text>
+        <Value>False</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SelectorTDHInf == 'L'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>InvertirTDHoritzontalInf2</Name>
+        <Text>Invertir Inf(SUP/INF)</Text>
+        <Value>False</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SelectorTDHInf == 'L'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>InvertirTDHoritzontalSup</Name>
+        <Text>Invertir Sup(ESQ/DRE)</Text>
+        <Value>False</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>InvertirTDHoritzontalSup2</Name>
+        <Text>Invertir Sup(SUP/INF)</Text>
+        <Value>True</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SepararTDHoritzontalInf</Name>
+        <Text>Separar Horitzontal Inf</Text>
+        <Value>False</Value>
+        <ValueType>checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SepararTDHoritzontalSup</Name>
+        <Text>Separar Horitzontal Sup</Text>
+        <Value>False</Value>
+        <ValueType>checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>nBarresTDHoritzontalInf</Name>
+        <Text>nº Barres Horitzontal Inf</Text>
+        <Value>3</Value>
+        <MinValue>1</MinValue>
+        <!-- <MaxValue>3</MaxValue>-->
+        <ValueType>Integer</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1</Visible>
+        <!-- <Visible>True</Visible>-->
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>nBarresTDHoritzontalSup</Name>
+        <Text>nº Barres Horitzontal SUp</Text>
+        <Value>3</Value>
+        <MinValue>1</MinValue>
+        <ValueType>Integer</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>esProvisional</Name>
+        <Text>es provisional</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>esProvisionalAuto</Name>
+        <Text>L automatiques</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPPTD == 2 and esProvisional</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>esExtrem</Name>
+        <Text>Provisional Extrem</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPPTD == 2 and esProvisional</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>esProvisionalAuto1</Name>
+        <Text>L Dre Inf</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPPTD == 2 and not esProvisionalAuto</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>esProvisionalAuto4</Name>
+        <Text>L Esq Inf</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPPTD == 2 and not esProvisionalAuto</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>esProvisionalAuto2</Name>
+        <Text>L Esq Sup</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPPTD == 2 and not esProvisionalAuto</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>esProvisionalAuto3</Name>
+        <Text>L Dre SUP</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPPTD == 2 and not esProvisionalAuto</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+    <Parameter>
+        <Name>esVermellVert</Name>
+        <Text>Vermell</Text>
+        <Value>False</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>ButtonRow</Name>
+        <Text> SAVE/UPDATE </Text>
+        <ValueType>Row</ValueType>
+
+        <Parameter>
+            <Name>Button</Name>
+            <Text>Actualitzar</Text>
+            <EventId>1000</EventId>
+            <ValueType>Button</ValueType>
+        </Parameter>
+
+        <!--
+        <Parameter>
+            <Name>detectarLocal</Name>
+            <Text>Detectar Local</Text>
+            <EventId>1005</EventId>
+            <ValueType>Button</ValueType>
+        </Parameter>
+        -->
+    </Parameter>
+
+
+    <Parameter>
+        <Name>MostrarOcultarLayers</Name>
+        <Text>Mostra/Ocultar Layers</Text>
+        <ValueType>Expander</ValueType>
+        <Value>True</Value>
+
+        <Parameter>
+            <Name>MostrarCavitatsRecess</Name>
+            <Text>Mostrar Cavitats (KN_XPS_RECESS)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>MostrarCavitats</Name>
+            <Text>Mostrar Cavitats (KN_XPS_CAVITAT)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>MostrarRecessInf</Name>
+            <Text>Mostrar Cavitat Tub Inferior (KN_XPS_RECESS)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>MostrarCavitatInf</Name>
+            <Text>Mostrar Cavitats Tub Inferior (KN_XPS_CAVITAT)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>MostrarRecessSup</Name>
+            <Text>Mostrar Cavitat Tub Superior (KN_XPS_RECESS)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>MostrarCavitatSup</Name>
+            <Text>Mostrar Cavitats Tub Superior (KN_XPS_CAVITAT)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 2</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>MostrarRecessVert</Name>
+            <Text>Mostrar Cavitat Tub Vertical (KN_XPS_RECESS)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>MostrarCavitatVert</Name>
+            <Text>Mostrar Cavitats Tub Vertical (KN_XPS_CAVITAT)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 2</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>MostrarEsponja</Name>
+            <Text>Mostrar Fresades Esponja (KN_ESPONJA)</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>True</Visible>
+        </Parameter>
+    </Parameter>
+
+
+
+
+
+    <Parameter>
+        <Name>NumerosIDParameterExpanderTD</Name>
+        <Text>Numeros Identificatius</Text>
+        <ValueType>Expander</ValueType>
+        <Value>False</Value>
+
+        <Parameter>
+            <Name>MostrarTDNums</Name>
+            <Text>Mostrar Numeros Id</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>tamanyNumId</Name>
+            <Text>Tamany Numeros Id</Text>
+            <Value>5</Value>
+            <ValueType>Integer</ValueType>
+            <ValueSlider>True</ValueSlider>
+            <MinValue>1</MinValue>
+            <MaxValue>10</MaxValue>
+            <IntervalValue>1</IntervalValue>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>InvertirTDNums</Name>
+            <Text>Invertir Numeros Id</Text>
+            <Value>False</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>FemellesEncaixosParameterExpanderTD</Name>
+        <Text>Femelles i Encaixos</Text>
+        <ValueType>Expander</ValueType>
+        <Value>False</Value>
+        <Visible>SelectorPPTD == 2</Visible>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>encaixSup</Name>
+            <Text>Treure Encaix Sup</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>encaixInf</Name>
+            <Text>Treure Encaix Inf</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>VertEditant</Name>
+            <Text>Hi ha una barra vertical editnaat</Text>
+            <Value>False</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>femellaSup</Name>
+            <Text>Femella Sup</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 2 and VertEditant == False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>femellaInf</Name>
+            <Text>Femella Inf</Text>
+            <Value>True</Value>
+            <ValueType>checkbox</ValueType>
+            <Visible>SelectorPPTD == 2 and VertEditant == False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+    </Parameter>
+
+
+
+
+    <Parameter>
+        <Name>CopiarPegarExpander</Name>
+        <Text>Copiar i Pegar</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Visible>SelectorPPTD == 2</Visible>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>CopyButton</Name>
+            <Text> Copiar Valors </Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>Button</Name>
+                <Text>Copiar</Text>
+                <EventId>1001</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>teValorsCopiats</Name>
+            <Text>teValorsCopiats</Text>
+            <Value>False</Value>
+            <Visible>False</Visible>
+            <ValueType>CheckBox</ValueType>
+            <Enable>False</Enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>PasteButton</Name>
+            <Text> Pegar Valors </Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>Button</Name>
+                <Text>Pegar</Text>
+                <EventId>1002</EventId>
+                <ValueType>Button</ValueType>
+                <Enable>teValorsCopiats</Enable>
+            </Parameter>
+        </Parameter>
+    </Parameter>
+    <!-- ******** Barres Inermitges *********-->
+        <!-- Llista de Barres Horitzontals Vertical-->
+    <!-- <Name>Parent:PythonPartConnection</Name>-->
+    <Name>Barres Horitzontal</Name>
+    <Text>Intermitges Horitzontal</Text>
+    <!-- <Persistent>Model</Persistent> -->
+    <Parameter>
+        <Name>ExtensioInferior</Name>
+        <Text>ExtensioInferior</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>False</ExcludeIdentical>
+        <!-- <Persistent>Model</Persistent> -->
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+
+        <Parameter>
+            <Name>ExtenderInf</Name>
+            <Text>Extensio Inf</Text>
+            <Value>0.0</Value>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+    </Parameter>
+
+
+
+    <!-- ******** Barres Inermitges *********-->
+        <!-- Llista de Barres Horitzontals Vertical-->
+    <!-- <Name>Parent:PythonPartConnection</Name>-->
+    <Name>Barres Horitzontal</Name>
+    <Text>Intermitges Horitzontal</Text>
+    <ValueType>ListGroup</ValueType>
+    <!-- <Persistent>Model</Persistent> -->
+    <Parameter>
+        <Name>BarresHorParameterExpander</Name>
+        <Text>Barres Horitzontals</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'Mes Tubs...'</Visible>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>valueListBarresComboBox</Name>
+            <Text>valueListBarresComboBox</Text>
+            <Value>['Tub 0','Tub 1','Tub 2','Tub 3','Tub 4','Tub 5','Tub 6','Tub 7','Tub 8','Tub 9','Tub 10']</Value>
+            <ValueType>String</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarresHorListToShowTD</Name>
+            <Text>Barra Horitzontal,Orientacio,Posicio,Long. Automatica,Longitud,BarraInici,BarraFinal,Edit,acabatEditar,Mostrar Cavitat (KN_XPS_RECESS),Mostrar Cavitat (KN_XPS_CAVITAT),Es Xapa, Profunitat Cavitat Xapa,Layer,Separator</Text>
+            <Value>[False|Inf|400|True|0|Tub 0|Tub 1|False|False|True|True|False|5|TD_ESTRUCTURA|]</Value>
+            <!-- <Value>[]</Value>-->
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Checkbox,Length,StringComboBox,StringComboBox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Length,StringComboBox,Separator)</ValueType>
+            <!-- <ValueList>,Sup|Inf,,,,[str(value) for value in valueListBarresComboBox],[str(value) for value in valueListBarresComboBox],,,,,,,TD_ESTRUCTURA|KN_ELECTRICITAT_REINFORCEMENT|KN_AIGUA_REINFORCEMENT,</ValueList>-->
+            <ValueList>,Sup|Inf,,,,valueListBarresComboBox,valueListBarresComboBox,,,,,,,TD_ESTRUCTURA|KN_ELECTRICITAT_REINFORCEMENT|KN_AIGUA_REINFORCEMENT,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraHor,Orientacio,Posicio,AutoLongitud,Longitud,BarraInici,BarraFinal,Edit,acabatEditar,MostrarRecess,MostrarCavitat,Xapa,ProfunditatXapa,Layer,Separator</FieldNames>
+            </NamedTuple>
+            <!-- <Visible>SelectorPPTD == 2, SelectorPPTD == 2 and BarresHorListToShowTD[$list_row][0] == True and BarresHorListToShowTD[$list_row][3] == False, SelectorPPTD == 2 and BarresHorListToShowTD[$list_row][0] == True, SelectorPPTD == 2 and BarresHorListToShowTD[$list_row][0] == True, SelectorPPTD == 2 and BarresHorListToShowTD[$list_row][0] == True and BarresHorListToShowTD[$list_row][3] == False, SelectorPPTD == 2 and BarresHorListToShowTD[$list_row][0] == True, SelectorPPTD == 2 and BarresHorListToShowTD[$list_row][0] == True, SelectorPPTD == 2 and BarresHorListToShowTD[$list_row][0] == True,False, SelectorPPTD == 2</Visible>-->
+            <Visible>SelectorPPTD == 1, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True and BarresHorListToShowTD[$list_row][3] == False, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True and BarresHorListToShowTD[$list_row][3] == False, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True,False,False, False, False, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True,  SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True and BarresHorListToShowTD[$list_row][11] == True, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True and BarresHorListToShowTD[$list_row][11] == True,SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True and BarresHorListToShowTD[$list_row][11] == True, SelectorPPTD == 1 and BarresHorListToShowTD[$list_row][0] == True</Visible>
+            <!-- <Visible> False,False, False, False, False, False, False, False,False, False</Visible>-->
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarresHorList</Name>
+            <Text>Barra Horitzontal,Orientacio,Posicio,Long. Automatica,Longitud,BarraInici,BarraFinal,Edit,acabatEditar, Mostrar Cavitat (KN_XPS_RECESS) Mostrar Cavitat (KN_XPS_CAVITAT),Es Xapa, Profunitat Cavitat Xapa,Layer,</Text>
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Checkbox,Length,StringComboBox,StringComboBox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Length,StringComboBox,Separator)</ValueType>
+            <!-- <ValueList>,Sup|Inf,,,,[str(value) for value in valueListBarresComboBox],[str(value) for value in valueListBarresComboBox],,,,,,,TD_ESTRUCTURA|KN_ELECTRICITAT_REINFORCEMENT|KN_AIGUA_REINFORCEMENT</ValueList>-->
+            <ValueList>,Sup|Inf,,,,valueListBarresComboBox, valueListBarresComboBox,,,,,,,TD_ESTRUCTURA|KN_ELECTRICITAT_REINFORCEMENT|KN_AIGUA_REINFORCEMENT</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraHor,Orientacio,Posicio,AutoLongitud,Longitud,BarraInici,BarraFinal,Edit,acabatEditar,MostrarRecess,MostrarCavitat,Xapa,ProfunditatXapa,Layer,Separator</FieldNames>
+            </NamedTuple>
+            <!-- <Visible>SelectorPPTD == 2, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True,False, SelectorPPTD == 2</Visible>-->
+            <!--<Visible>SelectorPPTD == 1, SelectorPPTD == 1 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 1 and BarresHorList[$list_row][0] == True, SelectorPPTD == 1 and BarresHorList[$list_row][0] == True, SelectorPPTD == 1 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 1 and BarresHorList[$list_row][0] == True, SelectorPPTD == 1 and BarresHorList[$list_row][0] == True, SelectorPPTD == 1 and BarresHorList[$list_row][0] == True,False, SelectorPPTD == 1</Visible>-->
+            <Visible>False, False, False, False, False, False, False, False,False, False,False,False,False,False,False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+        <!--
+        <Parameter>
+            <Name>Expander2</Name>
+            <Text>Barres Horitzontals</Text>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>Row2</Name>
+                <Text>$list_row</Text>
+
+                <Parameter>
+                    <Name>BarraHor</Name>
+                    <Value>"Barra Horitzontal" + $list_row</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>Orientacio</Name>
+                    <Value>Orientacio</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>Posicio</Name>
+                    <Value>Posicio</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>AutoLongitud</Name>
+                    <Value>AutoLongitud</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>Longitud</Name>
+                    <Value>Longitud</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>BarraInici</Name>
+                    <Value>BarraInici</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>BarraFinal</Name>
+                    <Value>BarraFinal</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>Edit</Name>
+                    <Value>Edit</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>acabatEditar</Name>
+                    <Value>acabatEditar</Value>
+                    <ValueType>Text</ValueType>
+                </Parameter>
+            </Parameter>
+
+                <Parameter>
+                <Name>BarresHorList</Name>
+                <Text>"Barra Horitzontal "+ ($list_row),Orientacio,Posicio,Long. Automatica,Longitud,BarraInici,BarraFinal,Edit,acabatEditar</Text>
+                <Value>[False|Sup|400|True|2500|TD Inferior|TD Superior|False|False]*30</Value>
+                <ValueType>tuple(Checkbox,StringComboBox,Length,Checkbox,Length,StringComboBox,StringComboBox,Checkbox,Checkbox,Separator)</ValueType>
+                <ValueList>,Sup|Inf,,,,[str(value) for value in valueListBarresComboBox],[str(value) for value in valueListBarresComboBox],,</ValueList>
+                <Visible>SelectorPPTD == 2, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True,False, SelectorPPTD == 2</Visible>
+                <ValueListStartRow>0</ValueListStartRow>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>BarresHorList</Name>
+                <Text>"Barra Horitzontal " + str($list_row),Orientacio,Posicio,Long. Automatica,Longitud,BarraInici,BarraFinal,Edit,acabatEditar</Text>
+                <Value>[]</Value>
+                <ValueType>namedtuple(Checkbox,StringComboBox,Length,Checkbox,Length,StringComboBox,StringComboBox,Checkbox,Checkbox,Separator)</ValueType>
+                <ValueList>,Sup|Inf,,,,[str(value) for value in valueListBarresComboBox],[str(value) for value in valueListBarresComboBox],,</ValueList>
+                <NamedTuple>
+                    <TypeName>StirrupList</TypeName>
+                    <FieldNames>BarraHor,Orientacio,Posicio,AutoLongitud,Longitud,BarraInici,BarraFinal,Edit,acabatEditar,Separator</FieldNames>
+                </NamedTuple>
+                <Visible>SelectorPPTD == 2, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True and BarresHorList[$list_row][3] == False, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True, SelectorPPTD == 2 and BarresHorList[$list_row][0] == True,False, SelectorPPTD == 2</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+        </Parameter>
+        -->
+    </Parameter>
+
+    <Name>BarresReforç</Name>
+    <Text>Barres Reforç</Text>
+    <ValueType>ListGroup</ValueType>
+    <!-- <Persistent>Model</Persistent> -->
+    <Parameter>
+        <Name>BarresRefParameterExpander</Name>
+        <Text>Barres reforç</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPTD == 4</Visible>
+
+        <Parameter>
+            <Name>NumBarresRef</Name>
+            <Text>Num Barres Reforc</Text>
+            <Value>10</Value>
+            <ValueType>Integer</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>valueAntReforc</Name>
+            <Text>valueAntReforc</Text>
+            <Value>0</Value>
+            <ValueType>Integer</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>valueListReforcComboBox</Name>
+            <Text>valueListReforcComboBox</Text>
+            <Value>[]</Value>
+            <ValueType>String</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>SelectorReforc</Name>
+            <Text>Select Reforç</Text>
+            <Value>Reforç 0</Value>
+            <ValueList>[str(value) for value in valueListReforcComboBox]</ValueList>
+            <ValueType>StringComboBox</ValueType>
+            <Visible>SelectorPPTD == 4</Visible>
+            <BackgroundColor>(0, 155, 155)</BackgroundColor>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible> SelectorPPTD == 4 </Visible>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>BarresRefListToShowTD</Name>
+            <Text>Barra Reforç,Orientacio,Posicio,Barra Ini,Barra Fin,Long. Automatica,Longitud,Edit,acabatEditar</Text>
+            <Value>[False|Sup|100|Tub 0|Tub 1|True|100|False|False]</Value>
+            <!-- <Value>[]</Value>-->
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,StringComboBox,StringComboBox,Checkbox, Length,Checkbox,Checkbox)</ValueType>
+            <!-- <ValueList>,Sup|Inf,,[str(value) for value in valueListBarresComboBox],[str(value) for value in valueListBarresComboBox],,,,,</ValueList>-->
+            <ValueList>,Sup|Inf,,valueListBarresComboBox,valueListBarresComboBox,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraRef,Orientacio,Posicio,BarraIni,BarraFin,AutoLongitud,Longitud,Edit,acabatEditar</FieldNames>
+            </NamedTuple>
+            <Visible> SelectorPPTD == 4, False, SelectorPPTD == 4 and BarresRefListToShowTD[$list_row][0] == True, SelectorPPTD == 4 and   BarresRefListToShowTD[$list_row][0] == True, SelectorPPTD == 4 and   BarresRefListToShowTD[$list_row][0] == True, SelectorPPTD == 4 and   BarresRefListToShowTD[$list_row][0] == True, SelectorPPTD == 4 and   BarresRefListToShowTD[$list_row][0] == True and BarresRefListToShowTD[$list_row][5] == False, False, False, SelectorPPTD == 4</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+
+        <Parameter>
+            <Name>BarresRefListTD</Name>
+            <Text>Barra Reforç,Orientacio,Posicio,Barra Ini,Barra Fin,Long. Automatica,Longitud,Edit,acabatEditar</Text>
+            <!-- <Value>[False|Sup|100|Tub 0|Tub 1|True|100|False|False]</Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,StringComboBox,StringComboBox,Checkbox, Length,Checkbox,Checkbox,Separator)</ValueType>
+            <!-- <ValueList>,Sup|Inf,,[str(value) for value in valueListBarresComboBox],[str(value) for value in valueListBarresComboBox],,,,,</ValueList>-->
+            <ValueList>,Sup|Inf,,valueListBarresComboBox,valueListBarresComboBox,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraRef,Orientacio,Posicio,BarraIni,BarraFin,AutoLongitud,Longitud,Edit,acabatEditar,Separator</FieldNames>
+            </NamedTuple>
+            <!-- <Visible> SelectorPPTD == 4, False, SelectorPPTD == 4 and BarresRefListTD[$list_row][0] == True, SelectorPPTD == 4 and BarresRefListTD[$list_row][0] == True, SelectorPPTD == 4 and BarresRefListTD[$list_row][0] == True, SelectorPPTD == 4 and BarresRefListTD[$list_row][0] == True, SelectorPPTD == 4 and BarresRefListTD[$list_row][0] == True and BarresRefListTD[$list_row][5] == False, False, False, SelectorPPTD == 4</Visible>-->
+            <Visible> False, False, False, False, False, False, False, False, False, False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <!-- Posicio barra TDV Interior-->
+    <Parameter>
+        <Name>BarresVerParameterExpander</Name>
+        <Text>Barres Verticals</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Visible>False</Visible>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>BarresVertListToShow</Name>
+            <Text>Barra Vertical,Posicio,Posicio Abs ,PosicioZ,Long. Automatica, Longitud, Barra Inici, Edit TIS, Edit,Encaix Inf, Encaix Sup, acabatEditar, editiantFrontals,PestanyaSup, PestanyaInf, FemellaSup, FemellaInf</Text>
+            <!--
+            <Value>[False|0|0|0|True|100|Inferior|False|False|False|False|False|False|False|False|True|True;
+                    False|0|0|0|True|100|Inferior|False|False|False|False|False|False|False|False|True|True;
+                    False|0|0|0|True|100|Inferior|False|False|False|False|False|False|False|False|True|True;
+                    False|0|0|0|True|100|Inferior|False|False|False|False|False|False|False|False|True|True]
+            </Value>
+            -->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,Length,Length,Length,Checkbox,Length,StringComboBox,Checkbox, Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Checkbox,Separator)</ValueType>
+            <ValueList>,,,,,,Inferior|Barra1|Barra2|Barra3,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraVert,Posicio,PosicioAbs,PosicioZ,AutoLongitud,Longitud,BarraInici,EditFront,Edit,EncaixInf,EncaixSup,acabatEditar,editiantFrontals,PestanyaSup,PestanyaInf,FemellaSup,FemellaInf, Separator</FieldNames>
+            </NamedTuple>
+            <Visible>SelectorPPTD == 2, False,SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True,False, False, False ,SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True, SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True, SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True,SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True,SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True,False,False,False,False, SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True, SelectorPPTD == 2 and BarresVertListToShow[$list_row][0] == True, SelectorPPTD == 2</Visible>
+            <!-- <Visible>False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False</Visible>-->
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+
+    <!-- ******** Barres Adjacents *********-->
+    <Name>Barres Adjacents</Name>
+    <Text>Intermitges Adjacents</Text>
+    <!-- <Persistent>Model</Persistent> -->
+    <Parameter>
+        <Name>BarresAdjParameterExpander</Name>
+        <Text>Barres Adjacents</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Visible>SelectorPPTD == 1 </Visible>
+
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>BarresAdjListToShow</Name>
+            <Text>Barra Adjacent,Orientacio,Posicio,Longitud,Profunditat,Show,Save,acabatEditar</Text>
+            <!-- <Value>[False|Inf|0|100|0|False|False|False]</Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Checkbox,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraAdj,Orientacio,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar, Separator</FieldNames>
+            </NamedTuple>
+            <Visible>SelectorPPTD == 1, SelectorPPTD == 1 and BarresAdjListToShow[$list_row][0] == True, SelectorPPTD == 1 and BarresAdjListToShow[$list_row][0] == True, SelectorPPTD == 1 and BarresAdjListToShow[$list_row][0] == True,SelectorPPTD == 1 and BarresAdjListToShow[$list_row][0] == True, False, SelectorPPTD == 1,False, SelectorPPTD == 1</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>BarresAdjList</Name>
+        <Text>BarraAdj,Orientacio,Posicio,Longitud,Profunditat,Edit,acabatEditar</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Checkbox,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>BarraAdj,Orientacio,Posicio,Longitud,Profunditat,Edit,acabatEditar, Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False, False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- ******** Barres Frontals *********-->
+    <Name>Barres Frontals</Name>
+    <Text>TIS</Text>
+    <!-- <Persistent>Model</Persistent> -->
+    <Parameter>
+        <Name>BarresFrontParameterExpander</Name>
+        <Text>TIS</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Visible>SelectorPPTD == 2</Visible>
+
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>BarresFrontListToShow</Name>
+            <Text>TIS,Longitud,Altura,Orientacio,Posicio,Ample,Profunditat,Show,Save,acabatEditar</Text>
+            <!-- <Value>[False|30|40|Inf|100|100|10|False|False|False;
+                    False|30|40|Inf|200|100|10|False|False|False;
+                    False|30|40|Inf|300|100|10|False|False|False;
+                    False|30|40|Inf|400|100|10|False|False|False;
+                    False|30|40|Inf|500|100|10|False|False|False;
+                    False|30|40|Inf|600|100|10|False|False|False;
+                    False|30|40|Inf|300|100|10|False|False|False;
+                    False|30|40|Inf|400|100|10|False|False|False;
+                    False|30|40|Inf|500|100|10|False|False|False;
+                    False|30|40|Inf|600|100|10|False|False|False]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,Length,Length,StringComboBox,Length,Length,Length,Checkbox,Checkbox,Checkbox,Separator)</ValueType>
+            <ValueList>,,,Esq|Dre,,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraFront,Amplitud,Altura,Orientacio,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar,Separator</FieldNames>
+            </NamedTuple>
+            <Visible>SelectorPPTD == 2, SelectorPPTD == 2 and BarresFrontListToShow[$list_row][0] == True,SelectorPPTD == 2 and BarresFrontListToShow[$list_row][0] == True,SelectorPPTD == 2 and BarresFrontListToShow[$list_row][0] == True, SelectorPPTD == 2 and BarresFrontListToShow[$list_row][0] == True, SelectorPPTD == 2 and BarresFrontListToShow[$list_row][0] == True, SelectorPPTD == 2 and BarresFrontListToShow[$list_row][0] == True, False, False,False, SelectorPPTD == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <!--
+    <Parameter>
+        <Name>Separator</Name>
+        <ValueType>Separator</ValueType>
+    </Parameter>
+    -->
+
+    <Parameter>
+        <Name>BarresFrontList</Name>
+        <Text>TISS,Ample,Forat,Orientacio,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar, Separator</Text>
+        <Value>[]
+        </Value>
+        <ValueType>namedtuple(Checkbox,Length,Length,StringComboBox,Length,Length,Length,Checkbox,Checkbox,Checkbox, Separator)</ValueType>
+        <ValueList>,,,Esq|Dre|Sup|Inf,,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>BarraFront,Amplitud,Altura,Orientacio,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False,False, False, False, False, False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>ReduirTempsCarrega</Name>
+        <Text>Reduir Temps Carrega</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>intervalTempsCarrega</Name>
+        <Text>intervalTempsCarrega</Text>
+        <Value>0</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>PointXTempsCarrega</Name>
+        <Text>intervalTempsCarrega</Text>
+        <Value>0</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>PointYTempsCarrega</Name>
+        <Text>intervalTempsCarrega</Text>
+        <Value>0</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>PointZTempsCarrega</Name>
+        <Text>intervalTempsCarrega</Text>
+        <Value>0</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>dadesBalcFines</Name>
+        <Text>Mostrar,AmpleBalconera,LlargadaBalconera,PosicioXBalconera,PosicioZBalconera,BarraHorSup,BarraHorInf,BarraVertEsq,BarraVertDre,Separator</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,Length,Length,Length,Length,String,String,String,String,Separator)</ValueType>
+        <ValueList>False,400,400,600,800,TD Superior,TD Inferior,Tub 0,Tub 1</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Mostrar,AmpleBalconera,LlargadaBalconera,PosicioXBalconera,PosicioZBalconera,BarraHorSup,BarraHorInf,BarraVertEsq,BarraVertDre, Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False,False, False, False, False, False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!--
+    <Parameter>
+        <Name>MostrarBalconera</Name>
+        <Text>Mostrar Balconera / Finestra</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    -->
+
+    <!-- Balconera Finestra-->
+    <Parameter>
+        <Name>PosiDimensBalcFinesParameterExpander</Name>
+        <Text>Posicio i Dimensions Balconera i Finestra</Text>
+        <ValueType>Expander</ValueType>
+        <Value>False</Value>
+        <Visible>SelectorPPTD == 3</Visible>
+
+        <Parameter>
+            <Name>MostrarBalconera</Name>
+            <Text>Mostrar Premarc</Text>
+            <Value>True</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>nomPremarc</Name>
+            <Text>Nom premarc</Text>
+            <Value>Premarc.</Value>
+            <ValueType>String</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>UpdateBalconera</Name>
+            <Text>Balconera</Text>
+            <ValueType>Row</ValueType>
+            <Visible>SelectorPPTD == 3</Visible>
+
+            <Parameter>
+                <Name>CreateBalconera</Name>
+                <Text>Create</Text>
+                <EventId>1003</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>DeleteBalconera</Name>
+                <Text>Delete</Text>
+                <EventId>1004</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>UpdateBalconeraFinestra</Name>
+            <Text>Crear Balconera / Finestra</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>AmpleBalconera</Name>
+            <Text>Ample</Text>
+            <Value>100</Value>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPTD == 3</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>LlargadaBalconera</Name>
+            <Text>Llargada</Text>
+            <Value>200</Value>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPTD == 3</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>PosicioXBalconera</Name>
+            <Text>Posicio X</Text>
+            <Value>300</Value>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPTD == 3</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>PosicioZBalconera</Name>
+            <Text>Posicio Z</Text>
+            <Value>400</Value>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPTD == 3</Visible>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>Separator</Name>
+        <ValueType>Separator</ValueType>
+        <Visible>SelectorPPTD == 3</Visible>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>valueListBarresHorBalc</Name>
+        <Text>valueListBarresHorBalc</Text>
+        <Value>[]</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!--
+    <Parameter>
+        <Name>valueListBarresHorBalcSup</Name>
+        <Text>valueListBarresHorBalcSup</Text>
+        <Value>[]</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    -->
+    <Parameter>
+        <Name>SelectorTDHorSupBalc</Name>
+        <Text>Tub Horitzontal SUP Balc/Fin</Text>
+        <Value>TD Inferior</Value>
+        <ValueList>[str(value) for value in valueListBarresHorBalc]</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 3</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!--
+    <Parameter>
+        <Name>valueListBarresHorBalcInf</Name>
+        <Text>valueListBarresHorBalcInf</Text>
+        <Value>[]</Value>
+        <ValueType>String</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    -->
+    <Parameter>
+        <Name>SelectorTDHorInfBalc</Name>
+        <Text>Tub Horitzontal INF Balc/Fin</Text>
+        <Value>TD Inferior</Value>
+        <ValueList>[str(value) for value in valueListBarresHorBalc]</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 3</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>VerticalAutoBalc</Name>
+        <Text>Vertical Auto</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>SelectorPPTD == 3</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDHorEsqBalc</Name>
+        <Text>Tub Horitzontal ESQ Balc/Fin</Text>
+        <Value>Tub 1</Value>
+        <!-- <ValueList>[str(value) for value in valueListBarresComboBox]</ValueList>-->
+        <ValueList>valueListBarresComboBox</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 3 and VerticalAutoBalc == False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorTDHorDreBalc</Name>
+        <Text>Tub Horitzontal DRE Balc/Fin</Text>
+        <Value>Tub 2</Value>
+        <!-- <ValueList>[str(value) for value in valueListBarresComboBox]</ValueList>-->
+        <ValueList>valueListBarresComboBox</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 3 and VerticalAutoBalc == False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+</Include>

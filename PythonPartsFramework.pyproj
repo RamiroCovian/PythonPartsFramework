@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{8e2589f8-9a6e-4a9b-b3a9-a79e8fecfc69}</ProjectGuid>
+    <ProjectHome />
+    <StartupFile>GeneralScripts\CreateHtmlDocumentation.py</StartupFile>
+    <SearchPath>..\..\..\BuildOutput\_VS2017_x64\UnicodeDebug\Dll</SearchPath>
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <ProjectTypeGuids>{888888a0-9f3d-457c-b088-3a5042f75d52}</ProjectTypeGuids>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <IsWindowsApplication>False</IsWindowsApplication>
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
+    <CommandLineArguments>
+    </CommandLineArguments>
+    <SccProjectName />
+    <SccProvider />
+    <SccAuxPath />
+    <SccLocalPath />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
+  <PropertyGroup>
+    <VisualStudioVersion Condition=" '$(VisualStudioVersion)' == '' ">10.0</VisualStudioVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="GeneralScripts\BuildingElementArchitectureUtil.py" />
+    <Compile Include="GeneralScripts\BuildingElementControlService.py" />
+    <Compile Include="GeneralScripts\BuildingElementMigrationUtil.py" />
+    <Compile Include="GeneralScripts\BuildingElementParameterListUtil.py" />
+    <Compile Include="GeneralScripts\BuildingElementConverterUtil.py" />
+    <Compile Include="GeneralScripts\BuildingElementListUtil.py" />
+    <Compile Include="GeneralScripts\BuildingElementConverter.py" />
+    <Compile Include="GeneralScripts\BuildingElement.py" />
+    <Compile Include="GeneralScripts\BuildingElementComposite.py" />
+    <Compile Include="GeneralScripts\BuildingElementCounter.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementFixtureUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementGeometryUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementInput.py" />
+    <Compile Include="GeneralScripts\BuildingElementListService.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementPalette.py" />
+    <Compile Include="GeneralScripts\BuildingElementPaletteGeometryControls.py" />
+    <Compile Include="GeneralScripts\BuildingElementPaletteReinforcementControls.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementPaletteService.py" />
+    <Compile Include="GeneralScripts\BuildingElementParameterPropertyUtil.py" />
+    <Compile Include="GeneralScripts\BuildingElementReinforcementUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementService.py" />
+    <Compile Include="GeneralScripts\BuildingElementStringTable.py" />
+    <Compile Include="GeneralScripts\BuildingElementMaterialStringTable.py" />
+    <Compile Include="GeneralScripts\BuildingElementStringTableManager.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementStringUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementTupleUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementValueConstraint.py" />
+    <Compile Include="GeneralScripts\BuildingElementValueTypeUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementValueUtil.py" />
+    <Compile Include="GeneralScripts\BuildingElementUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementXMLReinfPos.py" />
+    <Compile Include="GeneralScripts\BuildingElementXML.py" />
+    <Compile Include="GeneralScripts\BuildingElementXMLInclude.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\BuildingElementXMLSelectionValue.py" />
+    <Compile Include="GeneralScripts\BuildingElementXMLUtil.py" />
+    <Compile Include="GeneralScripts\StringToValueConverter.py" />
+    <Compile Include="GeneralScripts\BuildingElementXMLValue.py" />
+    <Compile Include="GeneralScripts\ControlProperties.py" />
+    <Compile Include="GeneralScripts\CreateHtmlDocumentation.py" />
+    <Compile Include="GeneralScripts\CreateLibraryPreview.py" />
+    <Compile Include="GeneralScripts\ErrorLogWindow.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\FileNameService.py" />
+    <Compile Include="GeneralScripts\GeometryValidate.py" />
+    <Compile Include="GeneralScripts\HandleDirection.py" />
+    <Compile Include="GeneralScripts\HandleProperties.py" />
+    <Compile Include="GeneralScripts\HandleService.py" />
+    <Compile Include="GeneralScripts\InputMode.py" />
+    <Compile Include="GeneralScripts\ParameterProperty.py" />
+    <Compile Include="GeneralScripts\PythonPart.py" />
+    <Compile Include="GeneralScripts\SectionFill.py" />
+    <Compile Include="GeneralScripts\StringTableService.py" />
+    <Compile Include="GeneralScripts\TraceService.py" />
+    <Compile Include="GeneralScripts\ValueInputDialogService.py" />
+    <Compile Include="TestHelper\BottomTopPlaneServiceMock.py" />
+    <Compile Include="TestHelper\DrawElementPreviewMock.py" />
+    <Compile Include="TestHelper\BuildingElementInputControlsMock.py" />
+    <Compile Include="TestHelper\HandleServiceMock.py" />
+    <Compile Include="TestHelper\PreviewSymbolBuilderMock.py" />
+    <Compile Include="TestHelper\AllplanPathsMock.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TestHelper\CoordinateInputMock.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TestHelper\CreateElementsMock.py" />
+    <Compile Include="TestHelper\ProfileUtil.py" />
+    <Compile Include="TestHelper\PythonPartTestUtil.py" />
+    <Compile Include="TestHelper\PythonWpfPaletteMock.py" />
+    <Compile Include="TestHelper\ReinforcementUtilMock.py" />
+    <Compile Include="TestHelper\TestUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GeneralScripts\ValueListUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="StdReinfShapeBuilder\BarShapeHandleUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="StdReinfShapeBuilder\ProfileReinfShapeBuilder.py" />
+    <Compile Include="GeneralScripts\ReinforcementDefinition.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="StdReinfShapeBuilder\__init__.py" />
+    <Compile Include="StdReinfShapeBuilder\BarPlacementUtil.py" />
+    <Compile Include="StdReinfShapeBuilder\BarShapePlacementUtil.py" />
+    <Compile Include="StdReinfShapeBuilder\ConcreteCoverProperties.py" />
+    <Compile Include="StdReinfShapeBuilder\CorbelReinfShapeBuilder.py" />
+    <Compile Include="StdReinfShapeBuilder\GeneralReinfShapeBuilder.py" />
+    <Compile Include="StdReinfShapeBuilder\IProfileReinfShapeBuilder.py" />
+    <Compile Include="StdReinfShapeBuilder\LinearBarPlacementBuilder.py" />
+    <Compile Include="StdReinfShapeBuilder\MeshPlacementBuilder.py" />
+    <Compile Include="StdReinfShapeBuilder\ReinforcementShapeProperties.py" />
+    <Compile Include="StdReinfShapeBuilder\RotationAngles.py" />
+    <Compile Include="StdReinfShapeBuilder\SleeveFoundationReinfShapeBuilder.py" />
+    <Compile Include="StdReinfShapeBuilder\StairsReinfShapeBuilder.py" />
+    <Compile Include="StdReinfShapeBuilder\WallCornerReinfShapeBuilder.py" />
+    <Compile Include="TestHelper\UnitTestRunnerUtil.py" />
+    <Compile Include="TestHelper\__init__.py" />
+    <Compile Include="Utils\FormatUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Utils\LibraryBitmapPreview.py" />
+    <Compile Include="Utils\TabularDataUtil.py" />
+    <Compile Include="Utils\XmlTreeUtil.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Utils\__init__.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="GeneralScripts\" />
+    <Folder Include="GeneralScripts\Bitmaps\" />
+    <Folder Include="GeneralScripts\Stringtable\" />
+    <Folder Include="InterfaceDoc\" />
+    <Folder Include="InterfaceStubs\" />
+    <Folder Include="TestHelper\" />
+    <Folder Include="StdReinfShapeBuilder\" />
+    <Folder Include="Utils\" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <Content Include="GeneralScripts\Bitmaps\arrowdown.png" />
+    <Content Include="GeneralScripts\Bitmaps\arrowup.png" />
+    <Content Include="GeneralScripts\Bitmaps\info_16.png" />
+    <Content Include="GeneralScripts\Bitmaps\info_20.png" />
+    <Content Include="GeneralScripts\Stringtable\BuildingElement_deu.xml" />
+    <Content Include="GeneralScripts\Stringtable\BuildingElement_eng.xml" />
+    <Content Include="GeneralScripts\Stringtable\BuildingElementMaterial_deu.xml" />
+    <Content Include="GeneralScripts\Stringtable\BuildingElementMaterial_eng.xml" />
+    <Content Include="InterfaceDoc\builtins.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_AllplanSettings.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_ArchElements.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_BaseElements.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_BasisElements.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_Geometry.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_IFW_ElementAdapter.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_IFW_Input.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_Palette.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_Precast.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_Reinforcement.html" />
+    <Content Include="InterfaceDoc\NemAll_Python_Reinforcement.zip" />
+    <Content Include="InterfaceDoc\NemAll_Python_Utility.html" />
+    <Content Include="InterfaceStubs\NemAll_Python_AllplanSettings.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_ArchElements.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_BaseElements.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_BasisElements.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_Geometry.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_IFW_ElementAdapter.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_IFW_Input.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_Palette.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_Precast.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_Reinforcement.pyi" />
+    <Content Include="InterfaceStubs\NemAll_Python_Utility.pyi" />
+    <Content Include="pylintrc" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
+</Project>

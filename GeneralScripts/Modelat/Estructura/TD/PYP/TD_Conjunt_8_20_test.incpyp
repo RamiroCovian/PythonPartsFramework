@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>esExtrem</Name>
+        <Text>Provisional Extrem</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Enable>True</Enable>
+        <Visible>SelectorPP == 2 and esProvisional</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+
+    <Parameter>
+        <Name>mantenirLlargadaSup</Name>
+        <Text>Llargada igual a Inf</Text>
+        <Value>True</Value>
+        <Visible>SelectorPP == 1 and SelectorTDH == 'TD Superior' </Visible>
+        <ValueType>CheckBox</ValueType>
+    </Parameter>
+
+</Include>

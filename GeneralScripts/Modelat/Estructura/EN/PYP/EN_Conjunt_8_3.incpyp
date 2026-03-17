@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+
+
+    <!-- ##################################################-->
+    <Parameter>
+        <Name>llargadaAutomatica</Name>
+        <Text>Llargada Automatica</Text>
+        <Value>True</Value>
+        <ValueType>Checkbox</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 2 </Visible>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>BarraAmpleVert</Name>
+        <Text>Ample</Text>
+        <Value>40.</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 2 </Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAmpleHor</Name>
+        <Text>Ample</Text>
+        <Value>10.</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 1 and SelectorENH == "Mes Tubs..."</Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAmpleRef</Name>
+        <Text>Ample</Text>
+        <Value>30.</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 4</Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAlturaVert</Name>
+        <Text>Altura</Text>
+        <Value>50</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 2 </Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAlturaHor</Name>
+        <Text>Altura</Text>
+        <Value>50</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 1 and SelectorENH == "Mes Tubs..."</Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAlturaRef</Name>
+        <Text>Altura</Text>
+        <Value>30</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 4</Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraLlargadaVert</Name>
+        <Text>Alçada</Text>
+        <Value>2600.0</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <!-- <Visible>llargadaAutomatica == True</Visible>-->
+        <Visible>False</Visible>
+        <enable>False</enable>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>BarraLlargadaIndiv</Name>
+        <Text>Alçada</Text>
+        <Value>2600.0</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <!-- <Visible>llargadaAutomatica == False</Visible>-->
+        <Visible>SelectorPPEN == 2</Visible>
+        <Persistent>Model</Persistent>
+        <enable>False</enable>
+    </Parameter>
+    <Parameter>
+        <Name>BarraGruixVert</Name>
+        <Text>Gruix</Text>
+        <Value>1.5</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 2 </Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraGruixHor</Name>
+        <Text>Gruix</Text>
+        <Value>1.5</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 1 and SelectorENH == "Mes Tubs..."</Visible>
+    </Parameter>
+    <Parameter>
+        <Name>BarraGruixRef</Name>
+        <Text>Gruix</Text>
+        <Value>1.5</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+        <Visible>SelectorPPEN == 4</Visible>
+    </Parameter>
+
+    <Parameter>
+        <Name>PropertiesExpander</Name>
+        <Text>Properties</Text>
+        <value>True</value>
+        <ValueType>Expander</ValueType>
+        <Visible>SelectorPPEN == 2</Visible>
+
+        <Parameter>
+            <Name>IsUseGlobalPropVert</Name>
+            <Text>Use Global Propierties</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Persistent>Model</Persistent>
+            <!-- <Visible>SelectorPPEN == 2</Visible>-->
+            <Visible>False</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>FounColorVert</Name>
+            <Text>Color</Text>
+            <Value>1</Value>
+            <ValueType>Color</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>SelectorPPEN == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraLayerVert</Name>
+            <Text>Layer</Text>
+            <Value>40076</Value>
+            <ValueType>Layer</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <!-- <Visible>IsUseGlobalPropVert == False and SelectorPPEN == 2</Visible>-->
+            <Persistent>Model</Persistent>
+            <Visible>False</Visible>
+        </Parameter>
+
+    </Parameter>
+    <!-- ##################################################-->
+
+    <Parameter>
+        <Name>BarraAmpleInf</Name>
+        <Text>Ample</Text>
+        <Value>50</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Inferior' or SelectorPPEN == 5</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAlturaInf</Name>
+        <Text>Altura</Text>
+        <Value>35</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Inferior'  or SelectorPPEN == 5 </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>BarraAmpleSup</Name>
+        <Text>Ample</Text>
+        <Value>27.</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Superior' and (TubSuperior == 'EXD' or TubSuperior == 'TUB')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAmpleSupL</Name>
+        <Text>Ample L</Text>
+        <Value>50</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Superior' and (TubSuperior == 'L' or TubSuperior == 'EXD' )</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>BarraAmpleSupTubInt</Name>
+        <Text>Ample</Text>
+        <Value>10</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Superior' and (TubSuperior == 'TUB Interior')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>BarraAlturaSup</Name>
+        <Text>Altura</Text>
+        <Value>30.</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Superior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>BarraLlargadaAnt</Name>
+        <Text>Llargada</Text>
+        <Value>4400.0</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>BarraLlargadaEN</Name>
+        <Text>Llargada</Text>
+        <Value>1200.0</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH != "Mes Tubs..."</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>BarraLlargadaInfEN</Name>
+        <Text>Llargada Inf</Text>
+        <Value>4400.0</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH == "EN Inferior" and llargadaigualHor == False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>BarraGruix</Name>
+        <Text>Gruix</Text>
+        <Value>1.5</Value>
+        <MinValue>0</MinValue>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPEN == 1 and SelectorENH != "Mes Tubs..."</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>PropertiesExpander</Name>
+        <Text>Properties</Text>
+        <value>True</value>
+        <ValueType>Expander</ValueType>
+        <Visible>IsUseGlobalProp == False and SelectorPPEN == 1</Visible>
+
+        <Parameter>
+            <Name>IsUseGlobalProp</Name>
+            <Text>Use Global Propierties</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>FounColor</Name>
+            <Text>Color</Text>
+            <Value>1</Value>
+            <ValueType>Color</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>FounColorHor</Name>
+            <Text>Color</Text>
+            <Value>1</Value>
+            <ValueType>Color</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>SelectorPPEN == 1 and SelectorENH == "Mes Tubs..."</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>FounColorSup</Name>
+            <Text>Color</Text>
+            <Value>1</Value>
+            <ValueType>Color</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>SelectorPPEN == 1 and SelectorENH == "EN Superior"</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>FounColorInf</Name>
+            <Text>Color</Text>
+            <Value>1</Value>
+            <ValueType>Color</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>SelectorPPEN == 1 and SelectorENH == "EN Inferior"</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraLayer</Name>
+            <Text>Layer</Text>
+            <Value>40076</Value>
+            <ValueType>Layer</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <!--
+        <Parameter>
+            <Name>NomTD</Name>
+            <Text>NomTD</Text>
+            <Value>TD</Value>
+            <ValueType>String</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>AttributeID</Name>
+            <Text>All attributes ID</Text>
+            <Value></Value>
+            <ValueType>AttributeID</ValueType>
+            <ValueDialog>AttributeSelection</ValueDialog>
+        </Parameter>
+        -->
+
+        <Parameter>
+            <Name>DENInf</Name>
+            <Text>Denominació INF</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <!-- <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Inferior'</Visible>-->
+            <Visible>False</Visible>
+            <enable>False</enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>DENSup</Name>
+            <Text>Denominació SUP</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <!-- <Visible>SelectorPPEN == 1 and SelectorENH == 'EN Superior'</Visible>-->
+            <Visible>False</Visible>
+            <enable>False</enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>DENVert</Name>
+            <Text>Denominació Vert</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <!-- <Visible>SelectorPPEN == 2 and SelectorENH == 'EN Inferior'</Visible>-->
+            <Visible>False</Visible>
+            <enable>False</enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>DENHorInt</Name>
+            <Text>Denominació Hor Int</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <!-- <Visible>SelectorPPEN == 2 and SelectorENH == 'EN Inferior'</Visible>-->
+            <Visible>False</Visible>
+            <enable>False</enable>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+</Include>

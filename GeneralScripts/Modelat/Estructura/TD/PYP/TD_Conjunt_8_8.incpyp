@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <!--CANCANMS HOR INF-->
+    <Parameter>
+        <Name>CancamsExpander</Name>
+        <Text>Cancams</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>posicio_centre_massesINF</Name>
+            <Text>Posicio centre de masses</Text>
+            <Value>1500.00</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>CancamsExpander</Name>
+            <Text></Text>
+            <value>True</value>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>IsFirstCancamINF</Name>
+                <Text>1r cancam</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>Dis1cancamINF</Name>
+                <Text>Distancia</Text>
+                <Value>500</Value>
+                <ValueType>Length</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>IsFirstCancamINF == True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>IsSecondCancamINF</Name>
+                <Text>2n cancam</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>Dis2cancamINF</Name>
+                <Text>Distancia</Text>
+                <Value>1000</Value>
+                <ValueType>Length</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>IsSecondCancamINF == True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+        </Parameter>
+    </Parameter>
+
+</Include>

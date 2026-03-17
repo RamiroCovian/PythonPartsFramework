@@ -1,0 +1,454 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Mesures Barra Vert</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>llargadaAutomatica</Name>
+            <Text>Llargada Automatica</Text>
+            <Value>True</Value>
+            <ValueType>Checkbox</ValueType>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>SelectorPPTD == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>BarraAmpleVert</Name>
+            <Text>Ample</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 2 </Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAmpleHor</Name>
+            <Text>Ample</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAmpleRef</Name>
+            <Text>Ample</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPTD == 4</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAlturaVert</Name>
+            <Text>Altura</Text>
+            <Value>30</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 2 </Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAlturaHor</Name>
+            <Text>Altura</Text>
+            <Value>30</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAlturaRef</Name>
+            <Text>Altura</Text>
+            <Value>30</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPTD == 4</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>BarraLlargadaVert</Name>
+            <Text>Alçada</Text>
+            <Value>2600.0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>(SelectorPPTD == 2 ) and llargadaAutomatica == True</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>BarraLlargadaHor</Name>
+            <Text>Alçada</Text>
+            <Value>2600.0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible> (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...") and llargadaAutomatica == True</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>BarraLlargadaIndiv</Name>
+            <Text>Alçada</Text>
+            <Value>2600.0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>(SelectorPPTD == 2 ) and llargadaAutomatica == False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraLlargadaIndivHor</Name>
+            <Text>Alçada</Text>
+            <Value>2600.0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>(SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...") and llargadaAutomatica == False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraGruixVert</Name>
+            <Text>Gruix</Text>
+            <Value>1.5</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 2</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraGruixHor</Name>
+            <Text>Gruix</Text>
+            <Value>1.5</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>(SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraGruixRef</Name>
+            <Text>Gruix</Text>
+            <Value>1.5</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPTD == 4</Visible>
+        </Parameter>
+
+
+
+
+        <Parameter>
+            <Name>PropertiesExpander</Name>
+            <Text>Properties</Text>
+            <value>True</value>
+            <Visible>SelectorPPTD == 2</Visible>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>IsUseGlobalPropVert</Name>
+                <Text>Use Global Propierties</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <!-- <Visible>SelectorPPTD == 2 or (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")</Visible>-->
+                <Visible>False</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>FounColorVert</Name>
+                <Text>Color</Text>
+                <Value>23</Value>
+                <ValueType>Color</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <!-- <Visible>(SelectorPPTD == 2 or (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")) and IsUseGlobalPropVert == False</Visible>-->
+                <Visible>SelectorPPTD == 2</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>BarraLayerVert</Name>
+                <Text>Layer</Text>
+                <Value>40001</Value>
+                <ValueType>Layer</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <!-- <Visible>IsUseGlobalPropVert == False and (SelectorPPTD == 2 or (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."))</Visible>-->
+                <Visible>False</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Mesures Barra Hor</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+
+        <Parameter>
+            <Name>BarraAmpleInf</Name>
+            <Text>Ample</Text>
+            <Value>40.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAlturaInf</Name>
+            <Text>Altura</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraAmpleSup</Name>
+            <Text>Ample</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'Tub' or SelectorTDHSup == 'Tub + L')</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAlturaSup</Name>
+            <Text>Altura</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'Tub' or SelectorTDHSup == 'Tub + L')</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAmpleSupL</Name>
+            <Text>Ample L</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>BarraAlturaSupL</Name>
+            <Text>Altura L</Text>
+            <Value>30.</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>BarraLlargadaAnt</Name>
+            <Text>Llargada</Text>
+            <Value>4400.0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>mantenirLlargadaSup</Name>
+            <Text>Llargada igual a Inf</Text>
+            <Value>True</Value>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' </Visible>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraLlargadaTD</Name>
+            <Text>Llargada</Text>
+            <Value>4400.0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and mantenirLlargadaSup</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraLlargadaSupInd</Name>
+            <Text>Llargada</Text>
+            <Value>4400.0</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and not mantenirLlargadaSup</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <!--
+        <Parameter>
+            <Name>BarraGruix</Name>
+            <Text>Gruix</Text>
+            <Value>1.5</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and (SelectorTDHTD == "Mes Tubs...")</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        -->
+
+        <Parameter>
+                <Name>BarraGruixInf</Name>
+                <Text>Gruix</Text>
+                <Value>1.5</Value>
+                <MinValue>0</MinValue>
+                <ValueType>Length</ValueType>
+                <Visible>SelectorPPTD == 1 and SelectorTDHTD == "TD Inferior"</Visible>
+                <!-- <Visible>False</Visible>-->
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+        <Parameter>
+            <Name>BarraGruixSup</Name>
+            <Text>Gruix SUP</Text>
+            <Value>1.5</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'Tub' or SelectorTDHSup == 'Tub + L')</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>BarraGruixSupL</Name>
+            <Text>Gruix L</Text>
+            <Value>1.5</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>PropertiesExpander</Name>
+            <Text>Properties</Text>
+            <value>True</value>
+            <Visible>True</Visible>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>IsUseGlobalProp</Name>
+                <Text>Use Global Propierties</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>False</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>FounColorHor</Name>
+                <Text>Color</Text>
+                <Value>23</Value>
+                <ValueType>Color</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible> SelectorPPTD == 1 and (SelectorTDHTD == "Mes Tubs...")</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>FounColorSup</Name>
+                <Text>Color</Text>
+                <Value>23</Value>
+                <ValueType>Color</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>SelectorPPTD == 1 and (SelectorTDHTD == "TD Superior")</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>FounColorInf</Name>
+                <Text>Color</Text>
+                <Value>23</Value>
+                <ValueType>Color</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>SelectorPPTD == 1 and (SelectorTDHTD == "TD Inferior")</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>BarraLayer</Name>
+                <Text>Layer</Text>
+                <Value>40001</Value>
+                <ValueType>Layer</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>False  </Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+
+
+            <!--
+            <Parameter>
+                <Name>AttributeID</Name>
+                <Text>All attributes ID</Text>
+                <Value></Value>
+                <ValueType>AttributeID</ValueType>
+                <ValueDialog>AttributeSelection</ValueDialog>
+            </Parameter>
+            -->
+
+            <Parameter>
+                <Name>DENInf</Name>
+                <Text>Denominacio INF</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+                <!-- <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>-->
+                <Visible>False</Visible>
+                <enable>False</enable>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>DENSup</Name>
+                <Text>Denominacio SUP</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+                <!-- <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>-->
+                <Visible>False</Visible>
+                <enable>False</enable>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>DENVert</Name>
+                <Text>Denominacio Vert</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+                <!-- <Visible>SelectorPPTD == 2 and SelectorTDHTD == 'TD Inferior'</Visible>-->
+                <Visible>False</Visible>
+                <enable>False</enable>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>DENHorInt</Name>
+                <Text>Denominacio Hor Int</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+                <!-- <Visible>SelectorPPTD == 2 and SelectorTDHTD == 'TD Inferior'</Visible>-->
+                <Visible>False</Visible>
+                <enable>False</enable>
+                <Persistent>Model</Persistent>
+            </Parameter>
+        </Parameter>
+    </Parameter>
+
+</Include>

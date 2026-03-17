@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <!--FEMELLES INFerior-->
+    <Parameter>
+        <Name>FemellesExpander</Name>
+        <Text></Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+
+        <Parameter>
+            <Name>Ample_forat_femellaINF</Name>
+            <Text>Ample Forat Femella</Text>
+            <Value>15</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Altura_forat_femellaINF</Name>
+            <Text>Altura Forat Femella</Text>
+            <Value>3.75</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separacio_forat_femellaINF</Name>
+            <Text>Separacio Forat Femella</Text>
+            <Value>30</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>PosicioExpander</Name>
+            <Text>Posicio femelles</Text>
+            <ValueType>Expander</ValueType>
+            <!-- FEMELLES-->
+            <!-- *********************************** -->
+            <Parameter>
+                <Name>Separator</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+
+
+            <Parameter>
+                <Name>FemellesINF</Name>
+                <Text>Femella,Orientacio,Posicio X,Posicio Y,Separacio</Text>
+                <!--
+                <Value>[False|Esq|400|0|100;
+                        False|Esq|800|0|100;
+                        False|Esq|1200|0|100]
+                </Value>
+                -->
+                <Value>[]</Value>
+                <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Separator)</ValueType>
+                <ValueList>,Esq|Dre|Sup|Inf,,,</ValueList>
+                <NamedTuple>
+                    <TypeName>UShape</TypeName>
+                    <FieldNames>Femella,FemellaOr,PosFemellaX,PosFemellaY,Separacio_forat_femella,Separator</FieldNames>
+                </NamedTuple>
+                <MinValue>,,0,</MinValue>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>True, FemellesINF[$list_row][0] == True, FemellesINF[$list_row][0] == True, FemellesINF[$list_row][0] == True, False</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+        </Parameter>
+    </Parameter>
+
+</Include>

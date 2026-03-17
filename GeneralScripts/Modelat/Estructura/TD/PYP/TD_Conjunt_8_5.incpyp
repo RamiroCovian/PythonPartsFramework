@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <!--Collisos i Potes HOR Superior-->
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Colis</Text>
+        <ValueType>Expander</ValueType>
+
+
+        <Parameter>
+            <Name>ColisParSUP</Name>
+            <Text>Colis,Orientacio,Posicio,Llargada,Amplada,Reforç Colis,Separator</Text>
+            <!--
+            <Value>[False|Sup|400.|150|12|True;
+                False|Sup|800.|150|12|True;
+                False|Sup|1200.|150|12|True;
+                False|Sup|1600.|150|12|True]
+            </Value>
+            -->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Colis,orientacio,Posicio,Llargada,Amplada,MostrarBox,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ColisParSUP[$list_row][0] == True, ColisParSUP[$list_row][0] == True, ColisParSUP[$list_row][0] == True, ColisParSUP[$list_row][0] == True, ColisParSUP[$list_row][0] == True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Potes</Text>
+        <ValueType>Expander</ValueType>
+
+
+        <Parameter>
+            <Name>PotaParSUP</Name>
+            <Text>Pota,Posicio,Separator</Text>
+            <!--
+            <Value>[False|400.;
+                    False|1200.;
+                    False|2400.;
+                    False|4600.]
+            </Value>
+            -->
+            <Value>[]</Value>
+            <EventId>,,</EventId>
+            <ValueType>namedtuple(Checkbox,Length,Separator)</ValueType>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Pota,Posicio,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,0,</MinValue>
+            <Visible>True, PotaParSUP[$list_row][0] == True,True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Forats</Text>
+        <ValueType>Expander</ValueType>
+        <Visible>(SelectorTDHSup == "Tub" or SelectorTDHSup == "Tub + L")</Visible>
+
+
+        <Parameter>
+            <Name>ForatsParSUP</Name>
+            <Text>Forat,Orientacio,Posicio,Llargada,Amplada,Completa,LLargada,Amplada, TFF</Text>
+            <!--
+            <Value>[False|Sup|200.|20|15|True|20|10;
+                    False|Sup|400.|20|15|True|20|10;
+                    False|Sup|600.|20|15|True|20|10;
+                    False|Sup|800.|20|15|True|20|10;
+                    False|Sup|1000.|20|15|True|20|10;
+                    False|Sup|1200.|20|15|True|20|10;
+                    False|Sup|1400.|20|15|True|20|10;
+                    False|Sup|1600.|20|15|True|20|10;
+                    False|Sup|1800.|20|15|True|20|10;
+                    False|Sup|2000.|20|15|True|20|10]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ForatsParSUP[$list_row][0] == True, ForatsParSUP[$list_row][0] == True, ForatsParSUP[$list_row][0] == True, ForatsParSUP[$list_row][0] == True, ForatsParSUP[$list_row][0] == True,ForatsParSUP[$list_row][0] == True and ForatsParSUP[$list_row][5] == True,ForatsParSUP[$list_row][0] == True and ForatsParSUP[$list_row][5] == True, False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>Separator</Name>
+        <ValueType>Separator</ValueType>
+        <Visible>(SelectorTDHSup == "L" or SelectorTDHSup == "Tub + L")</Visible>
+    </Parameter>
+
+    <Parameter>
+        <Name>foratsAutomatics</Name>
+        <Text>Automatitzacio Forats</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>(SelectorTDHSup == "L" or SelectorTDHSup == "Tub + L")</Visible>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpanderAuto</Name>
+        <Text>Automatitzacio Forats L</Text>
+        <ValueType>Expander</ValueType>
+        <Visible>foratsAutomatics</Visible>
+
+
+        <Parameter>
+            <Name>nForatsAutoL</Name>
+            <Text>nForats</Text>
+            <Value>5</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Integer</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>orientacioAutoL</Name>
+            <Text>Orientacio</Text>
+            <Value>Sup</Value>
+            <ValueList>Esq|Dre|Sup|Inf</ValueList>
+            <ValueType>StringComboBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>posIniAutoL</Name>
+            <Text>Posicio Inicial</Text>
+            <Value>150</Value>
+            <ValueType>Length</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>distanciaAutoL</Name>
+            <Text>Distancia entre Forats</Text>
+            <Value>100</Value>
+            <ValueType>Length</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>llargadaAutoL</Name>
+            <Text>Llargada Forats</Text>
+            <Value>20</Value>
+            <ValueType>Length</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>ampladaAutoL</Name>
+            <Text>AmpladaForats</Text>
+            <Value>20</Value>
+            <ValueType>Length</ValueType>
+        </Parameter>
+
+
+        <Parameter>
+            <Name>posYAutoL</Name>
+            <Text>posicio Altura</Text>
+            <Value>15</Value>
+            <ValueType>Length</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>ButtonRow</Name>
+            <Text> Forats auto </Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>createAutoL</Name>
+                <Text>Crear</Text>
+                <EventId>1006</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+
+    </Parameter>
+
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Forats L</Text>
+        <ValueType>Expander</ValueType>
+        <Visible>(SelectorTDHSup == "L" or SelectorTDHSup == "Tub + L")</Visible>
+
+
+
+        <Parameter>
+            <Name>ForatsParSUPL</Name>
+            <Text>Forat,Orientacio,Posicio,Posicio Ample,Llargada,Amplada,Completa,LLargada,Amplada, TFF</Text>
+            <!-- <Value>[False|Sup|200.|15|20|15|False|20|10;
+                    False|Sup|400.|15|20|15|False|20|10;
+                    False|Sup|600.|15|20|15|False|20|10;
+                    False|Sup|800.|15|20|15|False|20|10;
+                    False|Sup|1000.|15|20|15|False|20|10;
+                    False|Sup|1200.|15|20|15|False|20|10;
+                    False|Sup|1400.|15|20|15|False|20|10;
+                    False|Sup|1600.|15|20|15|False|20|10;
+                    False|Sup|1800.|15|20|15|False|20|10;
+                    False|Sup|2000.|15|20|15|False|20|10]
+            </Value>
+            -->
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Forat,orientacio,Posicio,PosicioY,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,Separator</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ForatsParSUPL[$list_row][0] == True, ForatsParSUPL[$list_row][0] == True, ForatsParSUPL[$list_row][0] == True, ForatsParSUPL[$list_row][0] == True, ForatsParSUPL[$list_row][0] == True, False, False, False, False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+</Include>

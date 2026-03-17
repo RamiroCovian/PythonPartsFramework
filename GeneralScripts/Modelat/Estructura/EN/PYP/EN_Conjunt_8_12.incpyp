@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Colís</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Visible>False</Visible>
+        <!-- <Persistent>Model</Persistent> -->
+
+
+        <Parameter>
+            <Name>ColisVertListToShow</Name>
+            <Text>Colís,Orientació,Posició,Llargada,Amplada</Text>
+            <Value>[False|Sup|400.|150|12;
+                    False|Sup|800.|150|12;
+                    False|Sup|1200.|150|12;
+                    False|Sup|1600.|150|12]
+            </Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length)</ValueType><!-- ,Separator-->
+            <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Colis,orientacio,Posicio,Llargada,Amplada</FieldNames>
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ColisVertListToShow[$list_row][0] == True, ColisVertListToShow[$list_row][0] == True, ColisVertListToShow[$list_row][0] == True</Visible><!--, ColisVertListToShow[$list_row][0] == True-->
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Potes</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Visible>False</Visible>
+
+        <Parameter>
+            <Name>PotesVertListToShow</Name>
+            <Text>Pota,Posició</Text>
+            <!-- <Text>Pota,Posició</Text>-->
+            <Value>[False|400.;
+                False|1200.;
+                False|2400.;
+                False|4600.]
+            </Value>
+            <ValueType>namedtuple(Checkbox,Length)</ValueType><!-- ,Separator-->
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Pota,Posicio</FieldNames>
+            </NamedTuple>
+            <MinValue>,0</MinValue>
+            <ExcludeIdentical>True</ExcludeIdentical>
+            <Visible>True, PotesVertListToShow[$list_row][0] == True</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>DimensionsParameterExpander</Name>
+        <Text>Forats</Text>
+        <ValueType>Expander</ValueType>
+
+        <Parameter>
+            <Name>ForatsVertListToShowEN</Name>
+            <Text>Forat,Orientació,Posició,Llargada,Amplada,Completa,Llargada,Amplada, TFF,Separator</Text>
+            <Value>[False|Sup|200.|25|25|True|3|3|False;
+                    False|Sup|400.|25|25|True|3|3|False;
+                    False|Sup|600.|25|25|True|3|3|False;
+                    False|Sup|800.|25|25|True|3|3|False;
+                    False|Sup|1000.|25|25|True|3|3|False;
+                    False|Sup|1200.|25|25|True|3|3|False;
+                    False|Sup|1400.|25|25|True|3|3|False;
+                    False|Sup|1600.|25|25|True|3|3|False;
+                    False|Sup|1800.|25|25|True|3|3|False;
+                    False|Sup|2000.|25|25|True|3|3|False]
+            </Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Length,Length,Checkbox,Separator)</ValueType>
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>UShape</TypeName>
+                <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,Separator</FieldNames><!-- ,Separator-->
+            </NamedTuple>
+            <MinValue>,,0</MinValue>
+            <Visible>True, ForatsVertListToShowEN[$list_row][0] == True, ForatsVertListToShowEN[$list_row][0] == True, ForatsVertListToShowEN[$list_row][0] == True, ForatsVertListToShowEN[$list_row][0] == True, ForatsVertListToShowEN[$list_row][0] == True,ForatsVertListToShowEN[$list_row][0] == True and ForatsVertListToShowEN[$list_row][5] == True,ForatsVertListToShowEN[$list_row][0] == True and ForatsVertListToShowEN[$list_row][5] == True, False,True</Visible><!-- ,False-->
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+</Include>

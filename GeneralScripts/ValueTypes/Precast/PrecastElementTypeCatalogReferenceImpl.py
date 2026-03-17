@@ -1,0 +1,50 @@
+""" implementation of the PrecastElementTypeCatalogReference value type
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import NemAll_Python_Palette as AllplanPalette
+
+from ControlProperties import ControlProperties
+
+from ..BaseStrImpl import BaseStrImpl
+
+if TYPE_CHECKING:
+    from ParameterProperty import ParameterProperty
+    from ..ValueTypeUtils.PropertyPaletteControlService import PropertyPaletteControlService
+
+class PrecastElementTypeCatalogReferenceImpl(BaseStrImpl):
+    """ implementation of the PrecastElementTypeCatalogReference value type
+    """
+
+    @staticmethod
+    def add_to_palette(wpf_palette          : AllplanPalette.PythonWpfPaletteBuilder,
+                       prop                 : ParameterProperty,
+                       ctrl_props           : ControlProperties,
+                       prop_pal_ctrl_service: PropertyPaletteControlService):
+        """ Add the string combo box control
+
+        Args:
+            wpf_palette:           WPf palette
+            prop:                  parameter property
+            ctrl_props:            control properties
+            prop_pal_ctrl_service: property palette control service
+        """
+
+        if isinstance(prop.value, int) and prop.value > 0:
+            value_str = str(prop.value)
+
+        elif isinstance(prop.value, str):
+            value_str = prop.value
+
+        else:
+            value_str = ""
+
+        prop.selected_value = \
+            wpf_palette.AddPrecastElementTypeCatalogRef(ctrl_props.text, prop.name, value_str, prop_pal_ctrl_service.page_index,
+                                                        ctrl_props.expander_name + ctrl_props.expander_state_key,
+                                                        ctrl_props.row_name + ctrl_props.row_state_key,
+                                                        prop_pal_ctrl_service.is_control_enabled(ctrl_props),
+                                                        ctrl_props.height, ctrl_props.width, ctrl_props.font_face_code)

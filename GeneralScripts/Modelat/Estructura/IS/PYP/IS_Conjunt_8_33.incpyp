@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+
+
+    <Parameter>
+        <Name>FemellesExpander</Name>
+        <Text></Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+
+        <Parameter>
+            <Name>Ample_forat_femella</Name>
+            <Text>Ample Forat Femella</Text>
+            <Value>15</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Altura_forat_femella</Name>
+            <Text>Altura Forat Femella</Text>
+            <Value>3.75</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separacio_forat_femella</Name>
+            <Text>Separació Forat Femella</Text>
+            <Value>30</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+    </Parameter>
+
+</Include>

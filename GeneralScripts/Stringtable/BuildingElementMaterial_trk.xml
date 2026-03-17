@@ -1,0 +1,31 @@
+<?xml version="1.0"?><Element>
+    <StringTable>Allplan PythonParts Materials Stringtable</StringTable>
+    <Item>
+        <TextId>mat_ALU</TextId>
+        <Text>Alüminyum</Text>
+    </Item>
+    <Item>
+        <TextId>mat_GLASS</TextId>
+        <Text>Sklo</Text>
+    </Item>
+    <Item>
+        <TextId>mat_OAK 3, PORTRAIT</TextId>
+        <Text>Dub 3 svisle</Text>
+    </Item>    
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\EXPOSED CONCRETE\\EXP_CONCRETE_DETAIL_01</TextId>
+        <Text>30YılSürümü Malzemeleri\\Brüt Beton\\Exp_Concrete_Detail_01</Text>
+    </Item>    
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\MASONRY\\BRICK_WALL_08</TextId>
+        <Text>30YılSürümü Malzemeleri\\Duvar\\Brick_wall_08</Text>
+    </Item>
+    <Item>
+        <TextId>mat_30YEAREDITION MATERIALS\\WOODEN FACADES\\WOOD_BOARDING_01</TextId>
+        <Text>30YılSürümü Malzemeleri\\Ahşap Cepheler\\Wood_Boarding_01</Text>
+    </Item>
+    <Item>
+        <TextId>mat_DEFAULT\\BUILDING\\FINISHES\\METAL\\METAL 3</TextId>
+        <Text>Standart\\Bina\\İnce Yapı\\Metal\\Metal 3</Text>
+    </Item>
+</Element>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>EncaixExpander</Name>
+        <Text>Encaix</Text>
+        <ValueType>Expander</ValueType>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>PestanyaSuperiorVert</Name>
+            <Text>Pestanya Superior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPEN == 2</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>PestanyaSuperiorHor</Name>
+            <Text>Pestanya Superior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPEN == 1 and SelectorENH == "Mes Tubs..."</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>PestanyaInferiorVert</Name>
+            <Text>Pestanya Inferior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPEN == 2</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>pestanyesInvVert</Name>
+            <Text>Invertir Pestanyes</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPEN == 2</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>PestanyaInferiorHor</Name>
+            <Text>Pestanya Inferior</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPEN == 1 and SelectorENH == "Mes Tubs..."</Visible>
+        </Parameter>
+
+        <Parameter>
+            <Name>pestanyesInv</Name>
+            <Text>Invertir Pestanyes</Text>
+            <Value>False</Value>
+            <ValueType>Checkbox</ValueType>
+            <Persistent>Model</Persistent>
+            <Visible>SelectorPPEN == 1 and SelectorENH == "Mes Tubs..."</Visible>
+        </Parameter>
+
+        <Name>EncaixTransversal</Name>
+        <Text>Encaixos Tranversals</Text>
+
+
+        <Parameter>
+            <Name>Separator</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+
+        <!-- llista que es mostra per pantalla -->
+        <Parameter>
+            <Name>EncaixVertListToShow</Name>
+            <Text>Encaix ,Orientació,Longitud,Amplitud,Posició,Profunditat,Pestanya</Text>
+            <Value>[]</Value>
+            <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox)</ValueType><!-- ,Separator-->
+            <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>Encaix,EncaixOr,Longitud,Amplitud,Posicio,Profunditat,Pestanya</FieldNames>
+            </NamedTuple>
+            <Visible>True, EncaixVertListToShow[$list_row][0] == True,EncaixVertListToShow[$list_row][0] == True,EncaixVertListToShow[$list_row][0] == True, EncaixVertListToShow[$list_row][0] == True, EncaixVertListToShow[$list_row][0] == True</Visible><!-- , EncaixVertListToShow[$list_row][0] == True-->
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+
+
+    </Parameter>
+
+</Include>

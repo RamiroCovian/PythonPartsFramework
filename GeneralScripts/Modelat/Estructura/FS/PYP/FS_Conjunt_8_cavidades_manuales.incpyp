@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+        <Name>Parent:PythonPartConnection</Name>
+        <Text>Crear cavidades manualmente</Text>
+        <Visible>True</Visible>
+
+        <Parameter>
+            <Name>zUnique</Name>
+            <Text>Unic</Text>
+            <Value>0.0</Value>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>Double</ValueType>
+        </Parameter>
+
+        <Name>Cavidades Manuales</Name>
+        <Text>Cavidades Manuales</Text>
+        <Visible>True</Visible>
+
+        <!-- Figure selector  -->
+        <Parameter>
+
+            <Name>SelectorFigura</Name>
+            <Text>Seleccione el tipo de figura</Text>
+            <Value>1</Value>
+            <ValueType>RadioButtonGroup</ValueType>
+
+            <Parameter>
+                <Name>CuboidFigure</Name>
+                <Text>Rectangular</Text>
+                <Value>1</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>CylinderFigure</Name>
+                <Text>Cilindro</Text>
+                <Value>2</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+
+        </Parameter>
+        <!-- End figure selector  -->
+
+        <!-- Cuboid figure params  -->
+        <Parameter>
+            <Name>AnchoCavidadCuboid</Name>
+            <Text>Ancho cuboide rectangular</Text>
+            <Value>400</Value>
+            <MinValue>50</MinValue>
+            <MaxValue>400</MaxValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorFigura == 1</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>LargoCavidadCuboid</Name>
+            <Text>Largo cuboide rectangular</Text>
+            <Value>800</Value>
+            <MinValue>100</MinValue>
+            <MaxValue>800</MaxValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorFigura == 1</Visible>
+        </Parameter>
+        <Parameter>
+            <Name>EspesorCavidadCuboid</Name>
+            <Text>Espesor cuboide rectangular</Text>
+            <Value>15.0</Value>
+            <MinValue>15</MinValue>
+            <MaxValue>15</MaxValue>
+            <ValueType>Length</ValueType>
+            <Enable>False</Enable>
+            <Visible>SelectorFigura == 1</Visible>
+        </Parameter>
+        <!-- End cuboid figure params  -->
+
+        <!-- Cylinder figure params  -->
+        <Parameter>
+            <Name>DiametroCavidadCylinder</Name>
+            <Text>Diametro cylinder</Text>
+            <Value>100</Value>
+            <MinValue>100</MinValue>
+            <MaxValue>400</MaxValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorFigura == 2</Visible>
+        </Parameter>
+        <!-- End cylinder figure params  -->
+
+        <!-- Button create figure -->
+        <Parameter>
+            <Name>ButtonRow</Name>
+            <Text>Crear</Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>ButtonCreateFigure</Name>
+                <Text>OK</Text>
+                <EventId>1000</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <!-- End button create figure -->
+
+</Include>

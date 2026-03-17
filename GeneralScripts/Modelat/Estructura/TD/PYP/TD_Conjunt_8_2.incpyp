@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+    <!-- ************* Desplaçament *************-->
+
+    <!-- Desplaçament en l'eix X en de la barra Horitzontal Inferior -->
+    <Parameter>
+        <Name>desplXI</Name>
+        <Text>desplaçament X</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' </Visible>
+        <ValueType>Length</ValueType>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament en l'eix Y en de la barra Horitzontal Inferior -->
+    <Parameter>
+        <Name>desplYI</Name>
+        <Text>desplaçament Y</Text>
+        <Value>0.0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+    <Parameter>
+        <Name>DimensionsParameterExpanderInf</Name>
+        <Text>Barres Hor. Inferiors</Text>
+        <ValueType>Expander</ValueType>
+        <Parameter>
+            <Name>listDesplHoritzontalsInf</Name>
+            <Text>Ample,Altura,Llargada,desplX,desplY,mostrarLiniaA,desplLinA,mostrarLiniaB,desplLinB,Separator</Text>
+            <Value>[30|30|1000|0|0|True|0|False|0;
+                    30|30|1000|0|0|True|0|False|0;
+                    30|30|1000|0|0|True|0|False|0]
+            </Value>
+            <ValueList>,,,,,,,,,,</ValueList>
+            <ValueType>namedtuple(Length,Length,Length,Length,Length,Checkbox,Length,Checkbox,Length,Separator)</ValueType>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraAmpleInf,BarraAlturaInf,BarraLlargadaInf,desplX,desplY,mostrarLiniaA,desplLinA,mostrarLiniaB,desplLinB,Separator</FieldNames>
+            </NamedTuple>
+            <!-- <Visible>False, False, False, False,False, False,False, False</Visible>-->
+            <Visible>False, False, SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1, False, SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1,SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and SepararTDHoritzontalInf == 1</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>listDesplHoritzontalsSup</Name>
+            <Text>Ample,Altura,Llargada,desplX,desplY,mostrarLiniaA,desplLinA,mostrarLiniaB,desplLinB,Separator</Text>
+            <!-- <Value>[30|30|1000|0|0|True|0|False|0;
+                    30|30|1000|0|0|True|0|False|0;
+                    30|30|1000|0|0|True|0|False|0]
+            </Value>-->
+            <Value>[]</Value>
+            <ValueList>,,,,,,,,,,</ValueList>
+            <ValueType>namedtuple(Length,Length,Length,Length,Length,Checkbox,Length,Checkbox,Length,Separator)</ValueType>
+            <NamedTuple>
+                <TypeName>StirrupList</TypeName>
+                <FieldNames>BarraAmpleSup,BarraAlturaSup,BarraLlargadaSup,desplX,desplY,mostrarLiniaA,desplLinA,mostrarLiniaB,desplLinB,Separator</FieldNames>
+            </NamedTuple>
+            <!-- <Visible>False, False, False, False,False, False,False, False</Visible>-->
+            <Visible>False, False, SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1, False, SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1,SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1, SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and SepararTDHoritzontalSup == 1</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>EncaixHorInf</Name>
+        <Text>Encaix Horitzontal</Text>
+        <Value>True</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Desplaçament en l'eix X en de la barra Horitzontal Superior -->
+    <Parameter>
+        <Name>desplXS</Name>
+        <Text>desplaçament X</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'Tub' or SelectorTDHSup == 'Tub + L')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament en l'eix Y en de la barra L Superior -->
+    <Parameter>
+        <Name>desplYS</Name>
+        <Text>desplaçament Y </Text>
+        <Value>30</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'Tub' or SelectorTDHSup == 'Tub + L')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>desplXSL</Name>
+        <Text>desplaçament X(L)</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament en l'eix Y en de la barra L Superior -->
+    <Parameter>
+        <Name>desplYSL</Name>
+        <Text>desplaçament Y (L)</Text>
+        <Value>30</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and (SelectorTDHSup == 'L' or SelectorTDHSup == 'Tub + L')</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>EncaixHorSup</Name>
+        <Text>Encaix Horitzontal</Text>
+        <Value>True</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>False</Visible>
+        <!--<Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>-->
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>invertirEncaixInf</Name>
+        <Text>Invertir Encaix (Inf)</Text>
+        <Value>1</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>invertirEncaixSup</Name>
+        <Text>Invertir Encaix (Sup)</Text>
+        <Value>1</Value>
+        <ValueType>Checkbox</ValueType>
+        <Visible>False</Visible>
+        <!--<Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>-->
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>listDesplVerticalsTD</Name>
+        <Text> desplX,desplXAbs,desplY,desplYAbs,mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,Separator</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Length,Length,Length,Length,Checkbox,Length,Checkbox,Length,Separator)</ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>desplX,desplXAbs,desplY,desplYAbs,mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False,False, False,False, False,False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- LLista de Barres TDV Interiors-->
+
+
+    <Parameter>
+        <Name>listDesplVerticalsInteriors</Name>
+        <Text> desplX,desplXAbs,desplY,desplYAbs,mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,Separator</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Length,Length,Length,Length,Checkbox,Length,Checkbox,Length,Separator)</ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>desplX,desplXAbs,desplY,desplYAbs,mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False,False, False,False, False,False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Desplaçament Eix X Barra Vertical-->
+    <Parameter>
+        <Name>desplXVert</Name>
+        <Text>desplaçament X</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <!-- <Visible>SelectorPPTD == 2</Visible>-->
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Eix Y Barra Vertical-->
+    <Parameter>
+        <Name>desplYVert</Name>
+        <Text>desplaçament Y</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <!--<Visible>SelectorPPTD == 2</Visible>-->
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Desplaçament Absolut Eix X Barra Vertical-->
+    <Parameter>
+        <Name>desplXVertAbs</Name>
+        <Text>despl X (Abs)</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Absolut Eix Y Barra Vertical-->
+    <Parameter>
+        <Name>desplYVertAbs</Name>
+        <Text>despl Y (Abs)</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Desplaçament Absolut Eix X Barra Vertical-->
+    <Parameter>
+        <Name>desplXHorAbs</Name>
+        <Text>despl X (Abs)</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>(SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Absolut Eix Y Barra Vertical-->
+    <Parameter>
+        <Name>desplYHorAbs</Name>
+        <Text>despl Y (Abs)</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>(SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>desplXVertAbsRef</Name>
+        <Text>despl X (Abs)</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 4</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Absolut Eix Y Barra Vertical-->
+    <Parameter>
+        <Name>desplYVertAbsRef</Name>
+        <Text>despl Y (Abs)</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 4</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>Separator</Name>
+        <ValueType>Separator</ValueType>
+    </Parameter>
+
+    <Parameter>
+        <Name>mostrarLiniaIntInf1</Name>
+        <Text>Eix 1</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and not SepararTDHoritzontalInf</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>desplLiniaIntInf1</Name>
+        <Text>Desplaçament 1</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and mostrarLiniaIntInf1 == True and not SepararTDHoritzontalInf</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+
+    <Parameter>
+        <Name>mostrarLiniaIntInf2</Name>
+        <Text>Eix 2</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and not SepararTDHoritzontalInf</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>desplLiniaIntInf2</Name>
+        <Text>Desplaçament 2</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior' and mostrarLiniaIntInf2 == True and not SepararTDHoritzontalInf</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorLiniaInf</Name>
+        <Text>Tipus Eix</Text>
+        <Value>Tipus 1</Value>
+        <ValueList>Tipus 1|Tipus 2</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorLayerInf</Name>
+        <Text>Layer Eix</Text>
+        <Value>TD_FIXACIO</Value>
+        <ValueList>TD_FIXACIO|TD_NO_CARAGOLAR</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Inferior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>mostrarLiniaIntSup1</Name>
+        <Text>Eix 1</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>desplLiniaIntSup1</Name>
+        <Text>Desplaçament 1</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and mostrarLiniaIntSup1 == True</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>mostrarLiniaIntSup2</Name>
+        <Text>Eix 2</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior'</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>desplLiniaIntSup2</Name>
+        <Text>Desplaçament 2</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' and mostrarLiniaIntSup2 == True</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorLiniaSup</Name>
+        <Text>Tipus Eix</Text>
+        <Value>Tipus 1</Value>
+        <ValueList>Tipus 1|Tipus 2</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorLayerSup</Name>
+        <Text>Layer Eix</Text>
+        <Value>TD_FIXACIO</Value>
+        <ValueList>TD_FIXACIO|TD_NO_CARAGOLAR</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == 'TD Superior' </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>mostrarLiniaVertA</Name>
+        <Text>Eix 1</Text>
+        <Value>True</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>SelectorPPTD == 2 or (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Eix X Barra Vertical-->
+    <Parameter>
+        <Name>desplVertLinA</Name>
+        <Text>desplaçament linia 1</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>(SelectorPPTD == 2 or (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")) and mostrarLiniaVertA == True</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>mostrarLiniaVertB</Name>
+        <Text>Eix 2</Text>
+        <Value>False</Value>
+        <ValueType>CheckBox</ValueType>
+        <Visible>SelectorPPTD == 2 or (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <!-- Desplaçament Eix Y Barra Vertical-->
+    <Parameter>
+        <Name>desplVertLinB</Name>
+        <Text>desplaçament linia 2</Text>
+        <Value>0</Value>
+        <ValueType>Length</ValueType>
+        <Visible>(SelectorPPTD == 2 or (SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs...")) and mostrarLiniaVertB == True</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>SelectorLiniaVert</Name>
+        <Text>Tipus Eix</Text>
+        <Value>Tipus 1</Value>
+        <ValueList>Tipus 1|Tipus 2</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorLayerVert</Name>
+        <Text>Layer Eix</Text>
+        <Value>TD_FIXACIO</Value>
+        <ValueList>TD_FIXACIO|TD_NO_CARAGOLAR</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 2</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorLiniaHor</Name>
+        <Text>Tipus Eix</Text>
+        <Value>Tipus 1</Value>
+        <ValueList>Tipus 1|Tipus 2</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorLayerHor</Name>
+        <Text>Layer Eix</Text>
+        <Value>TD_FIXACIO</Value>
+        <ValueList>TD_FIXACIO|TD_NO_CARAGOLAR</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 1 and SelectorTDHTD == "Mes Tubs..."</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>SelectorLiniaRef</Name>
+        <Text>Tipus Eix</Text>
+        <Value>Tipus 1</Value>
+        <ValueList>Tipus 1|Tipus 2</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 4</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+        <Name>SelectorLayerRef</Name>
+        <Text>Layer Eix</Text>
+        <Value>TD_FIXACIO</Value>
+        <ValueList>TD_FIXACIO|TD_NO_CARAGOLAR</ValueList>
+        <ValueType>StringComboBox</ValueType>
+        <Visible>SelectorPPTD == 4</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+</Include>

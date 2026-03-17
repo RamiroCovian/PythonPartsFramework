@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>DadesVertCopy</Name>
+        <Text> </Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Integer,Length,Length,Length,Length,Checkbox,Separator)</ValueType>
+        <ValueList>,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>nBarraGuardada,BarraAmple,BarraAltura,BarraLlargada,desplY,esProvisional,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False,False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>ForatsVertListCopy</Name>
+        <Text>Forat,Orientacio,Posicio,Llargada,Amplada,Completa,Llargada,Amplada,TFF,ProfunditatTFF,Separator</Text>
+        <Value>[]
+        </Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Length,Length,Checkbox,Length,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>UShape</TypeName>
+            <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,MostrarBox,ProfunditatTFF,Separator</FieldNames><!-- ,Separator-->
+        </NamedTuple>
+        <MinValue>,,0</MinValue>
+        <!-- <Visible>False, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True, ForatsVertListCopy[$list_row][0] == True,ForatsVertListCopy[$list_row][0] == True and ForatsVertListCopy[$list_row][5] == True,ForatsVertListCopy[$list_row][0] == True and ForatsVertListCopy[$list_row][5] == True, ForatsVertListCopy[$list_row][0] == True,False</Visible>-->
+        <Visible>False, False, False, False, False, False, False, False, False,False,False,False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>BarresFrontListCopy</Name>
+        <Text>TIS,Ample,Forat,Orientacio,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar,Separator</Text>
+        <Value>[]
+        </Value>
+        <ValueType>namedtuple(Checkbox,Length,Length,StringComboBox,Length,Length,Length,Checkbox,Checkbox,Checkbox,Separator)</ValueType>
+        <ValueList>,,,Esq|Dre|Sup|Inf,,,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>BarraFront,Amplitud,Altura,Orientacio,Posicio,Longitud,Profunditat,Edit,Save,acabatEditar,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False,False, False, False, False, False, False, False,False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <!-- *******************  Barres Interiors Ref **************************-->
+    <Parameter>
+        <Name>LengthListBarresIntRef</Name>
+        <Text>LengthListBarresIntRef</Text>
+        <Value>5</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Llista de indexacio a la BarresRefitzontals-->
+    <Parameter>
+        <Name>nListBarresRef</Name>
+        <Text>Posicio,nTotal</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Integer,Integer)</ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Posicio,nTotal</FieldNames>
+        </NamedTuple>
+        <Visible> False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <!-- valors Barra Refitzontal Intermitja-->
+    <Parameter>
+        <Name>dadesENReftInterTD</Name>
+        <Text>Ample, Altura, Llargada, Gruix,
+            desplX, desplY,
+            mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,
+            se esta editant, acabat editar,
+            Is Global Prop Vert, Color, Layer,
+            Ample_forat_femella, Altura_forat_femella, Separacio_forat_femella,
+            Posicio centre de masses, 1r cancam, Distancia, 2n cancam, Distancia,
+            PestanyaSup, PestanyaInf,
+            linia, layer
+        </Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Length,Length,Length,Length,
+                            Length,Length,
+                            Checkbox,Length, Checkbox,Length,
+                            Checkbox, Checkbox,
+                            Checkbox, Color, Layer,
+                            Length, Length, Length,
+                            Length, Checkbox, Length , Checkbox, Length,
+                            Checkbox, Checkbox,
+                            String, String)
+        </ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Ample, Altura, Llargada, Gruix,
+                        desplX, desplY,
+                        mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,
+                        estaEditant, acabatEditar,
+                        IsUseGlobalProp, FounColor, BarraLayer,
+                        Ample_forat_femella, Altura_forat_femella, Separacio_forat_femella,
+                        posicio_centre_masses, IsFirstCancam, Dis1cancam, IsSecondCancam, Dis2cancam,
+                        PestanyaSup, PestanyaInf,
+                        linia, layer
+            </FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False, False, False, False,False,False,False,False,False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- Llista de Colis Interiors-->
+    <Parameter>
+        <Name>ColisRefInt</Name>
+        <Text>Colis,Orientacio,Posicio,Llargada,MostrarBox,Amplada,Separator</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Colis,orientacio,Posicio,Llargada,Amplada,MostrarBox,Separator</FieldNames>
+        </NamedTuple>
+        <MinValue>,,0</MinValue>
+        <Visible>False, False, False,False,False,False,False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+
+    <Parameter>
+        <Name>PotesRefInt</Name>
+        <Text>Pota,Posicio</Text>
+        <Value>[]
+        </Value>
+        <ValueType>namedtuple(Checkbox,Length)</ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Pota,Posicio</FieldNames>
+        </NamedTuple>
+        <MinValue>,0,</MinValue>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <Visible>False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>ForatsRefInt</Name>
+        <Text>Forat,Orientacio,Posicio,Llargada,Amplada,Completa,Llargada,Amplada,Separator</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Checkbox,Length,Length,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>UShape</TypeName>
+            <FieldNames>Forat,orientacio,Posicio,Llargada,Amplada,Complet,LlargadaB,AmpladaB,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False,False, False, False,False, False,False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>FemellesRefInt</Name>
+        <Text>Femella,Orientacio,Posicio X,Posicio Y, Separacio</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Femella,FemellaOr,PosFemellaX,PosFemellaY,Separacio_forat_femella,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False ,False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>FemellesRefIntAux</Name>
+        <Text>Femella,Orientacio,Posicio X,Posicio Y, Separacio</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Femella,FemellaOr,PosFemellaX,PosFemellaY,Separacio_forat_femella,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False ,False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>FemellesRefIntAuxInf</Name>
+        <Text>Femella,Orientacio,Posicio X,Posicio Y, Separacio</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Femella,FemellaOr,PosFemellaX,PosFemellaY,Separacio_forat_femella,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False ,False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>FemellesRefIntAuxSup</Name>
+        <Text>Femella,Orientacio,Posicio X,Posicio Y, Separacio</Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Femella,FemellaOr,PosFemellaX,PosFemellaY,Separacio_forat_femella,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False ,False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>EncaixRefInt</Name>
+        <Text> </Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length,Length,Checkbox,Separator)</ValueType>
+        <ValueList>,Esq|Dre|Sup|Inf,,,,,</ValueList>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>Encaix,EncaixOr,Longitud,Amplitud,Posicio,Profunditat,Pestanya,Separator</FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False, False, False, False, False</Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+
+    <!-- valors Barra Inclinades-->
+    <Parameter>
+        <Name>dadesTDInclinades</Name>
+        <Text>MostrarInclinat, nom,
+            Ample, Altura, Llargada, Gruix,
+            desplX, desplY,
+            mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,
+            se esta editant, acabat editar,
+            Is Global Prop Vert, Color, Layer,
+            Ample_forat_femella, Altura_forat_femella, Separacio_forat_femella,
+            Posicio centre de masses, 1r cancam, Distancia, 2n cancam, Distancia,
+            PestanyaSup, PestanyaInf,FemellaSup, FemellaInf,
+            Posicio, Angle
+        </Text>
+        <Value>[]</Value>
+        <ValueType>namedtuple(Checkbox,String,
+                            Length,Length,Length,Length,
+                            Length,Length,
+                            Checkbox,Length, Checkbox,Length,
+                            Checkbox, Checkbox,
+                            Checkbox, Color, Layer,
+                            Length, Length, Length,
+                            Length, Checkbox, Length , Checkbox, Length,
+                            Checkbox, Checkbox, Checkbox, Checkbox,
+                            Length, Length)
+        </ValueType>
+        <NamedTuple>
+            <TypeName>StirrupList</TypeName>
+            <FieldNames>MostrarInclinat,nom,
+                        Ample, Altura, Llargada, Gruix,
+                        desplX, desplY,
+                        mostrarLiniaVertA,desplLinA,mostrarLiniaVertB,desplLinB,
+                        estaEditant, acabatEditar,
+                        IsUseGlobalProp, FounColor, BarraLayer,
+                        Ample_forat_femella, Altura_forat_femella, Separacio_forat_femella,
+                        posicio_centre_masses, IsFirstCancam, Dis1cancam, IsSecondCancam, Dis2cancam,
+                        PestanyaSup, PestanyaInf, femellaSup, femellaInf,
+                        Posicio, Angle
+            </FieldNames>
+        </NamedTuple>
+        <Visible>False, False, False, False, False,False,False,False,False,False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False </Visible>
+        <Persistent>Model</Persistent>
+    </Parameter>
+</Include>

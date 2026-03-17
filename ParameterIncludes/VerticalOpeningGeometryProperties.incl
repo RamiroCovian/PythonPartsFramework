@@ -1,0 +1,78 @@
+<Include>
+    <Parameter>
+        <Name>ProfileRow</Name>
+        <Text>Select geometry</Text>
+        <ValueType>Row</ValueType>
+        <Visible>Shape == AllplanArchEle.VerticalOpeningShapeType.eArbitrary</Visible>
+
+        <Parameter>
+            <Name>Profile</Name>
+            <Text>Selection</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <ValueDialog>SymbolDialog</ValueDialog>
+        </Parameter>
+    </Parameter>
+
+    <Parameter>
+        <Name>Width</Name>
+        <Text>Opening width</Text>
+        <Value>1010</Value>
+        <ValueType>Length</ValueType>
+        <MinValue>10</MinValue>
+        <Enable>Shape != AllplanArchEle.VerticalOpeningShapeType.eArbitrary</Enable>
+    </Parameter>
+
+    <Parameter>
+        <Name>RiseAtTop</Name>
+        <Text>Rise at top</Text>
+        <Value>200</Value>
+        <ValueType>Length</ValueType>
+        <Visible>Shape in [AllplanArchEle.VerticalOpeningShapeType.eSemiDiamond,
+                            AllplanArchEle.VerticalOpeningShapeType.eSemiCircle,
+                            AllplanArchEle.VerticalOpeningShapeType.eRiseBottomTop]</Visible>
+        <MinValue>0</MinValue>
+        <MaxValue>HeightSettings.Height</MaxValue>
+    </Parameter>
+
+    <Parameter>
+        <Name>SegmentsAtTop</Name>
+        <Text>Segments at top</Text>
+        <Value>30</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>Shape == AllplanArchEle.VerticalOpeningShapeType.eRiseBottomTop</Visible>
+        <MinValue>1</MinValue>
+    </Parameter>
+
+    <Parameter>
+        <Name>HeightToRise</Name>
+        <Text>Height to rise</Text>
+        <Value></Value>
+        <ValueType>Length</ValueType>
+        <Visible>Shape in [AllplanArchEle.VerticalOpeningShapeType.eSemiDiamond,
+                           AllplanArchEle.VerticalOpeningShapeType.eSemiCircle,
+                           AllplanArchEle.VerticalOpeningShapeType.eRiseBottomTop]</Visible>
+        <MinValue>0</MinValue>
+        <Constraint>HeightSettings.Height - (RiseAtTop if Shape != AllplanArchEle.VerticalOpeningShapeType.eRiseBottomTop else RiseAtBottom + RiseAtTop)</Constraint>
+        <Persistent>NO</Persistent>
+    </Parameter>
+
+    <Parameter>
+        <Name>RiseAtBottom</Name>
+        <Text>Rise at bottom</Text>
+        <Value>200</Value>
+        <ValueType>Length</ValueType>
+        <Visible>Shape == AllplanArchEle.VerticalOpeningShapeType.eRiseBottomTop</Visible>
+        <MinValue>0</MinValue>
+        <MaxValue>HeightSettings.Height</MaxValue>
+    </Parameter>
+
+    <Parameter>
+        <Name>SegmentsAtBottom</Name>
+        <Text>Segments at bottom</Text>
+        <Value>30</Value>
+        <ValueType>Integer</ValueType>
+        <Visible>Shape == AllplanArchEle.VerticalOpeningShapeType.eRiseBottomTop</Visible>
+        <MinValue>1</MinValue>
+    </Parameter>
+</Include>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <Parameter>
+        <Name>CancamsExpander</Name>
+        <Text>Cancams</Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>posicio_centre_massesVert</Name>
+            <Text>Posició centre de masses</Text>
+            <Value>150</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>CancamsExpander</Name>
+            <Text></Text>
+            <value>True</value>
+            <ValueType>Expander</ValueType>
+
+            <Parameter>
+                <Name>IsFirstCancamVert</Name>
+                <Text>1r cancam</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>Dis1cancamVert</Name>
+                <Text>Distància</Text>
+                <Value>500</Value>
+                <ValueType>Length</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>IsFirstCancamVert == True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>IsSecondCancamVert</Name>
+                <Text>2n cancam</Text>
+                <Value>False</Value>
+                <ValueType>Checkbox</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Persistent>Model</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>Dis2cancamVert</Name>
+                <Text>Distància</Text>
+                <Value>1000</Value>
+                <ValueType>Length</ValueType>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>IsSecondCancamVert == True</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+        </Parameter>
+    </Parameter>
+
+</Include>

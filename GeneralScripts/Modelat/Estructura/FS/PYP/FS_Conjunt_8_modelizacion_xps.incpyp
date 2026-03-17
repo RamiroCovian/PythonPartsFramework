@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+        <Name>Parent:PythonPartConnection</Name>
+        <Text>Crear cavidades manualmente</Text>
+        <Visible>True</Visible>
+
+        <Parameter>
+            <Name>zUnique</Name>
+            <Text>Unic</Text>
+            <Value>0.0</Value>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>Double</ValueType>
+        </Parameter>
+
+        <Name>Modelizacion XPS</Name>
+        <Text>Modelizacion XPS</Text>
+        <Visible>True</Visible>
+
+        <!-- Figure selector  -->
+        <Parameter>
+
+            <Name>SelectorTransporte</Name>
+            <Text>Añadir XPS transporte</Text>
+            <Value>1</Value>
+            <ValueType>RadioButtonGroup</ValueType>
+
+            <Parameter>
+                <Name>NotTransporteXPS</Name>
+                <Text>No</Text>
+                <Value>1</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>YesTransporteXPS</Name>
+                <Text>Añadir</Text>
+                <Value>2</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+
+        </Parameter>
+        <!-- End figure selector  -->
+
+        <!-- Largo XPS  -->
+        <Parameter>
+            <Name>LargoXPSTransporte</Name>
+            <Text>XPS (FS 400-3000mm)</Text>
+            <Value>3000.0</Value>
+            <MinValue>400</MinValue>
+            <MaxValue>3000</MaxValue>
+            <ValueType>Length</ValueType>
+            <Visible>SelectorTransporte == 2</Visible>
+        </Parameter>
+         <!-- End figure selector  -->
+
+         <!-- Transporte lado selector  -->
+        <Parameter>
+
+            <Name>SelectorLadoTransporteXPS</Name>
+            <Text>Transporte lado Opciones XPS</Text>
+            <Value>1</Value>
+            <ValueType>RadioButtonGroup</ValueType>
+            <Visible>SelectorTransporte == 2</Visible>
+
+            <Parameter>
+                <Name>LeftSideTransporte</Name>
+                <Text>Izquierdo</Text>
+                <Value>1</Value>
+                <ValueType>RadioButton</ValueType>
+                <Visible>SelectorTransporte == 2</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>RightSideTransporte</Name>
+                <Text>Derecho</Text>
+                <Value>2</Value>
+                <ValueType>RadioButton</ValueType>
+                <Visible>SelectorTransporte == 2</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>BothSidesTransporte</Name>
+                <Text>Ambos</Text>
+                <Value>3</Value>
+                <ValueType>RadioButton</ValueType>
+                <Visible>SelectorTransporte == 2</Visible>
+            </Parameter>
+
+        </Parameter>
+        <!-- End lado selector  -->
+
+</Include>

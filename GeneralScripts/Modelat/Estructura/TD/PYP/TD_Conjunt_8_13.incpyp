@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+    <!--FEMELLES Vert FALTA MATRIU FemellesVert-->
+    <Parameter>
+        <Name>FemellesExpander</Name>
+        <Text></Text>
+        <ValueType>Expander</ValueType>
+        <ExcludeIdentical>True</ExcludeIdentical>
+        <!-- <Persistent>Model</Persistent> -->
+
+        <Parameter>
+            <Name>Ample_forat_femellaVert</Name>
+            <Text>Ample Forat Femella</Text>
+            <Value>15</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Altura_forat_femellaVert</Name>
+            <Text>Altura Forat Femella</Text>
+            <Value>3.75</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+        <Parameter>
+            <Name>Separacio_forat_femellaVert</Name>
+            <Text>Separacio Forat Femella</Text>
+            <Value>30</Value>
+            <MinValue>0</MinValue>
+            <ValueType>Length</ValueType>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>FemellesExpanderVert</Name>
+            <Text>Posicio femelles</Text>
+            <ValueType>Expander</ValueType>
+            <!-- FEMELLES-->
+            <!-- ********************************************************************** -->
+            <Parameter>
+                <Name>Separator</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>FemellesVertListToShow</Name>
+                <Text>Femella,Orientacio,Posicio X,Posicio Y, PosFemellaXOri,Separacio</Text>
+                <!-- <Value>[False|Esq|400|0|400;
+                        False|Esq|800|0|800;
+                        False|Esq|1200|0|1200]
+                </Value>-->
+                <Value>[]</Value>
+                <ValueType>namedtuple(Checkbox,StringComboBox,Length,Length,Length, Length,Separator)</ValueType>
+                <ValueList>,Esq|Dre|Sup|Inf,,,</ValueList>
+                <NamedTuple>
+                    <TypeName>StirrupList</TypeName>
+                    <FieldNames>Femella,FemellaOr,PosFemellaX,PosFemellaY,Separacio_forat_femella,PosFemellaXOri,Separator</FieldNames>
+                </NamedTuple>
+                <MinValue>,,0,,</MinValue>
+                <ExcludeIdentical>True</ExcludeIdentical>
+                <Visible>True, FemellesVertListToShow[$list_row][0] == True, FemellesVertListToShow[$list_row][0] == True, FemellesVertListToShow[$list_row][0] == True, False, False</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+
+
+        </Parameter>
+    </Parameter>
+
+</Include>
