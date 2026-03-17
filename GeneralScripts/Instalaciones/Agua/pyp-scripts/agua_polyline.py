@@ -187,9 +187,16 @@ def _create_elements_for_segment_group(
                     }
                 )
 
+            # Codo: en TD devuelve outer + inner, igual que el tubo de polietileno.
+            # Registramos ambos en templates para que el PipelineProcessor pueda
+            # instanciar tanto el codo exterior como el interior.
             elem3D_list.append(
                 {"type": "codo_90", "elem": codo_model[0], "rotate": True}
             )
+            if len(codo_model) > 1:
+                elem3D_list.append(
+                    {"type": "codo_90_inner", "elem": codo_model[1], "rotate": True}
+                )
 
             processor = PipelineProcessor(
                 elem3D_list=elem3D_list, element_type="tubo_agua"
