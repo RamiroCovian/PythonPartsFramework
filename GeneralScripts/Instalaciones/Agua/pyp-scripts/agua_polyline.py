@@ -118,7 +118,7 @@ def _create_elements_for_segment_group(
     # ------------------------------------------------------------------
     # CASO B: Conducto Recuperador (EXAMPLE)
     # ------------------------------------------------------------------
-    if model_base and element_type_core in ["polietile", "multicapa"]:
+    if model_base and element_type_core in ["polietile", "multicapa", "armaflex"]:
 
         # water_type se guarda en SegmentInfo; si existe usamos el del primer segmento
         water_type = None
@@ -196,6 +196,16 @@ def _create_elements_for_segment_group(
             if len(codo_model) > 1:
                 elem3D_list.append(
                     {"type": "codo_90_inner", "elem": codo_model[1], "rotate": True}
+                )
+
+            # Si el codo TD devuelve también un inner, lo registramos como plantilla opcional.
+            if len(codo_model) > 1:
+                elem3D_list.append(
+                    {
+                        "type": "codo_90_inner",
+                        "elem": codo_model[1],
+                        "rotate": True,
+                    }
                 )
 
             processor = PipelineProcessor(

@@ -30,9 +30,22 @@ class TeSortidaScript(BaseScriptObject):
         attr_list = []
         return attr_list
 
-    def execute(self, diameter=None, dist_type=None) -> CreateElementResult:
-        # aqui tenes que usar el diametro que llega para generar el 3D en width y height
-        # tenes que tratar de no usar self.param .. hacerlo mas dinamico
+    def execute(self, *args, **kwargs) -> CreateElementResult:
+        """
+        Ejecuta la creación de la te de salida.
+        Acepta parámetros opcionales desde la polilínea:
+        - diameter: diámetro elegido (20, 25, 32, ...)
+        - dist_type: tipo de distribución ("IS" o "TD")
+        - water_type: tipo de agua ("Fred", "Calent", etc.) – reservado para futura ampliación
+        """
+        # Mantener compatibilidad con llamadas antiguas que pasaban solo dist_type/diameter por nombre
+        diameter = args[0] if args else kwargs.get("diameter")
+        dist_type = kwargs.get("dist_type")
+        water_type = kwargs.get("water_type")
+
+        # TODO: usar diameter para ajustar realmente la geometría del modelo TeSortidaModel
+        # cuando se defina el mapeo de diámetros a parámetros del modelo.
+
         model_ele_list = None
         if dist_type == "IS":
             PythonUtility.ShowMessageBox(
