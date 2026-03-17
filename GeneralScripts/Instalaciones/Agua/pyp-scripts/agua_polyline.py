@@ -149,6 +149,8 @@ def _create_elements_for_segment_group(
             item for item in so.pythonparts_modules if item.key == "manguito"
         ]
 
+        # Pasamos el tipo de distribución (IS / TD) al PythonPart de codo
+        # para que CodoScript.execute pueda elegir entre ColzeModel y ColzeTDModel.
         codo_model = so._get_pythonpart_installed(
             element_key=codo_selected[0].key,
             exec_kwargs={"dist_type": so.distribution_type},
@@ -185,10 +187,16 @@ def _create_elements_for_segment_group(
                     }
                 )
 
-            # Codo exterior
+            # Codo: en TD devuelve outer + inner, igual que el tubo de polietileno.
+            # Registramos ambos en templates para que el PipelineProcessor pueda
+            # instanciar tanto el codo exterior como el interior.
             elem3D_list.append(
                 {"type": "codo_90", "elem": codo_model[0], "rotate": True}
             )
+            if len(codo_model) > 1:
+                elem3D_list.append(
+                    {"type": "codo_90_inner", "elem": codo_model[1], "rotate": True}
+                )
 
             # Si el codo TD devuelve también un inner, lo registramos como plantilla opcional.
             if len(codo_model) > 1:

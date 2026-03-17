@@ -6950,8 +6950,8 @@ class PipelineProcessor:
                 if abs(dot) < 0.01:  # Giro a 90 grados
                     pos_nodo = seg.end
 
-                    # Codo exterior
-                    element_codo = self._aplicar_transformacion(
+                    # Codo exterior (outer)
+                    element_codo_outer = self._aplicar_transformacion(
                         self.templates["codo_90"],
                         seg,
                         elem_type="codo_90",
@@ -6959,16 +6959,14 @@ class PipelineProcessor:
                         next_seg=next_seg,
                     )
 
-                    result_list.append(
-                        {
-                            "element": element_codo,
-                            "element_type": "codo_90",
-                            "index": element_index,
-                        }
-                    )
+                    result_list.append({
+                        "element": element_codo_outer,
+                        "element_type": "codo_90",
+                        "index": element_index,
+                    })
                     element_index += 1
 
-                    # Codo inner opcional (solo para TD u otros casos con doble BRep)
+                    # Codo interior (inner), si existe plantilla registrada
                     if "codo_90_inner" in self.templates:
                         element_codo_inner = self._aplicar_transformacion(
                             self.templates["codo_90_inner"],
@@ -6978,13 +6976,11 @@ class PipelineProcessor:
                             next_seg=next_seg,
                         )
 
-                        result_list.append(
-                            {
-                                "element": element_codo_inner,
-                                "element_type": "codo_90_inner",
-                                "index": element_index,
-                            }
-                        )
+                        result_list.append({
+                            "element": element_codo_inner,
+                            "element_type": "codo_90_inner",
+                            "index": element_index,
+                        })
                         element_index += 1
 
         return result_list
