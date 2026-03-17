@@ -26,15 +26,54 @@ class ArmaflexScript(BaseScriptObject):
         attr_list = []
         return attr_list
 
-    def execute(self, diameter=None, dist_type=None) -> CreateElementResult:
-        # aqui tenes que usar el diametro que llega para generar el 3D en width y height
-        # tenes que tratar de no usar self.param .. hacerlo mas dinamico
+    def execute(self, *args, **kwargs) -> CreateElementResult:
+        """
+        Ejecuta la creación del armaflex.
+        Acepta parámetros opcionales desde la polilínea:
+        - diameter: diámetro elegido (20, 25, 32, ...)
+        - dist_type: tipo de distribución ("IS" o "TD")
+        - water_type: tipo de agua ("Fred", "Calent", etc.) – reservado para futura ampliación
+        """
+        diameter = args[0] if args else kwargs.get("diameter")
+        dist_type = kwargs.get("dist_type")
+        water_type = kwargs.get("water_type")
+
+        # De momento solo existe versión TD de armaflex.
         if dist_type == "IS":
             PythonUtility.ShowMessageBox(
                 "Este tipo de tubo no existe o no está disponible para la distribución IS.",
                 PythonUtility.MB_OK,
             )
             return CreateElementResult([])
+
+        # Si viene un diámetro desde la polilínea, lo mapeamos al tipo de armaflex
+        # para que ArmaflexModel seleccione el índice correcto vía TipoArmaflex.
+        if diameter is not None:
+            tipo_valor = None
+            try:
+                diam_int = int(diameter)
+            except Exception:
+                diam_int = None
+
+            if diam_int is not None:
+                if diam_int == 20:
+                    tipo_valor = "Ø20/9mm"
+                elif diam_int == 25:
+                    tipo_valor = "Ø25"
+                elif diam_int == 32:
+                    tipo_valor = "Ø32"
+
+            if tipo_valor:
+                try:
+                    tipo_attr = getattr(self.build_ele, "TipoArmaflex", None)
+                    if tipo_attr is not None and hasattr(tipo_attr, "value"):
+                        tipo_attr.value = tipo_valor
+                    else:
+                        setattr(self.build_ele, "TipoArmaflex", tipo_valor)
+                except Exception:
+                    # Si algo falla, seguimos sin interrumpir la creación
+                    pass
+
         tub = ArmaflexModel(self.build_ele, self.doc)
         model_ele_list = tub.build()
 

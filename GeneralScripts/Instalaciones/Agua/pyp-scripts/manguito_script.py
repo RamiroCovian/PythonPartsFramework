@@ -11,10 +11,10 @@ def check_allplan_version(_build_ele, version) -> bool:
 
 
 def create_script_object(build_ele, script_object_data):
-    return ManguitoIsScript(build_ele, script_object_data)
+    return ManguitoScript(build_ele, script_object_data)
 
 
-class ManguitoIsScript(BaseScriptObject):
+class ManguitoScript(BaseScriptObject):
     """Clase principal del PythonPart que modela un manguito."""
 
     def __init__(

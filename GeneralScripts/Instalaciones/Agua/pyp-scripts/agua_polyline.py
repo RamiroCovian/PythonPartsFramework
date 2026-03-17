@@ -118,7 +118,7 @@ def _create_elements_for_segment_group(
     # ------------------------------------------------------------------
     # CASO B: Conducto Recuperador (EXAMPLE)
     # ------------------------------------------------------------------
-    if model_base and element_type_core in ["polietile", "multicapa"]:
+    if model_base and element_type_core in ["polietile", "multicapa", "armaflex"]:
 
         # water_type se guarda en SegmentInfo; si existe usamos el del primer segmento
         water_type = None
