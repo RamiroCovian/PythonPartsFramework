@@ -149,7 +149,12 @@ def _create_elements_for_segment_group(
             item for item in so.pythonparts_modules if item.key == "manguito"
         ]
 
-        codo_model = so._get_pythonpart_installed(element_key=codo_selected[0].key)
+        # Pasamos el tipo de distribución (IS / TD) al PythonPart de codo
+        # para que CodoScript.execute pueda elegir entre ColzeModel y ColzeTDModel.
+        codo_model = so._get_pythonpart_installed(
+            element_key=codo_selected[0].key,
+            exec_kwargs={"dist_type": so.distribution_type},
+        )
         # La conexión (manguito) todavía no se utiliza en elem3D_list; no bloqueamos la creación
         # del tubo principal si este PythonPart no está disponible.
         # conexion_model = so._get_pythonpart_installed(
