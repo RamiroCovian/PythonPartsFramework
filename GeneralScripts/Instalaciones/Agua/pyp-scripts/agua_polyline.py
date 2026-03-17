@@ -149,7 +149,10 @@ def _create_elements_for_segment_group(
             item for item in so.pythonparts_modules if item.key == "manguito"
         ]
 
-        codo_model = so._get_pythonpart_installed(element_key=codo_selected[0].key)
+        codo_model = so._get_pythonpart_installed(
+            element_key=codo_selected[0].key,
+            exec_kwargs={"dist_type": so.distribution_type},
+        )
         # La conexión (manguito) todavía no se utiliza en elem3D_list; no bloqueamos la creación
         # del tubo principal si este PythonPart no está disponible.
         # conexion_model = so._get_pythonpart_installed(
@@ -182,9 +185,20 @@ def _create_elements_for_segment_group(
                     }
                 )
 
+            # Codo exterior
             elem3D_list.append(
                 {"type": "codo_90", "elem": codo_model[0], "rotate": True}
             )
+
+            # Si el codo TD devuelve también un inner, lo registramos como plantilla opcional.
+            if len(codo_model) > 1:
+                elem3D_list.append(
+                    {
+                        "type": "codo_90_inner",
+                        "elem": codo_model[1],
+                        "rotate": True,
+                    }
+                )
 
             processor = PipelineProcessor(
                 elem3D_list=elem3D_list, element_type="tubo_agua"

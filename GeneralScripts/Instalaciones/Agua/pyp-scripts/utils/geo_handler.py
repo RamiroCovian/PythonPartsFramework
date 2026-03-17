@@ -6735,11 +6735,13 @@ class PipelineProcessor:
         p_destino = custom_position if custom_position else segment_data.start
 
         # 2. NORMALIZACIÓN (ORIGEN 0,0,0)
-        # Llevamos el objeto al centro para que las rotaciones no lo desplacen fuera de eje
-        centro = self._get_center_from_vertices(brep)
-        brep = AllplanGeo.Move(
-            brep, AllplanGeo.Vector3D(-centro.X, -centro.Y, -centro.Z)
-        )
+        # Para conductos rectos normalizamos al centro, pero para codós ya vienen
+        # centrados y con la relación outer/inner correcta desde el modelo TD.
+        if elem_type != "codo_90":
+            centro = self._get_center_from_vertices(brep)
+            brep = AllplanGeo.Move(
+                brep, AllplanGeo.Vector3D(-centro.X, -centro.Y, -centro.Z)
+            )
 
         # ==========================================
         # PARTE 1: TRANSFORMACIONES LOCALES (ROLL)
@@ -6948,6 +6950,7 @@ class PipelineProcessor:
                 if abs(dot) < 0.01:  # Giro a 90 grados
                     pos_nodo = seg.end
 
+                    # Codo exterior
                     element_codo = self._aplicar_transformacion(
                         self.templates["codo_90"],
                         seg,
@@ -6964,6 +6967,25 @@ class PipelineProcessor:
                         }
                     )
                     element_index += 1
+
+                    # Codo inner opcional (solo para TD u otros casos con doble BRep)
+                    if "codo_90_inner" in self.templates:
+                        element_codo_inner = self._aplicar_transformacion(
+                            self.templates["codo_90_inner"],
+                            seg,
+                            elem_type="codo_90",
+                            custom_position=pos_nodo,
+                            next_seg=next_seg,
+                        )
+
+                        result_list.append(
+                            {
+                                "element": element_codo_inner,
+                                "element_type": "codo_90_inner",
+                                "index": element_index,
+                            }
+                        )
+                        element_index += 1
 
         return result_list
 

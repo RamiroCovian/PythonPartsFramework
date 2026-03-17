@@ -26,9 +26,22 @@ class ClauDePasScript(BaseScriptObject):
         attr_list = []
         return attr_list
 
-    def execute(self, diameter=None, dist_type=None) -> CreateElementResult:
-        # aqui tenes que usar el diametro que llega para generar el 3D en width y height
-        # tenes que tratar de no usar self.param .. hacerlo mas dinamico
+    def execute(self, *args, **kwargs) -> CreateElementResult:
+        """
+        Ejecuta la creación del clau de pas.
+        Acepta parámetros opcionales desde la polilínea:
+        - diameter: diámetro elegido (20, 25, 32, ...)
+        - dist_type: tipo de distribución ("IS" o "TD")
+        - water_type: tipo de agua ("Fred", "Calent", etc.) – reservado para futura ampliación
+        """
+        # Mantener compatibilidad con llamadas antiguas que pasaban solo dist_type/diameter por nombre
+        diameter = args[0] if args else kwargs.get("diameter")
+        dist_type = kwargs.get("dist_type")
+        water_type = kwargs.get("water_type")
+
+        # TODO: usar diameter para mapear a TipoClaudePas (CPØ20, CPØ25, ...)
+        # cuando se defina el mapeo exacto desde la polilínea.
+
         if dist_type == "IS":
             PythonUtility.ShowMessageBox(
                 "Este tipo de clau de pas no existe o no está disponible para la distribución IS.",

@@ -105,7 +105,7 @@ INSTALLATION_INFO = {
         create_element("te_sortida", "Te Sortida"),
     ],
     "summary": {
-        k: [] for k in ["conductos", "conexiones", "codo", "difusores", "manguitos"]
+        k: [] for k in ["conductos", "conexiones", "codo_90", "difusores", "manguitos"]
     },
 }
 
