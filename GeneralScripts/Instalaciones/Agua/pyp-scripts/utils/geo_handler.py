@@ -6050,6 +6050,9 @@ class PipelineProcessor:
         # Cache de modelos de tubo por distribución + diámetro
         self._tubo_model_cache = {}
         self._tubo_classes = None
+        # Cache de modelos de TE por distribución + trío de diámetros
+        self._te_model_cache = {}
+        self._te_classes = None
 
     def _load_manguito_classes(self):
         """
@@ -6181,7 +6184,9 @@ class PipelineProcessor:
         self._tubo_classes = classes
         return classes
 
-    def _set_build_ele_diameter_and_water(self, diameter_mm: int, dist: str, water_type=None):
+    def _set_build_ele_diameter_and_water(
+        self, diameter_mm: int, dist: str, water_type=None
+    ):
         """
         Sincroniza build_ele con diámetro/tipo de agua para crear el modelo correcto.
         """
@@ -6250,8 +6255,115 @@ class PipelineProcessor:
             )
             return model_list
         except Exception as ex:
-            print(f"[AGUA][TUBO] Error creando modelo dinámico dist={dist} diam={di}: {ex}")
+            print(
+                f"[AGUA][TUBO] Error creando modelo dinámico dist={dist} diam={di}: {ex}"
+            )
             self._tubo_model_cache[cache_key] = []
+            return []
+
+    def _load_te_classes(self):
+        """Carga dinámica de clases Te (IS/TD) para selección por diámetros."""
+        if self._te_classes is not None:
+            return self._te_classes
+
+        classes = {"IS": None, "TD": None}
+        try:
+            base_dir = os.path.dirname(os.path.dirname(__file__))
+            is_path = os.path.join(base_dir, "te_003_is.py")
+            td_path = os.path.join(base_dir, "te_003_td.py")
+
+            if os.path.exists(is_path):
+                spec_is = importlib.util.spec_from_file_location(
+                    "agua_te_003_is_runtime",
+                    is_path,
+                )
+                if spec_is and spec_is.loader:
+                    mod_is = importlib.util.module_from_spec(spec_is)
+                    spec_is.loader.exec_module(mod_is)
+                    classes["IS"] = getattr(mod_is, "TeModel", None)
+
+            if os.path.exists(td_path):
+                spec_td = importlib.util.spec_from_file_location(
+                    "agua_te_003_td_runtime",
+                    td_path,
+                )
+                if spec_td and spec_td.loader:
+                    mod_td = importlib.util.module_from_spec(spec_td)
+                    spec_td.loader.exec_module(mod_td)
+                    classes["TD"] = getattr(mod_td, "TeTDModel", None)
+        except Exception as ex:
+            print(f"[AGUA][TE] Error cargando clases dinámicas: {ex}")
+
+        self._te_classes = classes
+        return classes
+
+    def _get_te_models_for_diameters(
+        self,
+        d_main_in,
+        d_main_out,
+        d_branch,
+        distribution_type="IS",
+        mirror_model_x: bool = False,
+    ):
+        """
+        Devuelve [outer, inner?] de TE para el nodo según diámetros reales
+        (main_in, main_out, branch) y distribución IS/TD.
+        """
+        try:
+            di_in = int(round(float(d_main_in)))
+            di_out = int(round(float(d_main_out)))
+            di_branch = int(round(float(d_branch)))
+        except Exception:
+            return []
+
+        dist = "TD" if str(distribution_type).upper() == "TD" else "IS"
+        cache_key = (dist, di_in, di_out, di_branch, bool(mirror_model_x))
+        cached = self._te_model_cache.get(cache_key)
+        if cached is not None:
+            print(
+                f"[AGUA][TE] cache hit dist={dist} di_in={di_in} di_out={di_out} "
+                f"di_branch={di_branch} mirror_model_x={mirror_model_x} elems={len(cached)}"
+            )
+            return cached
+
+        if self.build_ele is None or self.doc is None:
+            return []
+
+        classes = self._load_te_classes()
+        ModelClass = classes.get(dist) if classes else None
+        if ModelClass is None:
+            return []
+
+        try:
+            try:
+                te_obj = ModelClass(self.build_ele, self.doc)
+            except TypeError:
+                te_obj = ModelClass(self.build_ele)
+
+            if hasattr(te_obj, "set_diameters"):
+                # Igual que fontaneria.py:
+                # - normal: (main_in, branch, main_out)
+                # - invertida (mirror_x): (main_out, branch, main_in)
+                if mirror_model_x:
+                    te_obj.set_diameters(di_out, di_branch, di_in)
+                else:
+                    te_obj.set_diameters(di_in, di_branch, di_out)
+
+            type_te = getattr(te_obj, "type_te", None)
+            model_list = te_obj.build() or []
+            self._te_model_cache[cache_key] = model_list
+            print(
+                f"[AGUA][TE] build dist={dist} di_in={di_in} di_out={di_out} "
+                f"di_branch={di_branch} mirror_model_x={mirror_model_x} "
+                f"type_te={type_te} elems={len(model_list)}"
+            )
+            return model_list
+        except Exception as ex:
+            print(
+                f"[AGUA][TE] Error creando modelo dinámico dist={dist} "
+                f"di_in={di_in} di_out={di_out} di_branch={di_branch}: {ex}"
+            )
+            self._te_model_cache[cache_key] = []
             return []
 
     def modificar_dimensiones_brep(
@@ -6419,6 +6531,26 @@ class PipelineProcessor:
                 need_my = bool(te_params.get("need_mirror_y_local", False))
                 branch_elevated = bool(te_params.get("branch_elevated", False))
                 need_mz = bool(te_params.get("need_mirror_z_local", False))
+                model_mirror_x = bool(te_params.get("model_mirror_x", False))
+                di_in = int(round(float(te_params.get("d_main_in", 0) or 0)))
+                di_out = int(round(float(te_params.get("d_main_out", 0) or 0)))
+                di_branch = int(round(float(te_params.get("d_branch", 0) or 0)))
+
+                # Caso específico verificado en obra:
+                # main 20->25 con rama 25 (TE 25-25-20 seleccionada correctamente)
+                # requiere mirror Y local para que el lado de 20 coincida con el primer tramo.
+                if (
+                    plane == "XY"
+                    and not branch_elevated
+                    and di_in < di_out
+                    and di_branch == di_out
+                ):
+                    need_mx = False
+                    need_my = True
+                    if debug_te:
+                        print(
+                            "[AGUA][TE] FIX ORIENTACION: di_in<di_out y di_branch=di_out -> force mirror_y_local=True"
+                        )
 
                 if debug_te_pos:
                     try:
@@ -6458,6 +6590,15 @@ class PipelineProcessor:
                             str(need_mz),
                             str(branch_elevated),
                             offset_perp_local,
+                        )
+                    )
+                    print(
+                        "[DBG TE] MODEL_FLAGS model_mirror_x=%s di_in=%s di_out=%s di_branch=%s"
+                        % (
+                            str(model_mirror_x),
+                            str(di_in),
+                            str(di_out),
+                            str(di_branch),
                         )
                     )
 
@@ -6885,7 +7026,9 @@ class PipelineProcessor:
                     # Diámetro/distribución por segmento (como fontaneria: no usar último global)
                     seg_info = getattr(seg_item, "info", None)
                     seg_diameter = (
-                        getattr(seg_info, "diameter", 20.0) if seg_info is not None else 20.0
+                        getattr(seg_info, "diameter", 20.0)
+                        if seg_info is not None
+                        else 20.0
                     )
                     if isinstance(seg_diameter, (list, tuple)) and seg_diameter:
                         seg_diameter = seg_diameter[0]
@@ -6987,6 +7130,70 @@ class PipelineProcessor:
                             # Fallback: conservar comportamiento previo si no hay center_pt.
                             pos_nodo = p_curr
                         yaw = float(te_info.get("yaw_deg", 0.0) or 0.0)
+
+                        # Selección de TE por diámetro (lógica equivalente a fontaneria.py)
+                        te_dist = str(te_info.get("distribution_type", "IS") or "IS")
+                        te_dist = "TD" if te_dist.upper() == "TD" else "IS"
+                        d_main_in = te_info.get("d_main_in", None)
+                        d_main_out = te_info.get("d_main_out", None)
+                        d_branch = te_info.get("d_branch", None)
+                        if d_main_in is None or d_main_out is None or d_branch is None:
+                            # Fallback: inferir con segmento actual/siguiente para no romper.
+                            try:
+                                info_curr = getattr(segments[i], "info", None)
+                                info_next = (
+                                    getattr(segments[i + 1], "info", None)
+                                    if i + 1 < len(segments)
+                                    else None
+                                )
+                                d_main_in = getattr(info_curr, "diameter", 20.0)
+                                d_main_out = getattr(info_next, "diameter", d_main_in)
+                                d_branch = d_main_in
+                            except Exception:
+                                d_main_in = d_main_out = d_branch = 20.0
+
+                        mirror_model_x = bool(
+                            te_info.get("model_mirror_x", False)
+                            or (
+                                (d_main_in is not None and d_main_out is not None)
+                                and int(round(float(d_main_in)))
+                                < int(round(float(d_main_out)))
+                            )
+                        )
+
+                        dyn_te_models = self._get_te_models_for_diameters(
+                            d_main_in,
+                            d_main_out,
+                            d_branch,
+                            distribution_type=te_dist,
+                            mirror_model_x=mirror_model_x,
+                        )
+                        te_outer_model = (
+                            dyn_te_models[0] if dyn_te_models else self.templates["te"]
+                        )
+                        te_inner_model = (
+                            dyn_te_models[1]
+                            if len(dyn_te_models) > 1
+                            else self.templates.get("te_inner")
+                        )
+                        print(
+                            "[AGUA][TE] node=%s dist=%s di_in=%s di_out=%s di_branch=%s "
+                            "modelo_outer=%s elems_dyn=%s"
+                            % (
+                                str(key),
+                                te_dist,
+                                str(d_main_in),
+                                str(d_main_out),
+                                str(d_branch),
+                                "dinamico" if dyn_te_models else "template",
+                                str(len(dyn_te_models)),
+                            )
+                        )
+                        if mirror_model_x:
+                            print(
+                                "[AGUA][TE] mirror_model_x=True (orden invertido de set_diameters)"
+                            )
+
                         if debug_te_pos:
                             try:
                                 print(
@@ -7015,7 +7222,7 @@ class PipelineProcessor:
                             except Exception:
                                 pass
                         element_te = self._aplicar_transformacion(
-                            self.templates["te"],
+                            te_outer_model,
                             seg,
                             elem_type="te",
                             custom_position=pos_nodo,
@@ -7031,9 +7238,9 @@ class PipelineProcessor:
                         element_index += 1
 
                         # TE inner opcional (TD): mismo nodo y orientación que la outer
-                        if "te_inner" in self.templates:
+                        if te_inner_model is not None:
                             element_te_inner = self._aplicar_transformacion(
-                                self.templates["te_inner"],
+                                te_inner_model,
                                 seg,
                                 elem_type="te",
                                 custom_position=pos_nodo,
@@ -7156,9 +7363,7 @@ class PipelineProcessor:
                                 or getattr(info_next, "distribution_type", None)
                                 or "IS"
                             )
-                            dist_type = (
-                                "TD" if str(dist_raw).upper() == "TD" else "IS"
-                            )
+                            dist_type = "TD" if str(dist_raw).upper() == "TD" else "IS"
                         except Exception:
                             dist_type = "IS"
 
@@ -7252,5 +7457,3 @@ class PipelineProcessor:
                             element_index += 1
 
         return result_list
-
-    

@@ -94,6 +94,15 @@ def build_te_params(
                 return float(d[0])
             return float(d)
 
+    def get_distribution_type(path_idx: int, seg_idx: int) -> str:
+        try:
+            seg = segment_groups[path_idx][seg_idx]
+            info = getattr(seg, "info", None)
+            dist = getattr(info, "distribution_type", "IS") if info is not None else "IS"
+            return "TD" if str(dist).upper() == "TD" else "IS"
+        except Exception:
+            return "IS"
+
     out: dict[tuple[float, float, float], dict] = {}
 
     def _dot3(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
@@ -328,6 +337,28 @@ def build_te_params(
         if _dot3(base_main, dirs_3d[j]) > 0:
             base_main = (-base_main[0], -base_main[1], -base_main[2])
 
+        # Diámetros por conexión y asignación main_in/main_out (como fontaneria).
+        d1 = float(get_diameter(main_infos[0]["path_idx"], main_infos[0]["seg_idx"]))
+        d2 = float(get_diameter(main_infos[1]["path_idx"], main_infos[1]["seg_idx"]))
+        d_branch = float(get_diameter(branch_info["path_idx"], branch_info["seg_idx"]))
+        v1 = _norm_vec_3d_from_conn(segment_groups, center_pt, main_infos[0])
+        v2 = _norm_vec_3d_from_conn(segment_groups, center_pt, main_infos[1])
+        dot1 = _dot3(v1, base_main)
+        dot2 = _dot3(v2, base_main)
+        if dot1 > dot2:
+            d_main_in, d_main_out = d1, d2
+        else:
+            d_main_in, d_main_out = d2, d1
+        di_main_in = int(round(d_main_in))
+        di_main_out = int(round(d_main_out))
+        di_branch = int(round(d_branch))
+        dist_candidates = [
+            get_distribution_type(main_infos[0]["path_idx"], main_infos[0]["seg_idx"]),
+            get_distribution_type(main_infos[1]["path_idx"], main_infos[1]["seg_idx"]),
+            get_distribution_type(branch_info["path_idx"], branch_info["seg_idx"]),
+        ]
+        te_dist_type = "TD" if any(d == "TD" for d in dist_candidates) else "IS"
+
         plane = _detect_plane_from_dir(base_main)
         mx3, my3, mz3 = base_main
 
@@ -338,6 +369,11 @@ def build_te_params(
             bx, by, bz = v_branch
             out[vkey] = {
                 "center_pt": (cx, cy, cz),
+                "distribution_type": te_dist_type,
+                "d_main_in": di_main_in,
+                "d_main_out": di_main_out,
+                "d_branch": di_branch,
+                "model_mirror_x": (di_main_in < di_main_out),
                 "ang_rad": 0.0,
                 "plane": "VERTICAL",
                 "main_dir_3d": (mx3, my3, mz3),
@@ -367,22 +403,6 @@ def build_te_params(
 
         # Descomponer rama
         bx, by, bz = v_branch
-
-        # Diámetros (para heurística type_te)
-        d1 = float(get_diameter(main_infos[0]["path_idx"], main_infos[0]["seg_idx"]))
-        d2 = float(get_diameter(main_infos[1]["path_idx"], main_infos[1]["seg_idx"]))
-        d_branch = float(get_diameter(branch_info["path_idx"], branch_info["seg_idx"]))
-
-        # Determinar main_in/out (siempre con el par de troncal, no afecta al plano)
-        # Usamos el signo sobre base_main para decidir “in/out”.
-        v1 = _norm_vec_3d_from_conn(segment_groups, center_pt, main_infos[0])
-        v2 = _norm_vec_3d_from_conn(segment_groups, center_pt, main_infos[1])
-        dot1 = _dot3(v1, base_main)
-        dot2 = _dot3(v2, base_main)
-        if dot1 > dot2:
-            d_main_in, d_main_out = d1, d2
-        else:
-            d_main_in, d_main_out = d2, d1
 
         # Rama en el plano del troncal vs "elevada" fuera del plano (generalizado a XY/XZ/YZ).
         if plane == "XY":
@@ -416,9 +436,6 @@ def build_te_params(
 
         # Heurística de type_te (para activar mirrors 45/135 de la sección type_te<=3)
         # Si hay mezcla de diámetros o rama elevada, tratamos como "mixta"
-        di_main_in = int(round(d_main_in))
-        di_main_out = int(round(d_main_out))
-        di_branch = int(round(d_branch))
         mixed = (di_main_in != di_main_out) or (
             di_branch not in (di_main_in, di_main_out)
         )
@@ -468,6 +485,11 @@ def build_te_params(
 
         out[vkey] = {
             "center_pt": (cx, cy, cz),
+            "distribution_type": te_dist_type,
+            "d_main_in": di_main_in,
+            "d_main_out": di_main_out,
+            "d_branch": di_branch,
+            "model_mirror_x": mirror_x,
             "ang_rad": ang,
             "plane": plane,
             "main_dir_3d": (mx3, my3, mz3),
