@@ -738,612 +738,6 @@ class GeometryHandler:
 
         return elementos_transformados
 
-    # def center_and_connect_models_v10(self,
-    #                     data_list,
-    #                     conducto_width=75,
-    #                     color=None,
-    #                     point_role=None,
-    #                     point_side=None,
-    #                     debug=True):
-    #     """
-    #     Versión v10.
-
-    #     PROPAGACIÓN BACKWARD SEGMENTO A SEGMENTO dentro de grupos XZ/YZ:
-    #     ──────────────────────────────────────────────────────────────────
-    #     En v9 todos los segmentos del grupo XZ/YZ recibían el mismo
-    #     adjacent_xy_roll (el angulo_xy del primer segmento XY adyacente).
-    #     Eso era correcto solo para el segmento frontera; los demás quedaban
-    #     mal orientados.
-
-    #     Solución v10: dentro de cada grupo XZ/YZ se procesa en orden
-    #     INVERSO (de fin a inicio). Cada segmento toma su adjacent_xy_roll
-    #     del segmento INMEDIATAMENTE SIGUIENTE en la lista global:
-
-    #       line_3 (último del grupo XZ, toca al grupo XY):
-    #           adjacent_xy_roll = angulo_xy de line_4 = 45°   ← frontera real
-    #       line_2 (siguiente hacia atrás):
-    #           adjacent_xy_roll = angulo_xy de line_3 = 0°    ← su vecino directo
-    #       line_1 (primero del grupo XZ):
-    #           adjacent_xy_roll = angulo_xy de line_2 = 0°    ← su vecino directo
-
-    #     Resultado:
-    #       line_1 → roll = 0 + 90 + 0  =  90°   yaw=0°  pitch=0°
-    #       line_2 → roll = 0 + 90 + 0  =  90°   yaw=0°  pitch=45°
-    #       line_3 → roll = 0 + 90 + 45 = 135°   yaw=0°  pitch=90°
-    #       line_4 → roll = 0            = 0°    yaw=45°  pitch=0°
-
-    #     El segmento frontera (line_3) es el único que asume el giro del
-    #     grupo XY, logrando la transición suave. Los demás del grupo XZ
-    #     mantienen su orientación natural dentro del plano XZ.
-
-    #     Dirección inversa (XY → XZ/YZ):
-    #     El primer segmento del grupo XZ/YZ toma su referencia del último
-    #     segmento del grupo XY anterior. Los siguientes propagan hacia adelante
-    #     tomando el angulo_xy del segmento INMEDIATAMENTE ANTERIOR.
-    #     """
-    #     elementos_transformados = []
-    #     last_real_end_point = None
-    #     last_segment = None
-
-    #     def get_dot_product(v1, v2):
-    #         if not v1 or not v2:
-    #             return 1.0
-    #         return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z
-
-    #     def same_direction(seg1, seg2, tol_deg=1):
-    #         if not seg1 or not seg2:
-    #             return False
-    #         diff = abs((seg1.data.angulo_xy - seg2.data.angulo_xy + 180) % 360 - 180)
-    #         return diff < tol_deg
-
-    #     CONDUCTO_WIDTH   = conducto_width
-    #     TIPOS_ACCESORIOS = ["manguito", "codo_45", "codo_90", "conexion", "difusor"]
-    #     UMBRAL_Z         = 0.1
-
-    #     if debug:
-    #         print(f"\n{'#'*70}")
-    #         print(f"# PROCESANDO DATA LIST: {len(data_list)}")
-    #         print(f"{'#'*70}")
-
-    #     # =========================================================================
-    #     # PASO 1: recopilar view_mode y angulo_xy
-    #     # =========================================================================
-    #     seg_view_modes = []
-    #     seg_angulo_xy  = []
-    #     for item in data_list:
-    #         seg = item.get("segment")
-    #         if seg:
-    #             seg_view_modes.append(getattr(seg, 'view_mode', 'XY'))
-    #             seg_angulo_xy.append(getattr(seg.data, 'angulo_xy', 0.0))
-    #         else:
-    #             seg_view_modes.append('XY')
-    #             seg_angulo_xy.append(0.0)
-
-    #     # =========================================================================
-    #     # PASO 2: detectar grupos por view_mode
-    #     # =========================================================================
-    #     grupos = []
-    #     if data_list:
-    #         vm_actual  = seg_view_modes[0]
-    #         idx_inicio = 0
-    #         for idx in range(1, len(data_list)):
-    #             if seg_view_modes[idx] != vm_actual:
-    #                 grupos.append((vm_actual, list(range(idx_inicio, idx))))
-    #                 vm_actual  = seg_view_modes[idx]
-    #                 idx_inicio = idx
-    #         grupos.append((vm_actual, list(range(idx_inicio, len(data_list)))))
-
-    #     if debug:
-    #         print(f"\n--- Grupos detectados por view_mode ---")
-    #         for g_vm, g_idx in grupos:
-    #             names = [getattr(data_list[k].get("segment"), 'name', f"Seg_{k}")
-    #                      for k in g_idx if data_list[k].get("segment")]
-    #             print(f"  {g_vm}: indices={g_idx} → {names}")
-    #         print()
-
-    #     # =========================================================================
-    #     # PASO 3: effective_yaw  (dirección de viaje propia de cada segmento)
-    #     #
-    #     # · Grupo XY  → propio angulo_xy con herencia delta_z interna.
-    #     # · Grupo XZ/YZ → propio angulo_xy individual de cada segmento.
-    #     # =========================================================================
-    #     effective_yaw = [0.0] * len(data_list)
-    #     for g_vm, g_idx in grupos:
-    #         if g_vm == 'XY':
-    #             last_xy_angle = None
-    #             for k in g_idx:
-    #                 seg = data_list[k].get("segment")
-    #                 if not seg:
-    #                     effective_yaw[k] = last_xy_angle if last_xy_angle is not None else 0.0
-    #                     continue
-    #                 dz = abs(getattr(seg.data, 'delta_z', 0.0))
-    #                 if dz < UMBRAL_Z:
-    #                     last_xy_angle  = getattr(seg.data, 'angulo_xy', 0.0)
-    #                     effective_yaw[k] = last_xy_angle
-    #                 else:
-    #                     effective_yaw[k] = last_xy_angle if last_xy_angle is not None else 0.0
-    #         else:
-    #             for k in g_idx:
-    #                 seg = data_list[k].get("segment")
-    #                 effective_yaw[k] = getattr(seg.data, 'angulo_xy', 0.0) if seg else 0.0
-
-    #     # =========================================================================
-    #     # PASO 4: adjacent_xy_roll  — propagación backward/forward segmento a segmento
-    #     #
-    #     # Para grupos XZ/YZ:
-    #     #   La dirección de la transición determina el sentido de propagación.
-    #     #
-    #     #   Caso A — XY → XZ/YZ  (el grupo XZ/YZ viene DESPUÉS de un grupo XY):
-    #     #     · El PRIMER segmento del grupo XZ/YZ toma su referencia del
-    #     #       ÚLTIMO segmento del grupo XY anterior.
-    #     #     · Los siguientes propagan FORWARD: cada segmento toma el
-    #     #       angulo_xy del segmento inmediatamente ANTERIOR (su vecino ya
-    #     #       procesado).
-    #     #
-    #     #   Caso B — XZ/YZ → XY  (el grupo XZ/YZ viene ANTES de un grupo XY):
-    #     #     · El ÚLTIMO segmento del grupo XZ/YZ toma su referencia del
-    #     #       PRIMER segmento del grupo XY siguiente.
-    #     #     · Los anteriores propagan BACKWARD: cada segmento toma el
-    #     #       angulo_xy del segmento inmediatamente SIGUIENTE (su vecino ya
-    #     #       procesado).
-    #     #
-    #     #   Caso C — XZ/YZ aislado (sin grupo XY en ningún lado): 0°.
-    #     # =========================================================================
-    #     adjacent_xy_roll = [0.0] * len(data_list)
-
-    #     for g_num, (g_vm, g_idx) in enumerate(grupos):
-    #         if g_vm == 'XY':
-    #             continue  # grupos XY no necesitan roll adicional
-
-    #         # Detectar si hay grupo XY antes y/o después
-    #         prev_xy_idx = None  # índice del último segmento del grupo XY anterior
-    #         next_xy_idx = None  # índice del primer segmento del grupo XY siguiente
-
-    #         for g2_vm, g2_idx in reversed(grupos[:g_num]):
-    #             if g2_vm == 'XY' and g2_idx:
-    #                 prev_xy_idx = g2_idx[-1]
-    #                 break
-
-    #         for g2_vm, g2_idx in grupos[g_num + 1:]:
-    #             if g2_vm == 'XY' and g2_idx:
-    #                 next_xy_idx = g2_idx[0]
-    #                 break
-
-    #         if debug:
-    #             pname = getattr(data_list[prev_xy_idx].get("segment"), 'name',
-    #                             f"Seg_{prev_xy_idx}") if prev_xy_idx is not None else "—"
-    #             nname = getattr(data_list[next_xy_idx].get("segment"), 'name',
-    #                             f"Seg_{next_xy_idx}") if next_xy_idx is not None else "—"
-    #             print(f"\n  Grupo {g_vm} {g_idx}:")
-    #             print(f"    XY anterior={pname} | XY siguiente={nname}")
-
-    #         if next_xy_idx is not None and prev_xy_idx is None:
-    #             # ── Caso A: grupo XZ/YZ viene ANTES del grupo XY ────────────────
-    #             # (orden: XZ/YZ → XY)
-    #             # Propagación BACKWARD: desde el último hacia el primero.
-    #             # El último toma la referencia del primer XY siguiente.
-    #             # Los anteriores toman el angulo_xy de su vecino inmediato.
-    #             if debug:
-    #                 print(f"    → Caso A (XZ→XY): propagación BACKWARD")
-    #             adjacent_xy_roll[g_idx[-1]] = seg_angulo_xy[next_xy_idx]
-    #             for local_i in range(len(g_idx) - 2, -1, -1):
-    #                 k       = g_idx[local_i]
-    #                 k_next  = g_idx[local_i + 1]
-    #                 adjacent_xy_roll[k] = seg_angulo_xy[k_next]
-    #                 if debug:
-    #                     nname2 = getattr(data_list[k_next].get("segment"), 'name', f"Seg_{k_next}")
-    #                     print(f"    [{k}] ← angulo_xy de [{k_next}]({nname2}) = "
-    #                           f"{seg_angulo_xy[k_next]:.2f}°")
-
-    #         elif prev_xy_idx is not None and next_xy_idx is None:
-    #             # ── Caso B: grupo XZ/YZ viene DESPUÉS del grupo XY ──────────────
-    #             # (orden: XY → XZ/YZ)
-    #             # Propagación FORWARD: desde el primero hacia el último.
-    #             # El primero toma la referencia del último XY anterior.
-    #             # Los siguientes toman el angulo_xy de su vecino inmediato.
-    #             if debug:
-    #                 print(f"    → Caso B (XY→XZ): propagación FORWARD")
-    #             adjacent_xy_roll[g_idx[0]] = seg_angulo_xy[prev_xy_idx]
-    #             for local_i in range(1, len(g_idx)):
-    #                 k       = g_idx[local_i]
-    #                 k_prev  = g_idx[local_i - 1]
-    #                 adjacent_xy_roll[k] = seg_angulo_xy[k_prev]
-    #                 if debug:
-    #                     pname2 = getattr(data_list[k_prev].get("segment"), 'name', f"Seg_{k_prev}")
-    #                     print(f"    [{k}] ← angulo_xy de [{k_prev}]({pname2}) = "
-    #                           f"{seg_angulo_xy[k_prev]:.2f}°")
-
-    #         elif prev_xy_idx is not None and next_xy_idx is not None:
-    #             # ── Caso C: grupo XZ/YZ entre dos grupos XY ─────────────────────
-    #             # Propagación BACKWARD desde el extremo final (hacia XY siguiente).
-    #             if debug:
-    #                 print(f"    → Caso C (XY→XZ→XY): propagación BACKWARD desde extremo final")
-    #             adjacent_xy_roll[g_idx[-1]] = seg_angulo_xy[next_xy_idx]
-    #             for local_i in range(len(g_idx) - 2, -1, -1):
-    #                 k      = g_idx[local_i]
-    #                 k_next = g_idx[local_i + 1]
-    #                 adjacent_xy_roll[k] = seg_angulo_xy[k_next]
-
-    #         else:
-    #             # ── Caso D: grupo XZ/YZ aislado (sin XY en ningún lado) ──────────
-    #             if debug:
-    #                 print(f"    → Caso D: aislado → adjacent_xy_roll=0°")
-    #             for k in g_idx:
-    #                 adjacent_xy_roll[k] = 0.0
-
-    #     # =========================================================================
-    #     # PASO 5: extra_roll_by_view  (+90° para XZ/YZ)
-    #     # =========================================================================
-    #     extra_roll_by_view = [
-    #         90.0 if seg_view_modes[idx] in ('XZ', 'YZ') else 0.0
-    #         for idx in range(len(data_list))
-    #     ]
-
-    #     if debug:
-    #         print(f"\n--- Tabla de rotaciones por segmento (v10) ---")
-    #         header = (f"  {'idx':<4} {'nombre':<12} {'vm':<4} {'ang_xy':>8} "
-    #                   f"{'yaw':>8} {'+view':>6} {'+adj':>6} {'roll_total':>10}")
-    #         print(header)
-    #         print(f"  {'-'*len(header)}")
-    #         for idx, item in enumerate(data_list):
-    #             seg  = item.get("segment")
-    #             name = getattr(seg, 'name', f"Seg_{idx}") if seg else f"Item_{idx}"
-    #             vm   = seg_view_modes[idx]
-    #             ang  = seg_angulo_xy[idx]
-    #             yaw  = effective_yaw[idx]
-    #             ev   = extra_roll_by_view[idx]
-    #             ar   = adjacent_xy_roll[idx]
-    #             seg_ar = getattr(seg.data, 'angulo_rotacion', 0) if seg else 0
-    #             total_r = seg_ar + ev + ar
-    #             print(f"  {idx:<4} {name:<12} {vm:<4} {ang:>8.2f}° "
-    #                   f"{yaw:>8.2f}° {ev:>5.0f}° {ar:>5.0f}° {total_r:>9.1f}°")
-    #         print()
-    #     # =========================================================================
-
-    #     for i, item in enumerate(data_list):
-    #         try:
-    #             segment = item.get("segment")
-    #             if not segment:
-    #                 continue
-    #             data        = segment.data
-    #             item_name   = getattr(segment, 'name', f"Segment_{i}")
-    #             start_point = getattr(data, 'start', None)
-    #             if start_point is None:
-    #                 continue
-    #             tipo_str   = item.get('type', "")
-    #             is_dinamic = tipo_str not in TIPOS_ACCESORIOS
-
-    #             vec_curr = getattr(data, 'vector_normalizado', None)
-    #             if vec_curr is None:
-    #                 vec_curr = AllplanGeo.Vector3D(
-    #                     getattr(data, 'delta_x', 0),
-    #                     getattr(data, 'delta_y', 0),
-    #                     getattr(data, 'delta_z', 0)
-    #                 )
-    #                 vec_curr.Normalize()
-
-    #             if (last_real_end_point is not None
-    #                     and last_segment is not None
-    #                     and same_direction(last_segment, segment)):
-    #                 start_point = last_real_end_point
-
-    #             extension_inicio = 0.0
-    #             extension_final  = 0.0
-
-    #             # ── Extensiones en uniones (solo tubos dinámicos) ────────────────
-    #             if is_dinamic:
-    #                 MIN_ANGLE_RAD = 0.0175
-    #                 MAX_ANGLE_RAD = math.pi - 0.0175
-
-    #                 if i > 0:
-    #                     prev_item   = data_list[i - 1]
-    #                     prev_tipo_s = prev_item.get('type', "")
-    #                     prev_tipo_s = prev_tipo_s if isinstance(prev_tipo_s, str) else (prev_tipo_s[0] if prev_tipo_s else "")
-    #                     if prev_tipo_s == "manguito":
-    #                         extension_inicio = 0.0
-    #                         if debug: print(f"  {item_name} – manguito anterior → ext_inicio=0")
-    #                     else:
-    #                         p_data   = prev_item["segment"].data
-    #                         vec_prev = AllplanGeo.Vector3D(p_data.delta_x, p_data.delta_y, p_data.delta_z)
-    #                         vec_prev.Normalize()
-    #                         dot   = max(-1.0, min(1.0, get_dot_product(vec_prev, vec_curr)))
-    #                         a_rad = math.acos(dot)
-    #                         if MIN_ANGLE_RAD < a_rad < MAX_ANGLE_RAD:
-    #                             extension_inicio = (CONDUCTO_WIDTH / 2.0) * math.tan(a_rad / 2.0)
-    #                             if debug: print(f"  {item_name} – ext_inicio: {math.degrees(a_rad):.1f}° → {extension_inicio:.2f}mm")
-
-    #                 if i < len(data_list) - 1:
-    #                     next_item   = data_list[i + 1]
-    #                     next_tipo_s = next_item.get('type', "")
-    #                     next_tipo_s = next_tipo_s if isinstance(next_tipo_s, str) else (next_tipo_s[0] if next_tipo_s else "")
-    #                     if next_tipo_s == "manguito":
-    #                         extension_final = 0.0
-    #                         if debug: print(f"  {item_name} – manguito siguiente → ext_final=0")
-    #                     else:
-    #                         n_data   = next_item["segment"].data
-    #                         vec_next = AllplanGeo.Vector3D(n_data.delta_x, n_data.delta_y, n_data.delta_z)
-    #                         vec_next.Normalize()
-    #                         dot   = max(-1.0, min(1.0, get_dot_product(vec_curr, vec_next)))
-    #                         a_rad = math.acos(dot)
-    #                         if MIN_ANGLE_RAD < a_rad < MAX_ANGLE_RAD:
-    #                             extension_final = (CONDUCTO_WIDTH / 2.0) * math.tan(a_rad / 2.0)
-    #                             if debug: print(f"  {item_name} – ext_final: {math.degrees(a_rad):.1f}° → {extension_final:.2f}mm")
-
-    #             longitud_original = getattr(data, 'longitud_3d', 0.0)
-    #             longitud_total    = longitud_original + extension_inicio + extension_final - 20
-
-    #             if debug and is_dinamic:
-    #                 print(f"\n{item_name}")
-    #                 print(f"  long_orig={longitud_original:.2f} | ext_i={extension_inicio:.2f} | "
-    #                       f"ext_f={extension_final:.2f} | total={longitud_total:.2f}")
-
-    #             list_elem_3d           = item.get("element3d", [])
-    #             lista_elem_3d_modified = []
-    #             if is_dinamic:
-    #                 for elem in list_elem_3d:
-    #                     lista_elem_3d_modified.append(self.modificar_dimensiones_brep(elem, longitud_total))
-    #             else:
-    #                 lista_elem_3d_modified = list_elem_3d
-
-    #             segment_brep = None
-    #             for e, elem_3d in enumerate(lista_elem_3d_modified):
-    #                 prop = elem_3d.GetCommonProperties()
-    #                 if is_dinamic and color:
-    #                     prop.Color = color
-
-    #                 brep     = elem_3d.GetGeometryObject()
-    #                 _, verts = brep.GetVertices()
-
-    #                 pmx = (start_point.X + data.end.X) / 2.0
-    #                 pmy = (start_point.Y + data.end.Y) / 2.0
-    #                 pmz = (start_point.Z + data.end.Z) / 2.0
-    #                 if verts:
-    #                     pmx = sum(v.X for v in verts) / len(verts)
-    #                     pmy = sum(v.Y for v in verts) / len(verts)
-    #                     pmz = sum(v.Z for v in verts) / len(verts)
-
-    #                 nuevo_brep = None
-
-    #                 # ──────────────────────────────────────────────────────────
-    #                 # CASO 1 – MANGUITO
-    #                 # ──────────────────────────────────────────────────────────
-    #                 if tipo_str == "manguito":
-    #                     segment_brep = None
-    #                     if e == 0:
-    #                         _, vp = brep.GetVertices()
-    #                         if vp:
-    #                             cx = sum(v.X for v in vp) / len(vp)
-    #                             cy = sum(v.Y for v in vp) / len(vp)
-    #                             cz = sum(v.Z for v in vp) / len(vp)
-    #                         else:
-    #                             cx, cy, cz = pmx, pmy, pmz
-    #                         if not hasattr(self, '_temp_manguito_center'):
-    #                             self._temp_manguito_center = {}
-    #                         self._temp_manguito_center[i] = (cx, cy, cz)
-    #                     else:
-    #                         cx, cy, cz = self._temp_manguito_center.get(i, (0, 0, 0))
-
-    #                     brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(
-    #                         -cx + (longitud_original / 2.0), -cy, -cz
-    #                     ))
-
-    #                     rot_xy    = effective_yaw[i]
-    #                     rot_pitch = math.degrees(math.atan2(
-    #                         data.delta_z, getattr(data, 'longitud_xy', 0)
-    #                     ))
-    #                     total_roll_m = (getattr(data, 'angulo_rotacion', 0)
-    #                                     + extra_roll_by_view[i]
-    #                                     + adjacent_xy_roll[i])
-
-    #                     if debug:
-    #                         print(f"  {item_name} [manguito] "
-    #                               f"vm={seg_view_modes[i]} | yaw={rot_xy:.2f}° | "
-    #                               f"pitch={rot_pitch:.2f}° | roll_total={total_roll_m:.1f}°")
-
-    #                     if abs(total_roll_m) > 0.001:
-    #                         m = AllplanGeo.Matrix3D()
-    #                         m.Rotation(AllplanGeo.Line3D(0,0,0, 1,0,0),
-    #                                 AllplanGeo.Angle.FromDeg(total_roll_m))
-    #                         brep = AllplanGeo.Transform(brep, m)
-
-    #                     m = AllplanGeo.Matrix3D()
-    #                     m.Rotation(AllplanGeo.Line3D(0,0,0, 0,0,1),
-    #                             AllplanGeo.Angle.FromDeg(rot_xy))
-    #                     brep = AllplanGeo.Transform(brep, m)
-
-    #                     if abs(rot_pitch) > 0.1:
-    #                         rad_xy = math.radians(rot_xy)
-    #                         axis   = AllplanGeo.Line3D(0,0,0,
-    #                                                    math.sin(rad_xy), -math.cos(rad_xy), 0)
-    #                         m = AllplanGeo.Matrix3D()
-    #                         m.Rotation(axis, AllplanGeo.Angle.FromDeg(rot_pitch))
-    #                         brep = AllplanGeo.Transform(brep, m)
-
-    #                     nuevo_brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(
-    #                         (start_point.X + data.end.X) / 2.0,
-    #                         (start_point.Y + data.end.Y) / 2.0,
-    #                         (start_point.Z + data.end.Z) / 2.0
-    #                     ))
-    #                     elementos_transformados.append({
-    #                         "index": i, "element_type": tipo_str,
-    #                         "element": AllplanBasisElements.ModelElement3D(prop, nuevo_brep)
-    #                     })
-
-    #                 # ──────────────────────────────────────────────────────────
-    #                 # CASO 2 – DIFUSOR
-    #                 # ──────────────────────────────────────────────────────────
-    #                 elif tipo_str == "difusor":
-    #                     move_offset = 0
-    #                     if point_side == 0:   move_offset =  CONDUCTO_WIDTH / 2
-    #                     elif point_side == 2: move_offset = -CONDUCTO_WIDTH / 2
-    #                     ang_int = int(data.angulo_xy)
-
-    #                     if debug:
-    #                         print(f"  start_point: ({start_point.X:.1f}, {start_point.Y:.1f}, {start_point.Z:.1f})")
-
-    #                     if point_role == "inicial":
-    #                         punto_inicio_real = start_point
-    #                         for j in range(i + 1, len(data_list)):
-    #                             ni   = data_list[j]
-    #                             nt_s = ni.get('type', "")
-    #                             nt_s = nt_s if isinstance(nt_s, str) else (nt_s[0] if nt_s else "")
-    #                             if nt_s not in TIPOS_ACCESORIOS:
-    #                                 punto_inicio_real = getattr(ni["segment"].data, 'start', start_point)
-    #                                 break
-    #                         _, vd = brep.GetVertices()
-    #                         if vd:
-    #                             brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(
-    #                                 -sum(v.X for v in vd)/len(vd),
-    #                                 -sum(v.Y for v in vd)/len(vd),
-    #                                 -sum(v.Z for v in vd)/len(vd)
-    #                             ))
-    #                         if ang_int != 0:
-    #                             mr = AllplanGeo.Matrix3D()
-    #                             mr.Rotation(AllplanGeo.Line3D(0,0,0, 0,0,1),
-    #                                         AllplanGeo.Angle.FromDeg(data.angulo_xy))
-    #                             brep = AllplanGeo.Transform(brep, mr)
-    #                         w_cubo   = -60 if ang_int in [0, 90, 89] else 60
-    #                         offset_x = punto_inicio_real.X + w_cubo
-    #                         offset_y = punto_inicio_real.Y + (move_offset if ang_int in [0, 180, 178, 179] else w_cubo)
-    #                         nuevo_brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(
-    #                             offset_x, offset_y - 1, punto_inicio_real.Z + 11
-    #                         ))
-
-    #                     elif point_role == "final":
-    #                         punto_final_real = getattr(data, 'end', AllplanGeo.Point3D(
-    #                             start_point.X + data.delta_x,
-    #                             start_point.Y + data.delta_y,
-    #                             start_point.Z + data.delta_z
-    #                         ))
-    #                         if i < len(data_list) - 1:
-    #                             for j in range(len(data_list) - 1, i, -1):
-    #                                 ni   = data_list[j]
-    #                                 nt_s = ni.get('type', "")
-    #                                 nt_s = nt_s if isinstance(nt_s, str) else (nt_s[0] if nt_s else "")
-    #                                 if nt_s not in TIPOS_ACCESORIOS:
-    #                                     punto_final_real = getattr(ni["segment"].data, 'end', punto_final_real)
-    #                                     break
-    #                         cdz = 0
-    #                         _, vd = brep.GetVertices()
-    #                         if vd:
-    #                             cdz = sum(v.Z for v in vd) / len(vd)
-    #                             brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(
-    #                                 -sum(v.X for v in vd)/len(vd),
-    #                                 -sum(v.Y for v in vd)/len(vd), -cdz
-    #                             ))
-    #                         rot_diff = (180 if ang_int == 0
-    #                                     else 0 if ang_int in [180,179,178]
-    #                                     else -data.angulo_xy if ang_int in [-90,89,90,-89]
-    #                                     else 0)
-    #                         mr = AllplanGeo.Matrix3D()
-    #                         mr.Rotation(AllplanGeo.Line3D(0,0,0, 0,0,1),
-    #                                     AllplanGeo.Angle.FromDeg(rot_diff))
-    #                         brep = AllplanGeo.Transform(brep, mr)
-    #                         padding = 60
-    #                         ltc = AllplanGeo.CalcLength(AllplanGeo.Line3D(
-    #                             data_list[0]["segment"].data.start
-    #                             if data_list[0].get('type','') not in TIPOS_ACCESORIOS
-    #                             else start_point,
-    #                             punto_final_real
-    #                         ))
-    #                         if ang_int in [0, 180, 179, 178]:
-    #                             factor = -1 if ang_int in [180,179,178] else 1
-    #                             nuevo_brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(
-    #                                 punto_final_real.X + (padding * factor),
-    #                                 punto_final_real.Y + move_offset,
-    #                                 punto_final_real.Z - cdz + 11
-    #                             ))
-    #                         else:
-    #                             factor = -1 if ang_int in [-90,-89] else 1
-    #                             nuevo_brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(
-    #                                 punto_final_real.X + move_offset,
-    #                                 punto_final_real.Y + (padding * factor),
-    #                                 punto_final_real.Z - cdz + 11
-    #                             ))
-    #                     else:
-    #                         nuevo_brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(pmx, pmy, pmz))
-
-    #                     elementos_transformados.append({
-    #                         "index": i, "element_type": tipo_str,
-    #                         "element": AllplanBasisElements.ModelElement3D(prop, nuevo_brep)
-    #                     })
-
-    #                 # ──────────────────────────────────────────────────────────
-    #                 # CASO 3 – TUBOS DINÁMICOS
-    #                 # ──────────────────────────────────────────────────────────
-    #                 else:
-    #                     nx = sum(v.X for v in verts) / len(verts) if verts else 0
-    #                     ny = sum(v.Y for v in verts) / len(verts) if verts else 0
-    #                     nz = sum(v.Z for v in verts) / len(verts) if verts else 0
-    #                     brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(-nx, -ny, -nz))
-
-    #                     rot_xy      = effective_yaw[i]
-    #                     long_xy_seg = getattr(data, 'longitud_xy', 0.0)
-    #                     rot_pitch   = math.degrees(math.atan2(data.delta_z, long_xy_seg))
-    #                     total_roll_t = (getattr(data, 'angulo_rotacion', 0)
-    #                                     + extra_roll_by_view[i]
-    #                                     + adjacent_xy_roll[i])
-
-    #                     if debug:
-    #                         print(f"  {item_name} [vm={seg_view_modes[i]}] "
-    #                               f"ang_xy={seg_angulo_xy[i]:.2f}° | "
-    #                               f"yaw={rot_xy:.2f}° | pitch={rot_pitch:.2f}° | "
-    #                               f"roll={total_roll_t:.1f}° "
-    #                               f"(+view={extra_roll_by_view[i]:.0f}° "
-    #                               f"+adj={adjacent_xy_roll[i]:.0f}°)")
-
-    #                     # 1) Roll total (alrededor del eje X local del BREP)
-    #                     if abs(total_roll_t) > 0.001:
-    #                         m = AllplanGeo.Matrix3D()
-    #                         m.Rotation(AllplanGeo.Line3D(0,0,0, 1,0,0),
-    #                                 AllplanGeo.Angle.FromDeg(total_roll_t))
-    #                         brep = AllplanGeo.Transform(brep, m)
-
-    #                     # 2) Yaw (rotación horizontal de viaje)
-    #                     m = AllplanGeo.Matrix3D()
-    #                     m.Rotation(AllplanGeo.Line3D(0,0,0, 0,0,1),
-    #                             AllplanGeo.Angle.FromDeg(rot_xy))
-    #                     brep = AllplanGeo.Transform(brep, m)
-
-    #                     # 3) Pitch (inclinación en el plano correcto según yaw)
-    #                     if abs(rot_pitch) > 0.001:
-    #                         rad_xy = math.radians(rot_xy)
-    #                         axis   = AllplanGeo.Line3D(
-    #                             0, 0, 0,
-    #                             math.sin(rad_xy),
-    #                             -math.cos(rad_xy),
-    #                             0
-    #                         )
-    #                         m = AllplanGeo.Matrix3D()
-    #                         m.Rotation(axis, AllplanGeo.Angle.FromDeg(rot_pitch))
-    #                         brep = AllplanGeo.Transform(brep, m)
-
-    #                     desplazamiento_neto = (
-    #                         longitud_original / 2.0
-    #                         + (extension_final - extension_inicio) / 2.0
-    #                     )
-    #                     mid_x = start_point.X + vec_curr.X * desplazamiento_neto
-    #                     mid_y = start_point.Y + vec_curr.Y * desplazamiento_neto
-    #                     mid_z = start_point.Z + vec_curr.Z * desplazamiento_neto
-
-    #                     nuevo_brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(mid_x, mid_y, mid_z))
-    #                     segment_brep = {
-    #                         "index": i, "element_type": tipo_str,
-    #                         "element": AllplanBasisElements.ModelElement3D(prop, nuevo_brep)
-    #                     }
-    #                     elementos_transformados.append(segment_brep)
-
-    #         except Exception as ex:
-    #             if debug:
-    #                 print(f"ERROR CRÍTICO en elemento {i} ({tipo_str}): {ex}")
-
-    #     if debug:
-    #         print(f"\n{'='*70}")
-    #         print(f"COMPLETADO: {len(elementos_transformados)} elementos procesados")
-    #         print(f"{'='*70}\n")
-
-    #     return elementos_transformados
-
     def center_and_connect_models_v9(
         self,
         data_list,
@@ -6635,8 +6029,10 @@ class PipelineProcessor:
         """
         self.templates = {item["type"]: item["elem"] for item in elem3D_list}
         self.debug = debug
-        self.offset_codo = 26
+        self.offset_codo = 0
         self.element_type_core = element_type
+        # TE nodes (bifurcaciones) opcional: { (x,y,z): {"yaw_deg": float, ...} }
+        self.te_nodes = {}
 
     def modificar_dimensiones_brep(
         self, model_element, nueva_longitud
@@ -6723,6 +6119,7 @@ class PipelineProcessor:
         elem_type="conducto",
         custom_position=None,
         next_seg=None,
+        custom_yaw_deg: float | None = None,
     ) -> AllplanBasisElements.ModelElement3D:
         """
         Aplica transformaciones separando lógica horizontal (XY) y vertical (ZX/Pitch).
@@ -6759,6 +6156,29 @@ class PipelineProcessor:
         # ==========================================
         # PARTE 2: LÓGICA VERTICAL (PITCH / ZX)
         # ==========================================
+        # Para codos, usamos la lógica completa de fontaneria (por puntos),
+        # y evitamos el pipeline simplificado pitch/yaw de abajo.
+        if elem_type == "codo_90" and next_seg:
+            from .elbow_orientation import apply_elbow_transform
+
+            p_prev = getattr(segment_data, "start", None)
+            p_mid = getattr(segment_data, "end", None)
+            p_next = getattr(next_seg, "end", None)
+            ref = getattr(self, "reference_orientation_angle", None)
+            if p_prev and p_mid and p_next:
+                brep = apply_elbow_transform(
+                    brep,
+                    p_prev=p_prev,
+                    p_mid=p_mid,
+                    p_next=p_next,
+                    reference_orientation_angle=ref,
+                )
+                # Traslado final al mundo y retorno (saltamos el resto de rotaciones)
+                brep = AllplanGeo.Move(
+                    brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
+                )
+                return AllplanBasisElements.ModelElement3D(prop, brep)
+
         # 2.1. Orientación Base (Poner de pie si el destino es vertical)
         # Si el codo debe ir en vertical, primero rotamos 90° en su eje X local
         if elem_type == "codo_90" and next_seg:
@@ -6779,7 +6199,7 @@ class PipelineProcessor:
 
         # 2.2. Inclinación Específica (Pitch)
         angulo_pitch = 0.0
-        if elem_type in ["conducto", "conexion"]:
+        if elem_type in ["conducto", "conexion", "manguito"]:
             angulo_pitch = segment_data.angulo_z
         elif elem_type == "codo_90" and next_seg:
             angulo_pitch = -(next_seg.angulo_z + segment_data.angulo_z)
@@ -6803,12 +6223,18 @@ class PipelineProcessor:
         # PARTE 3: LÓGICA HORIZONTAL (YAW / XY)
         # ==========================================
         angulo_yaw = 0.0
-        if elem_type in ["conducto", "conexion"]:
-            angulo_yaw = segment_data.angulo_xy
+        if elem_type in ["conducto", "conexion", "manguito", "te"]:
+            angulo_yaw = (
+                float(custom_yaw_deg)
+                if custom_yaw_deg is not None
+                else segment_data.angulo_xy
+            )
         else:
             # AJUSTE ESPECIAL PARA CODOS
-            v_entrada = next_seg.vector_normalizado  # type: ignore
-            v_salida = segment_data.vector_normalizado
+            # En el nodo del codo, el tramo de ENTRADA es el segmento actual,
+            # y el tramo de SALIDA es el siguiente segmento.
+            v_entrada = segment_data.vector_normalizado
+            v_salida = next_seg.vector_normalizado  # type: ignore
 
             # Inversión de cara (Flip) si el giro es a la derecha
             cross_z = v_entrada.X * v_salida.Y - v_entrada.Y * v_salida.X
@@ -6854,49 +6280,78 @@ class PipelineProcessor:
 
         return AllplanBasisElements.ModelElement3D(prop, brep)
 
-    def process(self, segments, default_attrs=None) -> list:
+    def process(self, segments, default_attrs=None, segment_cuts=None) -> list:
         """
         Procesa los segmentos y ubica conductos y codos con soporte
         para pendientes verticales (Pitch). Sin conexiones.
+
+        segment_cuts: opcional dict {seg_idx: {"start": mm, "end": mm}} con recortes
+        por codo/manguito (véase vertex_utils.compute_segment_cuts_for_path).
         """
         result_list = []
         element_index = 0
         num_seg = len(segments)
+        segment_cuts = segment_cuts or {}
+
+        # Detección de codos 90° compatible con fontaneria (cambio de eje dominante)
+        from .vertex_utils import is_90_deg_turn
+
+        # info de TE: opcional, se puede inyectar desde fuera
+        te_nodes = getattr(self, "te_nodes", {}) or {}
+        inserted_te_keys = set()
 
         for i, seg_item in enumerate(segments):
             seg = seg_item.data
             v_unit = seg.vector_normalizado
 
             # -------------------------------------------------------
-            # 1. DETERMINAR RECORTES (Offsets)
+            # 1. DETERMINAR RECORTES (Offsets por codo + recortes por fitting)
             # -------------------------------------------------------
             offset_inicio = 0.0
             offset_final = 0.0
 
             if i > 0:
-                prev_seg = segments[i - 1].data
-                dot_prev = AllplanGeo.Vector3D.DotProduct(
-                    prev_seg.vector_normalizado, v_unit
-                )
-                if abs(dot_prev) < 0.01:
+                # offset inicio si en el vértice start del segmento actual hay codo
+                p_prev = getattr(segments[i - 1].data, "start", None)
+                p_curr = getattr(segments[i - 1].data, "end", None)
+                p_next = getattr(seg, "end", None)
+                if (
+                    p_prev
+                    and p_curr
+                    and p_next
+                    and is_90_deg_turn(p_prev, p_curr, p_next)
+                ):
                     offset_inicio = self.offset_codo
 
             if i < num_seg - 1:
+                # offset final si en el vértice end del segmento actual hay codo
                 next_seg = segments[i + 1].data
-                dot_next = AllplanGeo.Vector3D.DotProduct(
-                    v_unit, next_seg.vector_normalizado
-                )
-                if abs(dot_next) < 0.01:
+                p_prev = getattr(seg, "start", None)
+                p_curr = getattr(seg, "end", None)
+                p_next = getattr(next_seg, "end", None)
+                if (
+                    p_prev
+                    and p_curr
+                    and p_next
+                    and is_90_deg_turn(p_prev, p_curr, p_next)
+                ):
                     offset_final = self.offset_codo
+
+            cuts = segment_cuts.get(i, {"start": 0.0, "end": 0.0})
+            cut_start = float(cuts.get("start", 0.0))
+            cut_end = float(cuts.get("end", 0.0))
 
             # -------------------------------------------------------
             # 2. CONDUCTO (TRAMO RECTO) - OUTER + INNER (opcional)
             # -------------------------------------------------------
             if self.element_type_core in self.templates:
-                longitud_recortada = seg.longitud_3d - offset_inicio - offset_final
+                longitud_recortada = (
+                    seg.longitud_3d - offset_inicio - offset_final - cut_start - cut_end
+                )
 
                 if longitud_recortada > 0:
-                    dist_al_centro = offset_inicio + (longitud_recortada / 2.0)
+                    # Centro del tramo recortado: desde start + cut_start, mitad del tramo útil
+                    dist_al_centro = cut_start + (longitud_recortada / 2.0)
                     p_centro = AllplanGeo.Point3D(
                         seg.start.X + v_unit.X * dist_al_centro,
                         seg.start.Y + v_unit.Y * dist_al_centro,
@@ -6943,11 +6398,42 @@ class PipelineProcessor:
             # -------------------------------------------------------
             if i < num_seg - 1:
                 next_seg = segments[i + 1].data
-                v1 = seg.vector_normalizado
-                v2 = next_seg.vector_normalizado
-                dot = AllplanGeo.Vector3D.DotProduct(v1, v2)
+                p_prev = getattr(seg, "start", None)
+                p_curr = getattr(seg, "end", None)
+                p_next = getattr(next_seg, "end", None)
 
-                if abs(dot) < 0.01:  # Giro a 90 grados
+                # -------------------------------------------------------
+                # 3.A TE (BIFURCACIÓN) EN EL NODO (si aplica)
+                # -------------------------------------------------------
+                if "te" in self.templates and p_curr:
+                    key = (round(p_curr.X, 3), round(p_curr.Y, 3), round(p_curr.Z, 3))
+                    te_info = te_nodes.get(key)
+                    if te_info and key not in inserted_te_keys:
+                        inserted_te_keys.add(key)
+                        pos_nodo = p_curr
+                        yaw = float(te_info.get("yaw_deg", 0.0) or 0.0)
+                        element_te = self._aplicar_transformacion(
+                            self.templates["te"],
+                            seg,
+                            elem_type="te",
+                            custom_position=pos_nodo,
+                            custom_yaw_deg=yaw,
+                        )
+                        result_list.append(
+                            {
+                                "element": element_te,
+                                "element_type": "te",
+                                "index": element_index,
+                            }
+                        )
+                        element_index += 1
+
+                if (
+                    p_prev
+                    and p_curr
+                    and p_next
+                    and is_90_deg_turn(p_prev, p_curr, p_next)
+                ):
                     pos_nodo = seg.end
 
                     # Codo exterior (outer)
@@ -6959,11 +6445,13 @@ class PipelineProcessor:
                         next_seg=next_seg,
                     )
 
-                    result_list.append({
-                        "element": element_codo_outer,
-                        "element_type": "codo_90",
-                        "index": element_index,
-                    })
+                    result_list.append(
+                        {
+                            "element": element_codo_outer,
+                            "element_type": "codo_90",
+                            "index": element_index,
+                        }
+                    )
                     element_index += 1
 
                     # Codo interior (inner), si existe plantilla registrada
@@ -6976,11 +6464,71 @@ class PipelineProcessor:
                             next_seg=next_seg,
                         )
 
-                        result_list.append({
-                            "element": element_codo_inner,
-                            "element_type": "codo_90_inner",
-                            "index": element_index,
-                        })
+                        result_list.append(
+                            {
+                                "element": element_codo_inner,
+                                "element_type": "codo_90_inner",
+                                "index": element_index,
+                            }
+                        )
+                        element_index += 1
+
+                # Manguito en vértice colineal (0° o 180°)
+                # En fontaneria se crea siempre en tramos rectos, incluso si no hay cambio de diámetro.
+                if "manguito" in self.templates:
+                    # Si este nodo es una TE, NO crear manguito (se muestra la TE).
+                    if p_curr:
+                        key = (round(p_curr.X, 3), round(p_curr.Y, 3), round(p_curr.Z, 3))
+                        if key in te_nodes:
+                            continue
+                    # Regla:
+                    # - Crear si el tramo es colineal (dot ~ ±1)
+                    # - O si hay cambio de diámetro entre segmentos consecutivos (aunque el dot no sea perfecto por pendientes/ruido)
+                    def _get_seg_diam(_seg_item):
+                        try:
+                            info = getattr(_seg_item, "info", None)
+                            d = (
+                                getattr(info, "diameter", None)
+                                if info is not None
+                                else None
+                            )
+                            if isinstance(d, (list, tuple)) and d:
+                                return float(d[0])
+                            if d is None:
+                                return None
+                            return float(d)
+                        except Exception:
+                            return None
+
+                    d_curr = _get_seg_diam(segments[i])
+                    d_next = _get_seg_diam(segments[i + 1])
+                    diam_change = (
+                        d_curr is not None
+                        and d_next is not None
+                        and abs(float(d_curr) - float(d_next)) > 1e-6
+                    )
+
+                    v1 = seg.vector_normalizado
+                    v2 = next_seg.vector_normalizado
+                    dot = AllplanGeo.Vector3D.DotProduct(v1, v2)
+                    # colineal si dot ~ 1 (mismo sentido) o dot ~ -1 (sentido opuesto)
+                    is_colinear = abs(abs(dot) - 1.0) < 0.01
+
+                    if is_colinear or diam_change:
+                        pos_nodo = seg.end
+                        element_manguito = self._aplicar_transformacion(
+                            self.templates["manguito"],
+                            seg,
+                            elem_type="manguito",
+                            custom_position=pos_nodo,
+                        )
+                        result_list.append(
+                            {
+                                "element": element_manguito,
+                                "element_type": "manguito",
+                                "index": element_index,
+                            }
+                        )
                         element_index += 1
 
         return result_list

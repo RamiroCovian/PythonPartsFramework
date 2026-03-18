@@ -21,8 +21,18 @@ from Instalaciones.PolyLib.storage import PolylineStorage
 
 from .utils.geo_handler import GeometryHandler, PipelineProcessor
 from .utils.segments import DynamicSegmentBuilder
-
-from NemAll_Python_BaseElements import LayerService
+from .utils.vertex_utils import (
+    compute_segment_cuts_for_path,
+    compute_segment_cuts_for_all_paths,
+    detect_bifurcations,
+)
+from .utils.attributes_utils import (
+    _merge_attributes,
+    _process_auto_numbering,
+    _extract_number_from_attrs,
+    _apply_attributes_to_model_elem,
+)
+from .utils.layers_utils import _apply_layer_to_element, _get_layer_id
 
 # ---------------- CUSTOM NUM_TD PATH ----------------
 project_name, host_name = (
@@ -148,6 +158,7 @@ def _create_elements_for_segment_group(
         conexion_selected = [
             item for item in so.pythonparts_modules if item.key == "manguito"
         ]
+        te_selected = [item for item in so.pythonparts_modules if item.key == "te"]
 
         # Pasamos el tipo de distribución (IS / TD) al PythonPart de codo
         # para que CodoScript.execute pueda elegir entre ColzeModel y ColzeTDModel.
@@ -155,11 +166,26 @@ def _create_elements_for_segment_group(
             element_key=codo_selected[0].key,
             exec_kwargs={"dist_type": so.distribution_type},
         )
-        # La conexión (manguito) todavía no se utiliza en elem3D_list; no bloqueamos la creación
-        # del tubo principal si este PythonPart no está disponible.
-        # conexion_model = so._get_pythonpart_installed(
-        #     element_key=conexion_selected[0].key
-        # )
+        # Manguito (conexión) para tramos colineales (0°/180°)
+        manguito_model = None
+        try:
+            if conexion_selected:
+                manguito_model = so._get_pythonpart_installed(
+                    element_key=conexion_selected[0].key,
+                    exec_kwargs={"dist_type": so.distribution_type},
+                )
+        except Exception:
+            manguito_model = None
+
+        te_model = None
+        try:
+            if te_selected:
+                te_model = so._get_pythonpart_installed(
+                    element_key=te_selected[0].key,
+                    exec_kwargs={"dist_type": so.distribution_type},
+                )
+        except Exception:
+            te_model = None
 
         if conduct_model and codo_model:
             elem3D_list = []
@@ -198,6 +224,15 @@ def _create_elements_for_segment_group(
                     {"type": "codo_90_inner", "elem": codo_model[1], "rotate": True}
                 )
 
+            # Manguito: se insertará automáticamente en vertices colineales.
+            if manguito_model:
+                elem3D_list.append(
+                    {"type": "manguito", "elem": manguito_model[0], "rotate": True}
+                )
+
+            if te_model:
+                elem3D_list.append({"type": "te", "elem": te_model[0], "rotate": True})
+
             # Si el codo TD devuelve también un inner, lo registramos como plantilla opcional.
             if len(codo_model) > 1:
                 elem3D_list.append(
@@ -211,7 +246,66 @@ def _create_elements_for_segment_group(
             processor = PipelineProcessor(
                 elem3D_list=elem3D_list, element_type="tubo_agua"
             )
-            elements_generated = processor.process(segments=segments)
+            # Recortes por codo, manguito y bifurcaciones (TE) en todos los paths
+            path_idx = next(
+                (i for i, sg in enumerate(so.segment_groups) if sg is segments),
+                0,
+            )
+            # Detección de bifurcaciones: puntos con 3 segmentos conectados (TE)
+            vertex_map, te_vertices = detect_bifurcations(so.segment_groups)
+            if te_vertices:
+                print(f"[AGUA] Bifurcaciones detectadas (TE): {len(te_vertices)}")
+
+            # Preparar TE nodes (yaw por troncal) para el processor
+            te_nodes = {}
+            if te_vertices and vertex_map:
+                import math
+
+                def _seg_dir(conn):
+                    segs = so.segment_groups[conn["path_idx"]]
+                    seg_item = segs[conn["seg_idx"]]
+                    data = seg_item.data
+                    start = data.start
+                    end = data.end
+                    if conn.get("is_start"):
+                        vx, vy, vz = end.X - start.X, end.Y - start.Y, end.Z - start.Z
+                    else:
+                        vx, vy, vz = start.X - end.X, start.Y - end.Y, start.Z - end.Z
+                    ln = math.sqrt(vx * vx + vy * vy + vz * vz)
+                    if ln < 1e-9:
+                        return (0.0, 0.0, 0.0)
+                    return (vx / ln, vy / ln, vz / ln)
+
+                for vkey in te_vertices:
+                    conns = vertex_map.get(vkey, [])
+                    if len(conns) != 3:
+                        continue
+                    dirs = [(_seg_dir(c), idx) for idx, c in enumerate(conns)]
+                    best_pair = None
+                    best_dot = -1.0
+                    for a in range(3):
+                        for b in range(a + 1, 3):
+                            d1, _ = dirs[a]
+                            d2, _ = dirs[b]
+                            dot = abs(d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2])
+                            if dot > best_dot:
+                                best_dot = dot
+                                best_pair = (a, b)
+                    if not best_pair:
+                        continue
+                    d_main, _ = dirs[best_pair[0]]
+                    yaw_deg = math.degrees(math.atan2(d_main[1], d_main[0]))
+                    te_nodes[vkey] = {"yaw_deg": yaw_deg}
+            processor.te_nodes = te_nodes
+
+            all_cuts = compute_segment_cuts_for_all_paths(so.segment_groups)
+            segment_cuts = {
+                seg_idx: all_cuts.get((path_idx, seg_idx), {"start": 0.0, "end": 0.0})
+                for seg_idx in range(len(segments))
+            }
+            elements_generated = processor.process(
+                segments=segments, segment_cuts=segment_cuts
+            )
 
     # self.element_list: List[List[GeneratedElement]] = []
     return elements_generated
@@ -236,187 +330,8 @@ def _create_elements_with_layers_attrs(
 # ========================================
 # APLICACIÓN DE ATRIBUTOS
 # ========================================
-def _merge_attributes(base_attrs: list, override_attrs: list) -> list:
-    """
-    Fusiona dos listas de atributos de Allplan.
-    Los atributos en override_attrs sobrescriben los de base_attrs si tienen el mismo ID.
-
-    Args:
-        base_attrs: Lista base de atributos (AttributeString, AttributeDouble, etc.)
-        override_attrs: Lista de atributos que sobrescriben los base
-
-    Returns:
-        Lista fusionada de atributos sin duplicados por ID
-
-    Example:
-        base = [AttributeString(Id: 55015, Value: "IS08"),
-                AttributeString(Id: 55010, Value: "")]
-        override = [AttributeString(Id: 55015, Value: "testtt00009")]
-
-        result = _merge_attributes(base, override)
-        # result tendrá Id 55015 con valor "testtt00009" y Id 55010 con valor ""
-    """
-    # Diccionario para rastrear atributos por ID
-    # Clave: ID del atributo, Valor: objeto de atributo completo
-    attr_dict = {}
-
-    # 1. Primero agregar todos los atributos base
-    for attr in base_attrs:
-        attr_dict[attr.Id] = attr
-
-    # 2. Sobrescribir/agregar con los atributos de override
-    for attr in override_attrs:
-        attr_dict[attr.Id] = attr
-
-    # 3. Convertir el diccionario de vuelta a lista
-    # Ordenar por ID para mantener consistencia (opcional)
-    merged_list = [attr_dict[key] for key in sorted(attr_dict.keys())]
-
-    return merged_list
-
-
-def _process_auto_numbering(
-    attribute_list: list,
-    inst_type: str,
-    so: PBL.script_object.PolylineScriptObject,
-    forced_number: int | None = None,
-) -> tuple[list, bool]:
-    if not attribute_list:
-        return attribute_list, False
-
-    new_attr_list = []
-    modified = False
-    target_id = 1083
-
-    for attr in attribute_list:
-        if hasattr(attr, "Id") and attr.Id == target_id:
-            # SIEMPRE generamos el valor si hay un forced_number,
-            # o si el valor es exactamente "TV" (semilla inicial)
-            if forced_number is not None:
-                new_value = f"TV-{forced_number}"
-                new_attr_list.append(
-                    AllplanBaseElements.AttributeString(target_id, new_value)
-                )
-                modified = True
-                continue
-            elif attr.Value == "TV":
-                # Caso de rescate: si no hay forced_number pero detectamos la semilla
-                if so.init_storage:
-                    num = so.init_storage._get_next_number(inst_type)
-                    so.init_storage._save_numbering_file()
-                    new_value = f"TV-{num}"
-                    new_attr_list.append(
-                        AllplanBaseElements.AttributeString(target_id, new_value)
-                    )
-                    modified = True
-                    continue
-
-        new_attr_list.append(attr)
-
-    return new_attr_list, modified
-
-
-def _extract_number_from_attrs(attribute_list: list) -> int | None:
-    """
-    Extrae el número entero del atributo 1083 (formato 'TV-X').
-    """
-    if not attribute_list:
-        return None
-
-    target_id = 1083
-    prefix = "TV-"
-
-    for attr in attribute_list:
-        try:
-            # Verificamos si es el atributo correcto
-            if hasattr(attr, "Id") and attr.Id == target_id:
-                val_str = str(attr.Value)
-
-                # Si el valor ya tiene el formato "TV-5", extraemos el 5
-                if prefix in val_str:
-                    num_part = val_str.replace(prefix, "").strip()
-                    if num_part.isdigit():
-                        return int(num_part)
-
-                # Si por alguna razón solo está el número como string
-                elif val_str.isdigit():
-                    return int(val_str)
-
-        except Exception as e:
-            print(f"[EXTRACT] Error procesando atributo: {e}")
-            continue
-
-    return None
-
-
-def _apply_attributes_to_model_elem(model_elem, attr_list):
-    """
-    Empaqueta y aplica una lista de atributos a un elemento 3D de Allplan
-    usando la estructura AttributeSet -> Attributes.
-    """
-    if not attr_list:
-        return
-    try:
-        attr_set_list = []
-        # Creamos el set de atributos
-        attr_set_list.append(AllplanBaseElements.AttributeSet(attr_list))
-        # Creamos el objeto Attributes contenedor
-        attributes = AllplanBaseElements.Attributes(attr_set_list)
-        # Aplicamos al elemento
-        model_elem.SetAttributes(attributes)
-        return model_elem
-    except Exception as e:
-        print(f"[Error] Al aplicar atributos: {e}")
-
-
-# ========================================
-# APLICACIÓN DE LAYERS
-# ========================================
-def _apply_layer_to_element(
-    model_elem: AllplanBasisElements.ModelElement3D,
-    key_layer: str,
-    so: PBL.script_object.PolylineScriptObject,
-) -> AllplanBasisElements.ModelElement3D:
-    """
-    Responsabilidad única: Buscar el ID del layer y aplicarlo al elemento.
-    """
-    layer_id = _get_layer_id(key_layer, so)
-    if layer_id is not None:
-        try:
-            props = model_elem.CommonProperties
-            props.Layer = layer_id
-            model_elem.CommonProperties = props
-        except Exception as e:
-            print(f"[Error] Fallo al setear layer en {key_layer}: {e}")
-            pass
-    else:
-        print(f"[Warn] No se pudo determinar un ID de Layer válido para {key_layer}")
-
-    return model_elem
-
-
-def _get_layer_id(
-    key_applied_layer_attr: str, so: PBL.script_object.PolylineScriptObject
-):
-    """
-    Obtiene el ID del layer apropiado para un elemento.
-    Prioriza layers específicos guardados sobre el layer por defecto.
-    """
-    doc = so.coord_input.GetInputViewDocument()
-    layer_id = 0
-    # Obtener ID del layer por defecto
-    if so.default_layers:
-        default_id = LayerService.GetIDByShortName(so.default_layers.get("default", ""), doc)  # type: ignore
-        if default_id:
-            layer_id = default_id
-
-    # Priorizar layer específico guardado
-    if hasattr(so, "applied_layers") and so.applied_layers:
-        layer_data = so.applied_layers.get(key_applied_layer_attr, None)
-        if layer_data and isinstance(layer_data, dict):
-            layer_name_str = layer_data.get("layer")
-            if layer_name_str:
-                specific_id = LayerService.GetIDByShortName(layer_name_str, doc)  # type: ignore
-                if specific_id:
-                    layer_id = specific_id
-    return layer_id
+#
+# Las funciones auxiliares de atributos y layers se han movido a:
+#   - utils/attributes_utils.py
+#   - utils/layers_utils.py
+# y se importan al inicio de este módulo.
