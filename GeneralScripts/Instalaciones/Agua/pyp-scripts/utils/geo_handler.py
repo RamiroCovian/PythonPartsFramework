@@ -6047,6 +6047,9 @@ class PipelineProcessor:
         # Cache de modelos de manguito por distribución + par de diámetros
         self._manguito_model_cache = {}
         self._manguito_classes = None
+        # Cache de modelos de tubo por distribución + diámetro
+        self._tubo_model_cache = {}
+        self._tubo_classes = None
 
     def _load_manguito_classes(self):
         """
@@ -6137,6 +6140,118 @@ class PipelineProcessor:
                 f"[AGUA] Error creando manguito para diámetros {di1}-{di2} ({dist}): {ex}"
             )
             self._manguito_model_cache[cache_key] = []
+            return []
+
+    def _load_tubo_classes(self):
+        """
+        Carga dinámica de clases de tubo (IS/TD) para instanciar por diámetro real
+        de cada segmento, evitando que todos tomen el último diámetro global.
+        """
+        if self._tubo_classes is not None:
+            return self._tubo_classes
+
+        classes = {"IS": None, "TD": None}
+        try:
+            base_dir = os.path.dirname(os.path.dirname(__file__))
+            is_path = os.path.join(base_dir, "tub_polietile_007_is.py")
+            td_path = os.path.join(base_dir, "tub_polietile_007_td.py")
+
+            if os.path.exists(is_path):
+                spec_is = importlib.util.spec_from_file_location(
+                    "agua_tub_polietile_007_is_runtime",
+                    is_path,
+                )
+                if spec_is and spec_is.loader:
+                    mod_is = importlib.util.module_from_spec(spec_is)
+                    spec_is.loader.exec_module(mod_is)
+                    classes["IS"] = getattr(mod_is, "TubPolietileModel", None)
+
+            if os.path.exists(td_path):
+                spec_td = importlib.util.spec_from_file_location(
+                    "agua_tub_polietile_007_td_runtime",
+                    td_path,
+                )
+                if spec_td and spec_td.loader:
+                    mod_td = importlib.util.module_from_spec(spec_td)
+                    spec_td.loader.exec_module(mod_td)
+                    classes["TD"] = getattr(mod_td, "TubPolietileTDModel", None)
+        except Exception as ex:
+            print(f"[AGUA][TUBO] Error cargando clases dinámicas: {ex}")
+
+        self._tubo_classes = classes
+        return classes
+
+    def _set_build_ele_diameter_and_water(self, diameter_mm: int, dist: str, water_type=None):
+        """
+        Sincroniza build_ele con diámetro/tipo de agua para crear el modelo correcto.
+        """
+        if self.build_ele is None:
+            return
+        try:
+            diam_attr = getattr(self.build_ele, "DiametroAplicar", None)
+            if diam_attr is not None and hasattr(diam_attr, "value"):
+                diam_attr.value = int(diameter_mm)
+            else:
+                setattr(self.build_ele, "DiametroAplicar", int(diameter_mm))
+        except Exception:
+            pass
+
+        if water_type is None:
+            return
+        try:
+            target_names = (
+                ["TipoDeAguaIS", "TipoDeAgua"]
+                if dist == "IS"
+                else ["TipoDeAguaTD", "TipoDeAgua"]
+            )
+            for name in target_names:
+                try:
+                    attr = getattr(self.build_ele, name, None)
+                    if attr is not None and hasattr(attr, "value"):
+                        attr.value = str(water_type)
+                    else:
+                        setattr(self.build_ele, name, str(water_type))
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    def _get_tubo_models_for_segment(
+        self, diameter_mm, distribution_type="IS", water_type=None
+    ):
+        """
+        Devuelve [outer, inner?] del tubo para el diámetro/distribución del segmento.
+        """
+        try:
+            di = int(round(float(diameter_mm)))
+        except Exception:
+            di = 20
+        dist = "TD" if str(distribution_type).upper() == "TD" else "IS"
+        cache_key = (dist, di)
+        cached = self._tubo_model_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        if self.build_ele is None or self.doc is None:
+            return []
+
+        classes = self._load_tubo_classes()
+        ModelClass = classes.get(dist) if classes else None
+        if ModelClass is None:
+            return []
+
+        try:
+            self._set_build_ele_diameter_and_water(di, dist, water_type=water_type)
+            tubo_obj = ModelClass(self.build_ele, self.doc)
+            model_list = tubo_obj.build() or []
+            self._tubo_model_cache[cache_key] = model_list
+            print(
+                f"[AGUA][TUBO] build dist={dist} diam={di} elems={len(model_list)} (cache miss)"
+            )
+            return model_list
+        except Exception as ex:
+            print(f"[AGUA][TUBO] Error creando modelo dinámico dist={dist} diam={di}: {ex}")
+            self._tubo_model_cache[cache_key] = []
             return []
 
     def modificar_dimensiones_brep(
@@ -6767,9 +6882,48 @@ class PipelineProcessor:
                         seg.start.Z + v_unit.Z * dist_al_centro,
                     )
 
+                    # Diámetro/distribución por segmento (como fontaneria: no usar último global)
+                    seg_info = getattr(seg_item, "info", None)
+                    seg_diameter = (
+                        getattr(seg_info, "diameter", 20.0) if seg_info is not None else 20.0
+                    )
+                    if isinstance(seg_diameter, (list, tuple)) and seg_diameter:
+                        seg_diameter = seg_diameter[0]
+                    seg_dist = (
+                        getattr(seg_info, "distribution_type", "IS")
+                        if seg_info is not None
+                        else "IS"
+                    )
+                    seg_water = (
+                        getattr(seg_info, "water_type", None)
+                        if seg_info is not None
+                        else None
+                    )
+                    seg_dist = "TD" if str(seg_dist).upper() == "TD" else "IS"
+
+                    dynamic_tube_models = self._get_tubo_models_for_segment(
+                        seg_diameter,
+                        distribution_type=seg_dist,
+                        water_type=seg_water,
+                    )
+                    tube_outer_tpl = (
+                        dynamic_tube_models[0]
+                        if dynamic_tube_models
+                        else self.templates[self.element_type_core]
+                    )
+                    tube_inner_tpl = (
+                        dynamic_tube_models[1]
+                        if len(dynamic_tube_models) > 1
+                        else self.templates.get(f"{self.element_type_core}_inner")
+                    )
+                    print(
+                        f"[AGUA][TUBO] seg={i} diam={seg_diameter} dist={seg_dist} "
+                        f"modelo_outer={'dinamico' if dynamic_tube_models else 'template'}"
+                    )
+
                     # OUTER
                     model_cond = self.modificar_dimensiones_brep(
-                        self.templates[self.element_type_core], longitud_recortada
+                        tube_outer_tpl, longitud_recortada
                     )
                     element = self._aplicar_transformacion(
                         model_cond, seg, custom_position=p_centro
@@ -6786,9 +6940,9 @@ class PipelineProcessor:
 
                     # INNER opcional: por convenio usamos "<core>_inner"
                     inner_key = f"{self.element_type_core}_inner"
-                    if inner_key in self.templates:
+                    if tube_inner_tpl is not None:
                         model_inner = self.modificar_dimensiones_brep(
-                            self.templates[inner_key], longitud_recortada
+                            tube_inner_tpl, longitud_recortada
                         )
                         element_inner = self._aplicar_transformacion(
                             model_inner, seg, custom_position=p_centro
