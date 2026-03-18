@@ -1,5 +1,6 @@
 import math
 import os
+import importlib.util
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_BaseElements as AllplanBaseElements
@@ -6023,7 +6024,14 @@ class GeometryHandler:
 
 
 class PipelineProcessor:
-    def __init__(self, elem3D_list, element_type=None, debug=False):
+    def __init__(
+        self,
+        elem3D_list,
+        element_type=None,
+        debug=False,
+        build_ele=None,
+        doc=None,
+    ):
         """
         Args:
             elem3D_list: [{'type': 'conducto', 'elem': model}, ...]
@@ -6034,6 +6042,102 @@ class PipelineProcessor:
         self.element_type_core = element_type
         # TE nodes (bifurcaciones) opcional: { (x,y,z): {"yaw_deg": float, ...} }
         self.te_nodes = {}
+        self.build_ele = build_ele
+        self.doc = doc
+        # Cache de modelos de manguito por distribución + par de diámetros
+        self._manguito_model_cache = {}
+        self._manguito_classes = None
+
+    def _load_manguito_classes(self):
+        """
+        Carga dinámica de clases de manguito para poder elegir tipo por diámetros
+        (M20, M25, reductor 25-20) igual que en fontaneria.
+        """
+        if self._manguito_classes is not None:
+            return self._manguito_classes
+
+        classes = {"IS": None, "TD": None}
+        try:
+            base_dir = os.path.dirname(os.path.dirname(__file__))
+            is_path = os.path.join(base_dir, "manguito_005_is.py")
+            td_path = os.path.join(base_dir, "manguito_005_td.py")
+
+            if os.path.exists(is_path):
+                spec_is = importlib.util.spec_from_file_location(
+                    "agua_manguito_005_is_runtime",
+                    is_path,
+                )
+                if spec_is and spec_is.loader:
+                    mod_is = importlib.util.module_from_spec(spec_is)
+                    spec_is.loader.exec_module(mod_is)
+                    classes["IS"] = getattr(mod_is, "ManguitoModel", None)
+
+            if os.path.exists(td_path):
+                spec_td = importlib.util.spec_from_file_location(
+                    "agua_manguito_005_td_runtime",
+                    td_path,
+                )
+                if spec_td and spec_td.loader:
+                    mod_td = importlib.util.module_from_spec(spec_td)
+                    spec_td.loader.exec_module(mod_td)
+                    classes["TD"] = getattr(mod_td, "ManguitoTDModel", None)
+        except Exception as ex:
+            print(f"[AGUA] Error cargando clases de manguito por diámetro: {ex}")
+
+        self._manguito_classes = classes
+        return classes
+
+    def _get_manguito_models_for_diameters(self, d1, d2, distribution_type="IS"):
+        """
+        Devuelve model_list de manguito ajustado al par de diámetros.
+        Soporta IS/TD y cachea por par para evitar reconstrucciones repetidas.
+        """
+        try:
+            di1 = int(round(float(d1)))
+            di2 = int(round(float(d2)))
+        except Exception:
+            return []
+
+        dist = "TD" if str(distribution_type).upper() == "TD" else "IS"
+        cache_key = (dist, tuple(sorted((di1, di2))))
+        cached = self._manguito_model_cache.get(cache_key)
+        if cached is not None:
+            print(
+                f"[AGUA][MANGUITO] cache hit dist={dist} pair={cache_key[1]} elems={len(cached)}"
+            )
+            return cached
+
+        if self.build_ele is None or self.doc is None:
+            return []
+
+        classes = self._load_manguito_classes()
+        ModelClass = classes.get(dist) if classes else None
+        if ModelClass is None:
+            return []
+
+        try:
+            try:
+                manguito_obj = ModelClass(self.build_ele, self.doc)
+            except TypeError:
+                manguito_obj = ModelClass(self.build_ele)
+
+            if hasattr(manguito_obj, "set_diameters"):
+                manguito_obj.set_diameters(di1, di2)
+
+            type_manguito = getattr(manguito_obj, "type_manguito", None)
+            model_list = manguito_obj.build() or []
+            print(
+                f"[AGUA][MANGUITO] build dist={dist} d1={di1} d2={di2} pair={cache_key[1]} "
+                f"type_manguito={type_manguito} elems={len(model_list)}"
+            )
+            self._manguito_model_cache[cache_key] = model_list
+            return model_list
+        except Exception as ex:
+            print(
+                f"[AGUA] Error creando manguito para diámetros {di1}-{di2} ({dist}): {ex}"
+            )
+            self._manguito_model_cache[cache_key] = []
+            return []
 
     def modificar_dimensiones_brep(
         self, model_element, nueva_longitud
@@ -6121,6 +6225,7 @@ class PipelineProcessor:
         custom_position=None,
         next_seg=None,
         custom_yaw_deg: float | None = None,
+        custom_mirror_x_local: bool = False,
     ) -> AllplanBasisElements.ModelElement3D:
         """
         Aplica transformaciones separando lógica horizontal (XY) y vertical (ZX/Pitch).
@@ -6154,6 +6259,16 @@ class PipelineProcessor:
                 eje_x_local, AllplanGeo.Angle.FromDeg(rotation_angle)
             )
             brep = AllplanGeo.Transform(brep, matriz_roll)
+
+        # Manguito reductor: invertir orientación local (como fontaneria.py)
+        # para el caso 25->20 usando el mismo modelo base 20-25.
+        if elem_type == "manguito" and custom_mirror_x_local:
+            try:
+                mirror_x = AllplanGeo.Matrix3D()
+                mirror_x.SetScaling(-1, 1, 1)
+                brep = AllplanGeo.Transform(brep, mirror_x)
+            except Exception:
+                pass
 
         # ==========================================
         # PARTE 2: LÓGICA VERTICAL (PITCH / ZX)
@@ -6872,11 +6987,78 @@ class PipelineProcessor:
 
                     if is_colinear or diam_change:
                         pos_nodo = seg.end
+                        # Distribución local del nodo (IS/TD): tomar del tramo actual;
+                        # si falta, usar el siguiente; fallback IS.
+                        dist_type = "IS"
+                        try:
+                            info_curr = getattr(segments[i], "info", None)
+                            info_next = (
+                                getattr(segments[i + 1], "info", None)
+                                if i + 1 < len(segments)
+                                else None
+                            )
+                            dist_raw = (
+                                getattr(info_curr, "distribution_type", None)
+                                or getattr(info_next, "distribution_type", None)
+                                or "IS"
+                            )
+                            dist_type = (
+                                "TD" if str(dist_raw).upper() == "TD" else "IS"
+                            )
+                        except Exception:
+                            dist_type = "IS"
+
+                        print(
+                            "[AGUA][MANGUITO] node=(%.3f,%.3f,%.3f) seg=%s->%s "
+                            "dot=%.4f colinear=%s diam_change=%s d_curr=%s d_next=%s dist=%s"
+                            % (
+                                pos_nodo.X,
+                                pos_nodo.Y,
+                                pos_nodo.Z,
+                                str(i),
+                                str(i + 1),
+                                float(dot),
+                                str(is_colinear),
+                                str(diam_change),
+                                str(d_curr),
+                                str(d_next),
+                                dist_type,
+                            )
+                        )
+
+                        # Elegir modelo de manguito por PAR DE DIÁMETROS (port de fontaneria).
+                        dyn_models = self._get_manguito_models_for_diameters(
+                            d_curr if d_curr is not None else 20.0,
+                            d_next if d_next is not None else 20.0,
+                            distribution_type=dist_type,
+                        )
+                        manguito_outer_model = (
+                            dyn_models[0] if dyn_models else self.templates["manguito"]
+                        )
+                        print(
+                            f"[AGUA][MANGUITO] modelo_outer={'dinamico' if dyn_models else 'template'} "
+                            f"elems_dyn={len(dyn_models)}"
+                        )
+
+                        # Reductor 25->20: mirror local para invertir el sentido.
+                        need_mirror_x = False
+                        try:
+                            if d_curr is not None and d_next is not None:
+                                di1 = int(round(float(d_curr)))
+                                di2 = int(round(float(d_next)))
+                                if {di1, di2} == {20, 25} and di1 > di2:
+                                    need_mirror_x = True
+                        except Exception:
+                            need_mirror_x = False
+                        if need_mirror_x:
+                            print("[AGUA][MANGUITO] mirror_x_local=True (caso 25->20)")
+
                         element_manguito = self._aplicar_transformacion(
-                            self.templates["manguito"],
+                            manguito_outer_model,
                             seg,
                             elem_type="manguito",
                             custom_position=pos_nodo,
+                            custom_mirror_x_local=need_mirror_x,
                         )
                         result_list.append(
                             {
@@ -6886,6 +7068,34 @@ class PipelineProcessor:
                             }
                         )
                         element_index += 1
+
+                        # TD opcional: manguito inner (si existe en modelo dinámico o templates)
+                        manguito_inner_model = None
+                        if len(dyn_models) > 1:
+                            manguito_inner_model = dyn_models[1]
+                        elif "manguito_inner" in self.templates:
+                            manguito_inner_model = self.templates["manguito_inner"]
+
+                        if manguito_inner_model is not None:
+                            print(
+                                "[AGUA][MANGUITO] creando inner "
+                                f"(fuente={'dinamico' if len(dyn_models) > 1 else 'template'})"
+                            )
+                            element_manguito_inner = self._aplicar_transformacion(
+                                manguito_inner_model,
+                                seg,
+                                elem_type="manguito",
+                                custom_position=pos_nodo,
+                                custom_mirror_x_local=need_mirror_x,
+                            )
+                            result_list.append(
+                                {
+                                    "element": element_manguito_inner,
+                                    "element_type": "manguito_inner",
+                                    "index": element_index,
+                                }
+                            )
+                            element_index += 1
 
         return result_list
 

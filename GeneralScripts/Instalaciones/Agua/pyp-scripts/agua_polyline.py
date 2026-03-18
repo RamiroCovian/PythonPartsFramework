@@ -230,6 +230,14 @@ def _create_elements_for_segment_group(
                 elem3D_list.append(
                     {"type": "manguito", "elem": manguito_model[0], "rotate": True}
                 )
+                if len(manguito_model) > 1:
+                    elem3D_list.append(
+                        {
+                            "type": "manguito_inner",
+                            "elem": manguito_model[1],
+                            "rotate": True,
+                        }
+                    )
 
             # TE: igual que el codo, puede devolver outer + inner en TD.
             if te_model:
@@ -240,7 +248,10 @@ def _create_elements_for_segment_group(
                     )
 
             processor = PipelineProcessor(
-                elem3D_list=elem3D_list, element_type="tubo_agua"
+                elem3D_list=elem3D_list,
+                element_type="tubo_agua",
+                build_ele=getattr(so, "build_ele", None),
+                doc=so.coord_input.GetInputViewDocument() if so.coord_input else None,
             )
             # Recortes por codo, manguito y bifurcaciones (TE) en todos los paths
             path_idx = next(
