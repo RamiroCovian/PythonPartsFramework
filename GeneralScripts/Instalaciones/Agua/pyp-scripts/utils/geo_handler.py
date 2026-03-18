@@ -6536,20 +6536,21 @@ class PipelineProcessor:
                 di_out = int(round(float(te_params.get("d_main_out", 0) or 0)))
                 di_branch = int(round(float(te_params.get("d_branch", 0) or 0)))
 
-                # Caso específico verificado en obra:
-                # main 20->25 con rama 25 (TE 25-25-20 seleccionada correctamente)
-                # requiere mirror Y local para que el lado de 20 coincida con el primer tramo.
+                # Casos de TE mixta en XY (portado práctico de fontaneria):
+                # cuando el troncal cambia de diámetro y la rama coincide con uno
+                # de los dos diámetros del troncal (casos 25-25-20 / 25-20-20),
+                # forzamos mirror en Y para que las bocas coincidan con los tramos.
                 if (
                     plane == "XY"
                     and not branch_elevated
-                    and di_in < di_out
-                    and di_branch == di_out
+                    and di_in != di_out
+                    and di_branch in (di_in, di_out)
                 ):
                     need_mx = False
                     need_my = True
                     if debug_te:
                         print(
-                            "[AGUA][TE] FIX ORIENTACION: di_in<di_out y di_branch=di_out -> force mirror_y_local=True"
+                            "[AGUA][TE] FIX ORIENTACION XY mixta: di_in!=di_out y di_branch en (di_in,di_out) -> mirror_y_local=True"
                         )
 
                 if debug_te_pos:
