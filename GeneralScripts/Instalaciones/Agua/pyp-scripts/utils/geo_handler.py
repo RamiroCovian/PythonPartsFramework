@@ -6133,10 +6133,10 @@ class PipelineProcessor:
         p_destino = custom_position if custom_position else segment_data.start
 
         # 2. NORMALIZACIÓN (ORIGEN 0,0,0)
-        # Para conductos rectos normalizamos al centro, pero codos y TES ya vienen
-        # centrados desde su propio modelador (IS/TD) y debemos conservar ese origen
-        # para mantener la alineación outer/inner y el cruce en nodo.
-        if elem_type not in ("codo_90", "te"):
+        # Para conductos rectos normalizamos al centro, pero codos, TES y manguitos
+        # ya vienen centrados desde su propio modelador (IS/TD) y debemos conservar
+        # ese origen para mantener la alineación y el encaje en nodo.
+        if elem_type not in ("codo_90", "te", "manguito"):
             centro = self._get_center_from_vertices(brep)
             brep = AllplanGeo.Move(
                 brep, AllplanGeo.Vector3D(-centro.X, -centro.Y, -centro.Z)
