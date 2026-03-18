@@ -11,6 +11,27 @@ import math
 import NemAll_Python_Geometry as AllplanGeo
 
 
+def _normalize_angle_rad_pi(angle_rad: float) -> float:
+    while angle_rad > math.pi:
+        angle_rad -= 2.0 * math.pi
+    while angle_rad < -math.pi:
+        angle_rad += 2.0 * math.pi
+    return angle_rad
+
+
+def _normalize_angle_deg_180(angle_deg: float) -> float:
+    while angle_deg > 180.0:
+        angle_deg -= 360.0
+    while angle_deg < -180.0:
+        angle_deg += 360.0
+    return angle_deg
+
+
+def _is_close_angle_deg(angle_deg: float, target_deg: float, tol_deg: float = 10.0) -> bool:
+    delta = (angle_deg - target_deg + 180.0) % 360.0 - 180.0
+    return abs(delta) <= tol_deg
+
+
 def _dir_from_delta(dx: float, dy: float, eps: float = 1e-6) -> str:
     """Devuelve 'E','W','N','S' según dx/dy (tramos ortogonales o dominantes)."""
     if abs(dx) > abs(dy):
@@ -30,6 +51,79 @@ def _normalize_reference_angle_deg(angle_deg: float) -> float:
     if -55.0 <= angle_deg <= -35.0:
         return 135.0
     return angle_deg
+
+
+def _compute_reference_yaw_for_vertical_elbow(
+    *,
+    seg1_vert: bool,
+    seg2_vert: bool,
+    h_dir: str,
+    hx: float,
+    hy: float,
+    reference_orientation_angle: float,
+) -> float:
+    """
+    Port de la excepción de rotación adicional de fontaneria.py (L2337+).
+    Devuelve el yaw adicional a aplicar en Z para codos verticales.
+    """
+    prev_angle_xy = float(reference_orientation_angle)
+    h_angle = math.atan2(hy, hx)
+    h_angle_deg = math.degrees(h_angle)
+    ref_deg_raw = math.degrees(reference_orientation_angle)
+
+    if seg1_vert and not seg2_vert:
+        adjustment_angle = 0.0
+        if h_dir == "W":
+            ref_deg_cmp = _normalize_angle_deg_180(ref_deg_raw)
+            # 225/-135 se comparan como 45 para usar la misma rama.
+            if _is_close_angle_deg(ref_deg_cmp, 225.0) or _is_close_angle_deg(ref_deg_cmp, -135.0):
+                ref_deg_cmp = 45.0
+            h_deg_norm = _normalize_angle_deg_180(h_angle_deg)
+            if _is_close_angle_deg(ref_deg_cmp, 45.0) and _is_close_angle_deg(h_deg_norm, -135.0):
+                adjustment_angle = 0.0
+            elif abs(h_angle_deg) > 135.0 and abs(h_angle_deg) <= 180.0:
+                adjustment_angle = math.pi
+        elif h_dir == "N":
+            ref_norm = _normalize_reference_angle_deg(ref_deg_raw)
+            h_norm = _normalize_reference_angle_deg(h_angle_deg)
+            if _is_close_angle_deg(ref_norm, 135.0) or _is_close_angle_deg(h_norm, 135.0):
+                adjustment_angle = -math.pi / 2.0
+            else:
+                adjustment_angle = math.pi
+        elif h_dir == "S":
+            ref_norm = _normalize_reference_angle_deg(ref_deg_raw)
+            h_norm = _normalize_reference_angle_deg(h_angle_deg)
+            if _is_close_angle_deg(ref_norm, 135.0) and _is_close_angle_deg(h_norm, 135.0):
+                adjustment_angle = -math.pi / 2.0
+            elif _is_close_angle_deg(h_norm, 135.0):
+                adjustment_angle = math.pi / 2.0
+            else:
+                adjustment_angle = math.pi
+
+        if abs(adjustment_angle) > 1e-6:
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + adjustment_angle)
+
+        # Ajuste adicional de +180° para referencias ~315/-45 y ~225/-135.
+        if _is_close_angle_deg(ref_deg_raw, 315.0) or _is_close_angle_deg(ref_deg_raw, -45.0):
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
+        elif _is_close_angle_deg(ref_deg_raw, 225.0) or _is_close_angle_deg(ref_deg_raw, -135.0):
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
+
+    elif seg2_vert and not seg1_vert:
+        if h_dir == "N":
+            ref_norm = _normalize_reference_angle_deg(ref_deg_raw)
+            h_norm = _normalize_reference_angle_deg(h_angle_deg)
+            if _is_close_angle_deg(ref_norm, 135.0) or _is_close_angle_deg(h_norm, 135.0):
+                prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy - (math.pi / 2.0))
+        elif h_dir == "S":
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy - (math.pi / 2.0))
+
+        if _is_close_angle_deg(ref_deg_raw, 315.0) or _is_close_angle_deg(ref_deg_raw, -45.0):
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
+        elif _is_close_angle_deg(ref_deg_raw, 225.0) or _is_close_angle_deg(ref_deg_raw, -135.0):
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
+
+    return prev_angle_xy
 
 
 def apply_elbow_transform(
@@ -103,31 +197,58 @@ def apply_elbow_transform(
         if seg1_vert and not seg2_vert:
             ang_h += math.pi
 
-        # Rotación adicional por reference_orientation_angle (diagonales y casos especiales)
+        # Rotación Z adicional (prev_angle_xy), como en fontaneria.py:
+        # se aplica ANTES de la vertical y horizontal.
+        prev_angle_xy = 0.0
         if reference_orientation_angle is not None:
-            ref_deg = math.degrees(reference_orientation_angle)
-            ref_deg_norm = _normalize_reference_angle_deg(ref_deg)
-            # Para 315/-45 y 225/-135 aplicar +180° adicional (portado de fontaneria)
-            if abs(ref_deg + 45.0) < 10.0 or abs(ref_deg - 315.0) < 10.0:
-                reference_orientation_angle += math.pi
-            if abs(ref_deg - 225.0) < 10.0 or abs(ref_deg + 135.0) < 10.0:
-                reference_orientation_angle += math.pi
-            # En vertical, aplicamos esta referencia como yaw adicional
-            ang_h += reference_orientation_angle
+            prev_angle_xy = _compute_reference_yaw_for_vertical_elbow(
+                seg1_vert=seg1_vert,
+                seg2_vert=seg2_vert,
+                h_dir=h_dir,
+                hx=hx,
+                hy=hy,
+                reference_orientation_angle=reference_orientation_angle,
+            )
+        elif seg2_vert:
+            # Fallback: usar el ángulo del tramo horizontal que llega al codo.
+            prev_angle_xy = _normalize_angle_rad_pi(math.atan2(hy, hx))
+        elif seg1_vert:
+            # Fallback: usar el ángulo del tramo horizontal que sale del codo.
+            prev_angle_xy = _normalize_angle_rad_pi(math.atan2(hy, hx))
 
-        # 1) Yaw en Z
-        m = AllplanGeo.Matrix3D()
-        m.Rotation(
-            AllplanGeo.Line3D(0, 0, 0, 0, 0, 1),
-            AllplanGeo.Angle(ang_h),
+        # Rz adicional (si aplica)
+        mat_z_rot = None
+        if abs(prev_angle_xy) > 1e-6:
+            axis_z_prev = AllplanGeo.Line3D(
+                AllplanGeo.Point3D(0, 0, 0),
+                AllplanGeo.Point3D(0, 0, 1),
+            )
+            mat_z_rot = AllplanGeo.Matrix3D()
+            mat_z_rot.SetRotation(axis_z_prev, AllplanGeo.Angle(prev_angle_xy))
+
+        # Rotación vertical alrededor de X o Y (mismo criterio de fontaneria.py)
+        if axis_code == "Y":
+            axis_vert = AllplanGeo.Line3D(
+                AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 1, 0)
+            )
+        else:
+            axis_vert = AllplanGeo.Line3D(
+                AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(-1, 0, 0)
+            )
+        mat_v = AllplanGeo.Matrix3D()
+        mat_v.SetRotation(axis_vert, AllplanGeo.Angle(ang_v))
+
+        # Rotación horizontal en planta
+        axis_z = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
         )
-        brep = AllplanGeo.Transform(brep, m)
+        mat_h = AllplanGeo.Matrix3D()
+        mat_h.SetRotation(axis_z, AllplanGeo.Angle(ang_h))
 
-        # 2) Rotación vertical alrededor del eje X o Y global (aprox consistente con fontaneria)
-        axis = AllplanGeo.Line3D(0, 0, 0, 1, 0, 0) if axis_code == "X" else AllplanGeo.Line3D(0, 0, 0, 0, 1, 0)
-        m = AllplanGeo.Matrix3D()
-        m.Rotation(axis, AllplanGeo.Angle(ang_v))
-        brep = AllplanGeo.Transform(brep, m)
+        # Composición igual que fontaneria:
+        # mat_h * mat_v * mat_z_rot => aplica primero mat_z_rot, luego mat_v, luego mat_h.
+        mat = mat_h * mat_v * mat_z_rot if mat_z_rot is not None else mat_h * mat_v
+        brep = AllplanGeo.Transform(brep, mat)
 
         return brep
 

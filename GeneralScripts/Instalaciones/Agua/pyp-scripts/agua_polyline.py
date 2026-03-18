@@ -112,6 +112,13 @@ def _create_elements_for_segment_group(
     builder = DynamicSegmentBuilder()
     geo_handler = GeometryHandler()
 
+    # Guardamos la orientación 3D de referencia
+    so.reference_orientation_angle = getattr(so, "reference_orientation_angle", None)
+    print(
+        "################################## so.reference_orientation_angle: ",
+        so.reference_orientation_angle,
+    )
+
     model_base = so.current_inst_config
 
     if model_base:
@@ -252,6 +259,10 @@ def _create_elements_for_segment_group(
                 element_type="tubo_agua",
                 build_ele=getattr(so, "build_ele", None),
                 doc=so.coord_input.GetInputViewDocument() if so.coord_input else None,
+            )
+            # Portar orientación capturada en start_orientation_capture a fittings/tramos.
+            processor.reference_orientation_angle = getattr(
+                so, "reference_orientation_angle", None
             )
             # Recortes por codo, manguito y bifurcaciones (TE) en todos los paths
             path_idx = next(

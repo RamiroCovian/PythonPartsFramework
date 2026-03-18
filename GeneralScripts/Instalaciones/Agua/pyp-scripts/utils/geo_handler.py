@@ -6053,6 +6053,33 @@ class PipelineProcessor:
         # Cache de modelos de TE por distribución + trío de diámetros
         self._te_model_cache = {}
         self._te_classes = None
+        # Orientación global capturada por PolyLib (start_orientation_capture).
+        self.reference_orientation_angle = None
+
+    def _resolve_vertical_rotation_angle(self, p_prev, p_mid) -> float:
+        """
+        Prioridad de orientación vertical (port de fontaneria.py):
+        1) reference_orientation_angle capturada,
+        2) ángulo del tramo previo horizontal.
+        """
+        ref_orientation = getattr(self, "reference_orientation_angle", None)
+        if ref_orientation is not None:
+            return float(ref_orientation)
+
+        if p_prev is None or p_mid is None:
+            return 0.0
+
+        prev_dx = p_mid.X - p_prev.X
+        prev_dy = p_mid.Y - p_prev.Y
+        prev_dz = p_mid.Z - p_prev.Z
+        prev_len = math.sqrt(
+            prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz
+        )
+
+        if prev_len > 1e-6 and abs(prev_dz) < 1e-6:
+            return math.atan2(prev_dy, prev_dx)
+
+        return 0.0
 
     def _load_manguito_classes(self):
         """
@@ -6675,13 +6702,26 @@ class PipelineProcessor:
                                 )
                                 mat = mat * r_main
 
-                                # Yaw para que (sin(theta), cos(theta)) == (bx, by)
+                                # Yaw para que (sin(theta), cos(theta)) == (bx, by).
+                                # Si hay orientación capturada, priorizarla.
                                 if abs(bx) + abs(by) > 1e-9:
-                                    theta = math.atan2(bx, by)
+                                    ref_orientation = getattr(
+                                        self, "reference_orientation_angle", None
+                                    )
+                                    theta = (
+                                        float(ref_orientation)
+                                        if ref_orientation is not None
+                                        else math.atan2(bx, by)
+                                    )
                                     if debug_te:
                                         print(
-                                            "[DBG TE] SPECIAL_VERTICAL theta=%.1f° (atan2(bx,by))"
-                                            % (math.degrees(theta))
+                                            "[DBG TE] SPECIAL_VERTICAL theta=%.1f° (%s)"
+                                            % (
+                                                math.degrees(theta),
+                                                "reference_orientation_angle"
+                                                if ref_orientation is not None
+                                                else "atan2(bx,by)",
+                                            )
                                         )
                                     r_yaw = AllplanGeo.Matrix3D()
                                     r_yaw.SetRotation(axis_z, AllplanGeo.Angle(theta))
@@ -6839,6 +6879,48 @@ class PipelineProcessor:
                 )
                 return AllplanBasisElements.ModelElement3D(prop, brep)
 
+        # Manguito en transición vertical: aplicar la misma prioridad de orientación
+        # que en fontaneria (orientación capturada o tramo horizontal previo).
+        if elem_type == "manguito" and next_seg:
+            p_prev = getattr(segment_data, "start", None)
+            p_mid = getattr(segment_data, "end", None)
+            p_next = getattr(next_seg, "end", None)
+            if p_prev is not None and p_mid is not None and p_next is not None:
+                dx = p_next.X - p_prev.X
+                dy = p_next.Y - p_prev.Y
+                dz = p_next.Z - p_prev.Z
+                is_vertical_transition = (
+                    abs(dx) < 1e-6 and abs(dy) < 1e-6 and abs(dz) > 1e-6
+                )
+
+                if is_vertical_transition:
+                    yaw_ref = self._resolve_vertical_rotation_angle(p_prev, p_mid)
+                    mat = AllplanGeo.Matrix3D()
+
+                    if abs(yaw_ref) > 1e-6:
+                        axis_z = AllplanGeo.Line3D(
+                            AllplanGeo.Point3D(0, 0, 0),
+                            AllplanGeo.Point3D(0, 0, 1),
+                        )
+                        mat_z = AllplanGeo.Matrix3D()
+                        mat_z.SetRotation(axis_z, AllplanGeo.Angle(yaw_ref))
+                        mat = mat_z
+
+                    axis_y = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0),
+                        AllplanGeo.Point3D(0, 1, 0),
+                    )
+                    angle_y = -math.pi / 2.0 if dz > 0 else math.pi / 2.0
+                    mat_y = AllplanGeo.Matrix3D()
+                    mat_y.SetRotation(axis_y, AllplanGeo.Angle(angle_y))
+
+                    mat = mat_y * mat if abs(yaw_ref) > 1e-6 else mat_y
+                    brep = AllplanGeo.Transform(brep, mat)
+                    brep = AllplanGeo.Move(
+                        brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
+                    )
+                    return AllplanBasisElements.ModelElement3D(prop, brep)
+
         # 2.1. Orientación Base (Poner de pie si el destino es vertical)
         # Si el codo debe ir en vertical, primero rotamos 90° en su eje X local
         if elem_type == "codo_90" and next_seg:
@@ -6889,6 +6971,27 @@ class PipelineProcessor:
                 if custom_yaw_deg is not None
                 else segment_data.angulo_xy
             )
+            # Port de fontaneria.py para verticales:
+            # si el tramo es vertical y no hay yaw explícito, usar orientación capturada
+            # (o, en su defecto, el ángulo del tramo previo horizontal).
+            if custom_yaw_deg is None:
+                try:
+                    v = getattr(segment_data, "vector_normalizado", None)
+                    is_vertical_seg = (
+                        v is not None
+                        and abs(v.X) < 1e-6
+                        and abs(v.Y) < 1e-6
+                        and abs(v.Z) > 1e-6
+                    )
+                    if is_vertical_seg:
+                        ref_yaw = self._resolve_vertical_rotation_angle(
+                            getattr(segment_data, "start", None),
+                            getattr(segment_data, "end", None),
+                        )
+                        if abs(ref_yaw) > 1e-6:
+                            angulo_yaw = math.degrees(ref_yaw)
+                except Exception:
+                    pass
         else:
             # AJUSTE ESPECIAL PARA CODOS
             # En el nodo del codo, el tramo de ENTRADA es el segmento actual,
@@ -7418,6 +7521,7 @@ class PipelineProcessor:
                             seg,
                             elem_type="manguito",
                             custom_position=pos_nodo,
+                            next_seg=next_seg,
                             custom_mirror_x_local=need_mirror_x,
                         )
                         result_list.append(
@@ -7446,6 +7550,7 @@ class PipelineProcessor:
                                 seg,
                                 elem_type="manguito",
                                 custom_position=pos_nodo,
+                                next_seg=next_seg,
                                 custom_mirror_x_local=need_mirror_x,
                             )
                             result_list.append(
