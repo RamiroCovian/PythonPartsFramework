@@ -231,18 +231,13 @@ def _create_elements_for_segment_group(
                     {"type": "manguito", "elem": manguito_model[0], "rotate": True}
                 )
 
+            # TE: igual que el codo, puede devolver outer + inner en TD.
             if te_model:
                 elem3D_list.append({"type": "te", "elem": te_model[0], "rotate": True})
-
-            # Si el codo TD devuelve también un inner, lo registramos como plantilla opcional.
-            if len(codo_model) > 1:
-                elem3D_list.append(
-                    {
-                        "type": "codo_90_inner",
-                        "elem": codo_model[1],
-                        "rotate": True,
-                    }
-                )
+                if len(te_model) > 1:
+                    elem3D_list.append(
+                        {"type": "te_inner", "elem": te_model[1], "rotate": True}
+                    )
 
             processor = PipelineProcessor(
                 elem3D_list=elem3D_list, element_type="tubo_agua"

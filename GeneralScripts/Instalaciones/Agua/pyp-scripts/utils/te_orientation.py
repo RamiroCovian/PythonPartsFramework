@@ -20,6 +20,7 @@ from typing import Callable
 def _norm2(x: float, y: float) -> float:
     return math.hypot(x, y)
 
+
 # Debug TE: por defecto ON (hasta estabilizar orientación XZ/YZ)
 DEBUG_TE = os.getenv("AGUA_DEBUG_TE", "1").strip() not in ("", "0", "false", "False")
 
@@ -39,7 +40,9 @@ def _other_point(segment_groups: list, conn: dict):
     return start
 
 
-def _norm_vec_2d_from_conn(segment_groups: list, center_pt, conn: dict) -> tuple[float, float]:
+def _norm_vec_2d_from_conn(
+    segment_groups: list, center_pt, conn: dict
+) -> tuple[float, float]:
     op = _other_point(segment_groups, conn)
     vx = op.X - center_pt.X
     vy = op.Y - center_pt.Y
@@ -49,7 +52,9 @@ def _norm_vec_2d_from_conn(segment_groups: list, center_pt, conn: dict) -> tuple
     return (vx / n, vy / n)
 
 
-def _norm_vec_3d_from_conn(segment_groups: list, center_pt, conn: dict) -> tuple[float, float, float]:
+def _norm_vec_3d_from_conn(
+    segment_groups: list, center_pt, conn: dict
+) -> tuple[float, float, float]:
     op = _other_point(segment_groups, conn)
     vx = op.X - center_pt.X
     vy = op.Y - center_pt.Y
@@ -80,6 +85,7 @@ def build_te_params(
         } }
     """
     if get_diameter is None:
+
         def get_diameter(path_idx: int, seg_idx: int) -> float:
             seg = segment_groups[path_idx][seg_idx]
             info = getattr(seg, "info", None)
@@ -288,9 +294,13 @@ def build_te_params(
             continue
 
         cx, cy, cz = vkey
+
         # center_pt solo para vectores
         class _P:
-            X = cx; Y = cy; Z = cz
+            X = cx
+            Y = cy
+            Z = cz
+
         center_pt = _P()
 
         dirs_3d = [_norm_vec_3d_from_conn(segment_groups, center_pt, c) for c in conns]
@@ -327,6 +337,7 @@ def build_te_params(
         if abs(mx3) < 0.05 and abs(my3) < 0.05 and abs(mz3) > 0.95:
             bx, by, bz = v_branch
             out[vkey] = {
+                "center_pt": (cx, cy, cz),
                 "ang_rad": 0.0,
                 "plane": "VERTICAL",
                 "main_dir_3d": (mx3, my3, mz3),
@@ -394,7 +405,8 @@ def build_te_params(
             branch_dir_initial_a = math.sin(ang)
             branch_dir_initial_b = math.cos(ang)
             dot_branch_initial = (
-                branch_dir_initial_a * branch_proj_a + branch_dir_initial_b * branch_proj_b
+                branch_dir_initial_a * branch_proj_a
+                + branch_dir_initial_b * branch_proj_b
             )
             if dot_branch_initial < 0:
                 ang += math.pi
@@ -407,7 +419,9 @@ def build_te_params(
         di_main_in = int(round(d_main_in))
         di_main_out = int(round(d_main_out))
         di_branch = int(round(d_branch))
-        mixed = (di_main_in != di_main_out) or (di_branch not in (di_main_in, di_main_out))
+        mixed = (di_main_in != di_main_out) or (
+            di_branch not in (di_main_in, di_main_out)
+        )
         type_te = 4 if mixed else 1
 
         # En fontaneria mirror_x depende del modelo (invertido). En Agua usamos heurística equivalente.
@@ -453,6 +467,7 @@ def build_te_params(
             )
 
         out[vkey] = {
+            "center_pt": (cx, cy, cz),
             "ang_rad": ang,
             "plane": plane,
             "main_dir_3d": (mx3, my3, mz3),
@@ -466,4 +481,3 @@ def build_te_params(
         }
 
     return out
-

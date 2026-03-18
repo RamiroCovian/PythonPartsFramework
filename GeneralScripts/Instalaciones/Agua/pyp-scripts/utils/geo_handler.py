@@ -6133,9 +6133,10 @@ class PipelineProcessor:
         p_destino = custom_position if custom_position else segment_data.start
 
         # 2. NORMALIZACIÓN (ORIGEN 0,0,0)
-        # Para conductos rectos normalizamos al centro, pero para codós ya vienen
-        # centrados y con la relación outer/inner correcta desde el modelo TD.
-        if elem_type != "codo_90":
+        # Para conductos rectos normalizamos al centro, pero codos y TES ya vienen
+        # centrados desde su propio modelador (IS/TD) y debemos conservar ese origen
+        # para mantener la alineación outer/inner y el cruce en nodo.
+        if elem_type not in ("codo_90", "te"):
             centro = self._get_center_from_vertices(brep)
             brep = AllplanGeo.Move(
                 brep, AllplanGeo.Vector3D(-centro.X, -centro.Y, -centro.Z)
@@ -6171,18 +6172,51 @@ class PipelineProcessor:
                     "false",
                     "False",
                 )
+                debug_te_pos = str(os.getenv("AGUA_DEBUG_TE_POS", "1")).strip() not in (
+                    "",
+                    "0",
+                    "false",
+                    "False",
+                )
                 ang = float(te_params.get("ang_rad", 0.0) or 0.0)
                 plane = str(te_params.get("plane", "XY") or "XY")
                 main_dir_3d = te_params.get("main_dir_3d", None)
                 branch_dir_3d = te_params.get("branch_dir_3d", None)
+                offset_perp_local = float(
+                    te_params.get("offset_perp_local", 0.0) or 0.0
+                )
                 need_mx = bool(te_params.get("need_mirror_x_local", False))
                 need_my = bool(te_params.get("need_mirror_y_local", False))
                 branch_elevated = bool(te_params.get("branch_elevated", False))
                 need_mz = bool(te_params.get("need_mirror_z_local", False))
 
+                if debug_te_pos:
+                    try:
+                        _e, _verts = brep.GetVertices()
+                        if _verts:
+                            minx = min(v.X for v in _verts)
+                            miny = min(v.Y for v in _verts)
+                            minz = min(v.Z for v in _verts)
+                            maxx = max(v.X for v in _verts)
+                            maxy = max(v.Y for v in _verts)
+                            maxz = max(v.Z for v in _verts)
+                            cx = (minx + maxx) * 0.5
+                            cy = (miny + maxy) * 0.5
+                            cz = (minz + maxz) * 0.5
+                            print(
+                                "[DBG TE POS] BREP_LOCAL bbox_min=(%.3f,%.3f,%.3f) bbox_max=(%.3f,%.3f,%.3f) bbox_center=(%.3f,%.3f,%.3f)"
+                                % (minx, miny, minz, maxx, maxy, maxz, cx, cy, cz)
+                            )
+                        print(
+                            "[DBG TE POS] APPLY_MOVE world_node=(%.3f,%.3f,%.3f) (Move after transforms)"
+                            % (p_destino.X, p_destino.Y, p_destino.Z)
+                        )
+                    except Exception:
+                        pass
+
                 if debug_te:
                     print(
-                        "[DBG TE] APPLY node=(%.3f,%.3f,%.3f) plane=%s ang=%.1f° mx=%s my=%s mz=%s elevated=%s"
+                        "[DBG TE] APPLY node=(%.3f,%.3f,%.3f) plane=%s ang=%.1f° mx=%s my=%s mz=%s elevated=%s offset_perp=%.2f"
                         % (
                             round(p_destino.X, 3),
                             round(p_destino.Y, 3),
@@ -6193,6 +6227,7 @@ class PipelineProcessor:
                             str(need_my),
                             str(need_mz),
                             str(branch_elevated),
+                            offset_perp_local,
                         )
                     )
 
@@ -6207,6 +6242,13 @@ class PipelineProcessor:
                     mirror_mat.SetScaling(-1, -1, 1)
                     mat = mat * mirror_mat
 
+                # Desplazamiento local perpendicular al troncal (offset de centrado)
+                if abs(offset_perp_local) > 1e-3 and plane == "XY":
+                    # En XY, el eje perpendicular al troncal (X) es el eje Y local.
+                    brep = AllplanGeo.Move(
+                        brep, AllplanGeo.Vector3D(0.0, offset_perp_local, 0.0)
+                    )
+
                 # Caso especial robusto: troncal casi vertical (Z). La orientación por plano es ambigua,
                 # así que alineamos X local -> troncal (3D) y luego giramos alrededor del troncal para
                 # alinear Y local -> rama. Esto evita inversiones en el caso (Z + rama ±Y).
@@ -6217,8 +6259,16 @@ class PipelineProcessor:
                         and len(main_dir_3d) == 3
                         and len(branch_dir_3d) == 3
                     ):
-                        mx, my, mz = float(main_dir_3d[0]), float(main_dir_3d[1]), float(main_dir_3d[2])
-                        bx, by, bz = float(branch_dir_3d[0]), float(branch_dir_3d[1]), float(branch_dir_3d[2])
+                        mx, my, mz = (
+                            float(main_dir_3d[0]),
+                            float(main_dir_3d[1]),
+                            float(main_dir_3d[2]),
+                        )
+                        bx, by, bz = (
+                            float(branch_dir_3d[0]),
+                            float(branch_dir_3d[1]),
+                            float(branch_dir_3d[2]),
+                        )
 
                         mnorm = math.sqrt(mx * mx + my * my + mz * mz)
                         bnorm = math.sqrt(bx * bx + by * by + bz * bz)
@@ -6235,16 +6285,21 @@ class PipelineProcessor:
                                 # Secuencia determinista (estable): X local -> ±Z con rotación fija en Y,
                                 # luego yaw en Z para alinear +Y local con la proyección de la rama (XY).
                                 axis_y = AllplanGeo.Line3D(
-                                    AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 1, 0)
+                                    AllplanGeo.Point3D(0, 0, 0),
+                                    AllplanGeo.Point3D(0, 1, 0),
                                 )
                                 axis_z = AllplanGeo.Line3D(
-                                    AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
+                                    AllplanGeo.Point3D(0, 0, 0),
+                                    AllplanGeo.Point3D(0, 0, 1),
                                 )
 
                                 # X->+Z: rotY(-90°). X->-Z: rotY(+90°).
                                 r_main = AllplanGeo.Matrix3D()
                                 r_main.SetRotation(
-                                    axis_y, AllplanGeo.Angle(-math.pi / 2 if mz >= 0 else math.pi / 2)
+                                    axis_y,
+                                    AllplanGeo.Angle(
+                                        -math.pi / 2 if mz >= 0 else math.pi / 2
+                                    ),
                                 )
                                 mat = mat * r_main
 
@@ -6268,7 +6323,9 @@ class PipelineProcessor:
                                 brep = AllplanGeo.Transform(brep, mat)
                                 brep = AllplanGeo.Move(
                                     brep,
-                                    AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z),
+                                    AllplanGeo.Vector3D(
+                                        p_destino.X, p_destino.Y, p_destino.Z
+                                    ),
                                 )
                                 return AllplanBasisElements.ModelElement3D(prop, brep)
                 except Exception:
@@ -6288,7 +6345,10 @@ class PipelineProcessor:
 
                     if branch_elevated:
                         if debug_te:
-                            print("[DBG TE] XY branch_elevated: rotate branch -90° + mirror_z=%s" % str(need_mz))
+                            print(
+                                "[DBG TE] XY branch_elevated: rotate branch -90° + mirror_z=%s"
+                                % str(need_mz)
+                            )
                         axis_x_rotated = AllplanGeo.Line3D(
                             AllplanGeo.Point3D(0, 0, 0),
                             AllplanGeo.Point3D(math.cos(ang), math.sin(ang), 0),
@@ -6527,6 +6587,12 @@ class PipelineProcessor:
         # info de TE: opcional, se puede inyectar desde fuera
         te_nodes = getattr(self, "te_nodes", {}) or {}
         inserted_te_keys = set()
+        debug_te_pos = str(os.getenv("AGUA_DEBUG_TE_POS", "1")).strip() not in (
+            "",
+            "0",
+            "false",
+            "False",
+        )
 
         for i, seg_item in enumerate(segments):
             seg = seg_item.data
@@ -6638,8 +6704,47 @@ class PipelineProcessor:
                     te_info = te_nodes.get(key)
                     if te_info and key not in inserted_te_keys:
                         inserted_te_keys.add(key)
-                        pos_nodo = p_curr
+                        center_pt_raw = te_info.get("center_pt")
+                        if (
+                            isinstance(center_pt_raw, (tuple, list))
+                            and len(center_pt_raw) == 3
+                        ):
+                            pos_nodo = AllplanGeo.Point3D(
+                                float(center_pt_raw[0]),
+                                float(center_pt_raw[1]),
+                                float(center_pt_raw[2]),
+                            )
+                        else:
+                            # Fallback: conservar comportamiento previo si no hay center_pt.
+                            pos_nodo = p_curr
                         yaw = float(te_info.get("yaw_deg", 0.0) or 0.0)
+                        if debug_te_pos:
+                            try:
+                                print(
+                                    "[DBG TE POS] CREATE key=%s center_pt=(%.3f,%.3f,%.3f) pos_nodo=(%.3f,%.3f,%.3f) seg_start=(%.3f,%.3f,%.3f) seg_end=(%.3f,%.3f,%.3f) v_unit=(%.3f,%.3f,%.3f) cut_start=%.2f cut_end=%.2f"
+                                    % (
+                                        str(key),
+                                        pos_nodo.X,
+                                        pos_nodo.Y,
+                                        pos_nodo.Z,
+                                        pos_nodo.X,
+                                        pos_nodo.Y,
+                                        pos_nodo.Z,
+                                        seg.start.X,
+                                        seg.start.Y,
+                                        seg.start.Z,
+                                        seg.end.X,
+                                        seg.end.Y,
+                                        seg.end.Z,
+                                        v_unit.X,
+                                        v_unit.Y,
+                                        v_unit.Z,
+                                        float(cut_start),
+                                        float(cut_end),
+                                    )
+                                )
+                            except Exception:
+                                pass
                         element_te = self._aplicar_transformacion(
                             self.templates["te"],
                             seg,
@@ -6655,6 +6760,24 @@ class PipelineProcessor:
                             }
                         )
                         element_index += 1
+
+                        # TE inner opcional (TD): mismo nodo y orientación que la outer
+                        if "te_inner" in self.templates:
+                            element_te_inner = self._aplicar_transformacion(
+                                self.templates["te_inner"],
+                                seg,
+                                elem_type="te",
+                                custom_position=pos_nodo,
+                                custom_yaw_deg=yaw,
+                            )
+                            result_list.append(
+                                {
+                                    "element": element_te_inner,
+                                    "element_type": "te_inner",
+                                    "index": element_index,
+                                }
+                            )
+                            element_index += 1
 
                 if (
                     p_prev
@@ -6706,9 +6829,14 @@ class PipelineProcessor:
                 if "manguito" in self.templates:
                     # Si este nodo es una TE, NO crear manguito (se muestra la TE).
                     if p_curr:
-                        key = (round(p_curr.X, 3), round(p_curr.Y, 3), round(p_curr.Z, 3))
+                        key = (
+                            round(p_curr.X, 3),
+                            round(p_curr.Y, 3),
+                            round(p_curr.Z, 3),
+                        )
                         if key in te_nodes:
                             continue
+
                     # Regla:
                     # - Crear si el tramo es colineal (dot ~ ±1)
                     # - O si hay cambio de diámetro entre segmentos consecutivos (aunque el dot no sea perfecto por pendientes/ruido)
@@ -6761,211 +6889,4 @@ class PipelineProcessor:
 
         return result_list
 
-    # def son_colineales(self, v1, v2, eps=1e-6):
-    #     """Verifica si dos vectores unitarios son colineales."""
-    #     dot = AllplanGeo.Vector3D.DotProduct(v1, v2)
-    #     # Si el valor absoluto es cercano a 1, son la misma línea (paralelos o opuestos)
-    #     return abs(1.0 - abs(dot)) < eps
-
-    # def obtener_matriz_alineacion(self, v_objetivo, eps=1e-8):
-    #     import math
-    #     """
-    #     Calcula la matriz de rotación para alinear el eje X (1,0,0) con v_objetivo.
-    #     Usa math de Python para las comparaciones y cálculos trigonométricos.
-    #     """
-    #     # 1. Normalizar el vector objetivo manualmente por seguridad
-    #     mag = math.sqrt(v_objetivo.X**2 + v_objetivo.Y**2 + v_objetivo.Z**2)
-    #     if mag < eps:
-    #         return AllplanGeo.Matrix3D() # Vector nulo, devolvemos identidad
-
-    #     vx, vy, vz = v_objetivo.X / mag, v_objetivo.Y / mag, v_objetivo.Z / mag
-
-    #     # Vector base (el template de Allplan suele estar dibujado en el eje X)
-    #     # bx, by, bz = 1.0, 0.0, 0.0
-
-    #     # 2. Producto escalar (Dot Product) entre (1,0,0) y (vx, vy, vz)
-    #     # Como el base es (1,0,0), el dot product es simplemente vx
-    #     dot = vx
-
-    #     # 3. Caso: Vectores ya alineados (0 grados)
-    #     if abs(dot - 1.0) < eps:
-    #         return AllplanGeo.Matrix3D()
-
-    #     # 4. Caso: Vectores opuestos (180 grados)
-    #     if abs(dot + 1.0) < eps:
-    #         matriz = AllplanGeo.Matrix3D()
-    #         # Rotamos 180° sobre el eje Z (o Y si el vector ya es Z)
-    #         eje_fallback = AllplanGeo.Vector3D(0, 0, 1)
-    #         if abs(vz) > 0.9: eje_fallback = AllplanGeo.Vector3D(0, 1, 0)
-
-    #         linea_eje = AllplanGeo.Line3D(AllplanGeo.Point3D(0,0,0),
-    #                                     AllplanGeo.Point3D(eje_fallback.X, eje_fallback.Y, eje_fallback.Z))
-    #         matriz.SetRotation(linea_eje, AllplanGeo.Angle(math.pi))
-    #         return matriz
-
-    #     # 5. Caso General: Producto vectorial (Cross Product) para hallar el eje de rotación
-    #     # Base (1,0,0) x Objetivo (vx, vy, vz) -> (0, -vz, vy)
-    #     eje_x, eje_y, eje_z = 0.0, -vz, vy
-
-    #     # Normalizar el eje de rotación
-    #     mag_eje = math.sqrt(eje_x**2 + eje_y**2 + eje_z**2)
-    #     eje_x, eje_y, eje_z = eje_x / mag_eje, eje_y / mag_eje, eje_z / mag_eje
-
-    #     # 6. Ángulo de rotación
-    #     angulo_rad = math.acos(max(-1.0, min(1.0, dot)))
-
-    #     # 7. Crear Matrix3D de Allplan
-    #     matriz = AllplanGeo.Matrix3D()
-    #     linea_eje = AllplanGeo.Line3D(AllplanGeo.Point3D(0,0,0),
-    #                                 AllplanGeo.Point3D(eje_x, eje_y, eje_z))
-    #     matriz.SetRotation(linea_eje, AllplanGeo.Angle(angulo_rad))
-
-    #     return matriz
-
-    # def _aplicar_transformacion_automatica(self, model_element, v_direccion, p_destino):
-    #     prop = model_element.GetCommonProperties()
-    #     brep = model_element.GetGeometryObject()
-
-    #     # 1. Centrar en el origen
-    #     centro = self._get_center_from_vertices(brep)
-    #     brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(-centro.X, -centro.Y, -centro.Z))
-
-    #     # 2. Alinear automáticamente con el vector 3D
-    #     matriz_rot = self.obtener_matriz_alineacion(v_direccion)
-    #     brep = AllplanGeo.Transform(brep, matriz_rot)
-
-    #     # 3. Mover a la posición final
-    #     brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z))
-
-    #     return AllplanBasisElements.ModelElement3D(prop, brep)
-
-    # def _construir_codo_automatico(self, seg_actual, seg_siguiente):
-    #     """
-    #     Calcula la orientación del codo usando la bisectriz de los dos vectores.
-    #     """
-    #     v1 = seg_actual.vector_normalizado
-    #     v2 = seg_siguiente.vector_normalizado
-
-    #     model_codo = self.templates["codo_90"]
-    #     prop = model_codo.GetCommonProperties()
-    #     brep = model_codo.GetGeometryObject()
-
-    #     # Centrar
-    #     centro = self._get_center_from_vertices(brep)
-    #     brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(-centro.X, -centro.Y, -centro.Z))
-
-    #     # 1. Alinear el codo con el primer segmento (entrada)
-    #     m_alinear = self.obtener_matriz_alineacion(v1)
-    #     brep = AllplanGeo.Transform(brep, m_alinear)
-
-    #     # 2. Rotar el codo sobre su eje local para que apunte hacia el segundo segmento
-    #     # Esto se calcula mediante el ángulo de giro entre v1 y v2
-    #     # ... (Aquí podrías usar tu función obtener_rotacion_codo adaptada)
-
-    #     # 3. Traslación al nodo de unión
-    #     p_union = seg_actual.end
-    #     brep = AllplanGeo.Move(brep, AllplanGeo.Vector3D(p_union.X, p_union.Y, p_union.Z))
-
-    #     return AllplanBasisElements.ModelElement3D(prop, brep)
-
-    # def process(self, segments, default_attrs=None) -> list:
-    #     result_list = []
-    #     num_seg = len(segments)
-
-    #     # Procesamos desde el FINAL hacia el PRINCIPIO
-    #     for i in reversed(range(num_seg)):
-    #         seg = segments[i].data
-    #         v_unit = seg.vector_normalizado
-
-    #         # 1. CÁLCULO DE RECORTES (OFFSETS)
-    #         offset_inicio = 0.0
-    #         offset_final = 0.0
-
-    #         # ¿Hay un segmento después en la ruta? (Giro adelante)
-    #         hay_giro_adelante = False
-    #         if i < num_seg - 1:
-    #             v_siguiente = segments[i+1].data.vector_normalizado
-    #             if not self.son_colineales(v_unit, v_siguiente):
-    #                 offset_final = self.offset_codo
-    #                 hay_giro_adelante = True
-
-    #         # ¿Hay un segmento antes en la ruta? (Giro atrás)
-    #         if i > 0:
-    #             v_anterior = segments[i-1].data.vector_normalizado
-    #             if not self.son_colineales(v_unit, v_anterior):
-    #                 offset_inicio = self.offset_codo
-
-    #         # 2. CONEXIÓN FINAL (Manguito que une con el siguiente elemento)
-    #         # ------------------------------------------------------------------
-    #         p_final_con = AllplanGeo.Point3D(
-    #             seg.end.X - v_unit.X * offset_final,
-    #             seg.end.Y - v_unit.Y * offset_final,
-    #             seg.end.Z - v_unit.Z * offset_final
-    #         )
-    #         # La conexión siempre se alinea con el vector del tubo donde está puesta
-    #         elem_con_final = self._aplicar_transformacion_automatica(
-    #             self.templates["conexion"], v_unit, p_final_con
-    #         )
-    #         result_list.append({"element": elem_con_final, "type": "conexion", "index": i})
-
-    #         # 3. CONDUCTO (Tramo Recto)
-    #         # ------------------------------------------------------------------
-    #         longitud_recortada = seg.longitud_3d - offset_inicio - offset_final
-    #         if longitud_recortada > 0.01:
-    #             dist_al_centro = offset_inicio + (longitud_recortada / 2.0)
-    #             p_centro = AllplanGeo.Point3D(
-    #                 seg.start.X + v_unit.X * dist_al_centro,
-    #                 seg.start.Y + v_unit.Y * dist_al_centro,
-    #                 seg.start.Z + v_unit.Z * dist_al_centro
-    #             )
-
-    #             # Modificar longitud del template y alinear
-    #             model_cond = self.modificar_dimensiones_brep(self.templates[self.element_type_core], longitud_recortada)
-    #             elem_cond = self._aplicar_transformacion_automatica(model_cond, v_unit, p_centro)
-    #             result_list.append({"element": elem_cond, "type": "conducto", "index": i})
-
-    #         # 4. CONEXIÓN INICIAL (Solo si hay un codo antes)
-    #         # ------------------------------------------------------------------
-    #         if offset_inicio > 0:
-    #             p_inicio_con = AllplanGeo.Point3D(
-    #                 seg.start.X + v_unit.X * offset_inicio,
-    #                 seg.start.Y + v_unit.Y * offset_inicio,
-    #                 seg.start.Z + v_unit.Z * offset_inicio
-    #             )
-    #             elem_con_inicio = self._aplicar_transformacion_automatica(
-    #                 self.templates["conexion"], v_unit, p_inicio_con
-    #             )
-    #             result_list.append({"element": elem_con_inicio, "type": "conexion", "index": i})
-
-    #         # 5. EL CODO (Se coloca en el nodo de intersección)
-    #         # ------------------------------------------------------------------
-    #         if hay_giro_adelante:
-    #             # El codo se coloca en el 'end' del segmento actual
-    #             elem_codo = self._construir_codo_automatico(seg, segments[i+1].data)
-    #             result_list.append({"element": elem_codo, "type": "codo_90", "index": i})
-
-    #     return result_list
-
-    # def apply_attrs(self, elem_list, attr_list):
-    #     list_attrs_apply = []
-    #     for item in elem_list:
-    #         element = item.get("element", None)
-    #         tipo_str =  item.get("element_type", None)
-    #         index =  item.get("index", None)
-    #         print("############################################## tipo_str_: ", tipo_str in attr_list, attr_list)
-    #         if element and tipo_str:
-    #             attrs = attr_list.get(tipo_str, [])
-    #             if len(attrs) != 0:
-    #                 attr_set_list = []
-    #                 attr_set_list.append(AllplanBaseElements.AttributeSet(attrs))
-    #                 attributes = AllplanBaseElements.Attributes(attr_set_list)
-    #                 element.SetAttributes(attributes)
-    #             list_attrs_apply.append(
-    #                 {
-    #                     "index": index,
-    #                     "element_type": tipo_str,
-    #                     "element": element,
-    #                 }
-    #             )
-
-    #     return list_attrs_apply
+    
