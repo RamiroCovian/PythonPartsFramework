@@ -1,4 +1,5 @@
 import math
+import os
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_BaseElements as AllplanBaseElements
@@ -6156,6 +6157,233 @@ class PipelineProcessor:
         # ==========================================
         # PARTE 2: LÓGICA VERTICAL (PITCH / ZX)
         # ==========================================
+        # TE: aplicar mirrors/rotación/elevación como en fontaneria.py
+        if elem_type == "te" and custom_yaw_deg is not None:
+            te_params = getattr(self, "te_nodes", {}).get(
+                (round(p_destino.X, 3), round(p_destino.Y, 3), round(p_destino.Z, 3)),
+                None,
+            )
+            if te_params:
+                # Debug TE: por defecto ON (hasta estabilizar orientación XZ/YZ)
+                debug_te = str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
+                    "",
+                    "0",
+                    "false",
+                    "False",
+                )
+                ang = float(te_params.get("ang_rad", 0.0) or 0.0)
+                plane = str(te_params.get("plane", "XY") or "XY")
+                main_dir_3d = te_params.get("main_dir_3d", None)
+                branch_dir_3d = te_params.get("branch_dir_3d", None)
+                need_mx = bool(te_params.get("need_mirror_x_local", False))
+                need_my = bool(te_params.get("need_mirror_y_local", False))
+                branch_elevated = bool(te_params.get("branch_elevated", False))
+                need_mz = bool(te_params.get("need_mirror_z_local", False))
+
+                if debug_te:
+                    print(
+                        "[DBG TE] APPLY node=(%.3f,%.3f,%.3f) plane=%s ang=%.1f° mx=%s my=%s mz=%s elevated=%s"
+                        % (
+                            round(p_destino.X, 3),
+                            round(p_destino.Y, 3),
+                            round(p_destino.Z, 3),
+                            plane,
+                            math.degrees(ang),
+                            str(need_mx),
+                            str(need_my),
+                            str(need_mz),
+                            str(branch_elevated),
+                        )
+                    )
+
+                mat = AllplanGeo.Matrix3D()
+                # Mirrors locales como en fontaneria: SIEMPRE antes de rotaciones (independiente del plano)
+                if need_mx:
+                    mirror_mat = AllplanGeo.Matrix3D()
+                    mirror_mat.SetScaling(1, -1, 1)
+                    mat = mat * mirror_mat
+                if need_my:
+                    mirror_mat = AllplanGeo.Matrix3D()
+                    mirror_mat.SetScaling(-1, -1, 1)
+                    mat = mat * mirror_mat
+
+                # Caso especial robusto: troncal casi vertical (Z). La orientación por plano es ambigua,
+                # así que alineamos X local -> troncal (3D) y luego giramos alrededor del troncal para
+                # alinear Y local -> rama. Esto evita inversiones en el caso (Z + rama ±Y).
+                try:
+                    if (
+                        isinstance(main_dir_3d, (list, tuple))
+                        and isinstance(branch_dir_3d, (list, tuple))
+                        and len(main_dir_3d) == 3
+                        and len(branch_dir_3d) == 3
+                    ):
+                        mx, my, mz = float(main_dir_3d[0]), float(main_dir_3d[1]), float(main_dir_3d[2])
+                        bx, by, bz = float(branch_dir_3d[0]), float(branch_dir_3d[1]), float(branch_dir_3d[2])
+
+                        mnorm = math.sqrt(mx * mx + my * my + mz * mz)
+                        bnorm = math.sqrt(bx * bx + by * by + bz * bz)
+                        if mnorm > 1e-9 and bnorm > 1e-9:
+                            mx, my, mz = mx / mnorm, my / mnorm, mz / mnorm
+                            bx, by, bz = bx / bnorm, by / bnorm, bz / bnorm
+
+                            if abs(mx) < 0.05 and abs(my) < 0.05 and abs(mz) > 0.95:
+                                if debug_te:
+                                    print(
+                                        "[DBG TE] SPECIAL_VERTICAL main=(%.3f,%.3f,%.3f) branch=(%.3f,%.3f,%.3f)"
+                                        % (mx, my, mz, bx, by, bz)
+                                    )
+                                # Secuencia determinista (estable): X local -> ±Z con rotación fija en Y,
+                                # luego yaw en Z para alinear +Y local con la proyección de la rama (XY).
+                                axis_y = AllplanGeo.Line3D(
+                                    AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 1, 0)
+                                )
+                                axis_z = AllplanGeo.Line3D(
+                                    AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
+                                )
+
+                                # X->+Z: rotY(-90°). X->-Z: rotY(+90°).
+                                r_main = AllplanGeo.Matrix3D()
+                                r_main.SetRotation(
+                                    axis_y, AllplanGeo.Angle(-math.pi / 2 if mz >= 0 else math.pi / 2)
+                                )
+                                mat = mat * r_main
+
+                                # Yaw para que (sin(theta), cos(theta)) == (bx, by)
+                                if abs(bx) + abs(by) > 1e-9:
+                                    theta = math.atan2(bx, by)
+                                    if debug_te:
+                                        print(
+                                            "[DBG TE] SPECIAL_VERTICAL theta=%.1f° (atan2(bx,by))"
+                                            % (math.degrees(theta))
+                                        )
+                                    r_yaw = AllplanGeo.Matrix3D()
+                                    r_yaw.SetRotation(axis_z, AllplanGeo.Angle(theta))
+                                    mat = mat * r_yaw
+
+                                if need_mz:
+                                    mirror_z_mat = AllplanGeo.Matrix3D()
+                                    mirror_z_mat.SetScaling(1, 1, -1)
+                                    mat = mat * mirror_z_mat
+
+                                brep = AllplanGeo.Transform(brep, mat)
+                                brep = AllplanGeo.Move(
+                                    brep,
+                                    AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z),
+                                )
+                                return AllplanBasisElements.ModelElement3D(prop, brep)
+                except Exception:
+                    pass
+
+                # --- Plano XY (comportamiento existente) ---
+                if plane == "XY":
+                    if debug_te:
+                        print("[DBG TE] PATH=XY")
+                    axis_z = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
+                    )
+
+                    rot_mat = AllplanGeo.Matrix3D()
+                    rot_mat.SetRotation(axis_z, AllplanGeo.Angle(ang))
+                    mat = mat * rot_mat
+
+                    if branch_elevated:
+                        if debug_te:
+                            print("[DBG TE] XY branch_elevated: rotate branch -90° + mirror_z=%s" % str(need_mz))
+                        axis_x_rotated = AllplanGeo.Line3D(
+                            AllplanGeo.Point3D(0, 0, 0),
+                            AllplanGeo.Point3D(math.cos(ang), math.sin(ang), 0),
+                        )
+                        rot_branch_mat = AllplanGeo.Matrix3D()
+                        rot_branch_mat.SetRotation(
+                            axis_x_rotated, AllplanGeo.Angle(-math.pi / 2)
+                        )
+                        mat = mat * rot_branch_mat
+
+                        if need_mz:
+                            mirror_z_mat = AllplanGeo.Matrix3D()
+                            mirror_z_mat.SetScaling(1, 1, -1)
+                            mat = mat * mirror_z_mat
+
+                # --- Plano XZ: preparar XY->XZ y rotar alrededor de Y ---
+                elif plane == "XZ":
+                    if debug_te:
+                        print("[DBG TE] PATH=XZ")
+                    axis_x = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0)
+                    )
+                    axis_y = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 1, 0)
+                    )
+
+                    # Preparación: “acostar” el modelo de XY a XZ (Y local pasa a Z)
+                    prep = AllplanGeo.Matrix3D()
+                    prep.SetRotation(axis_x, AllplanGeo.Angle(-math.pi / 2))
+                    mat = mat * prep
+
+                    rot = AllplanGeo.Matrix3D()
+                    rot.SetRotation(axis_y, AllplanGeo.Angle(ang))
+                    mat = mat * rot
+
+                    if branch_elevated:
+                        trunk_axis = AllplanGeo.Line3D(
+                            AllplanGeo.Point3D(0, 0, 0),
+                            AllplanGeo.Point3D(math.cos(ang), 0.0, math.sin(ang)),
+                        )
+                        rot_branch_mat = AllplanGeo.Matrix3D()
+                        rot_branch_mat.SetRotation(
+                            trunk_axis, AllplanGeo.Angle(-math.pi / 2)
+                        )
+                        mat = mat * rot_branch_mat
+
+                        if need_mz:
+                            mirror_z_mat = AllplanGeo.Matrix3D()
+                            mirror_z_mat.SetScaling(1, 1, -1)
+                            mat = mat * mirror_z_mat
+
+                # --- Plano YZ: preparar XY->YZ y rotar alrededor de X ---
+                elif plane == "YZ":
+                    if debug_te:
+                        print("[DBG TE] PATH=YZ")
+                    axis_z = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
+                    )
+                    axis_x = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0)
+                    )
+
+                    # Preparación: girar 90° en Z para que X local pase a Y global
+                    prep = AllplanGeo.Matrix3D()
+                    # Nota: para replicar la mano/convención de fontaneria.py en YZ,
+                    # el mapeo correcto es -90° (evita que la TE quede “al lado contrario”).
+                    prep.SetRotation(axis_z, AllplanGeo.Angle(-math.pi / 2))
+                    mat = mat * prep
+
+                    rot = AllplanGeo.Matrix3D()
+                    rot.SetRotation(axis_x, AllplanGeo.Angle(ang))
+                    mat = mat * rot
+
+                    if branch_elevated:
+                        trunk_axis = AllplanGeo.Line3D(
+                            AllplanGeo.Point3D(0, 0, 0),
+                            AllplanGeo.Point3D(0.0, math.cos(ang), math.sin(ang)),
+                        )
+                        rot_branch_mat = AllplanGeo.Matrix3D()
+                        rot_branch_mat.SetRotation(
+                            trunk_axis, AllplanGeo.Angle(-math.pi / 2)
+                        )
+                        mat = mat * rot_branch_mat
+
+                        if need_mz:
+                            mirror_z_mat = AllplanGeo.Matrix3D()
+                            mirror_z_mat.SetScaling(1, 1, -1)
+                            mat = mat * mirror_z_mat
+
+                brep = AllplanGeo.Transform(brep, mat)
+                brep = AllplanGeo.Move(
+                    brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
+                )
+                return AllplanBasisElements.ModelElement3D(prop, brep)
+
         # Para codos, usamos la lógica completa de fontaneria (por puntos),
         # y evitamos el pipeline simplificado pitch/yaw de abajo.
         if elem_type == "codo_90" and next_seg:

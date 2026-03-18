@@ -26,6 +26,7 @@ from .utils.vertex_utils import (
     compute_segment_cuts_for_all_paths,
     detect_bifurcations,
 )
+from .utils.te_orientation import build_te_params
 from .utils.attributes_utils import (
     _merge_attributes,
     _process_auto_numbering,
@@ -257,46 +258,11 @@ def _create_elements_for_segment_group(
                 print(f"[AGUA] Bifurcaciones detectadas (TE): {len(te_vertices)}")
 
             # Preparar TE nodes (yaw por troncal) para el processor
-            te_nodes = {}
-            if te_vertices and vertex_map:
-                import math
-
-                def _seg_dir(conn):
-                    segs = so.segment_groups[conn["path_idx"]]
-                    seg_item = segs[conn["seg_idx"]]
-                    data = seg_item.data
-                    start = data.start
-                    end = data.end
-                    if conn.get("is_start"):
-                        vx, vy, vz = end.X - start.X, end.Y - start.Y, end.Z - start.Z
-                    else:
-                        vx, vy, vz = start.X - end.X, start.Y - end.Y, start.Z - end.Z
-                    ln = math.sqrt(vx * vx + vy * vy + vz * vz)
-                    if ln < 1e-9:
-                        return (0.0, 0.0, 0.0)
-                    return (vx / ln, vy / ln, vz / ln)
-
-                for vkey in te_vertices:
-                    conns = vertex_map.get(vkey, [])
-                    if len(conns) != 3:
-                        continue
-                    dirs = [(_seg_dir(c), idx) for idx, c in enumerate(conns)]
-                    best_pair = None
-                    best_dot = -1.0
-                    for a in range(3):
-                        for b in range(a + 1, 3):
-                            d1, _ = dirs[a]
-                            d2, _ = dirs[b]
-                            dot = abs(d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2])
-                            if dot > best_dot:
-                                best_dot = dot
-                                best_pair = (a, b)
-                    if not best_pair:
-                        continue
-                    d_main, _ = dirs[best_pair[0]]
-                    yaw_deg = math.degrees(math.atan2(d_main[1], d_main[0]))
-                    te_nodes[vkey] = {"yaw_deg": yaw_deg}
-            processor.te_nodes = te_nodes
+            processor.te_nodes = (
+                build_te_params(so.segment_groups, vertex_map, te_vertices)
+                if te_vertices
+                else {}
+            )
 
             all_cuts = compute_segment_cuts_for_all_paths(so.segment_groups)
             segment_cuts = {
