@@ -41,6 +41,8 @@ INSTALLATION_INFO = {
         {"key": "KN_XPS_RECESS", "label": "XPS RECESS"},
         {"key": "KN_AIGUA", "label": "AIGUA"},
         {"key": "KN_XPS_CAVITAT", "label": "XPS CAVITAT"},
+        {"key": "KN_PLD_RECESS", "label": "KN PLD RECESS"},
+        {"key": "IS_CON_AIGUA_FAB", "label": "IS CON AIGUA FAB"},
     ],
     "installation_types": [
         {
