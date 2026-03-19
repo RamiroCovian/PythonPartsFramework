@@ -13,6 +13,7 @@ import math
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
+import NemAll_Python_Utility as PythonUtility
 
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
@@ -224,6 +225,115 @@ def _split_path_segments_by_max_length(
     return out
 
 
+def _get_parent_value_from_palette(so: PBL.script_object.PolylineScriptObject) -> str:
+    """Obtiene valor de padre desde la paleta (NomIS) si existe."""
+    try:
+        if hasattr(so, "build_ele") and hasattr(so.build_ele, "NomIS"):
+            raw = getattr(so.build_ele.NomIS, "value", so.build_ele.NomIS)
+            return str(raw or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _attr_has_non_empty_value(attr_list) -> bool:
+    """True si la lista de atributos contiene algún valor no vacío."""
+    for attr in _normalize_attribute_list(attr_list):
+        val = getattr(attr, "Value", None)
+        if val is None:
+            val = getattr(attr, "value", None)
+        if val is not None and str(val).strip():
+            return True
+    return False
+
+
+def _collect_missing_layer_and_parent(
+    so: PBL.script_object.PolylineScriptObject,
+) -> tuple[list[str], list[str]]:
+    """
+    Recorre elementos en preview y detecta storage_keys sin layer o sin atributo padre.
+    """
+    intr = getattr(so, "script_object_interactor", None)
+    generated_paths = getattr(intr, "generated_elements", []) if intr else []
+
+    expected_storage_keys: set[str] = set()
+    for path_group in generated_paths:
+        for element in path_group or []:
+            key = element.get("key") if isinstance(element, dict) else None
+            if not key or len(key) < 5:
+                continue
+            # Estructura usada por PolyLib: seg_{key[4]}_elem_{key[3]}
+            expected_storage_keys.add(f"seg_{key[4]}_elem_{key[3]}")
+
+    if not expected_storage_keys:
+        return [], []
+
+    applied_layers = getattr(so, "applied_layers", {}) or {}
+    applied_attrs = getattr(so, "applied_attributes", {}) or {}
+
+    missing_layers = [k for k in expected_storage_keys if k not in applied_layers]
+
+    # Si hay padre global en paleta, no exigimos atributo por elemento.
+    parent_global = _get_parent_value_from_palette(so)
+    if parent_global:
+        missing_parent = []
+    else:
+        missing_parent = [
+            k
+            for k in expected_storage_keys
+            if not _attr_has_non_empty_value(applied_attrs.get(k, []))
+        ]
+
+    return missing_layers, missing_parent
+
+
+def _has_pending_geometry(so: PBL.script_object.PolylineScriptObject) -> bool:
+    """Indica si hay geometría pendiente de validar/crear."""
+    intr = getattr(so, "script_object_interactor", None)
+    if intr and len(getattr(intr, "points", []) or []) >= 2:
+        return True
+    if len(getattr(so, "saved_paths", []) or []) > 0:
+        return True
+    if len(getattr(so, "segment_groups", []) or []) > 0:
+        return True
+    return False
+
+
+def _ensure_validation_context_ready(so: PBL.script_object.PolylineScriptObject) -> None:
+    """
+    Garantiza que existan elementos de preview para validar layers/atributos
+    incluso si se finaliza directamente desde modo creación.
+    """
+    intr = getattr(so, "script_object_interactor", None)
+    if intr is None:
+        return
+
+    generated_paths = getattr(intr, "generated_elements", []) or []
+    if generated_paths:
+        return
+    if not _has_pending_geometry(so):
+        return
+
+    try:
+        # Si está dibujando en modo creación, guardar la polilínea activa primero.
+        if getattr(intr, "create_mode", False) and len(getattr(intr, "points", []) or []) >= 2:
+            save_fn = getattr(intr, "_save_current_polyline", None)
+            if not callable(save_fn):
+                save_fn = getattr(intr, "save_current_polyline", None)
+            if callable(save_fn):
+                save_fn()
+
+        create_preview_fn = getattr(so, "_create_elements_preview", None)
+        if callable(create_preview_fn):
+            create_preview_fn()
+
+        gen_preview_fn = getattr(intr, "_generate_elements_for_preview", None)
+        if callable(gen_preview_fn):
+            gen_preview_fn()
+    except Exception as ex:
+        print(f"[AGUA] No se pudo preparar contexto de validación: {ex}")
+
+
 def check_allplan_version(_build_ele, _version):
     for module in reload_module:
         try:
@@ -242,6 +352,78 @@ def create_script_object(build_ele, script_object_data):
 
     # HOOK: Creación de elementos para crear elementos 3D finales
     script_object.element_creation_layer_attrs_hook = _create_elements_with_layers_attrs
+
+    # Validación UX previa a finalizar: layer + atributo padre.
+    original_on_control_event = script_object.on_control_event
+
+    def _on_control_event_with_reminder(event_id: int):
+        try:
+            if event_id == 1003:
+                _ensure_validation_context_ready(script_object)
+                missing_layers, missing_parent = _collect_missing_layer_and_parent(
+                    script_object
+                )
+                if missing_layers or missing_parent:
+                    lines = [
+                        "Hay elementos sin configuración completa antes de finalizar.",
+                        "",
+                    ]
+                    if missing_layers:
+                        lines.append(
+                            f"• Sin layer asignado: {len(missing_layers)} elemento(s)."
+                        )
+                    if missing_parent:
+                        lines.append(
+                            f"• Sin atributo padre (pmp_pare / 6_CC_IS): {len(missing_parent)} elemento(s)."
+                        )
+                    lines.extend(
+                        [
+                            "",
+                            "¿Desea continuar sin asignar (Aceptar) o volver a configuración para asignar estos datos (Cancelar)?",
+                        ]
+                    )
+                    warning_message = "\n".join(lines)
+
+                    try:
+                        if hasattr(PythonUtility, "MB_OKCANCEL"):
+                            response = PythonUtility.ShowMessageBox(
+                                warning_message, PythonUtility.MB_OKCANCEL
+                            )
+                        else:
+                            response = PythonUtility.ShowMessageBox(
+                                warning_message, PythonUtility.MB_OK
+                            )
+                    except Exception as ex:
+                        print(
+                            f"[AGUA] Error mostrando advertencia de layer/atributos: {ex}"
+                        )
+                        response = getattr(PythonUtility, "IDOK", None)
+
+                    if (
+                        getattr(PythonUtility, "IDCANCEL", None) is not None
+                        and response == PythonUtility.IDCANCEL
+                    ):
+                        print(
+                            "[AGUA] Finalización cancelada por usuario para completar layer/atributos."
+                        )
+                        intr = getattr(script_object, "script_object_interactor", None)
+                        try:
+                            if intr:
+                                intr.preview_mode = True
+                                intr.edit_mode = True
+                                intr.create_mode = False
+                                intr._generate_elements_for_preview()
+                        except Exception as ex:
+                            print(
+                                f"[AGUA] No se pudo reactivar modo configuración: {ex}"
+                            )
+                        return True
+        except Exception as ex:
+            print(f"[AGUA] Error en recordatorio previo a finalizar: {ex}")
+
+        return original_on_control_event(event_id)
+
+    script_object.on_control_event = _on_control_event_with_reminder
 
     return script_object
 
