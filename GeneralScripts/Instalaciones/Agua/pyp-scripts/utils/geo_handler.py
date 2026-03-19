@@ -6478,6 +6478,7 @@ class PipelineProcessor:
         elem_type="conducto",
         custom_position=None,
         next_seg=None,
+        prev_seg=None,
         custom_yaw_deg: float | None = None,
         custom_mirror_x_local: bool = False,
     ) -> AllplanBasisElements.ModelElement3D:
@@ -7004,9 +7005,23 @@ class PipelineProcessor:
                         and abs(v.Z) > 1e-6
                     )
                     if is_vertical_seg:
+                        prev_start = getattr(prev_seg, "start", None)
+                        prev_end = getattr(prev_seg, "end", None)
+                        # Heredar yaw del tramo horizontal anterior cuando exista.
+                        # Si no existe, mantener fallback actual.
+                        p_ref_start = (
+                            prev_start
+                            if prev_start is not None and prev_end is not None
+                            else getattr(segment_data, "start", None)
+                        )
+                        p_ref_end = (
+                            prev_end
+                            if prev_start is not None and prev_end is not None
+                            else getattr(segment_data, "end", None)
+                        )
                         ref_yaw = self._resolve_vertical_rotation_angle(
-                            getattr(segment_data, "start", None),
-                            getattr(segment_data, "end", None),
+                            p_ref_start,
+                            p_ref_end,
                         )
                         if abs(ref_yaw) > 1e-6:
                             angulo_yaw = math.degrees(ref_yaw)
@@ -7192,8 +7207,12 @@ class PipelineProcessor:
                     model_cond = self.modificar_dimensiones_brep(
                         tube_outer_tpl, longitud_recortada
                     )
+                    prev_seg_data = segments[i - 1].data if i > 0 else None
                     element = self._aplicar_transformacion(
-                        model_cond, seg, custom_position=p_centro
+                        model_cond,
+                        seg,
+                        custom_position=p_centro,
+                        prev_seg=prev_seg_data,
                     )
 
                     result_list.append(
@@ -7212,7 +7231,10 @@ class PipelineProcessor:
                             tube_inner_tpl, longitud_recortada
                         )
                         element_inner = self._aplicar_transformacion(
-                            model_inner, seg, custom_position=p_centro
+                            model_inner,
+                            seg,
+                            custom_position=p_centro,
+                            prev_seg=prev_seg_data,
                         )
                         result_list.append(
                             {
