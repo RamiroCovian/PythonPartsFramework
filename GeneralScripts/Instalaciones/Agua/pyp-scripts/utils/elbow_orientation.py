@@ -177,6 +177,7 @@ def apply_elbow_transform(
         v_dir = "U" if v_dz > 0 else "D"
 
         # (axis_code, yaw_Z_rad, rot_vert_rad)
+        # Mapeo equivalente al de fontaneria.py para codos verticales.
         vertical_map: dict[tuple[str, str], tuple[str, float, float]] = {
             ("E", "U"): ("X", -math.pi / 2.0, math.pi / 2.0),
             ("E", "D"): ("X", -math.pi / 2.0, -math.pi / 2.0),
@@ -193,7 +194,14 @@ def apply_elbow_transform(
             ("X", math.atan2(hy, hx) - math.pi / 2.0, math.pi / 2.0 if v_dz > 0 else -math.pi / 2.0),
         )
 
-        # Ajuste: si el vertical es el PRIMERO, sumar 180° en planta (como fontaneria)
+        print(
+            f"[ELBOW][V] h_dir={h_dir} v_dir={v_dir} "
+            f"axis={axis_code} ang_h={math.degrees(ang_h):.2f}° ang_v={math.degrees(ang_v):.2f}° "
+            f"seg1_vert={seg1_vert} seg2_vert={seg2_vert}"
+        )
+
+        # Igual que en fontaneria (base): cuando el vertical es el primero
+        # se suma 180° en planta.
         if seg1_vert and not seg2_vert:
             ang_h += math.pi
 
@@ -215,6 +223,17 @@ def apply_elbow_transform(
         elif seg1_vert:
             # Fallback: usar el ángulo del tramo horizontal que sale del codo.
             prev_angle_xy = _normalize_angle_rad_pi(math.atan2(hy, hx))
+
+        # Port parcial de fontaneria: para direcciones cardinales, NO aplicar
+        # rotación Z adicional (evita sobre-rotar el codo en V<->H ortogonales).
+        prev_angle_deg = abs(math.degrees(prev_angle_xy))
+        is_cardinal = (
+            abs(prev_angle_deg - 0.0) < 5.0
+            or abs(prev_angle_deg - 90.0) < 5.0
+            or abs(prev_angle_deg - 180.0) < 5.0
+        )
+        if is_cardinal:
+            prev_angle_xy = 0.0
 
         # Rz adicional (si aplica)
         mat_z_rot = None
@@ -301,6 +320,16 @@ def apply_elbow_transform(
         while angle >= 2 * math.pi:
             angle -= 2 * math.pi
 
+        print(
+            f"[ELBOW] plano=XZ d_prev=({d_prev_x:.3f},{d_prev_z:.3f}) "
+            f"d_next=({d_next_x:.3f},{d_next_z:.3f})"
+        )
+        print(
+            f"[ELBOW] XZ angle_prev={math.degrees(angle_prev):.2f}° "
+            f"angle_next={math.degrees(angle_next):.2f}° "
+            f"cross={cross:.6f} final={math.degrees(angle):.2f}° mirror={needs_mirror}"
+        )
+
         # Preparación XY->XZ: rotación alrededor de X
         axis_x = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0))
         mat_prep = AllplanGeo.Matrix3D()
@@ -338,6 +367,16 @@ def apply_elbow_transform(
         while angle >= 2 * math.pi:
             angle -= 2 * math.pi
 
+        print(
+            f"[ELBOW] plano=YZ d_prev=({d_prev_y:.3f},{d_prev_z:.3f}) "
+            f"d_next=({d_next_y:.3f},{d_next_z:.3f})"
+        )
+        print(
+            f"[ELBOW] YZ angle_prev={math.degrees(angle_prev):.2f}° "
+            f"angle_next={math.degrees(angle_next):.2f}° "
+            f"cross={cross:.6f} final={math.degrees(angle):.2f}° mirror={needs_mirror}"
+        )
+
         # Preparación XY->YZ: rotación alrededor de Z
         axis_z = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1))
         mat_prep = AllplanGeo.Matrix3D()
@@ -374,6 +413,16 @@ def apply_elbow_transform(
             angle += 2 * math.pi
         while angle >= 2 * math.pi:
             angle -= 2 * math.pi
+
+        print(
+            f"[ELBOW] plano=XY d_prev=({d_prev_x:.3f},{d_prev_y:.3f}) "
+            f"d_next=({d_next_x:.3f},{d_next_y:.3f})"
+        )
+        print(
+            f"[ELBOW] XY angle_prev={math.degrees(angle_prev):.2f}° "
+            f"angle_next={math.degrees(angle_next):.2f}° "
+            f"cross={cross:.6f} final={math.degrees(angle):.2f}° mirror={needs_mirror}"
+        )
 
         axis_z = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1))
         mat.SetRotation(axis_z, AllplanGeo.Angle(angle))
