@@ -6702,25 +6702,45 @@ class PipelineProcessor:
                                 )
                                 mat = mat * r_main
 
-                                # Yaw para que (sin(theta), cos(theta)) == (bx, by).
-                                # Si hay orientación capturada, priorizarla.
+                                # Yaw TE vertical:
+                                # 1) tomar ángulo de la rama en XY respecto al eje X
+                                #    (atan2(by, bx)),
+                                # 2) aplicar desfase local de -90° del modelo TE.
                                 if abs(bx) + abs(by) > 1e-9:
                                     ref_orientation = getattr(
                                         self, "reference_orientation_angle", None
                                     )
-                                    theta = (
-                                        float(ref_orientation)
-                                        if ref_orientation is not None
-                                        else math.atan2(bx, by)
-                                    )
+                                    theta_branch_xy = math.atan2(by, bx)
+                                    theta_base = theta_branch_xy
+                                    theta_source = "branch atan2(by,bx)"
+                                    if not math.isfinite(theta_base):
+                                        theta_base = (
+                                            float(ref_orientation)
+                                            if ref_orientation is not None
+                                            else 0.0
+                                        )
+                                        theta_source = (
+                                            "reference_orientation_angle"
+                                            if ref_orientation is not None
+                                            else "fallback=0"
+                                        )
+                                    theta = theta_base - (math.pi / 2.0)
                                     if debug_te:
                                         print(
-                                            "[DBG TE] SPECIAL_VERTICAL theta=%.1f° (%s)"
+                                            "[DBG TE] SPECIAL_VERTICAL theta=%.1f° (base=%.1f° source=%s, branch_xy=%.1f°, ref=%s, offset=-90°)"
                                             % (
                                                 math.degrees(theta),
-                                                "reference_orientation_angle"
+                                                math.degrees(theta_base),
+                                                theta_source,
+                                                math.degrees(theta_branch_xy),
+                                                (
+                                                    "%.1f°"
+                                                    % math.degrees(
+                                                        float(ref_orientation)
+                                                    )
+                                                )
                                                 if ref_orientation is not None
-                                                else "atan2(bx,by)",
+                                                else "None",
                                             )
                                         )
                                     r_yaw = AllplanGeo.Matrix3D()
