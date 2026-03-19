@@ -1178,15 +1178,20 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     pass
 
                 # 2. EXTRAER atributos del elemento (ya fueron asignados previamente)
+                #    Leemos TODOS los AttributeSet para no perder atributos default.
                 attribute_list = []
                 try:
                     if hasattr(element, 'GetAttributes'):
                         attrs = element.GetAttributes()
                         if attrs:
-                            for attr_set in attrs.GetAttributeSets():
-                                elem_attrs = list(attr_set.GetAttributes())
-                                attribute_list.extend(elem_attrs)
-                                break
+                            attrs_by_id = {}
+                            for attr_set in attrs.GetAttributeSets() or []:
+                                for attr in attr_set.GetAttributes() or []:
+                                    attr_id = getattr(attr, "Id", None)
+                                    if attr_id is None:
+                                        continue
+                                    attrs_by_id[attr_id] = attr
+                            attribute_list = list(attrs_by_id.values())
                 except Exception as e:
                     print(f"[SO] Advertencia: No se pudieron extraer atributos del elemento {idx}: {e}")
 
@@ -1275,10 +1280,15 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                         if hasattr(element, 'GetAttributes'):
                             attrs = element.GetAttributes()
                             if attrs:
-                                for attr_set in attrs.GetAttributeSets():
-                                    elem_attrs = list(attr_set.GetAttributes())
-                                    all_attributes.extend(elem_attrs)
-                                    break
+                                attrs_by_id = {}
+                                for attr_set in attrs.GetAttributeSets() or []:
+                                    for attr in attr_set.GetAttributes() or []:
+                                        attr_id = getattr(attr, "Id", None)
+                                        if attr_id is None:
+                                            continue
+                                        attrs_by_id[attr_id] = attr
+                                elem_attrs = list(attrs_by_id.values())
+                                all_attributes.extend(elem_attrs)
                 except:
                     pass
 
