@@ -308,6 +308,39 @@ def _upsert_named_attributes(
     elem.SetAttributes(attrs)
 
 
+def _remove_named_attributes(elem: Any, doc: Any, attr_names: List[str]) -> None:
+    """
+    Elimina atributos por nombre (si existen) manteniendo el resto intacto.
+    """
+    if elem is None or doc is None or not attr_names:
+        return
+
+    remove_ids = set()
+    for attr_name in attr_names:
+        try:
+            attr_id = AllplanBaseElements.AttributeService.GetAttributeID(doc, attr_name)
+        except Exception:
+            attr_id = 0
+        if attr_id and attr_id > 0:
+            remove_ids.add(int(attr_id))
+
+    if not remove_ids:
+        return
+
+    attrs = elem.GetAttributes() if hasattr(elem, "GetAttributes") else None
+    if not attrs or not hasattr(attrs, "GetAttributeSets"):
+        return
+
+    attr_sets = list(attrs.GetAttributeSets() or [])
+    for attr_set in attr_sets:
+        attr_list = list(attr_set.GetAttributes() or [])
+        filtered = [a for a in attr_list if getattr(a, "Id", None) not in remove_ids]
+        attr_set.SetAttributes(filtered)
+
+    attrs.SetAttributeSets(attr_sets)
+    elem.SetAttributes(attrs)
+
+
 def _set_parent_attributes(
     elem: Any, custom_attrs: Dict[str, Any], doc: Any, distribution_type: str = "IS"
 ) -> None:
@@ -332,6 +365,9 @@ def _set_parent_attributes(
         pairs = [("6_CC_IS", attr_value), ("pmp_pare", attr_value)]
 
     _upsert_named_attributes(elem, doc, pairs)
+    if dist == "TD":
+        # Regla estricta TD: nunca conservar 6_CC_IS en atributos padre.
+        _remove_named_attributes(elem, doc, ["6_CC_IS"])
 
 
 def _apply_absolute_numbering_attr01(

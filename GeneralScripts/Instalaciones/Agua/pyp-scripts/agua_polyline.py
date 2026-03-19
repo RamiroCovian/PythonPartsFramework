@@ -811,16 +811,11 @@ def _create_elements_with_layers_attrs(
                 custom_parent_value = ""
 
         if custom_parent_value and doc:
-            parent_distribution = str(distribution_type)
-            if is_td and is_paired_inner:
-                # En par TD outer+inner, el inner debe recibir explícitamente
-                # pmp_pare + 6_CC_IS (comportamiento equivalente a la rama IS).
-                parent_distribution = "IS"
             _set_parent_attributes(
                 model_elem,
                 {"NomIS": custom_parent_value},
                 doc,
-                distribution_type=parent_distribution,
+                distribution_type=str(distribution_type),
             )
 
         if element_type == "tubo_agua":
