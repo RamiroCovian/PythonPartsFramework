@@ -4,6 +4,7 @@ import importlib.util
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_BaseElements as AllplanBaseElements
+import NemAll_Python_Utility as PythonUtility
 
 from typing import List
 
@@ -6053,6 +6054,8 @@ class PipelineProcessor:
         # Cache de modelos de TE por distribución + trío de diámetros
         self._te_model_cache = {}
         self._te_classes = None
+        # Evita mostrar el mismo aviso de TE inválida múltiples veces en un ciclo.
+        self._te_invalid_warning_cache = set()
         # Orientación global capturada por PolyLib (start_orientation_capture).
         self.reference_orientation_angle = None
 
@@ -6399,6 +6402,39 @@ class PipelineProcessor:
             return []
 
         dist = "TD" if str(distribution_type).upper() == "TD" else "IS"
+
+        def _is_supported_te_combo(di_in, di_out, di_branch):
+            if di_in == di_out == di_branch and di_in in (20, 25, 32):
+                return True
+            triple_sorted = tuple(sorted((di_in, di_out, di_branch)))
+            if di_in == 25 and di_out == 25 and di_branch == 20:
+                return True
+            if di_branch == 25 and triple_sorted == (20, 25, 25):
+                return True
+            if di_branch == 20 and triple_sorted == (20, 20, 25):
+                return True
+            return False
+
+        if not _is_supported_te_combo(di_in, di_out, di_branch):
+            warn_key = (dist, di_in, di_out, di_branch)
+            if warn_key not in self._te_invalid_warning_cache:
+                self._te_invalid_warning_cache.add(warn_key)
+                msg = (
+                    "No existe una TE para la combinación de diámetros seleccionada.\n\n"
+                    f"Combinación detectada: {di_in}-{di_out}-{di_branch} ({dist}).\n\n"
+                    "Modifique los diámetros de los segmentos para que coincidan "
+                    "con los tipos de TE disponibles."
+                )
+                try:
+                    PythonUtility.ShowMessageBox(msg, PythonUtility.MB_OK)
+                except Exception:
+                    print(f"[AGUA][TE] {msg}")
+            print(
+                f"[AGUA][TE] combinación no soportada dist={dist} "
+                f"di_in={di_in} di_out={di_out} di_branch={di_branch}"
+            )
+            return []
+
         cache_key = (dist, di_in, di_out, di_branch, bool(mirror_model_x))
         cached = self._te_model_cache.get(cache_key)
         if cached is not None:
