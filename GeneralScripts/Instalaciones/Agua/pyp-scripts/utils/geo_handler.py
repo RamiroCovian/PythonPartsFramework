@@ -6499,6 +6499,20 @@ class PipelineProcessor:
         prop = model_element.GetCommonProperties()
         brep = model_element.GetGeometryObject()
 
+        def _build_model_with_source_attrs(transformed_brep):
+            nuevo_model = AllplanBasisElements.ModelElement3D(prop, transformed_brep)
+            try:
+                src_attrs = (
+                    model_element.GetAttributes()
+                    if hasattr(model_element, "GetAttributes")
+                    else None
+                )
+                if src_attrs:
+                    nuevo_model.SetAttributes(src_attrs)
+            except Exception:
+                pass
+            return nuevo_model
+
         # 1. POSICIONAMIENTO INICIAL
         # Determinamos el punto de inserción (vértice o centro)
         p_destino = custom_position if custom_position else segment_data.start
@@ -6771,7 +6785,7 @@ class PipelineProcessor:
                                         p_destino.X, p_destino.Y, p_destino.Z
                                     ),
                                 )
-                                return AllplanBasisElements.ModelElement3D(prop, brep)
+                                return _build_model_with_source_attrs(brep)
                 except Exception:
                     pass
 
@@ -6886,7 +6900,7 @@ class PipelineProcessor:
                 brep = AllplanGeo.Move(
                     brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
                 )
-                return AllplanBasisElements.ModelElement3D(prop, brep)
+                return _build_model_with_source_attrs(brep)
 
         # Para codos, usamos la lógica completa de fontaneria (por puntos),
         # y evitamos el pipeline simplificado pitch/yaw de abajo.
@@ -6909,7 +6923,7 @@ class PipelineProcessor:
                 brep = AllplanGeo.Move(
                     brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
                 )
-                return AllplanBasisElements.ModelElement3D(prop, brep)
+                return _build_model_with_source_attrs(brep)
 
         # Manguito en transición vertical: aplicar la misma prioridad de orientación
         # que en fontaneria (orientación capturada o tramo horizontal previo).
@@ -6951,7 +6965,7 @@ class PipelineProcessor:
                     brep = AllplanGeo.Move(
                         brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
                     )
-                    return AllplanBasisElements.ModelElement3D(prop, brep)
+                    return _build_model_with_source_attrs(brep)
 
         # 2.1. Orientación Base (Poner de pie si el destino es vertical)
         # Si el codo debe ir en vertical, primero rotamos 90° en su eje X local
@@ -7087,18 +7101,7 @@ class PipelineProcessor:
             brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
         )
 
-        nuevo_model = AllplanBasisElements.ModelElement3D(prop, brep)
-        try:
-            src_attrs = (
-                model_element.GetAttributes()
-                if hasattr(model_element, "GetAttributes")
-                else None
-            )
-            if src_attrs:
-                nuevo_model.SetAttributes(src_attrs)
-        except Exception:
-            pass
-        return nuevo_model
+        return _build_model_with_source_attrs(brep)
 
     def process(self, segments, default_attrs=None, segment_cuts=None) -> list:
         """
@@ -7562,10 +7565,24 @@ class PipelineProcessor:
                         manguito_outer_model = (
                             dyn_models[0] if dyn_models else self.templates["manguito"]
                         )
+                        # Reductor TD (p.ej. 25-20) puede venir como único BRep "inner".
+                        # En ese caso NO debemos tratarlo como outer ni crear inner template extra.
+                        is_inner_only_reducer = (
+                            dist_type == "TD"
+                            and len(dyn_models) == 1
+                            and d_curr is not None
+                            and d_next is not None
+                            and int(round(float(d_curr))) != int(round(float(d_next)))
+                        )
                         print(
                             f"[AGUA][MANGUITO] modelo_outer={'dinamico' if dyn_models else 'template'} "
                             f"elems_dyn={len(dyn_models)}"
                         )
+                        if is_inner_only_reducer:
+                            print(
+                                "[AGUA][MANGUITO] reductor TD inner-only detectado: "
+                                "se trata como manguito_inner y se omite inner template"
+                            )
 
                         # Reductor 25->20: mirror local para invertir el sentido.
                         need_mirror_x = False
@@ -7591,7 +7608,11 @@ class PipelineProcessor:
                         result_list.append(
                             {
                                 "element": element_manguito,
-                                "element_type": "manguito",
+                                "element_type": (
+                                    "manguito_inner"
+                                    if is_inner_only_reducer
+                                    else "manguito"
+                                ),
                                 "index": element_index,
                             }
                         )
@@ -7599,7 +7620,9 @@ class PipelineProcessor:
 
                         # TD opcional: manguito inner (si existe en modelo dinámico o templates)
                         manguito_inner_model = None
-                        if len(dyn_models) > 1:
+                        if is_inner_only_reducer:
+                            manguito_inner_model = None
+                        elif len(dyn_models) > 1:
                             manguito_inner_model = dyn_models[1]
                         elif "manguito_inner" in self.templates:
                             manguito_inner_model = self.templates["manguito_inner"]

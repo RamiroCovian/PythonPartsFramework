@@ -65,7 +65,7 @@ class ManguitoTDModel:
             "INNER_THICKNESS": 35.0,
             "INNER_HEIGHT": 35.0,
             "INNER_COLOR": 16,
-            "LAYER_SHORT": "KN_AIGUA",
+            "LAYER_SHORT_INNER": "KN_AIGUA",
             # Caps
             "CAP_ARM_X": 23.0,
             "CAP_ARM_Y": 35.0,
@@ -84,6 +84,7 @@ class ManguitoTDModel:
             "pmp_nom": "MØ25",
             "pmp_seccio": "Ø25",
             "pmp_pes_unitari": 0.1470,  # numérico
+            "Material": "CAVITAT",  # Material para outer_model
         },
         # MØ32
         {
@@ -682,10 +683,29 @@ class ManguitoTDModel:
             special_props = AllplanBaseElements.CommonProperties()
             special_props.GetGlobalProperties()
             special_props.Color = p["COLOR"]
+            special_props.ColorByLayer = False
+
+            # Para el reductor TD "inner-only", usar layer de agua por defecto del modelo.
+            special_layer_short = p.get("LAYER_SHORT_INNER", None) or p.get(
+                "LAYER_SHORT", None
+            )
+            if special_layer_short:
+                special_layer_id = LayerService.GetIDByShortName(
+                    special_layer_short, self.doc
+                )
+                if special_layer_id > 0:
+                    special_props.Layer = special_layer_id
+                    special_props.Color = p["COLOR"]
+                    special_props.ColorByLayer = False
 
             special_model = AllplanBasisElements.ModelElement3D(
                 special_props, special_brep_centered
             )
+            # El reductor TD especial es inner-only: llevar atributos "normales"
+            # (sin Material=CAVITAT) para que el pipeline le aplique paleta/padre.
+            special_attributes = self._create_attributes()
+            if special_attributes:
+                special_model.SetAttributes(special_attributes)
             return [special_model]
 
 

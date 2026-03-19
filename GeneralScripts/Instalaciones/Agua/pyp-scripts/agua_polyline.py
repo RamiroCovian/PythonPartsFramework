@@ -698,6 +698,24 @@ def _create_elements_with_layers_attrs(
                 return str(val).strip()
         return ""
 
+    def _resolve_assignment_key(default_key, candidate_keys):
+        """
+        Resuelve la key de paleta (attrs/layers) cuando el índice final de
+        elementos difiere del índice usado al seleccionar.
+        """
+        applied_attrs = getattr(so, "applied_attributes", {}) or {}
+        applied_layers = getattr(so, "applied_layers", {}) or {}
+
+        keys_to_try = [default_key] + [k for k in (candidate_keys or []) if k]
+        seen = set()
+        for key in keys_to_try:
+            if key in seen:
+                continue
+            seen.add(key)
+            if key in applied_attrs or key in applied_layers:
+                return key
+        return default_key
+
     elements_generated_final = []
     current_tube_idx = -1
     last_segment_idx = 0
@@ -743,6 +761,22 @@ def _create_elements_with_layers_attrs(
             if is_paired_inner:
                 assignment_key = f"seg_{path_idx}_elem_{prev_item.index}"
 
+        # Fallback robusto para inner (incluye manguito reductor TD inner-only):
+        # si la key exacta no existe en paleta, buscar en vecinos inmediatos.
+        if element_type.endswith("_inner"):
+            fallback_keys = []
+            try:
+                idx = int(element_idx)
+                # Priorizar vecino previo (caso real: unión guardada en elem anterior)
+                fallback_keys.append(f"seg_{path_idx}_elem_{idx - 1}")
+                fallback_keys.append(f"seg_{path_idx}_elem_{idx + 1}")
+                # Un fallback extra por si hubo inserción de outer/inner adicional
+                fallback_keys.append(f"seg_{path_idx}_elem_{idx - 2}")
+                fallback_keys.append(f"seg_{path_idx}_elem_{idx + 2}")
+            except Exception:
+                pass
+            assignment_key = _resolve_assignment_key(assignment_key, fallback_keys)
+
         # 1) Defaults que ya trae el modelo generado por el PythonPart
         model_default_attrs = _get_attributes_from_model_elem(model_elem)
         # 2) Defaults cacheados por key (compatibilidad con el flujo actual)
@@ -775,7 +809,7 @@ def _create_elements_with_layers_attrs(
             so.applied_default_attributes[storage_key] = list(model_default_attrs)
         else:
             merged_defaults = (
-                _merge_attributes(model_default_attrs, key_default_attrs)
+                _merge_attributes(key_default_attrs, model_default_attrs)
                 if key_default_attrs
                 else list(model_default_attrs)
             )
