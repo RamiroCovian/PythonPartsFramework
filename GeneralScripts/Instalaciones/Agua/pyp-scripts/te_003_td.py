@@ -829,7 +829,11 @@ class TeTDModel:
             outer_props.ColorByLayer = False  # Desactivar color por layer
 
             # Asignar layer al outer_model
-            outer_layer_short = p.get("LAYER_SHORT_OUTER", None)
+            outer_layer_short = (
+                p.get("LAYER_SHORT_OUTER", None)
+                or p.get("LAYER_SHORT_INNER", None)
+                or p.get("LAYER_SHORT", None)
+            )
             if outer_layer_short:
                 outer_layer_id = LayerService.GetIDByShortName(
                     outer_layer_short, self.doc
@@ -844,8 +848,13 @@ class TeTDModel:
                 outer_props, outer_brep_centered
             )
 
-            # Atributos para outer_model (solo Material)
-            outer_attributes = self._create_outer_attributes()
+            # TE TD mixta (type_te >= 3) se comporta como "inner-only":
+            # no lleva Material=CAVITAT y debe traer attrs propios del tipo dinámico.
+            # En TE TD normal (<3), outer lleva solo Material.
+            if self.type_te >= 3:
+                outer_attributes = self._create_attributes()
+            else:
+                outer_attributes = self._create_outer_attributes()
             if outer_attributes:
                 outer_model.SetAttributes(outer_attributes)
 

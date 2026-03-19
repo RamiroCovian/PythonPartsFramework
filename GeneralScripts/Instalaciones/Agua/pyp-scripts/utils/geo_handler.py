@@ -7342,6 +7342,23 @@ class PipelineProcessor:
                         te_outer_model = (
                             dyn_te_models[0] if dyn_te_models else self.templates["te"]
                         )
+                        # Algunos modelos TD de TE mixta se modelan como "inner-only"
+                        # y devuelven un único BRep dinámico. En ese caso debe tratarse
+                        # como te_inner (con attrs/layer de paleta) y no crear inner template.
+                        is_inner_only_te = False
+                        try:
+                            diam_set = {
+                                int(round(float(d_main_in))),
+                                int(round(float(d_main_out))),
+                                int(round(float(d_branch))),
+                            }
+                            is_inner_only_te = (
+                                te_dist == "TD"
+                                and len(dyn_te_models) == 1
+                                and len(diam_set) > 1
+                            )
+                        except Exception:
+                            is_inner_only_te = False
                         te_inner_model = (
                             dyn_te_models[1]
                             if len(dyn_te_models) > 1
@@ -7363,6 +7380,11 @@ class PipelineProcessor:
                         if mirror_model_x:
                             print(
                                 "[AGUA][TE] mirror_model_x=True (orden invertido de set_diameters)"
+                            )
+                        if is_inner_only_te:
+                            print(
+                                "[AGUA][TE] TE TD inner-only detectada: "
+                                "se trata como te_inner y se omite inner template"
                             )
 
                         if debug_te_pos:
@@ -7402,13 +7424,17 @@ class PipelineProcessor:
                         result_list.append(
                             {
                                 "element": element_te,
-                                "element_type": "te",
+                                "element_type": (
+                                    "te_inner" if is_inner_only_te else "te"
+                                ),
                                 "index": element_index,
                             }
                         )
                         element_index += 1
 
                         # TE inner opcional (TD): mismo nodo y orientación que la outer
+                        if is_inner_only_te:
+                            te_inner_model = None
                         if te_inner_model is not None:
                             element_te_inner = self._aplicar_transformacion(
                                 te_inner_model,
