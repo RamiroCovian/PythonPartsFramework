@@ -33,6 +33,16 @@ def _normalize_attribute_list(raw_attrs: Any) -> List:
                             normalized.append(nested)
                 except Exception:
                     continue
+            elif hasattr(item, "GetAttributeSets"):
+                try:
+                    for attr_set in item.GetAttributeSets() or []:
+                        if not hasattr(attr_set, "GetAttributes"):
+                            continue
+                        for nested in attr_set.GetAttributes() or []:
+                            if hasattr(nested, "Id"):
+                                normalized.append(nested)
+                except Exception:
+                    continue
         return normalized
 
     # Caso AttributeSet
@@ -173,6 +183,20 @@ def _apply_attributes_to_model_elem(model_elem, attr_list: List):
     except Exception as e:
         print(f"[Error] Al aplicar atributos: {e}")
         return model_elem
+
+
+def _get_attributes_from_model_elem(model_elem: Any) -> List:
+    """
+    Extrae los atributos actuales de un ModelElement3D y los devuelve
+    como lista plana de atributos.
+    """
+    if model_elem is None or not hasattr(model_elem, "GetAttributes"):
+        return []
+    try:
+        raw_attrs = model_elem.GetAttributes()
+    except Exception:
+        return []
+    return _normalize_attribute_list(raw_attrs)
 
 
 def _has_material_cavitat(elem: Any, doc: Any) -> bool:

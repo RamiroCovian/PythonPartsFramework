@@ -29,6 +29,7 @@ from .utils.vertex_utils import (
 from .utils.te_orientation import build_te_params
 from .utils.attributes_utils import (
     _normalize_attribute_list,
+    _get_attributes_from_model_elem,
     _merge_attributes,
     _apply_attributes_to_model_elem,
     _apply_absolute_numbering_attr01,
@@ -161,6 +162,11 @@ def _create_elements_for_segment_group(
                 "dist_type": so.distribution_type,
                 "water_type": water_type,
             },
+            attr_kwargs={
+                "diameter": diameter,
+                "dist_type": so.distribution_type,
+                "water_type": water_type,
+            },
         )
 
         codo_selected = [item for item in so.pythonparts_modules if item.key == "codo"]
@@ -174,6 +180,7 @@ def _create_elements_for_segment_group(
         codo_model = so._get_pythonpart_installed(
             element_key=codo_selected[0].key,
             exec_kwargs={"dist_type": so.distribution_type},
+            attr_kwargs={"dist_type": so.distribution_type},
         )
         # Manguito (conexión) para tramos colineales (0°/180°)
         manguito_model = None
@@ -182,6 +189,7 @@ def _create_elements_for_segment_group(
                 manguito_model = so._get_pythonpart_installed(
                     element_key=conexion_selected[0].key,
                     exec_kwargs={"dist_type": so.distribution_type},
+                    attr_kwargs={"dist_type": so.distribution_type},
                 )
         except Exception:
             manguito_model = None
@@ -192,6 +200,7 @@ def _create_elements_for_segment_group(
                 te_model = so._get_pythonpart_installed(
                     element_key=te_selected[0].key,
                     exec_kwargs={"dist_type": so.distribution_type},
+                    attr_kwargs={"dist_type": so.distribution_type},
                 )
         except Exception:
             te_model = None
@@ -349,12 +358,24 @@ def _create_elements_with_layers_attrs(
         storage_key = f"seg_{path_idx}_elem_{element_idx}"
         base_key = _default_attr_key_for(element_type)
 
-        base_attrs = _normalize_attribute_list(
+        # 1) Defaults que ya trae el modelo generado por el PythonPart
+        model_default_attrs = _get_attributes_from_model_elem(model_elem)
+        # 2) Defaults cacheados por key (compatibilidad con el flujo actual)
+        key_default_attrs = _normalize_attribute_list(
             so.default_attributes.get(base_key, []) if base_key else []
         )
+        # 3) Atributos custom aplicados desde paleta
         custom_attrs = _normalize_attribute_list(so.applied_attributes.get(storage_key, []))
+
+        merged_defaults = (
+            _merge_attributes(model_default_attrs, key_default_attrs)
+            if key_default_attrs
+            else list(model_default_attrs)
+        )
         merged_attrs = (
-            _merge_attributes(base_attrs, custom_attrs) if custom_attrs else list(base_attrs)
+            _merge_attributes(merged_defaults, custom_attrs)
+            if custom_attrs
+            else list(merged_defaults)
         )
 
         if merged_attrs:

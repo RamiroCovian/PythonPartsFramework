@@ -25,10 +25,65 @@ class MulticapaScript(BaseScriptObject):
         self.build_ele = build_ele
         self.doc = self.coord_input.GetInputViewDocument()
 
-    def get_attributes(self, value: int = 0):
+    def get_attributes(self, *args, **kwargs):
+        """
+        Devuelve atributos por defecto del modelo multicapa (TD).
+        """
+        diameter = args[0] if args else kwargs.get("diameter")
+        dist_type = kwargs.get("dist_type")
+        water_type = kwargs.get("water_type")
 
-        attr_list = []
-        return attr_list
+        # No hay multicapa IS
+        if dist_type == "IS":
+            return []
+
+        if diameter is not None:
+            tipo_valor = None
+            try:
+                diam_int = int(diameter)
+            except Exception:
+                diam_int = None
+
+            if diam_int is not None:
+                if diam_int == 20:
+                    tipo_valor = "Ø20/2mm"
+                elif diam_int == 25:
+                    tipo_valor = "Ø25/2,5mm"
+                elif diam_int == 32:
+                    tipo_valor = "Ø32/3mm"
+
+            if tipo_valor:
+                try:
+                    tipo_attr = getattr(self.build_ele, "TipoTubMulticapa", None)
+                    if tipo_attr is not None and hasattr(tipo_attr, "value"):
+                        tipo_attr.value = tipo_valor
+                    else:
+                        setattr(self.build_ele, "TipoTubMulticapa", tipo_valor)
+                except Exception:
+                    pass
+
+        if water_type:
+            try:
+                for name in ("TipoDeAguaTD", "TipoDeAgua"):
+                    attr = getattr(self.build_ele, name, None)
+                    if attr is not None and hasattr(attr, "value"):
+                        attr.value = str(water_type)
+                    else:
+                        setattr(self.build_ele, name, str(water_type))
+            except Exception:
+                pass
+
+        try:
+            tub = TubMulticapaTDModel(self.build_ele, self.doc)
+            create_attrs = getattr(tub, "_create_attributes", None)
+            if callable(create_attrs):
+                attrs = create_attrs()
+                if attrs:
+                    return [attrs]
+        except Exception:
+            pass
+
+        return []
 
     def execute(self, *args, **kwargs) -> CreateElementResult:
         """
