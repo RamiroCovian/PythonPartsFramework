@@ -6172,6 +6172,19 @@ class PipelineProcessor:
             self._manguito_model_cache[cache_key] = []
             return []
 
+    def _normalize_tube_family(self, tube_system=None) -> str:
+        """
+        Normaliza el sistema de tubo del segmento a una familia interna.
+        """
+        raw = str(tube_system or "").strip().lower()
+        if "multi" in raw:
+            return "multicapa"
+        if "arma" in raw:
+            return "armaflex"
+        if "poli" in raw:
+            return "polietile"
+        return "polietile"
+
     def _load_tubo_classes(self):
         """
         Carga dinámica de clases de tubo (IS/TD) para instanciar por diámetro real
@@ -6180,11 +6193,17 @@ class PipelineProcessor:
         if self._tubo_classes is not None:
             return self._tubo_classes
 
-        classes = {"IS": None, "TD": None}
+        classes = {
+            "polietile": {"IS": None, "TD": None},
+            "multicapa": {"IS": None, "TD": None},
+            "armaflex": {"IS": None, "TD": None},
+        }
         try:
             base_dir = os.path.dirname(os.path.dirname(__file__))
             is_path = os.path.join(base_dir, "tub_polietile_007_is.py")
             td_path = os.path.join(base_dir, "tub_polietile_007_td.py")
+            multicapa_td_path = os.path.join(base_dir, "tub_multicapa_008_td.py")
+            armaflex_td_path = os.path.join(base_dir, "armaflex_009_td.py")
 
             if os.path.exists(is_path):
                 spec_is = importlib.util.spec_from_file_location(
@@ -6194,7 +6213,9 @@ class PipelineProcessor:
                 if spec_is and spec_is.loader:
                     mod_is = importlib.util.module_from_spec(spec_is)
                     spec_is.loader.exec_module(mod_is)
-                    classes["IS"] = getattr(mod_is, "TubPolietileModel", None)
+                    classes["polietile"]["IS"] = getattr(
+                        mod_is, "TubPolietileModel", None
+                    )
 
             if os.path.exists(td_path):
                 spec_td = importlib.util.spec_from_file_location(
@@ -6204,7 +6225,33 @@ class PipelineProcessor:
                 if spec_td and spec_td.loader:
                     mod_td = importlib.util.module_from_spec(spec_td)
                     spec_td.loader.exec_module(mod_td)
-                    classes["TD"] = getattr(mod_td, "TubPolietileTDModel", None)
+                    classes["polietile"]["TD"] = getattr(
+                        mod_td, "TubPolietileTDModel", None
+                    )
+
+            if os.path.exists(multicapa_td_path):
+                spec_mc_td = importlib.util.spec_from_file_location(
+                    "agua_tub_multicapa_008_td_runtime",
+                    multicapa_td_path,
+                )
+                if spec_mc_td and spec_mc_td.loader:
+                    mod_mc_td = importlib.util.module_from_spec(spec_mc_td)
+                    spec_mc_td.loader.exec_module(mod_mc_td)
+                    classes["multicapa"]["TD"] = getattr(
+                        mod_mc_td, "TubMulticapaTDModel", None
+                    )
+
+            if os.path.exists(armaflex_td_path):
+                spec_af_td = importlib.util.spec_from_file_location(
+                    "agua_armaflex_009_td_runtime",
+                    armaflex_td_path,
+                )
+                if spec_af_td and spec_af_td.loader:
+                    mod_af_td = importlib.util.module_from_spec(spec_af_td)
+                    spec_af_td.loader.exec_module(mod_af_td)
+                    classes["armaflex"]["TD"] = getattr(
+                        mod_af_td, "ArmaflexModel", None
+                    )
         except Exception as ex:
             print(f"[AGUA][TUBO] Error cargando clases dinámicas: {ex}")
 
@@ -6249,7 +6296,7 @@ class PipelineProcessor:
             pass
 
     def _get_tubo_models_for_segment(
-        self, diameter_mm, distribution_type="IS", water_type=None
+        self, diameter_mm, distribution_type="IS", water_type=None, tube_system=None
     ):
         """
         Devuelve [outer, inner?] del tubo para el diámetro/distribución del segmento.
@@ -6259,7 +6306,9 @@ class PipelineProcessor:
         except Exception:
             di = 20
         dist = "TD" if str(distribution_type).upper() == "TD" else "IS"
-        cache_key = (dist, di)
+        family = self._normalize_tube_family(tube_system)
+        water_key = str(water_type or "").strip().lower()
+        cache_key = (family, dist, di, water_key)
         cached = self._tubo_model_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -6268,7 +6317,11 @@ class PipelineProcessor:
             return []
 
         classes = self._load_tubo_classes()
-        ModelClass = classes.get(dist) if classes else None
+        family_classes = classes.get(family, {}) if classes else {}
+        ModelClass = family_classes.get(dist) if family_classes else None
+        if ModelClass is None and classes:
+            # Fallback seguro: polietilè
+            ModelClass = classes.get("polietile", {}).get(dist)
         if ModelClass is None:
             return []
 
@@ -6278,12 +6331,14 @@ class PipelineProcessor:
             model_list = tubo_obj.build() or []
             self._tubo_model_cache[cache_key] = model_list
             print(
-                f"[AGUA][TUBO] build dist={dist} diam={di} elems={len(model_list)} (cache miss)"
+                f"[AGUA][TUBO] build family={family} dist={dist} diam={di} "
+                f"water={water_key or '-'} elems={len(model_list)} (cache miss)"
             )
             return model_list
         except Exception as ex:
             print(
-                f"[AGUA][TUBO] Error creando modelo dinámico dist={dist} diam={di}: {ex}"
+                f"[AGUA][TUBO] Error creando modelo dinámico family={family} "
+                f"dist={dist} diam={di}: {ex}"
             )
             self._tubo_model_cache[cache_key] = []
             return []
@@ -7206,12 +7261,16 @@ class PipelineProcessor:
                         if seg_info is not None
                         else None
                     )
+                    seg_system = (
+                        getattr(seg_info, "system", None) if seg_info is not None else None
+                    )
                     seg_dist = "TD" if str(seg_dist).upper() == "TD" else "IS"
 
                     dynamic_tube_models = self._get_tubo_models_for_segment(
                         seg_diameter,
                         distribution_type=seg_dist,
                         water_type=seg_water,
+                        tube_system=seg_system,
                     )
                     tube_outer_tpl = (
                         dynamic_tube_models[0]
@@ -7225,6 +7284,7 @@ class PipelineProcessor:
                     )
                     print(
                         f"[AGUA][TUBO] seg={i} diam={seg_diameter} dist={seg_dist} "
+                        f"system={seg_system} "
                         f"modelo_outer={'dinamico' if dynamic_tube_models else 'template'}"
                     )
 
