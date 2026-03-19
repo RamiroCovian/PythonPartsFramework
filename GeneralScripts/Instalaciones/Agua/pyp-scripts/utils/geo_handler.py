@@ -6423,10 +6423,21 @@ class PipelineProcessor:
         # Aplicar transformación
         nuevo_brep = AllplanGeo.Transform(geo, matriz)
 
-        # Crear nuevo ModelElement con las mismas propiedades
+        # Crear nuevo ModelElement con las mismas propiedades y atributos.
+        # Sin esto se pierde, por ejemplo, Material=CAVITAT en outer TD.
         nuevo_model = AllplanBasisElements.ModelElement3D(
             model_element.GetCommonProperties(), nuevo_brep
         )
+        try:
+            src_attrs = (
+                model_element.GetAttributes()
+                if hasattr(model_element, "GetAttributes")
+                else None
+            )
+            if src_attrs:
+                nuevo_model.SetAttributes(src_attrs)
+        except Exception:
+            pass
         # print(f"  Escalado BREP: {longitud_actual:.2f}mm → {nueva_longitud:.2f}mm (factor: {factor_escala:.3f})")
         return nuevo_model
 
@@ -7076,7 +7087,18 @@ class PipelineProcessor:
             brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
         )
 
-        return AllplanBasisElements.ModelElement3D(prop, brep)
+        nuevo_model = AllplanBasisElements.ModelElement3D(prop, brep)
+        try:
+            src_attrs = (
+                model_element.GetAttributes()
+                if hasattr(model_element, "GetAttributes")
+                else None
+            )
+            if src_attrs:
+                nuevo_model.SetAttributes(src_attrs)
+        except Exception:
+            pass
+        return nuevo_model
 
     def process(self, segments, default_attrs=None, segment_cuts=None) -> list:
         """

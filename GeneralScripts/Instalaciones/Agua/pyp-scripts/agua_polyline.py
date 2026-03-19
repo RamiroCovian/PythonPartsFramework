@@ -36,6 +36,7 @@ from .utils.attributes_utils import (
     _apply_attributes_to_model_elem,
     _apply_absolute_numbering_attr01,
     _set_parent_attributes,
+    _has_material_cavitat,
 )
 from .utils.layers_utils import _apply_layer_to_element
 
@@ -701,37 +702,18 @@ def _create_elements_with_layers_attrs(
     current_tube_idx = -1
     last_segment_idx = 0
 
-    for item in elements_generated:
+    outer_inner_type_map = {
+        "tubo_agua": "tubo_agua_inner",
+        "codo_90": "codo_90_inner",
+        "manguito": "manguito_inner",
+        "te": "te_inner",
+    }
+    inner_outer_type_map = {v: k for k, v in outer_inner_type_map.items()}
+
+    for seq_idx, item in enumerate(elements_generated):
         element_type = item.element_type
         model_elem = item.element
         element_idx = item.index
-
-        storage_key = f"seg_{path_idx}_elem_{element_idx}"
-        base_key = _default_attr_key_for(element_type)
-
-        # 1) Defaults que ya trae el modelo generado por el PythonPart
-        model_default_attrs = _get_attributes_from_model_elem(model_elem)
-        # 2) Defaults cacheados por key (compatibilidad con el flujo actual)
-        key_default_attrs = _normalize_attribute_list(
-            so.default_attributes.get(base_key, []) if base_key else []
-        )
-        # 3) Atributos custom aplicados desde paleta
-        custom_attrs = _normalize_attribute_list(so.applied_attributes.get(storage_key, []))
-
-        merged_defaults = (
-            _merge_attributes(model_default_attrs, key_default_attrs)
-            if key_default_attrs
-            else list(model_default_attrs)
-        )
-        merged_attrs = (
-            _merge_attributes(merged_defaults, custom_attrs)
-            if custom_attrs
-            else list(merged_defaults)
-        )
-
-        if merged_attrs:
-            model_elem = _apply_attributes_to_model_elem(model_elem, merged_attrs)
-        so.applied_default_attributes[storage_key] = merged_attrs
 
         if element_type == "tubo_agua":
             current_tube_idx += 1
@@ -748,6 +730,64 @@ def _create_elements_with_layers_attrs(
         )
         if not distribution_type:
             distribution_type = getattr(so, "distribution_type", None) or "IS"
+
+        storage_key = f"seg_{path_idx}_elem_{element_idx}"
+        assignment_key = storage_key
+        base_key = _default_attr_key_for(element_type)
+
+        expected_outer_type = inner_outer_type_map.get(element_type)
+        is_paired_inner = False
+        if expected_outer_type and seq_idx - 1 >= 0:
+            prev_item = elements_generated[seq_idx - 1]
+            is_paired_inner = prev_item.element_type == expected_outer_type
+            if is_paired_inner:
+                assignment_key = f"seg_{path_idx}_elem_{prev_item.index}"
+
+        # 1) Defaults que ya trae el modelo generado por el PythonPart
+        model_default_attrs = _get_attributes_from_model_elem(model_elem)
+        # 2) Defaults cacheados por key (compatibilidad con el flujo actual)
+        key_default_attrs = _normalize_attribute_list(
+            so.default_attributes.get(base_key, []) if base_key else []
+        )
+        # 3) Atributos custom aplicados desde paleta
+        custom_attrs = _normalize_attribute_list(
+            so.applied_attributes.get(assignment_key, [])
+        )
+
+        expected_inner_type = outer_inner_type_map.get(element_type)
+        has_outer_inner_pair = False
+        if expected_inner_type and seq_idx + 1 < len(elements_generated):
+            next_item = elements_generated[seq_idx + 1]
+            has_outer_inner_pair = next_item.element_type == expected_inner_type
+
+        is_td = str(distribution_type).upper() == "TD"
+        is_outer_cavitat = bool(
+            doc
+            and is_td
+            and has_outer_inner_pair
+            and _has_material_cavitat(model_elem, doc)
+        )
+
+        if is_outer_cavitat:
+            # En TD, el outer (Material=CAVITAT) debe conservar:
+            # - su atributo Material propio del modelo
+            # - su layer por defecto del modelo (no layer de paleta)
+            so.applied_default_attributes[storage_key] = list(model_default_attrs)
+        else:
+            merged_defaults = (
+                _merge_attributes(model_default_attrs, key_default_attrs)
+                if key_default_attrs
+                else list(model_default_attrs)
+            )
+            merged_attrs = (
+                _merge_attributes(merged_defaults, custom_attrs)
+                if custom_attrs
+                else list(merged_defaults)
+            )
+
+            if merged_attrs:
+                model_elem = _apply_attributes_to_model_elem(model_elem, merged_attrs)
+            so.applied_default_attributes[storage_key] = merged_attrs
 
         diameter_raw = (
             getattr(seg_info, "diameter", None) if seg_info is not None else None
@@ -771,11 +811,16 @@ def _create_elements_with_layers_attrs(
                 custom_parent_value = ""
 
         if custom_parent_value and doc:
+            parent_distribution = str(distribution_type)
+            if is_td and is_paired_inner:
+                # En par TD outer+inner, el inner debe recibir explícitamente
+                # pmp_pare + 6_CC_IS (comportamiento equivalente a la rama IS).
+                parent_distribution = "IS"
             _set_parent_attributes(
                 model_elem,
                 {"NomIS": custom_parent_value},
                 doc,
-                distribution_type=str(distribution_type),
+                distribution_type=parent_distribution,
             )
 
         if element_type == "tubo_agua":
@@ -786,7 +831,8 @@ def _create_elements_with_layers_attrs(
                 distribution_type=str(distribution_type),
             )
 
-        model_elem = _apply_layer_to_element(model_elem, storage_key, so)
+        if not is_outer_cavitat:
+            model_elem = _apply_layer_to_element(model_elem, assignment_key, so)
         item.element = model_elem
         elements_generated_final.append(item)
 
