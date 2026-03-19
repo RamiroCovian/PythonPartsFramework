@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import importlib
+import math
 
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
@@ -16,7 +17,7 @@ import NemAll_Python_BasisElements as AllplanBasisElements
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
 from Instalaciones.PolyLib import interactor as PBL_interactor
-from Instalaciones.PolyLib.models import Agua, GeneratedElement
+from Instalaciones.PolyLib.models import Agua, GeneratedElement, SegmentItem
 from Instalaciones.PolyLib.storage import PolylineStorage
 
 from .utils.geo_handler import GeometryHandler, PipelineProcessor
@@ -69,6 +70,158 @@ reload_module = [
     PBL_interactor,
     PBL_object,
 ]
+
+MAX_SEGMENT_LENGTH = 5000.0  # 5m (fallback)
+MAX_SEGMENT_LENGTH_BY_TUBE_TYPE = {
+    # TD
+    ("TD", "Polietilè"): 5000.0,
+    ("TD", "Multicapa"): 5000.0,
+    ("TD", "Armaflex"): 5000.0,
+    # IS
+    ("IS", "Polietilè"): 5000.0,
+    ("IS", "Multicapa"): 5000.0,
+    ("IS", "Armaflex"): 5000.0,
+}
+
+_TUBE_LABEL_BY_KEY = {
+    "polietile": "Polietilè",
+    "multicapa": "Multicapa",
+    "armaflex": "Armaflex",
+}
+
+
+def _get_max_segment_length_for_group(
+    so: PBL.script_object.PolylineScriptObject, segments: list, model_base: dict | None
+) -> float:
+    """
+    Obtiene longitud máxima por tipo de tubo (TD/IS + tubo) con fallback global.
+    """
+    try:
+        dist_raw = None
+        if segments:
+            first_info = getattr(segments[0], "info", None)
+            dist_raw = getattr(first_info, "distribution_type", None)
+        if not dist_raw:
+            dist_raw = getattr(so, "distribution_type", None)
+        distribution_type = "TD" if str(dist_raw).upper() == "TD" else "IS"
+
+        tube_label = None
+        if isinstance(model_base, dict):
+            tube_label = model_base.get("label")
+            if not tube_label:
+                tube_key = str(model_base.get("key", "")).strip().lower()
+                tube_label = _TUBE_LABEL_BY_KEY.get(tube_key)
+        if not tube_label:
+            tube_label = "Polietilè"
+
+        key = (distribution_type, str(tube_label).strip())
+        max_len = MAX_SEGMENT_LENGTH_BY_TUBE_TYPE.get(key)
+        if max_len is not None:
+            return float(max_len)
+
+        print(
+            f"[AGUA] No max length para {key}, usando fallback {MAX_SEGMENT_LENGTH}mm"
+        )
+        return float(MAX_SEGMENT_LENGTH)
+    except Exception as ex:
+        print(
+            f"[AGUA] Error resolviendo max length por tipo de tubo: {ex}. "
+            f"Usando fallback {MAX_SEGMENT_LENGTH}mm"
+        )
+        return float(MAX_SEGMENT_LENGTH)
+
+
+def _split_segment_by_max_length(
+    segment, max_length: float = MAX_SEGMENT_LENGTH
+) -> list:
+    """
+    Divide un SegmentItem largo en subsegmentos de longitud máxima `max_length`.
+    Conserva metadata (`info`) y orientación del segmento original.
+    """
+    data = getattr(segment, "data", None)
+    if data is None:
+        return [segment]
+
+    start = getattr(data, "start", None)
+    end = getattr(data, "end", None)
+    length = float(getattr(data, "longitud_3d", 0.0) or 0.0)
+    if not start or not end or length <= max_length + 1e-6:
+        return [segment]
+    if length <= 1e-6:
+        return [segment]
+
+    dx = end.X - start.X
+    dy = end.Y - start.Y
+    dz = end.Z - start.Z
+    ux = dx / length
+    uy = dy / length
+    uz = dz / length
+
+    result = []
+    current_pos = 0.0
+    sub_idx = 0
+
+    while current_pos < length - 1e-3:
+        sub_length = min(max_length, length - current_pos)
+
+        p_start = AllplanGeo.Point3D(
+            start.X + ux * current_pos,
+            start.Y + uy * current_pos,
+            start.Z + uz * current_pos,
+        )
+        p_end = AllplanGeo.Point3D(
+            start.X + ux * (current_pos + sub_length),
+            start.Y + uy * (current_pos + sub_length),
+            start.Z + uz * (current_pos + sub_length),
+        )
+
+        seg_dict = SegmentItem.segment_item_to_dict(segment)
+        sub_seg = SegmentItem.dict_to_segment_item(seg_dict)
+        sub_seg.name = f"{segment.name}_sub_{sub_idx + 1}"
+
+        sub_dx = p_end.X - p_start.X
+        sub_dy = p_end.Y - p_start.Y
+        sub_dz = p_end.Z - p_start.Z
+        sub_len_xy = math.sqrt(sub_dx * sub_dx + sub_dy * sub_dy)
+        sub_len = math.sqrt(sub_dx * sub_dx + sub_dy * sub_dy + sub_dz * sub_dz)
+
+        sub_seg.data.start = p_start
+        sub_seg.data.end = p_end
+        sub_seg.data.delta_x = sub_dx
+        sub_seg.data.delta_y = sub_dy
+        sub_seg.data.delta_z = sub_dz
+        sub_seg.data.longitud_3d = sub_len
+        sub_seg.data.longitud_xy = sub_len_xy
+        sub_seg.data.longitud_xz = math.sqrt(sub_dx * sub_dx + sub_dz * sub_dz)
+        sub_seg.data.longitud_yz = math.sqrt(sub_dy * sub_dy + sub_dz * sub_dz)
+        sub_seg.data.longitud_x = abs(sub_dx)
+        sub_seg.data.longitud_y = abs(sub_dy)
+        sub_seg.data.longitud_z = abs(sub_dz)
+        sub_seg.data.vector = AllplanGeo.Vector3D(sub_dx, sub_dy, sub_dz)
+        if sub_len > 1e-9:
+            sub_seg.data.vector_normalizado = AllplanGeo.Vector3D(
+                sub_dx / sub_len, sub_dy / sub_len, sub_dz / sub_len
+            )
+        else:
+            sub_seg.data.vector_normalizado = AllplanGeo.Vector3D(0.0, 0.0, 0.0)
+
+        result.append(sub_seg)
+        current_pos += sub_length
+        sub_idx += 1
+
+    return result
+
+
+def _split_path_segments_by_max_length(
+    segments: list, max_length: float = MAX_SEGMENT_LENGTH
+) -> list:
+    """
+    Divide todos los segmentos de un path en subsegmentos de `max_length`.
+    """
+    out = []
+    for seg in segments or []:
+        out.extend(_split_segment_by_max_length(seg, max_length=max_length))
+    return out
 
 
 def check_allplan_version(_build_ele, _version):
@@ -279,25 +432,38 @@ def _create_elements_for_segment_group(
                 (i for i, sg in enumerate(so.segment_groups) if sg is segments),
                 0,
             )
+            max_segment_length = _get_max_segment_length_for_group(
+                so, segments, model_base
+            )
+            segments_to_process = _split_path_segments_by_max_length(
+                segments, max_segment_length
+            )
+            split_segment_groups = list(so.segment_groups)
+            if 0 <= path_idx < len(split_segment_groups):
+                split_segment_groups[path_idx] = segments_to_process
+            if not hasattr(so, "_runtime_segments_by_path"):
+                so._runtime_segments_by_path = {}
+            so._runtime_segments_by_path[path_idx] = segments_to_process
+
             # Detección de bifurcaciones: puntos con 3 segmentos conectados (TE)
-            vertex_map, te_vertices = detect_bifurcations(so.segment_groups)
+            vertex_map, te_vertices = detect_bifurcations(split_segment_groups)
             if te_vertices:
                 print(f"[AGUA] Bifurcaciones detectadas (TE): {len(te_vertices)}")
 
             # Preparar TE nodes (yaw por troncal) para el processor
             processor.te_nodes = (
-                build_te_params(so.segment_groups, vertex_map, te_vertices)
+                build_te_params(split_segment_groups, vertex_map, te_vertices)
                 if te_vertices
                 else {}
             )
 
-            all_cuts = compute_segment_cuts_for_all_paths(so.segment_groups)
+            all_cuts = compute_segment_cuts_for_all_paths(split_segment_groups)
             segment_cuts = {
                 seg_idx: all_cuts.get((path_idx, seg_idx), {"start": 0.0, "end": 0.0})
-                for seg_idx in range(len(segments))
+                for seg_idx in range(len(segments_to_process))
             }
             elements_generated = processor.process(
-                segments=segments, segment_cuts=segment_cuts
+                segments=segments_to_process, segment_cuts=segment_cuts
             )
 
     # self.element_list: List[List[GeneratedElement]] = []
@@ -322,7 +488,10 @@ def _create_elements_with_layers_attrs(
         doc = None
 
     path_segments = []
-    if getattr(so, "segment_groups", None) and path_idx < len(so.segment_groups):
+    runtime_segments = getattr(so, "_runtime_segments_by_path", {})
+    if isinstance(runtime_segments, dict) and path_idx in runtime_segments:
+        path_segments = runtime_segments[path_idx]
+    elif getattr(so, "segment_groups", None) and path_idx < len(so.segment_groups):
         path_segments = so.segment_groups[path_idx]
 
     def _default_attr_key_for(element_type: str) -> str:
