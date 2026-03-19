@@ -84,7 +84,11 @@ class ArmaflexScript(BaseScriptObject):
         # De momento solo existe versión TD de armaflex.
         if dist_type == "IS":
             PythonUtility.ShowMessageBox(
-                "Este tipo de tubo no existe o no está disponible para la distribución IS.",
+                "Este tipo de tubo no existe o no está disponible para la distribución IS.\n\n"
+                "Para continuar:\n"
+                "1) Vuelva a Modo creación.\n"
+                "2) Cambie la distribución a TD.\n"
+                "3) Regrese a Modo configuración.",
                 PythonUtility.MB_OK,
             )
             return CreateElementResult([])

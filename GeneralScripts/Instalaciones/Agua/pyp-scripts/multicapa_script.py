@@ -100,7 +100,11 @@ class MulticapaScript(BaseScriptObject):
         # De momento solo existe la versión TD de multicapa.
         if dist_type == "IS":
             PythonUtility.ShowMessageBox(
-                "Este tipo de tub multicapa no existe o no está disponible para la distribución IS.",
+                "Este tipo de tub multicapa no existe o no está disponible para la distribución IS.\n\n"
+                "Para continuar:\n"
+                "1) Vuelva a Modo creación.\n"
+                "2) Cambie la distribución a TD.\n"
+                "3) Regrese a Modo configuración.",
                 PythonUtility.MB_OK,
             )
             return CreateElementResult([])
