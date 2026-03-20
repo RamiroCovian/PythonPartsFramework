@@ -1,263 +1,220 @@
-# Integración polilínea ⇔ PythonParts (Agua)
+# Integracion polilinea <-> PythonParts (Agua)
 
 ## Objetivo
 
-Unificar el flujo entre la polilínea de `Agua` y los PythonParts de tuberías (`polietile` IS/TD y `multicapa`), de forma que:
+Documentar el estado actual de la integracion entre polilinea y PythonParts de `Agua`, incluyendo:
 
-- El diámetro elegido en la polilínea controle la geometría 3D (dimensiones) del tubo.
-- El tipo de agua (`water_type`) viaje desde la polilínea hasta el modelo.
-- Los tubos complejos (TD, multicapa) se recorran correctamente a lo largo de la polilínea.
-
----
-
-## 1. Flujo de datos desde la polilínea
-
-Archivo clave: `agua_polyline.py`
-
-- En el hook `_create_elements_for_segment_group`:
-  - Se lee la configuración de instalación actual: `so.current_inst_config`.
-  - Se determina el diámetro efectivo:
-    - Si el usuario eligió uno en la paleta (`so.diameter_list` / `so.diameter_type`), se usa ese.
-    - Si no, se usa el diámetro por defecto del modelo (`model_base["diameter"]`).
-  - Para los sistemas de agua que usan tuberías instaladas:
-
-```python
-if model_base and element_type_core in ["polietile", "multicapa"]:
-    # water_type viene de SegmentInfo
-    water_type = segments[0].info.water_type  # si existe
-
-    conduct_model = so._get_pythonpart_installed(
-        element_key=selected_inst[0].key,
-        exec_kwargs={
-            "diameter": diameter,
-            "dist_type": so.distribution_type,  # "IS" o "TD"
-            "water_type": water_type,
-        },
-    )
-```
-
-- El resultado del PythonPart (`conduct_model`) se combina con el modelo de codo y se pasa al `PipelineProcessor`:
-
-```python
-elem3D_list = [
-    {"type": "tubo_agua", "elem": conduct_model[0], "rotate": True, "color": 1},
-]
-
-if len(conduct_model) > 1:
-    elem3D_list.append(
-        {"type": "tubo_agua_inner", "elem": conduct_model[1], "rotate": True, "color": 1}
-    )
-
-elem3D_list.append({"type": "codo_90", "elem": codo_model[0], "rotate": True})
-
-processor = PipelineProcessor(elem3D_list=elem3D_list, element_type="tubo_agua")
-elements_generated = processor.process(segments=segments)
-```
+- Seleccion dinamica correcta por sistema (`Polietile`, `Multicapa`, `Armaflex`), diametro y distribucion.
+- Reglas de atributos/layers para elementos TD con doble BRep (`outer` + `inner`).
+- Casos especiales `inner-only` (reductores y TE mixtas) y su comportamiento de paleta.
+- Validaciones y mensajes al usuario para combinaciones no soportadas.
 
 ---
 
-## 2. PythonPart de polietileno (`polietile_script.py`)
+## 1) Flujo general de generacion
 
-Archivo: `Agua/pyp-scripts/polietile_script.py`
+Archivo principal: `Agua/pyp-scripts/agua_polyline.py`.
 
-- `execute` ahora acepta parámetros de la polilínea:
-
-```python
-def execute(self, *args, **kwargs) -> CreateElementResult:
-    diameter = args[0] if args else kwargs.get("diameter")
-    dist_type = kwargs.get("dist_type")     # "IS" o "TD"
-    water_type = kwargs.get("water_type")   # "Fred", "Calent", etc.
-```
-
-### 2.1. Diámetro (`DiametroAplicar`)
-
-- El `diameter` que viene de la polilínea se vuelca en `build_ele.DiametroAplicar`:
-
-```python
-if diameter is not None:
-    diam_attr = getattr(self.build_ele, "DiametroAplicar", None)
-    diam_int = int(diameter)  # si es posible
-    if diam_int is not None:
-        if diam_attr is not None and hasattr(diam_attr, "value"):
-            diam_attr.value = diam_int
-        else:
-            setattr(self.build_ele, "DiametroAplicar", diam_int)
-```
-
-- Los modelos `TubPolietileModel` (IS) y `TubPolietileTDModel` (TD) leen `DiametroAplicar` y lo usan para seleccionar el índice de `PARAMS`, por encima del valor del combo.
-
-### 2.2. Tipo de agua (`water_type`)
-
-- Se traslada el tipo de agua al `build_ele` para que los modelos no tengan que usar el valor por defecto:
-
-```python
-if water_type:
-    if dist_type == "IS":
-        target_names = ["TipoDeAguaIS", "TipoDeAgua"]
-    elif dist_type == "TD":
-        target_names = ["TipoDeAguaTD", "TipoDeAgua"]
-    else:
-        target_names = ["TipoDeAgua"]
-
-    for name in target_names:
-        attr = getattr(self.build_ele, name, None)
-        if attr is not None and hasattr(attr, "value"):
-            attr.value = str(water_type)
-        else:
-            setattr(self.build_ele, name, str(water_type))
-```
-
-### 2.3. Ejecución del modelo
-
-- En función de `dist_type` se llama al modelo correspondiente:
-
-```python
-if dist_type == "IS":
-    tub = TubPolietileModel(self.build_ele, self.doc)
-else:
-    tub = TubPolietileTDModel(self.build_ele, self.doc)
-
-model_ele_list = tub.build()
-return CreateElementResult(model_ele_list)
-```
+1. La polilinea guarda por segmento: diametro, distribucion, sistema y tipo de agua.
+2. Se instancian templates base (`tubo`, `codo`, `manguito`, `te`).
+3. `PipelineProcessor` (en `utils/geo_handler.py`) reconstruye cada elemento por segmento/nodo con seleccion dinamica por diametros.
+4. `_create_elements_with_layers_attrs(...)` aplica:
+   - defaults del modelo generado,
+   - attrs/layers de paleta,
+   - atributo padre,
+   - numeracion.
 
 ---
 
-## 3. PythonPart de multicapa (`multicapa_script.py`)
+## 2) Seleccion dinamica por sistema de tubo
 
-Archivo: `Agua/pyp-scripts/multicapa_script.py`
+Archivo: `Agua/pyp-scripts/utils/geo_handler.py`.
 
-- `execute` ahora acepta `diameter`, `dist_type` y `water_type` igual que polietile:
+### 2.1 Problema corregido
 
-```python
-def execute(self, *args, **kwargs) -> CreateElementResult:
-    diameter = args[0] if args else kwargs.get("diameter")
-    dist_type = kwargs.get("dist_type")
-    water_type = kwargs.get("water_type")
-```
+Antes, la creacion dinamica de tubo usaba siempre familia polietileno; por eso en `Multicapa TD` podia crear `TubPolietileTDModel`.
 
-### 3.1. Distribución
+### 2.2 Implementacion actual
 
-- Actualmente solo existe versión TD:
+- Se normaliza `seg_info.system` a familia interna:
+  - `polietile`
+  - `multicapa`
+  - `armaflex`
+- Se cargan clases por familia y distribucion:
+  - `TubPolietileModel` / `TubPolietileTDModel`
+  - `TubMulticapaTDModel`
+  - `ArmaflexModel` (TD)
+- El cache de tubo incluye familia y agua:
+  - `(family, dist, diameter, water)`
 
-```python
-if dist_type == "IS":
-    PythonUtility.ShowMessageBox(
-        "Este tipo de tub multicapa no existe o no está disponible para la distribución IS.",
-        PythonUtility.MB_OK,
-    )
-    return CreateElementResult([])
-```
-
-### 3.2. Mapeo de diámetro a tipo de multicapa
-
-- El diámetro de la polilínea se traduce en el valor del combo `TipoTubMulticapa`, que lee `TubMulticapaTDModel`:
-
-```python
-if diameter is not None:
-    diam_int = int(diameter)  # si es posible
-    if diam_int == 20:
-        tipo_valor = "Ø20/2mm"
-    elif diam_int == 25:
-        tipo_valor = "Ø25/2,5mm"
-    elif diam_int == 32:
-        tipo_valor = "Ø32/3mm"
-
-    if tipo_valor:
-        tipo_attr = getattr(self.build_ele, "TipoTubMulticapa", None)
-        if tipo_attr is not None and hasattr(tipo_attr, "value"):
-            tipo_attr.value = tipo_valor
-        else:
-            setattr(self.build_ele, "TipoTubMulticapa", tipo_valor)
-```
-
-### 3.3. Tipo de agua
-
-- Igual que en polietile TD, se deja disponible en `TipoDeAguaTD` / `TipoDeAgua`:
-
-```python
-if water_type:
-    for name in ("TipoDeAguaTD", "TipoDeAgua"):
-        attr = getattr(self.build_ele, name, None)
-        if attr is not None and hasattr(attr, "value"):
-            attr.value = str(water_type)
-        else:
-            setattr(self.build_ele, name, str(water_type))
-```
+Resultado: `Multicapa TD` y `Armaflex TD` usan su clase correcta, sin contaminarse con `Polietile`.
 
 ---
 
-## 4. Generación de outer + inner a lo largo de la polilínea
+## 3) Reglas TD outer/inner (layers y atributos)
 
-Para los modelos TD de polietileno, el PythonPart devuelve **dos** elementos 3D:
+Archivos:
 
-- Outer: aislamiento.
-- Inner: tubo interior.
+- `Agua/pyp-scripts/agua_polyline.py`
+- `Agua/pyp-scripts/utils/attributes_utils.py`
+- `Agua/pyp-scripts/utils/geo_handler.py`
 
-Archivo: `Agua/pyp-scripts/utils/geo_handler.py` (`PipelineProcessor.process`).
+### 3.1 Regla funcional
 
-- Se usa como `element_type_core = "tubo_agua"` y se añade una convención:
-  - Outer → clave `"tubo_agua"`.
-  - Inner → clave `"tubo_agua_inner"`.
+Para elementos TD con par `outer + inner`:
 
-- En el tramo recto, se generan ambos cuando existe la plantilla inner:
+- `outer` con `Material=CAVITAT`:
+  - conserva su material y su layer default de modelo,
+  - no se pisan attrs/layer desde paleta.
+- `inner`:
+  - si recibe attrs/layer de paleta,
+  - si recibe atributo padre.
 
-```python
-if self.element_type_core in self.templates:
-    longitud_recortada = seg.longitud_3d - offset_inicio - offset_final
-    if longitud_recortada > 0:
-        # Punto central del tramo
-        dist_al_centro = offset_inicio + (longitud_recortada / 2.0)
-        p_centro = AllplanGeo.Point3D(
-            seg.start.X + v_unit.X * dist_al_centro,
-            seg.start.Y + v_unit.Y * dist_al_centro,
-            seg.start.Z + v_unit.Z * dist_al_centro,
-        )
+### 3.2 Atributo padre por distribucion
 
-        # OUTER
-        model_cond = self.modificar_dimensiones_brep(
-            self.templates[self.element_type_core], longitud_recortada
-        )
-        element = self._aplicar_transformacion(
-            model_cond, seg, custom_position=p_centro
-        )
-        result_list.append({...})
+- `TD`: solo `pmp_pare`.
+- `IS`: `pmp_pare` + `6_CC_IS`.
 
-        # INNER opcional: "<core>_inner"
-        inner_key = f"{self.element_type_core}_inner"
-        if inner_key in self.templates:
-            model_inner = self.modificar_dimensiones_brep(
-                self.templates[inner_key], longitud_recortada
-            )
-            element_inner = self._aplicar_transformacion(
-                model_inner, seg, custom_position=p_centro
-            )
-            result_list.append({...})
-```
-
-Con esto, el tramo TD de polietileno se dibuja como dos BReps paralelos, siguiendo exactamente la misma geometría de la polilínea.
+Adicionalmente, en TD se elimina explicitamente `6_CC_IS` si llega por defaults previos.
 
 ---
 
-## 5. Resumen del flujo completo
+## 4) Preservacion de atributos al transformar BReps
 
-1. El usuario define una polilínea de agua (`agua_polyline.py`), eligiendo:
-   - Diámetro.
-   - Tipo de agua (agua fría, caliente, retorno, etc.).
-   - Distribución IS / TD.
-2. Cada `SegmentInfo` guarda:
-   - `diameter`, `distribution_type`, `water_type`, `system`.
-3. `_create_elements_for_segment_group`:
-   - Llama al PythonPart correspondiente (`polietile_script`, `multicapa_script`) pasando `diameter`, `dist_type`, `water_type`.
-4. El PythonPart:
-   - Vuelca `diameter` en `DiametroAplicar` o `TipoTubMulticapa`.
-   - Vuelca `water_type` en `TipoDeAgua*`.
-   - Llama al modelo 3D (`TubPolietileModel`, `TubPolietileTDModel`, `TubMulticapaTDModel`).
-5. El modelo:
-   - Elige parámetros (`PARAMS`) en función de tipo de agua + diámetro.
-   - Devuelve outer (+ inner si aplica).
-6. `PipelineProcessor`:
-   - Escala y coloca outer (+ inner) por cada segmento de la polilínea.
-   - Añade codos donde hay cambios de dirección.
+Archivo: `Agua/pyp-scripts/utils/geo_handler.py`.
 
-Este documento sirve como referencia de cómo viajan los parámetros clave (diámetro y tipo de agua) y cómo se conectan polilínea, PythonParts y modelos 3D en la integración de instalaciones de agua.
+### Problema corregido
+
+En varias rutas de transformacion/retorno se recreaba `ModelElement3D` sin copiar atributos, perdiendo por ejemplo `Material=CAVITAT`.
+
+### Solucion
+
+Se centralizo la creacion con helper interno que siempre copia atributos del modelo fuente en los modelos transformados.
+
+Impacto:
+
+- Codos TD, manguitos TD y TE TD mantienen atributos de origen tras rotacion/escalado/traslado.
+
+---
+
+## 5) Casos especiales inner-only
+
+### 5.1 Manguito reductor TD (ej. 25-20)
+
+Archivos:
+
+- `Agua/pyp-scripts/utils/geo_handler.py`
+- `Agua/pyp-scripts/manguito_005_td.py`
+
+Comportamiento:
+
+- Si el modelo dinamico devuelve 1 solo BRep en TD reductor, se trata como `manguito_inner`.
+- Se omite crear `manguito_inner` desde template.
+- El modelo especial queda preparado para paleta (layer/attrs normales, sin `Material=CAVITAT` de outer).
+
+### 5.2 TE TD mixta inner-only
+
+Archivos:
+
+- `Agua/pyp-scripts/utils/geo_handler.py`
+- `Agua/pyp-scripts/te_003_td.py`
+
+Comportamiento:
+
+- Si la TE dinamica TD mixta devuelve 1 solo BRep, se trata como `te_inner`.
+- Se omite `te_inner` template.
+- Para `type_te >= 3`, se aplican attrs de `_create_attributes()` (no attrs de outer CAVITAT).
+
+---
+
+## 6) Priorizacion correcta de defaults por diametro real
+
+Archivo: `Agua/pyp-scripts/agua_polyline.py`.
+
+Se invirtio la prioridad del merge de defaults:
+
+- ahora ganan los attrs del modelo dinamico real (diametro efectivo),
+- los defaults cacheados por key quedan como base/fallback.
+
+Esto corrige casos donde se generaba diametro 25 pero quedaban attrs de 20.
+
+---
+
+## 7) Resolucion robusta de keys de paleta (inner)
+
+Archivo: `Agua/pyp-scripts/agua_polyline.py`.
+
+Para `*_inner` se agrego fallback de key (`seg_*_elem_*`) en indices vecinos cuando hay corrimiento entre seleccion y reconstruccion final.
+
+Objetivo: evitar perdidas de layer/atributo padre por desalineacion de key en elementos inner.
+
+---
+
+## 8) Mensajes al usuario por distribucion no soportada
+
+Archivos:
+
+- `Agua/pyp-scripts/multicapa_script.py`
+- `Agua/pyp-scripts/armaflex_script.py`
+
+Si el usuario intenta `IS` en esos sistemas, el mensaje ahora incluye pasos:
+
+1. Volver a modo creacion.
+2. Cambiar distribucion a TD.
+3. Volver a modo configuracion.
+
+---
+
+## 9) Validacion de combinaciones de TE no soportadas
+
+Archivo: `Agua/pyp-scripts/utils/geo_handler.py`.
+
+Se agrego validacion previa de combinacion `(di_in, di_out, di_branch)` para TE (IS y TD):
+
+- Si no existe TE para esa combinacion (ej. `20-25-20`), se muestra mensaje y no se crea TE fallback incorrecta.
+- El mensaje indica que deben ajustarse diametros de segmentos para coincidir con tipos de TE disponibles.
+- Se cachea la advertencia para no repetir popups identicos en bucle.
+
+---
+
+## 10) Ajustes de parametros de modelos TD
+
+### Manguito TD
+
+Archivo: `Agua/pyp-scripts/manguito_005_td.py`
+
+- Correccion de parametros `M25`:
+  - `LAYER_SHORT_INNER` correcto.
+  - `Material=CAVITAT` en outer.
+
+### TE TD
+
+Archivo: `Agua/pyp-scripts/te_003_td.py`
+
+- Fallback de layer para casos especiales (`LAYER_SHORT_OUTER` -> `LAYER_SHORT_INNER` / `LAYER_SHORT` cuando aplica).
+
+---
+
+## 11) Estado funcional esperado
+
+1. Tuberia dinamica respeta sistema real (`Polietile`, `Multicapa`, `Armaflex`).
+2. En TD con outer+inner:
+   - outer CAVITAT protegido,
+   - inner por paleta.
+3. Atributo padre:
+   - TD: solo `pmp_pare`,
+   - IS: `pmp_pare` + `6_CC_IS`.
+4. Reducers y TE mixtas inner-only reciben comportamiento de inner.
+5. Combinaciones TE invalidas muestran error y no generan geometria incorrecta.
+
+---
+
+## 12) Archivos impactados (resumen)
+
+- `Agua/pyp-scripts/agua_polyline.py`
+- `Agua/pyp-scripts/utils/geo_handler.py`
+- `Agua/pyp-scripts/utils/attributes_utils.py`
+- `Agua/pyp-scripts/manguito_005_td.py`
+- `Agua/pyp-scripts/te_003_td.py`
+- `Agua/pyp-scripts/multicapa_script.py`
+- `Agua/pyp-scripts/armaflex_script.py`

@@ -12,7 +12,6 @@ from .parameters import ParamNames
 # ============= ENUMERACIONES BASE =============
 class InstallationCategory(str, Enum):
     """Categorías principales de instalaciones"""
-
     VENTILATION = "Ventilacion"
     PLUMBING_WATER = "Agua"
     PLUMBING_DRAIN = "Saneamiento"
@@ -55,9 +54,7 @@ class WaterTypes(str, Enum):
         return "|".join(e.value for e in members)
 
     @classmethod
-    def _by_distribution(
-        cls, distribution: DistributionTypes | str
-    ) -> list["WaterTypes"]:
+    def _by_distribution(cls, distribution: DistributionTypes | str) -> list["WaterTypes"]:
         if distribution == DistributionTypes.TD:
             return [cls.FRED, cls.CALENT]
         return list(cls)
@@ -72,7 +69,6 @@ class FacesEN(str, Enum):
         """Formato listo para set_value_list."""
         return "|".join(e.value for e in cls)
 
-
 # ──────────────────────────────────────────────────────────────────────
 #   PARAMETROS POR DEFECTO
 # ──────────────────────────────────────────────────────────────────────
@@ -80,7 +76,8 @@ class FacesEN(str, Enum):
 class AdditionalParametersBase:
     # ── Instalación ──
     installation_type: bool = True
-    diameter_Type: bool = False
+    diameter_type: bool = False
+    diameter_type_str: bool = False
     distribution_type: bool = False
     water_type: bool = False
     face_en: bool = False
@@ -88,33 +85,33 @@ class AdditionalParametersBase:
     # ── Modo de dibujo ──
     draw_info_box: bool = True
     draw_mode: bool = True
-    draw_insert_point: bool = True  # CheckBox "Insertar punto"
-    draw_insert_cut: bool = False  # CheckBox "Insertar corte"
+    draw_insert_point: bool = True          # CheckBox "Insertar punto"
+    draw_insert_cut: bool = False          # CheckBox "Insertar corte"
 
     # ── Ángulos ──
-    limit_angles: bool = True  # CheckBox limitar ángulos
+    limit_angles: bool = True              # CheckBox limitar ángulos
     rotation_angle: bool = True
     rotation_angle_apply: bool = True
 
     # ── Layers ──
     elem_desc: bool = False
     info_apply: bool = False
-    layer_types: bool = True  # ComboBox tipos de layer
-    layer_apply: bool = True  # Button aplicar layer
+    layer_types: bool = True               # ComboBox tipos de layer
+    layer_apply: bool = True               # Button aplicar layer
 
     # ── Atributos ──
-    attribute_value: bool = True  # Input valor atributo
-    attribute_apply: bool = True  # Button aplicar atributo
+    attribute_value: bool = True           # Input valor atributo
+    attribute_apply: bool = True           # Button aplicar atributo
 
     # ── General ──
-    create_python_part: bool = True  # CheckBox crear PythonPartGroup
-    add_polilyne: bool = False  # CheckBox agregar polilínea
-    add_cube: bool = False  # CheckBox agregar cubo
+    create_python_part: bool = True        # CheckBox crear PythonPartGroup
+    add_polilyne: bool = False             # CheckBox agregar polilínea
+    add_cube: bool = False             # CheckBox agregar cubo
     functional_name: bool = True
 
     # ── Acciones ──
-    borrar_seccion: bool = True  # Button borrar segmento
-    finalizar_creacion: bool = True  # Button finalizar y crear
+    borrar_seccion: bool = True            # Button borrar segmento
+    finalizar_creacion: bool = True        # Button finalizar y crear
 
     # ──────────────────────────────────────────────────────────────
     # Mapeo: campo de este dataclass  →  nombre de parámetro XML
@@ -122,32 +119,32 @@ class AdditionalParametersBase:
     def to_param_map(self) -> dict[str, bool]:
         """Retorna {nombre_XML: valor_habilitado} para cada campo."""
         return {
-            ParamNames.Installation.INSTALLATION_TYPE: self.installation_type,
-            ParamNames.Installation.DIAMETER_TYPE: self.diameter_Type,
-            ParamNames.Installation.DISTRIBUTION_TYPE: self.distribution_type,
-            ParamNames.Installation.WATER_TYPE: self.water_type,
-            ParamNames.Installation.FACE_EN: self.face_en,
-            ParamNames.DrawMode.INFO_BOX: self.draw_info_box,
-            ParamNames.DrawMode.MODE: self.draw_mode,
-            ParamNames.DrawMode.INSERT: self.draw_insert_point,
-            ParamNames.DrawMode.CUT: self.draw_insert_cut,
-            ParamNames.Angles.CHECKBOX: self.limit_angles,
-            ParamNames.Angles.ROTATION_ANGLE: self.rotation_angle,
-            ParamNames.Angles.ROTATION_ANGLE_APPLY: self.rotation_angle_apply,
-            ParamNames.Layers.DESCRIPTION: self.elem_desc,
-            ParamNames.Layers.VIEW_INFO: self.info_apply,
-            ParamNames.Layers.TYPES: self.layer_types,
-            ParamNames.Layers.APPLY: self.layer_apply,
-            ParamNames.Attributes.VALUE: self.attribute_value,
-            ParamNames.Attributes.APPLY: self.attribute_apply,
-            ParamNames.General.CREATE_PYTHON_PART: self.create_python_part,
-            ParamNames.General.ADD_POLILYNE: self.add_polilyne,
-            ParamNames.General.ADD_CUBE: self.add_cube,
-            ParamNames.General.FUNCTIONAL_NAME: self.functional_name,
-            ParamNames.Actions.BORRAR_SECCION: self.borrar_seccion,
-            ParamNames.Actions.FINALIZAR_CREACION: self.finalizar_creacion,
+            ParamNames.Installation.INSTALLATION_TYPE:  self.installation_type,
+            ParamNames.Installation.DIAMETER_TYPE:      self.diameter_type,
+            ParamNames.Installation.DIAMETER_TYPE_STR:  self.diameter_type_str,
+            ParamNames.Installation.DISTRIBUTION_TYPE:  self.distribution_type,
+            ParamNames.Installation.WATER_TYPE:         self.water_type,
+            ParamNames.Installation.FACE_EN:            self.face_en,
+            ParamNames.DrawMode.INFO_BOX:               self.draw_info_box,
+            ParamNames.DrawMode.MODE:                   self.draw_mode,
+            ParamNames.DrawMode.INSERT:                 self.draw_insert_point,
+            ParamNames.DrawMode.CUT:                    self.draw_insert_cut,
+            ParamNames.Angles.CHECKBOX:                 self.limit_angles,
+            ParamNames.Angles.ROTATION_ANGLE:           self.rotation_angle,
+            ParamNames.Angles.ROTATION_ANGLE_APPLY:     self.rotation_angle_apply,
+            ParamNames.Layers.DESCRIPTION:              self.elem_desc,
+            ParamNames.Layers.VIEW_INFO:                self.info_apply,
+            ParamNames.Layers.TYPES:                    self.layer_types,
+            ParamNames.Layers.APPLY:                    self.layer_apply,
+            ParamNames.Attributes.VALUE:                self.attribute_value,
+            ParamNames.Attributes.APPLY:                self.attribute_apply,
+            ParamNames.General.CREATE_PYTHON_PART:      self.create_python_part,
+            ParamNames.General.ADD_POLILYNE:            self.add_polilyne,
+            ParamNames.General.ADD_CUBE:                self.add_cube,
+            ParamNames.General.FUNCTIONAL_NAME:         self.functional_name,
+            ParamNames.Actions.BORRAR_SECCION:          self.borrar_seccion,
+            ParamNames.Actions.FINALIZAR_CREACION:      self.finalizar_creacion,
         }
-
 
 # ──────────────────────────────────────────────────────────────────────
 # Habilitación de parámetros (True = interactúa, False = bloqueado)
@@ -160,9 +157,7 @@ class AdditionalParametersEnabled(AdditionalParametersBase):
     True  → el usuario puede interactuar con el control.
     False → el control se muestra pero está bloqueado/deshabilitado.
     """
-
     pass
-
 
 # ──────────────────────────────────────────────────────────────────────
 # Visibilidad de parámetros (True = visible, False = oculto)
@@ -175,7 +170,6 @@ class AdditionalParametersShow(AdditionalParametersBase):
     True  → el parámetro (y su row/expander padre) se muestra.
     False → el parámetro se oculta completamente.
     """
-
     pass
 
 
@@ -183,7 +177,7 @@ class AdditionalParametersShow(AdditionalParametersBase):
 #  PERFIL BASE — agrupa Show + Enabled de una instalación
 # ══════════════════════════════════════════════════════════════════════
 class InstallationProfile(NamedTuple):
-    show: AdditionalParametersShow
+    show:    AdditionalParametersShow
     enabled: AdditionalParametersEnabled
 
 
@@ -195,7 +189,6 @@ class BaseInstallation:
     cada tipo de instalación. Luego llamá a .profile() para
     obtener el par (show, enabled) listo para CONFIG.
     """
-
     class Show(AdditionalParametersShow):
         pass
 
@@ -220,7 +213,7 @@ class Agua(BaseInstallation):
         draw_mode_insert: bool = True
         distribution_type: bool = True
         face_en: bool = False
-        diameter_Type: bool = True
+        diameter_type: bool = True
         water_type: bool = True
 
     @dataclass
@@ -229,7 +222,7 @@ class Agua(BaseInstallation):
         distribution_type: bool = True
         face_en: bool = True
         create_python_part: bool = True
-        diameter_Type: bool = True
+        diameter_type: bool = True
         water_type: bool = True
 
 
@@ -237,16 +230,18 @@ class Clima(BaseInstallation):
 
     @dataclass
     class Show(AdditionalParametersShow):
-        elem_desc: bool = True
-        info_apply: bool = True
+        draw_mode_insert: bool = True
         distribution_type: bool = True
+        face_en: bool = False
+        diameter_type_str: bool = True
 
     @dataclass
     class Enabled(AdditionalParametersEnabled):
-        diameter_Type: bool = True
-
+        functional_name: bool = True
         distribution_type: bool = True
         face_en: bool = True
+        create_python_part: bool = True
+        diameter_type_str: bool = True
 
 
 class Electricidad(BaseInstallation):
@@ -281,18 +276,25 @@ class Ventilacion(BaseInstallation):
         functional_name: bool = True
         add_polilyne: bool = True
         create_python_part: bool = False
-        diameter_Type: bool = True
+        diameter_type: bool = True
 
 
 class Saneamiento(BaseInstallation):
 
     @dataclass
     class Show(AdditionalParametersShow):
-        limit_angles: bool = False
-        attribute_value: bool = False
-        attribute_apply: bool = False
+        draw_mode_insert: bool = True
+        distribution_type: bool = True
+        face_en: bool = False
+        diameter_type: bool = True
 
-    # Enabled queda en default → no hace falta redefinirla
+    @dataclass
+    class Enabled(AdditionalParametersEnabled):
+        functional_name: bool = True
+        distribution_type: bool = True
+        face_en: bool = True
+        create_python_part: bool = True
+        diameter_type: bool = True
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -305,7 +307,6 @@ _REGISTRY: dict[str, Type[BaseInstallation]] = {
     "ELECTRICIDAD": Electricidad,
     "SANEAMIENTO": Saneamiento,
 }
-
 
 def get_installation_profile(installation: str) -> InstallationProfile:
     key = installation.upper()
@@ -321,7 +322,6 @@ def register_installation(name: str, cls: Type[BaseInstallation]) -> None:
     """Permite registrar nuevos tipos desde fuera de la librería."""
     _REGISTRY[name.upper()] = cls
 
-
 # ══════════════════════════════════════════════════════════════════════
 # CONFIG BASE
 # ══════════════════════════════════════════════════════════════════════
@@ -332,126 +332,22 @@ class PolylineBaseConfig:
     Controls interactive behavior flags. Geometry constants (HANDLE_SIZE, etc.)
     should be set directly on the module by installation scripts.
     """
-
     registry_base_folder: str = "Instalaciones"
     registry_auto_load: bool = True  # Discover installations automatically
 
     default_installation: Optional[str] = ""
-    parameters_show: AdditionalParametersShow = field(
-        default_factory=lambda: AdditionalParametersShow()
-    )
-    parameters_enabled: AdditionalParametersEnabled = field(
-        default_factory=lambda: AdditionalParametersEnabled()
-    )
+    parameters_show: AdditionalParametersShow = field(default_factory=lambda: AdditionalParametersShow())
+    parameters_enabled: AdditionalParametersEnabled = field(default_factory=lambda: AdditionalParametersEnabled())
     num_td_path: Optional[str | None] = None
 
     limit_angles: bool = False  # Enable angle limiting (snap to predefined increments)
-    allowed_angles: Optional[List[float]] = field(
-        default_factory=lambda: [0.0, 45.0, 90.0, -45.0, -90.0]
-    )
-    min_backtrack_deg: int = 0  # Permite establecer rango de angulos
-
-
-# @dataclass
-# class SegmentMetadata:
-#     """Metadata for a single polyline segment.
-
-#     The library keeps this flexible so installation scripts can attach
-#     any additional information required to post-process saved paths.
-#     """
-#     points: List[Any]
-#     diameter: Optional[float | int] = 0
-#     section_type: Optional[str] = None
-#     system: Optional[str] = None
-#     label: Optional[str] = field(default_factory=str)
-#     layer: Optional[str] = None
-#     path_id: Optional[int] = None
-#     segment_id: Optional[int] = None
-#     color_id: Optional[int | None] = None
-#     point_roles: Optional[List[int] | None] = field(default_factory=list)
-#     custom: Dict[str, Any] = field(default_factory=dict)
-
-#     @classmethod
-#     def from_legacy(cls, data: Any) -> "SegmentMetadata":
-#         """Create metadata from legacy dict structures."""
-#         if isinstance(data, cls):
-#             return data
-
-#         if isinstance(data, dict):
-#             points = data.get("points", [])
-#             diameter = data.get("diameter", 0)
-#             section_type = data.get("section_type", 0)
-#             system = data.get("system", 0)
-#             label = data.get("label", "")
-#             layer = data.get("layer")
-#             path_id = data.get("path_id")
-#             segment_id = data.get("segment_id")
-#             color_id = data.get("color_id")
-#             point_roles = data.get("point_roles", [])
-
-#             # Copy any additional fields that may exist
-#             custom_fields = {
-#                 k: v
-#                 for k, v in data.items()
-#                 if k
-#                 not in {
-#                     "points",
-#                     "diameter",
-#                     "section_type",
-#                     "system",
-#                     "label",
-#                     "layer",
-#                     "path_id",
-#                     "segment_id",
-#                     "color_id",
-#                     "point_roles",
-#                 }
-#             }
-
-#             return cls(
-#                 points=list(points),
-#                 diameter=float(diameter) if isinstance(diameter, (int, float, str)) else 0,
-#                 section_type=str(section_type),
-#                 system=str(system),
-#                 label=str(label),
-#                 layer=str(layer) if layer is not None else None,
-#                 path_id=int(path_id) if path_id is not None else None,
-#                 segment_id=int(segment_id) if segment_id is not None else None,
-#                 color_id=int(color_id) if color_id is not None else None,
-#                 point_roles=list(point_roles) if isinstance(point_roles, (list, tuple)) else [],
-#                 custom=custom_fields,
-#             )
-
-#         # Fallback: treat as empty metadata
-#         return cls(points=[])
-
-#     def to_dict(self) -> Dict[str, Any]:
-#         """Serialize metadata to a dict for backwards compatibility."""
-#         base = {
-#             "points": self.points,
-#             "diameter": self.diameter,
-#             "section_type": self.section_type,
-#             "system": self.system,
-#             "label": self.label,
-#         }
-#         if self.layer is not None:
-#             base["layer"] = self.layer
-#         if self.path_id is not None:
-#             base["path_id"] = self.path_id
-#         if self.segment_id is not None:
-#             base["segment_id"] = self.segment_id
-#         if self.color_id is not None:
-#             base["color_id"] = self.color_id
-#         if self.point_roles:
-#             base["point_roles"] = list(self.point_roles)
-#         base.update(self.custom)
-#         return base
+    allowed_angles: Optional[List[float]] = field(default_factory=lambda: [0.0, 45.0, 90.0, -45.0, -90.0])
+    min_backtrack_deg: int = 0 # Permite establecer rango de angulos
 
 
 @dataclass
 class PolylineResult:
     """Result returned to the caller after user acceptance."""
-
     points: List[AllplanGeo.Point3D] = field(default_factory=list)
     is_closed: bool = False
 
@@ -485,7 +381,7 @@ class SegmentData:
     # ===== ÁNGULOS HORIZONTALES (Plano XY - cuadrado rojo) =====
     angulo_xy_desde_x: float = 0.0  # Desde +X [-180° a 180°]
     angulo_xy_desde_y: float = 0.0  # Desde +Y [-180° a 180°]
-    azimut: float = 0.0  # Desde Norte (horario) [0° a 360°]
+    azimut: float = 0.0              # Desde Norte (horario) [0° a 360°]
 
     # ===== ÁNGULOS VERTICALES (Plano XZ) =====
     angulo_xz_desde_x: float = 0.0
@@ -498,11 +394,11 @@ class SegmentData:
     inclinacion_en_y: float = 0.0
 
     # ===== ELEVACIÓN Y PENDIENTE =====
-    elevacion: float = 0.0  # [-90° a 90°]
+    elevacion: float = 0.0           # [-90° a 90°]
     pendiente_porcentaje: float = 0.0
 
     # ===== ÁNGULOS DIRECTORES =====
-    angulo_con_eje_x: float = 0.0  # [0° a 180°]
+    angulo_con_eje_x: float = 0.0    # [0° a 180°]
     angulo_con_eje_y: float = 0.0
     angulo_con_eje_z: float = 0.0
     coseno_director_x: float = 0.0
@@ -515,8 +411,8 @@ class SegmentData:
     angulo_xz_yz: float = 0.0
 
     # ===== CLASIFICACIÓN ESPACIAL =====
-    cuadrante_xy: int = 1  # 1-4
-    octante: int = 1  # 1-8
+    cuadrante_xy: int = 1            # 1-4
+    octante: int = 1                 # 1-8
     tipo_segmento: str = "horizontal"  # horizontal/vertical/inclinado
 
     # ===== SENTIDOS =====
@@ -530,7 +426,7 @@ class SegmentData:
 
     # ===== COMPATIBILIDAD CON CÓDIGO ANTERIOR =====
     angulo_xy: float = 0.0  # Alias de angulo_xy_desde_x
-    angulo_z: float = 0.0  # Alias de elevacion
+    angulo_z: float = 0.0   # Alias de elevacion
 
 
 @dataclass
@@ -538,7 +434,6 @@ class SegmentItem:
     """
     Representa un segmento individual de una polilínea con todos sus datos geométricos.
     """
-
     name: str
     view_mode: str
     data: SegmentData
@@ -578,8 +473,9 @@ class SegmentItem:
                         "x": round(self.data.delta_x, 3),
                         "y": round(self.data.delta_y, 3),
                         "z": round(self.data.delta_z, 3),
-                    },
+                    }
                 },
+
                 # LONGITUDES
                 "longitudes": {
                     "total_3d": round(self.data.longitud_3d, 3),
@@ -592,14 +488,16 @@ class SegmentItem:
                         "x": round(self.data.longitud_x, 3),
                         "y": round(self.data.longitud_y, 3),
                         "z": round(self.data.longitud_z, 3),
-                    },
+                    }
                 },
+
                 # ÁNGULOS HORIZONTALES
                 "angulos_horizontales": {
                     "desde_eje_x": round(self.data.angulo_xy_desde_x, 2),
                     "desde_eje_y": round(self.data.angulo_xy_desde_y, 2),
                     "azimut": round(self.data.azimut, 2),
                 },
+
                 # ÁNGULOS VERTICALES
                 "angulos_verticales": {
                     "plano_xz": {
@@ -615,6 +513,7 @@ class SegmentItem:
                     "elevacion_general": round(self.data.elevacion, 2),
                     "pendiente_porcentaje": round(self.data.pendiente_porcentaje, 2),
                 },
+
                 # ÁNGULOS DIRECTORES
                 "angulos_directores": {
                     "con_eje_x": round(self.data.angulo_con_eje_x, 2),
@@ -624,8 +523,9 @@ class SegmentItem:
                         "x": round(self.data.coseno_director_x, 4),
                         "y": round(self.data.coseno_director_y, 4),
                         "z": round(self.data.coseno_director_z, 4),
-                    },
+                    }
                 },
+
                 # CLASIFICACIÓN
                 "clasificacion": {
                     "cuadrante_xy": self.data.cuadrante_xy,
@@ -635,13 +535,14 @@ class SegmentItem:
                         "x": self.data.sentido_x,
                         "y": self.data.sentido_y,
                         "z": self.data.sentido_z,
-                    },
+                    }
                 },
+
                 # VECTORES (solo magnitudes, no objetos)
                 "vectores": {
                     "direccional": self._vector_to_dict(self.data.vector),
                     "normalizado": self._vector_to_dict(self.data.vector_normalizado),
-                },
+                }
             }
         }
 
@@ -724,9 +625,7 @@ class SegmentItem:
         Returns:
             String JSON
         """
-        return json.dumps(
-            self.as_dict(simplified=simplified), indent=indent, ensure_ascii=False
-        )
+        return json.dumps(self.as_dict(simplified=simplified), indent=indent, ensure_ascii=False)
 
     def summary(self) -> str:
         """
@@ -764,7 +663,11 @@ class SegmentItem:
         """Convierte un Point3D a diccionario."""
         if point is None:
             return {"x": 0.0, "y": 0.0, "z": 0.0}
-        return {"x": round(point.X, 3), "y": round(point.Y, 3), "z": round(point.Z, 3)}
+        return {
+            "x": round(point.X, 3),
+            "y": round(point.Y, 3),
+            "z": round(point.Z, 3)
+        }
 
     @staticmethod
     def _vector_to_dict(vector: Any) -> Dict[str, float]:
@@ -774,7 +677,7 @@ class SegmentItem:
         return {
             "x": round(vector.X, 4),
             "y": round(vector.Y, 4),
-            "z": round(vector.Z, 4),
+            "z": round(vector.Z, 4)
         }
 
     # ===== PROPIEDADES DE ACCESO RÁPIDO =====
@@ -816,10 +719,12 @@ class SegmentItem:
             # Puntos principales
             "start": SegmentItem.point_to_dict(data.start),
             "end": SegmentItem.point_to_dict(data.end),
+
             # Deltas
             "delta_x": data.delta_x,
             "delta_y": data.delta_y,
             "delta_z": data.delta_z,
+
             # Longitudes
             "longitud_3d": data.longitud_3d,
             "longitud_xy": data.longitud_xy,
@@ -828,6 +733,7 @@ class SegmentItem:
             "longitud_x": data.longitud_x,
             "longitud_y": data.longitud_y,
             "longitud_z": data.longitud_z,
+
             # Ángulos desde ejes
             "angulo_xy_desde_x": data.angulo_xy_desde_x,
             "angulo_xy_desde_y": data.angulo_xy_desde_y,
@@ -838,32 +744,40 @@ class SegmentItem:
             "angulo_yz_desde_y": data.angulo_yz_desde_y,
             "angulo_yz_desde_z": data.angulo_yz_desde_z,
             "inclinacion_en_y": data.inclinacion_en_y,
+
             # Elevación y pendiente
             "elevacion": data.elevacion,
             "pendiente_porcentaje": data.pendiente_porcentaje,
+
             # Ángulos con ejes principales
             "angulo_con_eje_x": data.angulo_con_eje_x,
             "angulo_con_eje_y": data.angulo_con_eje_y,
             "angulo_con_eje_z": data.angulo_con_eje_z,
+
             # Cosenos directores
             "coseno_director_x": data.coseno_director_x,
             "coseno_director_y": data.coseno_director_y,
             "coseno_director_z": data.coseno_director_z,
+
             # Ángulos entre planos
             "angulo_xy_xz": data.angulo_xy_xz,
             "angulo_xy_yz": data.angulo_xy_yz,
             "angulo_xz_yz": data.angulo_xz_yz,
+
             # Clasificación espacial
             "cuadrante_xy": data.cuadrante_xy,
             "octante": data.octante,
             "tipo_segmento": data.tipo_segmento,
+
             # Sentidos
             "sentido_x": data.sentido_x,
             "sentido_y": data.sentido_y,
             "sentido_z": data.sentido_z,
+
             # Vectores
             "vector": SegmentItem.vector_to_dict(data.vector),
             "vector_normalizado": SegmentItem.vector_to_dict(data.vector_normalizado),
+
             # Ángulos principales (simplificados)
             "angulo_xy": data.angulo_xy,
             "angulo_z": data.angulo_z,
@@ -883,6 +797,7 @@ class SegmentItem:
     def segments_list_to_dict(segments_list):
         """Convierte una lista de SegmentItem a lista de diccionarios"""
         return [SegmentItem.segment_item_to_dict(item) for item in segments_list]
+
 
     # ============================================================================
     # FUNCIONES DE DESERIALIZACIÓN (OPCIONAL - Para reconstruir desde JSON)
@@ -945,7 +860,7 @@ class SegmentItem:
             vector=SegmentItem.dict_to_vector(d["vector"]),
             vector_normalizado=SegmentItem.dict_to_vector(d["vector_normalizado"]),
             angulo_xy=d["angulo_xy"],
-            angulo_z=d["angulo_z"],
+            angulo_z=d["angulo_z"]
         )
 
     @staticmethod
@@ -955,21 +870,20 @@ class SegmentItem:
             name=d["name"],
             view_mode=d["view_mode"],
             data=SegmentItem.dict_to_segment_data(d["data"]),
-            info=SegmentInfo.from_dict(d["info"]) if d.get("info") else None,
+            info=SegmentInfo.from_dict(d["info"]) if d.get("info") else None
         )
 
 
 @dataclass
 class SegmentInfo:
     """Representa un segmento de la instalación con su metadata técnica."""
-
-    diameter: Any  # int | float | list[int|float]
-    section_type: str = ""
+    diameter: Any # int | float | list[int|float]
+    section_type:  str = ""
     system: str = ""
     label: str = ""
     distribution_type: Optional[str] = None
     water_type: Optional[str] = None
-    face: Optional[Any] = None
+    face: Optional[Any]  = None
     view_mode: Optional[str] = None
 
     @property
@@ -986,29 +900,26 @@ class SegmentInfo:
 
     def to_dict(self) -> dict:
         return {
-            "diameter": self.diameter,
-            "section_type": self.section_type,
-            "system": self.system,
-            "label": self.label,
-            "distribution_type": (
-                self.distribution_type if self.distribution_type is not None else ""
-            ),
-            "face": self.face if self.face is not None else "",
-            "view_mode": self.view_mode if self.view_mode is not None else "",
+            "diameter":          self.diameter,
+            "section_type":      self.section_type,
+            "system":            self.system,
+            "label":             self.label,
+            "distribution_type": self.distribution_type if self.distribution_type is not None else "",
+            "face":              self.face if self.face is not None else "",
+            "view_mode":          self.view_mode if self.view_mode is not None else "",
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "SegmentInfo":
         return cls(
-            diameter=data.get("diameter", 0),
-            section_type=data.get("section_type", ""),
-            system=data.get("system", ""),
-            label=data.get("label", ""),
-            distribution_type=data.get("distribution_type", "") or None,
-            face=data.get("face", "") or None,
-            view_mode=data.get("view_mode", ""),
+            diameter=          data.get("diameter", 0),
+            section_type=      data.get("section_type", ""),
+            system=            data.get("system", ""),
+            label=             data.get("label", ""),
+            distribution_type= data.get("distribution_type", "") or None,
+            face=              data.get("face", "") or None,
+            view_mode=         data.get("view_mode", "")
         )
-
 
 @dataclass
 class InstallationElement:
@@ -1016,39 +927,34 @@ class InstallationElement:
     Representa un componente real de la instalación con su data técnica,
     geometría y ubicación dentro de la red.
     """
-
-    type: str  # 'tubo', 'codo', 'union', 'bifurcacion', 'reducer'
-    key: List  # Identificador único para el interactor
+    type: str                          # 'tubo', 'codo', 'union', 'bifurcacion', 'reducer'
+    key: List                          # Identificador único para el interactor
     geometry: Any
-    position: AllplanGeo.Point3D  # Punto de inserción o inicio
-    layer: str  # Layer Name
-    path_idx: int  # Índice de la trayectoria a la que pertenece
-    seg_idx: int  # Índice del segmento dentro de esa trayectoria
+    position: AllplanGeo.Point3D       # Punto de inserción o inicio
+    layer: str                         # Layer Name
+    path_idx: int                      # Índice de la trayectoria a la que pertenece
+    seg_idx: int                       # Índice del segmento dentro de esa trayectoria
     params: Dict[str, Any] = field(default_factory=dict)  # Metadata adicional
     attribute: Optional[str] = None
     # --- Campos exclusivos de reductores (None para el resto de elementos) ---
-    diameter_in: Optional[float] = None  # Diámetro del segmento entrante (mm)
+    diameter_in: Optional[float] = None   # Diámetro del segmento entrante (mm)
     diameter_out: Optional[float] = None  # Diámetro del segmento saliente (mm)
-    reducer_type: Optional[str] = None  # Ej: "D40-D110"
+    reducer_type: Optional[str] = None    # Ej: "D40-D110"
 
     def get_info(self) -> str:
         """Devuelve un resumen rápido del elemento."""
         if self.type == ElementTypes.REDUCION.value and self.reducer_type:
-            return (
-                f"Reductor {self.reducer_type} "
-                f"(Path: {self.path_idx}, Seg: {self.seg_idx})"
-            )
+            return (f"Reductor {self.reducer_type} "
+                    f"(Path: {self.path_idx}, Seg: {self.seg_idx})")
         return f"Elemento {self.type} (Path: {self.path_idx}, Seg: {self.seg_idx})"
 
     def to_dict(self) -> Dict[str, Any]:
         """Opcional: Para mantener compatibilidad con código antiguo"""
         return self.__dict__
 
-
 @dataclass
 class AppliedLayer:
     """Información de un layer aplicado a un elemento del path."""
-
     layer: str
     type: str
     path_idx: int
@@ -1067,18 +973,18 @@ class AppliedLayer:
             "type": self.type,
             "path_idx": self.path_idx,
             "elem_idx": self.elem_idx,
-            "layer_idx": self.layer_idx,
+            "layer_idx": self.layer_idx
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AppliedLayer":
+    def from_dict(cls, data: dict) -> 'AppliedLayer':
         """Crea una instancia desde un diccionario."""
         return cls(
             layer=data["layer"],
             type=data["type"],
             path_idx=data["path_idx"],
             elem_idx=data["elem_idx"],
-            layer_idx=data["layer_idx"],
+            layer_idx=data["layer_idx"]
         )
 
 
@@ -1087,10 +993,9 @@ class GeneratedElement:
     """
     Representa un elemento generado y su metadata asociada.
     """
-
     element: Any  # Aquí podrías poner el tipo específico del objeto 3D si lo tienes
     index: int
     element_type: str
 
     # Opcional: __slots__ reduce el uso de memoria y acelera el acceso
-    __slots__ = ["element", "index", "element_type"]
+    __slots__ = ['element', 'index', 'element_type']

@@ -42,6 +42,7 @@ PARAM_INSTALLATION_NAME = "InstallationName"           # Nombre de la instalaci�
 PARAM_SUPPORTED_ANGLES = "SupportedAngles"             # Ángulos soportados (texto informativo)
 PARAM_INSTALLATION_TYPE = "InstallationType"           # ComboBox tipo de instalación
 PARAM_DIAMETER_TYPE = "DiameterType"
+PARAM_DIAMETER_TYPE_STR = "DiameterTypeStr"
 PARAM_DISTRIBUTION_TYPE = "DistributionType"
 PARAM_WATER_TYPE = "WaterType"
 PARAM_FACE_EN ="FaceEN"
@@ -132,6 +133,7 @@ class ParamNames:
         SUPPORTED_ANGLES = PARAM_SUPPORTED_ANGLES
         INSTALLATION_TYPE = PARAM_INSTALLATION_TYPE
         DIAMETER_TYPE = PARAM_DIAMETER_TYPE
+        DIAMETER_TYPE_STR = PARAM_DIAMETER_TYPE_STR
         DISTRIBUTION_TYPE = PARAM_DISTRIBUTION_TYPE
         WATER_TYPE = PARAM_WATER_TYPE
         FACE_EN = PARAM_FACE_EN

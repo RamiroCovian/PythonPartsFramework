@@ -278,6 +278,7 @@ class PolylineInteractor:
             self.script_object.show_parameter(ParamNames.Layers.VIEW_INFO, False)
             print(f"[INT] CREATE MODE = ON - Nuevo camino iniciado")
         elif checkbox_value == PointModeValues.EDIT:
+            self.highlight_geometries.clear()
             if not self.saved_elements:
                 self.script_object.element_list = []
                 self._save_current_polyline()
@@ -327,9 +328,6 @@ class PolylineInteractor:
     # ============================================================================
     # LOAD DEFAULT INSTALLATION PARAMETERS
     # ============================================================================
-    # def _on_installation_changed(self):
-    #     self.script_object._load_default_inst_params(installation_name=self.current_installation)
-
     def _on_installation_type_changed(self):
         self.script_object.resolve_installation_config()
 
@@ -411,6 +409,8 @@ class PolylineInteractor:
         self.last_points = []
 
         self.script_object.saved_paths = []
+        self.script_object.saved_cut_points = []
+        self.script_object.saved_vertex_cut_points = []
         self.script_object.applied_layers = {}
         self.script_object.applied_default_attributes = {}
         self.script_object.applied_attributes = {}
@@ -437,6 +437,21 @@ class PolylineInteractor:
                         for pt in path_data
                     ]
                     self.script_object.saved_paths.append(path)
+
+            # Restaurar cut points
+            self.script_object.saved_cut_points = []
+            if "saved_cut_points" in state:
+                self.script_object.saved_cut_points = [
+                    AllplanGeo.Point3D(pt["X"], pt["Y"], pt["Z"])
+                    for pt in state["saved_cut_points"]
+                ]
+
+            self.script_object.saved_vertex_cut_points = []
+            if "saved_vertex_cut_points" in state:
+                self.script_object.saved_vertex_cut_points = [
+                    AllplanGeo.Point3D(pt["X"], pt["Y"], pt["Z"])
+                    for pt in state["saved_vertex_cut_points"]
+                ]
 
             # Restaurar points
             for path_points in self.script_object.saved_paths:
@@ -704,11 +719,9 @@ class PolylineInteractor:
             )
             PythonUtility.ShowMessageBox(message, PythonUtility.MB_OK)
 
-
     # ============================================================================
     # HELPERS DE REINDEXACIÓN DE METADATA
     # ============================================================================
-
     def _shift_metadata(self, path_idx: int, offset: int):
         """
         Desplaza los índices de segmento de un path en +offset.
@@ -724,7 +737,6 @@ class PolylineInteractor:
             new_key = f"{path_idx}_{seg_idx + offset}"
             del meta[old_key]
             meta[new_key] = value
-
 
     def _merge_metadata(self, src_path_idx: int, dst_path_idx: int, dst_offset: int, reverse: bool):
         """
@@ -749,7 +761,6 @@ class PolylineInteractor:
                 new_seg_idx = dst_offset + seg_idx
             meta[f"{dst_path_idx}_{new_seg_idx}"] = value
 
-
     def _reindex_metadata_after_pop(self, removed_path_idx: int):
         """
         Reindexar todos los path_idx > removed_path_idx decrementando en 1.
@@ -768,220 +779,6 @@ class PolylineInteractor:
             parts    = old_key.split("_")
             new_key  = f"{int(parts[0]) - 1}_{parts[1]}"
             meta[new_key] = value
-
-    # def _save_current_polyline(self):
-    #     self.saved_elements = False
-    #     polyline_info = ""
-
-    #     # ── Guard: si no hay puntos suficientes, no hay nada que guardar ──────
-    #     if len(self.points) < 2:
-    #         print("[INT] _save_current_polyline: sin puntos suficientes, omitiendo.")
-    #         self.extend_target = None
-    #         self.points.clear()
-    #         return
-
-    #     # ── Detectar si el PRIMER punto snapea a un extremo guardado ──────────
-    #     # Esto reemplaza extend_target que puede quedar desactualizado tras borrados
-    #     if self.extend_target is None and len(self.points) >= 2:
-    #         first_pnt = self.points[0]
-    #         for pidx, path in enumerate(self.script_object.saved_paths):
-    #             if not path:
-    #                 continue
-    #             # Snap al FINAL del path
-    #             if self._points_equal(first_pnt, path[-1]):
-    #                 self.extend_target = (pidx, "end")
-    #                 break
-    #             # Snap al INICIO del path
-    #             if self._points_equal(first_pnt, path[0]):
-    #                 self.extend_target = (pidx, "start")
-    #                 break
-
-    #     # ── También detectar si el ÚLTIMO punto snapea a un extremo guardado ──
-    #     # Permite unir ambos extremos de un segmento borrado
-    #     end_target = None
-    #     if len(self.points) >= 2:
-    #         last_pnt = self.points[-1]
-    #         for pidx, path in enumerate(self.script_object.saved_paths):
-    #             if not path:
-    #                 continue
-    #             # Evitar el mismo path que extend_target
-    #             if self.extend_target and self.extend_target[0] == pidx:
-    #                 continue
-    #             if self._points_equal(last_pnt, path[0]):
-    #                 end_target = (pidx, "start")
-    #                 break
-    #             if self._points_equal(last_pnt, path[-1]):
-    #                 end_target = (pidx, "end")
-    #                 break
-
-    #     # ── CASO: Extensión simple (un extremo) ───────────────────────────────
-    #     if self.extend_target is not None and len(self.points) >= 2:
-    #         pidx, side = self.extend_target
-    #         if 0 <= pidx < len(self.script_object.saved_paths):
-    #             base = self.script_object.saved_paths[pidx]
-
-    #             if side == "end":
-    #                 # Ancla en path[-1], añadir puntos desde self.points[1:]
-    #                 new_points = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points[1:]]
-    #                 base.extend(new_points)
-    #                 print(f"[INT] Extensión fusionada en polilínea #{pidx} (end)")
-
-    #             else:  # 'start'
-    #                 # Ancla en path[0], los puntos nuevos van ANTES en orden directo
-    #                 # self.points = [anchor=path[0], p1, p2, ...]
-    #                 # Resultado esperado: [p2, p1, anchor, ...base...]  ← INCORRECTO
-    #                 # Resultado esperado: [...base con p1,p2 prepended en orden]
-    #                 # El usuario trazó: anchor→p1→p2, queremos: p2→p1→anchor→base
-    #                 # PERO si el usuario trazó desde C hacia atrás, el orden es correcto
-    #                 new_points = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points[1:]]
-    #                 self.script_object.saved_paths[pidx] = list(reversed(new_points)) + base
-    #                 print(f"[INT] Extensión fusionada en polilínea #{pidx} (start)")
-
-    #             # ── CASO ESPECIAL: El otro extremo también conecta con otro path ──
-    #             if end_target is not None:
-    #                 ep_idx, ep_side = end_target
-    #                 if 0 <= ep_idx < len(self.script_object.saved_paths):
-    #                     # Fusionar el path recién extendido con el path del otro extremo
-    #                     extended_path = self.script_object.saved_paths[pidx]
-    #                     other_path = self.script_object.saved_paths[ep_idx]
-
-    #                     if ep_side == "start":
-    #                         # extended_path[-1] == other_path[0] → concatenar directo
-    #                         merged = extended_path + other_path[1:]
-    #                     else:  # ep_side == "end"
-    #                         # extended_path[-1] == other_path[-1] → invertir other
-    #                         merged = extended_path + list(reversed(other_path))[1:]
-
-    #                     # Reemplazar pidx con el merge y eliminar ep_idx
-    #                     self.script_object.saved_paths[pidx] = merged
-    #                     self.script_object.saved_paths.pop(ep_idx)
-    #                     print(f"[INT] Paths #{pidx} y #{ep_idx} fusionados en uno solo")
-
-    #             polyline_info = f"Polilínea #{pidx + 1} extendida"
-
-    #         self.extend_target = None
-
-    #     # ── CASO: Camino nuevo o bifurcación ──────────────────────────────────
-    #     else:
-    #         first_pnt = self.points[0]
-    #         match = self._find_path_to_extend(first_pnt)
-
-    #         if match is not None:
-    #             path_idx, vtx_idx, existing_vtx = match
-    #             existing_path = self.script_object.saved_paths[path_idx]
-    #             last_idx = len(existing_path) - 1
-    #             new_pts = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points[1:]]
-
-    #             if vtx_idx == last_idx:
-    #                 self.script_object.saved_paths[path_idx].extend(new_pts)
-    #                 print(f"[CONEXIÓN] Extendido final de camino {path_idx}")
-
-    #             elif vtx_idx == 0:
-    #                 self.script_object.saved_paths[path_idx] = list(reversed(new_pts)) + existing_path
-    #                 print(f"[CONEXIÓN] Extendido inicio de camino {path_idx}")
-
-    #             else:
-    #                 branch_path = [existing_vtx] + new_pts
-    #                 self.script_object.saved_paths.append(branch_path)
-    #                 print(f"[BIFURCACIÓN] Nueva rama desde camino {path_idx} (Vértice {vtx_idx})")
-
-    #             self.last_points.extend(self.points[1:])
-
-    #         else:
-    #             self.last_points.extend(self.points)
-    #             new_path = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points]
-    #             self.script_object.saved_paths.append(new_path)
-    #             print(f"[NUEVO] Camino independiente creado")
-
-    #     # ── Sincronización final común ─────────────────────────────────────────
-    #     self.points.clear()
-    #     self.get_segments()
-    #     self._update_segment_groups()
-    #     self.script_object._create_elements_preview()
-    #     self.saved_elements = True
-
-    #     if self.saved_elements:
-    #         total_polylines = len(self.script_object.saved_paths)
-    #         total_segments = sum(
-    #             len(pts) - 1 for pts in self.script_object.saved_paths if len(pts) >= 2
-    #         )
-    #         message = (
-    #             f"✅ Polilínea guardada exitosamente!\n\n"
-    #             f"{polyline_info}\n\n"
-    #             f"Total de polilíneas: {total_polylines}\n"
-    #             f"Total de segmentos: {total_segments}"
-    #         )
-    #         PythonUtility.ShowMessageBox(message, PythonUtility.MB_OK)
-
-    # def _save_current_polyline(self):
-    #     self.saved_elements = False
-    #     polyline_info = ""
-
-    #     # ── Bloque de guardado con soporte para Bifurcaciones ──────────────────────────
-    #     if len(self.points) >= 2:
-    #         first_pnt = self.points[0]
-    #         match = self._find_path_to_extend(first_pnt)
-
-    #         if match is not None:
-    #             # Extraemos la info del punto encontrado
-    #             path_idx, vtx_idx, existing_vtx = match
-    #             existing_path = self.script_object.saved_paths[path_idx]
-    #             last_idx = len(existing_path) - 1
-
-    #             # Generamos los nuevos puntos (del segundo en adelante)
-    #             new_pts = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points[1:]]
-
-    #             # --- ESCENARIO 1: Extender al FINAL ---
-    #             if vtx_idx == last_idx:
-    #                 self.script_object.saved_paths[path_idx].extend(new_pts)
-    #                 # self._create_default_segments_for_extension(path_idx, last_idx, len(self.script_object.saved_paths[path_idx]))
-    #                 print(f"[CONEXIÓN] Extendido final de camino {path_idx}")
-
-    #             # --- ESCENARIO 2: Extender al INICIO ---
-    #             elif vtx_idx == 0:
-    #                 # Invertimos los puntos nuevos y los prependemos al camino existente
-    #                 self.script_object.saved_paths[path_idx] = list(reversed(new_pts)) + existing_path
-    #                 # self._create_default_segments_for_extension(path_idx, 0, len(new_pts))
-    #                 print(f"[CONEXIÓN] Extendido inicio de camino {path_idx}")
-
-    #             # --- ESCENARIO 3: BIFURCACIÓN (Codos/Uniones intermedias) ---
-    #             else:
-    #                 # IMPORTANTE: El primer punto de esta rama es el MISMO objeto punto
-    #                 # que ya existe en el camino original. Esto crea la unión física.
-    #                 branch_path = [existing_vtx] + new_pts
-    #                 self.script_object.saved_paths.append(branch_path)
-
-    #                 new_path_idx = len(self.script_object.saved_paths) - 1
-    #                 # self._create_default_segments_for_new_path(new_path_idx)
-    #                 print(f"[BIFURCACIÓN] Nueva rama desde camino {path_idx} (Vértice {vtx_idx})")
-
-    #             self.last_points.extend(self.points[1:])
-
-    #         else:
-    #             # --- ESCENARIO 4: CAMINO TOTALMENTE NUEVO ---
-    #             self.last_points.extend(self.points)
-    #             new_path = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points]
-    #             self.script_object.saved_paths.append(new_path)
-
-    #             # self._create_default_segments_for_new_path(len(self.script_object.saved_paths) - 1)
-    #             print(f"[NUEVO] Camino independiente creado")
-
-    #         # ── Sincronización final común ──────────────────────────────────
-    #         self.points.clear()
-    #         self.get_segments()
-    #         self._update_segment_groups()
-    #         self.script_object._create_elements_preview()
-    #         self.saved_elements = True
-
-    #     # Mostrar popup de confirmación si se guardó exitosamente
-    #     if self.saved_elements:
-    #         total_polylines = len(self.script_object.saved_paths)
-    #         total_segments = sum(
-    #             len(pts) - 1 for pts in self.script_object.saved_paths if len(pts) >= 2
-    #         )
-    #         message = f"✅ Polilínea guardada exitosamente!\n\n{polyline_info}\n\nTotal de polilíneas: {total_polylines}\nTotal de segmentos: {total_segments}"
-    #         PythonUtility.ShowMessageBox(message, PythonUtility.MB_OK)
-
 
     def _update_segment_groups(self):
         """
@@ -1404,7 +1201,6 @@ class PolylineInteractor:
                         element['layer'] = self.script_object.layer_selected
                         break
 
-
     def _calculate_layer_from_orientation(
         self, p1: AllplanGeo.Point3D, p2: AllplanGeo.Point3D
     ) -> str:
@@ -1668,20 +1464,6 @@ class PolylineInteractor:
                         self._draw_preview(current_pnt)
                         return True
 
-                # --- MODO CREAR=OFF: edición (guardadas) ---
-                # A) Click en vértice GUARDADO -> iniciar drag de guardado
-                # self.saved_hover_point = self._find_hover_saved_point(current_pnt, mode)
-                # if self.saved_hover_point is not None:
-                #     pidx, vidx, _ = self.saved_hover_point
-
-                #     # Capturar coordenadas originales antes del drag
-                #     original_point = self.script_object.saved_paths[pidx][vidx]
-                #     self.saved_dragging_original_point = AllplanGeo.Point3D(original_point.X, original_point.Y, original_point.Z)
-                #     self.saved_dragging = (pidx, vidx)
-                #     self.script_object.saved_paths[pidx][vidx] = AllplanGeo.Point3D(current_pnt.X, current_pnt.Y, current_pnt.Z)
-                #     self._draw_preview(current_pnt)
-                #     return True
-
                 # C) Click sobre SEGMENTO GUARDADO: prioridad insertar si está activo
                 self.hover_seg = self._find_hover_segment(current_pnt, mode)
                 if self.hover_seg is not None:
@@ -1769,6 +1551,10 @@ class PolylineInteractor:
                 mouse_msg, pnt, msg_info, AllplanGeo.Point3D(), True
             ).GetPoint()
 
+            # Preserve Z of the vertex being dragged (GetInputPoint projects to Z=0)
+            if self.saved_dragging is not None and self.saved_dragging_original_point is not None:
+                current_pnt = AllplanGeo.Point3D(current_pnt.X, current_pnt.Y, self.saved_dragging_original_point.Z)
+
             if self.coord_input.IsMouseMove(mouse_msg):
                 # A) Si ya estamos arrastrando algo, actualizamos posición
                 if self.saved_dragging is not None:
@@ -1786,13 +1572,15 @@ class PolylineInteractor:
                         # --- JERARQUÍA DE DETECCIÓN ---
                         self.saved_hover_point = self._find_hover_saved_point(current_pnt, mode)
 
-                        # ── Detectar si el punto hovereado es un junction de corte ──
+                        # ── Detectar si el punto hovereado es un junction o vértice cortable ──
                         self.hover_cut_vertex = None
                         if self.saved_hover_point is not None:
                             path_idx, pt_idx = self.saved_hover_point[0], self.saved_hover_point[1]
                             junction = self._is_junction_point(path_idx, pt_idx)
                             if junction is not None:
                                 self.hover_cut_vertex = junction  # (left_idx, right_idx)
+                            elif self.cut_mode and self._is_cuttable_vertex(path_idx, pt_idx):
+                                self.hover_cut_vertex = ("vertex", path_idx, pt_idx)
 
                         self.hover_mid = (
                             None if self.saved_hover_point
@@ -1853,6 +1641,28 @@ class PolylineInteractor:
                 # ─────────────────────────────────────────────────────────────────
                 if self.cut_mode:
                     try:
+                        # ── Corte en vértice existente ──────────────────────────────
+                        hover_pt = self._find_hover_saved_point(current_pnt, mode)
+                        if hover_pt is not None:
+                            v_path, v_idx, _ = hover_pt
+                            if self._is_cuttable_vertex(v_path, v_idx):
+                                pts = self.script_object.saved_paths[v_path]
+                                cut_pt = AllplanGeo.Point3D(pts[v_idx].X, pts[v_idx].Y, pts[v_idx].Z)
+                                left  = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in pts[:v_idx + 1]]
+                                right = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in pts[v_idx:]]
+                                self.script_object.saved_paths.pop(v_path)
+                                self.script_object.saved_paths.insert(v_path, right)
+                                self.script_object.saved_paths.insert(v_path, left)
+                                self.script_object.saved_cut_points.append(cut_pt)
+                                self.script_object.saved_vertex_cut_points.append(cut_pt)
+                                self.selected_segments.clear()
+                                self.selected_seg      = None
+                                self.selected_junction = None
+                                self.hover_seg         = None
+                                self._draw_preview(current_pnt)
+                                return True
+
+                        # ── Corte en punto proyectado sobre segmento ─────────────────
                         target = self._find_hover_segment(current_pnt, mode)
                         if target is None:
                             return True
@@ -1897,6 +1707,10 @@ class PolylineInteractor:
                         else:
                             self.points = left
                             self.script_object.saved_paths.append(right)
+
+                        self.script_object.saved_cut_points.append(
+                            AllplanGeo.Point3D(q3.X, q3.Y, q3.Z)
+                        )
 
                         self.selected_segments.clear()
                         self.selected_seg      = None
@@ -1966,18 +1780,18 @@ class PolylineInteractor:
                 # ─────────────────────────────────────────────────────────────────
                 # 6. SELECCIONAR SEGMENTO
                 # ─────────────────────────────────────────────────────────────────
-                # self.hover_seg = self._find_hover_segment(current_pnt, mode)
-                # if self.hover_seg:
-                #     if self.selected_segments:
-                #         if self.hover_seg in self.selected_segments:
-                #             self.selected_segments.remove(self.hover_seg)
-                #         else:
-                #             self.selected_segments.add(self.hover_seg)
-                #     else:
-                #         self.selected_seg = (
-                #             None if self._seg_equal(self.selected_seg, self.hover_seg)
-                #             else self.hover_seg
-                #         )
+                self.hover_seg = self._find_hover_segment(current_pnt, mode)
+                if self.hover_seg:
+                    if self.selected_segments:
+                        if self.hover_seg in self.selected_segments:
+                            self.selected_segments.remove(self.hover_seg)
+                        else:
+                            self.selected_segments.add(self.hover_seg)
+                    else:
+                        self.selected_seg = (
+                            None if self._seg_equal(self.selected_seg, self.hover_seg)
+                            else self.hover_seg
+                        )
 
                 self._draw_preview(current_pnt)
                 return True
@@ -2024,6 +1838,14 @@ class PolylineInteractor:
 
      # ---------- Detección y borrado de puntos de corte (junction) ----------
 
+    def _is_cuttable_vertex(self, path_idx: int, pt_idx: int) -> bool:
+        """Devuelve True si el vértice es interior (cortable): no es primero ni último
+        del path y el path tiene ≥ 3 puntos (ambos fragmentos quedan con ≥ 2 puntos)."""
+        if not (0 <= path_idx < len(self.script_object.saved_paths)):
+            return False
+        pts = self.script_object.saved_paths[path_idx]
+        return len(pts) >= 3 and 1 <= pt_idx <= len(pts) - 2
+
     def _is_junction_point(self, path_idx: int, pt_idx: int) -> Optional[Tuple[int, int]]:
         """
         Detecta si un punto guardado es un punto de corte (junction entre dos paths adyacentes).
@@ -2061,11 +1883,36 @@ class PolylineInteractor:
         left_idx, right_idx = junction
         left_pts = self.script_object.saved_paths[left_idx]
         right_pts = self.script_object.saved_paths[right_idx]
-        # Merge: left[:-1] + right[1:]  (elimina el punto de corte duplicado)
-        merged = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in left_pts[:-1]] + \
-                 [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in right_pts[1:]]
+
+        # Determinar si el corte fue hecho en un vértice existente
+        cut_pt = left_pts[-1]
+        TOL_SQ = 1e-3 * 1e-3
+        is_vertex_cut = any(
+            self._dist_sq(cut_pt, p) < TOL_SQ
+            for p in self.script_object.saved_vertex_cut_points
+        )
+
+        if is_vertex_cut:
+            # Corte en vértice: conservar el vértice → left + right[1:]
+            merged = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in left_pts] + \
+                     [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in right_pts[1:]]
+        else:
+            # Corte en segmento: eliminar el punto proyectado → left[:-1] + right[1:]
+            merged = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in left_pts[:-1]] + \
+                     [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in right_pts[1:]]
+
         self.script_object.saved_paths.pop(right_idx)
         self.script_object.saved_paths[left_idx] = merged
+
+        # Eliminar de saved_cut_points y saved_vertex_cut_points
+        self.script_object.saved_cut_points = [
+            p for p in self.script_object.saved_cut_points
+            if self._dist_sq(p, cut_pt) >= TOL_SQ
+        ]
+        self.script_object.saved_vertex_cut_points = [
+            p for p in self.script_object.saved_vertex_cut_points
+            if self._dist_sq(p, cut_pt) >= TOL_SQ
+        ]
 
         self.get_segments()
         self._update_segment_groups()    # Re-mapea puntos con los nuevos SegmentItems
@@ -2534,14 +2381,66 @@ class PolylineInteractor:
                         continue
 
                     # ── Vértice normal ───────────────────────────────────────────────
+                    is_hovered_vtx = (
+                        self.saved_hover_point is not None
+                        and self.saved_hover_point[0] == path_idx
+                        and self.saved_hover_point[1] == vidx
+                    )
+
+                    # En cut_mode: vértice cortable hovereado → X de corte en lugar de círculo
+                    if self.cut_mode and is_hovered_vtx and self._is_cuttable_vertex(path_idx, vidx):
+                        cx, cy, cz = vpt.X, vpt.Y, vpt.Z
+                        cut_prop = self._clone_properties(self.com_prop)
+                        cut_prop.ColorByLayer  = False
+                        cut_prop.PenByLayer    = False
+                        cut_prop.StrokeByLayer = False
+                        cut_prop.Color = 7   # blanco/hover
+                        try:
+                            cut_prop.Pen = 3
+                        except Exception:
+                            pass
+                        half = HANDLE_SIZE * 0.75
+
+                        if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
+                                         AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
+                                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
+                                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
+                        elif view_type in XZ_VIEWS:
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy, cz - half),
+                                                  AllplanGeo.Point3D(cx + half, cy, cz + half))))
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy, cz - half),
+                                                  AllplanGeo.Point3D(cx - half, cy, cz + half))))
+                        elif view_type in YZ_VIEWS:
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy - half, cz - half),
+                                                  AllplanGeo.Point3D(cx, cy + half, cz + half))))
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy + half, cz - half),
+                                                  AllplanGeo.Point3D(cx, cy - half, cz + half))))
+                        else:  # isométrica
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
+                                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
+                                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
+                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy, cz - half),
+                                                  AllplanGeo.Point3D(cx, cy, cz + half))))
+                        continue
+
                     size = HANDLE_SIZE
 
                     if self.saved_dragging is not None and self.saved_dragging == (path_idx, vidx):
                         size = HANDLE_SIZE * DRAG_SCALE
 
-                    if (self.saved_hover_point is not None
-                            and self.saved_hover_point[0] == path_idx
-                            and self.saved_hover_point[1] == vidx):
+                    if is_hovered_vtx:
                         size = HANDLE_SIZE * HOVER_SCALE
 
                     elems.extend(self._create_point_marker(vpt, handle_prop, size))
@@ -3672,7 +3571,11 @@ class PolylineInteractor:
 
             if element_type == 'tubo':
                 lines.append(f"Ruta: {path_idx}, Segmento: {seg_or_vertex_idx}")
-                diameter_in = int(element.get('diameter_in', 0))
+                raw_diam = element.get('diameter_in', 0)
+                try:
+                    diameter_in = int(raw_diam)
+                except (ValueError, TypeError):
+                    diameter_in = raw_diam
                 lines.append(f"Diametro: {diameter_in}")
             else:
                 element_params = element.get('params', {})
@@ -3682,8 +3585,16 @@ class PolylineInteractor:
                 elif element_type == 'reduccion':
                     lines.append(f"reducer_type: {element_params.get('reducer_type', "")}")
 
-                    diameter_in = int(element_params.get('diameter_in', 0))
-                    diameter_out = int(element_params.get('diameter_out', 0))
+                    raw_in = element_params.get('diameter_in', 0)
+                    raw_out = element_params.get('diameter_out', 0)
+                    try:
+                        diameter_in = int(raw_in)
+                    except (ValueError, TypeError):
+                        diameter_in = raw_in
+                    try:
+                        diameter_out = int(raw_out)
+                    except (ValueError, TypeError):
+                        diameter_out = raw_out
                     lines.append(f"Diametro IN: {diameter_in} - Diametro OUT: {diameter_out}")
 
         # Agregar información adicional según el tipo
@@ -4324,6 +4235,94 @@ class PolylineInteractor:
             self._draw_preview(current_pnt)
         return changed
 
+    def _delete_selected_seg(self) -> bool:
+        """
+        Borra el segmento individual seleccionado en extend_mode (selected_seg).
+        Si quedan fragmentos válidos (≥2 puntos) a ambos lados, los conserva como rutas separadas.
+        """
+        if self.selected_seg is None:
+            return False
+        try:
+            kind = self.selected_seg[0]
+            if kind != "tubo":
+                return False
+            path_idx = self.selected_seg[1]
+            seg_idx  = self.selected_seg[2]
+        except (IndexError, TypeError):
+            return False
+
+        if not (0 <= path_idx < len(self.script_object.saved_paths)):
+            return False
+        pts = self.script_object.saved_paths[path_idx]
+        if not pts or seg_idx >= len(pts) - 1:
+            return False
+
+        message = (
+            f"Tipo elemento seleccionado: {kind}\n"
+            f"Ruta: {path_idx}\n"
+            f"Segmento: {seg_idx}\n\n"
+            f"Estas seguro que deseas eliminar el segmento seleccionado?\n"
+        )
+        result = PythonUtility.ShowMessageBox(message, PythonUtility.MB_YESNO)
+        if result != 6:
+            return False
+
+        new_saved_paths: list = []
+        new_persistent_metadata: dict = {}
+
+        for idx, path_pts in enumerate(self.script_object.saved_paths):
+            if idx != path_idx:
+                new_path_idx = len(new_saved_paths)
+                for s_idx in range(len(path_pts) - 1):
+                    old_key = f"{idx}_{s_idx}"
+                    new_key = f"{new_path_idx}_{s_idx}"
+                    if old_key in self.script_object.persistent_metadata:
+                        new_persistent_metadata[new_key] = self.script_object.persistent_metadata[old_key]
+                new_saved_paths.append(path_pts)
+            else:
+                left  = path_pts[:seg_idx + 1]
+                right = path_pts[seg_idx + 1:]
+
+                if len(left) >= 2:
+                    new_path_idx = len(new_saved_paths)
+                    for s_idx in range(len(left) - 1):
+                        old_key = f"{idx}_{s_idx}"
+                        new_key = f"{new_path_idx}_{s_idx}"
+                        if old_key in self.script_object.persistent_metadata:
+                            new_persistent_metadata[new_key] = self.script_object.persistent_metadata[old_key]
+                    new_saved_paths.append(left)
+
+                if len(right) >= 2:
+                    new_path_idx = len(new_saved_paths)
+                    for s_idx in range(len(right) - 1):
+                        old_key = f"{idx}_{seg_idx + 1 + s_idx}"
+                        new_key = f"{new_path_idx}_{s_idx}"
+                        if old_key in self.script_object.persistent_metadata:
+                            new_persistent_metadata[new_key] = self.script_object.persistent_metadata[old_key]
+                    new_saved_paths.append(right)
+
+        self.script_object.persistent_metadata = new_persistent_metadata
+        self.script_object.saved_paths = new_saved_paths
+
+        self.get_segments()
+        self.highlight_geometry = None
+        self.selected_segments.clear()
+        self.selected_seg = None
+        self.hover_seg = None
+        self.insert_preview_p = None
+        self.insert_target = None
+        self.hover_mid = None
+        self.highlight_geometries.clear()
+        self.element_list_final = []
+
+        self._update_segment_groups()
+        self.script_object._create_elements_preview()
+        self._generate_elements_for_preview()
+
+        current_pnt = self.coord_input.GetCurrentPoint(self.current_point).GetPoint() # type: ignore
+        self._draw_preview(current_pnt)
+        return True
+
     def delete_selected_cut_section(self) -> bool:
         if not self.selected_junction:
             message = (
@@ -4620,6 +4619,10 @@ class PolylineInteractor:
             elif self.selected_junction is not None:
                 self.delete_selected_cut_section()
 
+            # C) Borrar segmento seleccionado individualmente (extend_mode)
+            elif self.selected_seg is not None:
+                self._delete_selected_seg()
+
         elif event_id == 1003:  # Finalizar -> guardar y crear inmediatament
             print("[SO] Finalizar -> guardar y crear inmediatamente")
             name = "CancelInput"
@@ -4836,58 +4839,3 @@ class PolylineInteractor:
         param.value = info_text
 
     # ==========================================================================================================================================
-
-     # def delete_selected_or_hovered_segment(self, mode) -> bool:
-    #     # Si no hay selección, reintenta con el hover actual; si tampoco hay, recalcula según modo
-    #     target = self.selected_element_id if self.selected_element_id is not None else self.hover_seg
-
-    #     if target is None:
-    #         curr = self.coord_input.GetCurrentPoint(self.current_point).GetPoint()  # type: ignore
-    #         if self.preview_mode:
-    #             target = self._find_hover_segment(curr, mode)
-
-    #     if not target:
-    #         message = (
-    #             f"No existe elemento seleccionado para borrar\n\n"
-    #         )
-    #         PythonUtility.ShowMessageBox(message, PythonUtility.MB_OK)
-    #         return False
-
-    #     kind, path_idx, seg_idx, layer_idx = target
-    #     if kind == "tubo":
-    #         message = (
-    #             f"Tipo elemento seleccionado: {kind}\n"
-    #             f"Ruta: {path_idx}\n"
-    #             f"Segmento: {seg_idx}\n\n"
-    #             f"Estas seguro que deseas eliminar el elemento seleccionado?\n"
-    #         )
-    #         result = PythonUtility.ShowMessageBox(message, PythonUtility.MB_YESNO)
-
-    #         if result == 6:
-    #             if not (0 <= path_idx < len(self.script_object.saved_paths)):
-    #                 return False
-    #             pts = self.script_object.saved_paths[path_idx]
-    #             if len(pts) < 2 or not (0 <= seg_idx < len(pts) - 1):
-    #                 return False
-
-    #             left = pts[: seg_idx + 1]
-    #             right = pts[seg_idx + 1 :]
-
-    #             new_paths: List[List[AllplanGeo.Point3D]] = []
-    #             if len(left) >= 2:
-    #                 new_paths.append([AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in left])
-    #             if len(right) >= 2:
-    #                 new_paths.append([AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in right])
-
-    #             self.script_object.saved_paths.pop(path_idx)
-    #             for offset, path in enumerate(new_paths):
-    #                 self.script_object.saved_paths.insert(path_idx + offset, path)
-
-    #     self.highlight_geometry = None
-    #     self._update_segment_groups()
-    #     self.element_list_final = []
-    #     self.highlight_geometries.clear()
-    #     self._generate_elements_for_preview()
-    #     self.script_object._create_elements_preview()
-    #     self._draw_preview(self.coord_input.GetCurrentPoint(self.current_point).GetPoint())  # type: ignore
-    #     return True

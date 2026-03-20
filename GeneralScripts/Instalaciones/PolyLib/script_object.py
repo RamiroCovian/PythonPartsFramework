@@ -64,8 +64,8 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
         self.selected_inst_type: str | None = None
         self.min_segment_length: float | int = 0
-        self.diameter_list: List[int] | None = None
-        self.diameter_type: int = 0
+        self.diameter_list: List[Any] | None = None
+        self.diameter_type: Any = None
 
         self.crear_pythonpart: bool = True
         self._fn_name: str | None = None
@@ -80,9 +80,12 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         self.saved_segments = []
         self.bifurcation_nodes: Dict = {}
         self.persistent_metadata: dict[str, SegmentInfo] = {}
+        self.saved_cut_points: List[AllplanGeo.Point3D] = []         # Puntos de corte activos
+        self.saved_vertex_cut_points: List[AllplanGeo.Point3D] = []  # Subconjunto: cortes hechos en vértice existente
 
         # Store configuration self._config = config
         self._config: Optional[PolylineBaseConfig | None] = None
+        self._polyline_attrs: Any | None = None
 
         # Element assembly hooks (callbacks for installations to customize element creation)
         self.element_creation_preview_hook: Optional[Callable] = None  # Called for each segment: hook(segment_data, properties)
@@ -274,13 +277,23 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         is_list = isinstance(raw_diameter, list)
 
         self.diameter_list = raw_diameter if is_list else None
-        self.show_parameter(ParamNames.Installation.DIAMETER_TYPE, is_list)
+
+        if self._config and self._config.parameters_enabled.diameter_type:
+            self.show_parameter(ParamNames.Installation.DIAMETER_TYPE, is_list)
+        if self._config and self._config.parameters_enabled.diameter_type_str:
+            self.show_parameter(ParamNames.Installation.DIAMETER_TYPE_STR, is_list)
 
         if is_list:
-            if self.diameter_list:
+            if self._config and self._config.parameters_enabled.diameter_type and self.diameter_list:
                 self.ctrl_prop_util.set_value_list(ParamNames.Installation.DIAMETER_TYPE,
                     "|".join(str(el) for el in self.diameter_list)
                 )
+
+            if self._config and self._config.parameters_enabled.diameter_type_str and self.diameter_list:
+                self.ctrl_prop_util.set_value_list(ParamNames.Installation.DIAMETER_TYPE_STR,
+                    "|".join(str(el) for el in self.diameter_list)
+                )
+
             self.diameter_type = raw_diameter[0]
         else:
             self.diameter_type = raw_diameter
@@ -448,6 +461,13 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self.diameter_type = value
             update_necessary = True
 
+        elif name == ParamNames.Installation.DIAMETER_TYPE_STR:
+            param = getattr(self.build_ele, name)
+            param.value = value
+
+            self.diameter_type = value
+            update_necessary = True
+
         elif name == ParamNames.General.FUNCTIONAL_NAME:
             param = getattr(self.build_ele, name)
             param.value = value
@@ -541,6 +561,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         """
         self.element_list_final = []
         self.pythonpart_group_list = [] # Limpiar grupos previos
+        self._polyline_attrs = None
         self._delete_previous_copies()
 
         self._create_elements()
@@ -551,12 +572,17 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         self.crear_pythonpart =  getattr(self.build_ele, ParamNames.General.CREATE_PYTHON_PART).value
         self._fn_name = getattr(self.build_ele, ParamNames.General.FUNCTIONAL_NAME).value
 
-        # Crear polilínea si está habilitado
+        # Agregar polilíneas antes de copiar para que sean incluidas en _copy_elements_grouped_by_attribute
         if self._config and self._config.parameters_show.add_polilyne:
             if getattr(self.build_ele, ParamNames.General.ADD_POLILYNE).value:
-                polyline_list = self._create_polyline()
-                pp_poly = self.create_individual_pythonpart(elements_list=polyline_list, build_ele=self.build_ele)
-                self.pythonpart_group_list.extend(pp_poly)
+                # Si no hay atributos definidos, construir un fallback vacío por path
+                poly_attrs = self._polyline_attrs
+                if not poly_attrs:
+                    poly_attrs = {i: {0: []} for i in range(len(self.saved_paths))}
+                polyline_dict = self._create_polyline(attr_list=poly_attrs)
+                for poly_elem in polyline_dict.values():
+                    pp_poly = self.create_individual_pythonpart(elements_list=[poly_elem], build_ele=self.build_ele)
+                    self.pythonpart_group_list.extend(pp_poly)
 
         # --- Inserción de Elementos y Creación de PythonParts ---
         if self.crear_pythonpart:
@@ -612,6 +638,8 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                                 group_key = str(attr.Value).strip()
                                 if group_key not in element_dict:
                                     element_dict[group_key] = []
+                                model.SetAttributes(attrs)
+                                model.SetCommonProperties(element.GetCommonProperties())
                                 element_dict[group_key].append(model)
                                 self.copy_element_list.append(model)
         if element_dict:
@@ -786,39 +814,64 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 )
                 print(f"[SO] PythonPartGroup creado exitosamente.")
 
-                # _sv = str(getattr(getattr(self.build_ele, "AttributeValue", None), "value", "") or "").strip()
-                # print("################## _SV: ", _sv)
-                # if _sv:
-                #     self._copy_elements_to_drawing_files(model_elem_list, _sv)
-
         except Exception as e:
             print(f"[SO] ERROR al crear PythonPartGroup. {str(e)}")
 
-    def _create_polyline(self) -> List:
-        """Materializa inmediatamente lo que haya en saved_paths en el documento."""
-        _points = self.saved_paths.copy()
-        if not _points:
-            return []
+    def _create_polyline(self, attr_list: dict | None = None) -> Dict[int, AllplanBasisElements.ModelElement3D]:
+        """Crea una polilínea por sub-grupo de conductos (separados por manguitos).
+        attr_list = {path_idx: {start_i: attrs_list}}
+        Retorna dict {result_key: ModelElement3D}."""
+        if not self.saved_paths or attr_list is None:
+            return {}
 
-        # doc = self.coord_input.GetInputViewDocument() if self.coord_input else None
         if self.default_layers:
-            default_id = LayerService.GetIDByShortName(self.default_layers["default"], self.doc) # type: ignore
+            default_id = LayerService.GetIDByShortName(self.default_layers["layer_polyline"], self.doc) # type: ignore
 
         com_prop = AllplanBaseElements.CommonProperties()
         com_prop.GetGlobalProperties()
         com_prop.Layer = default_id
 
-        elems: List[AllplanBasisElements.ModelElement3D] = []
+        result: Dict[int, AllplanBasisElements.ModelElement3D] = {}
+        result_key = 0
 
-        for pts in _points:
+        for path_idx, group_dict in attr_list.items():
+            if path_idx >= len(self.saved_paths):
+                continue
+            pts = self.saved_paths[path_idx]
             if len(pts) < 2:
                 continue
-            poly = AllplanGeo.Polyline3D()
-            for p in pts:
-                poly += p
-            elems.append(AllplanBasisElements.ModelElement3D(com_prop, poly))
 
-        return elems
+            sorted_keys = sorted(group_dict.keys())  # ej: [0, 5]
+
+            for k, start_i in enumerate(sorted_keys):
+                # Determinar el índice del punto final del sub-grupo
+                if k + 1 < len(sorted_keys):
+                    next_start = sorted_keys[k + 1]
+                    end_pt_idx = next_start  # punto de unión compartido: cierra grupo actual y abre el siguiente
+                else:
+                    end_pt_idx = len(pts) - 1   # fin del path
+
+                if end_pt_idx <= start_i:
+                    continue
+
+                sub_pts = pts[start_i : end_pt_idx + 1]
+                if len(sub_pts) < 2:
+                    continue
+
+                poly = AllplanGeo.Polyline3D()
+                for p in sub_pts:
+                    poly += p
+
+                elem = AllplanBasisElements.ModelElement3D(com_prop, poly)
+                path_attrs = group_dict[start_i]
+                if path_attrs:
+                    attr_set_list = [AllplanBaseElements.AttributeSet(path_attrs)]
+                    elem.SetAttributes(AllplanBaseElements.Attributes(attr_set_list))
+
+                result[result_key] = elem
+                result_key += 1
+
+        return result
 
     # ═══════════════════════════════════════════════════════════════════════
     #  COPIA 3D A ARCHIVOS DE DIBUJO POR ATRIBUTO pmp_pare
@@ -1100,8 +1153,17 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 _water_type = getattr(self.build_ele, ParamNames.Installation.WATER_TYPE).value
                 self.water_type = _water_type
 
+            cut_points_data = [
+                {"X": p.X, "Y": p.Y, "Z": p.Z} for p in self.saved_cut_points
+            ]
+            vertex_cut_points_data = [
+                {"X": p.X, "Y": p.Y, "Z": p.Z} for p in self.saved_vertex_cut_points
+            ]
+
             state = {
                 "saved_paths": paths_data,
+                "saved_cut_points": cut_points_data,
+                "saved_vertex_cut_points": vertex_cut_points_data,
                 "data": data,
                 "metadata": ElementSerializer.serialize_persistent_metadata(self.persistent_metadata),
                 "layer_default": self.default_layers,
@@ -1273,7 +1335,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     base_color = props.Color    # <-- COLOR BASE
                     print(f"[SO] Color base = {base_color}")
 
-                # Atributos
+               # Atributos
                 elem_attrs = []
                 try:
                     if idx == 0:
