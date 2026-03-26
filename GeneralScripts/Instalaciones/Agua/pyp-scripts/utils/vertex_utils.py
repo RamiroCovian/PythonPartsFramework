@@ -282,6 +282,230 @@ def _seg_dir_from_conn(conn: dict, segment_groups: list) -> tuple[float, float, 
     return (vx / ln, vy / ln, vz / ln)
 
 
+def _other_endpoint_from_conn(conn: dict, segment_groups: list):
+    """Devuelve el endpoint opuesto al nodo para una conexión del vertex_map."""
+    path_idx = conn["path_idx"]
+    seg_idx = conn["seg_idx"]
+    is_start = conn.get("is_start", True)
+    if path_idx >= len(segment_groups) or seg_idx >= len(segment_groups[path_idx]):
+        return None
+    seg = segment_groups[path_idx][seg_idx]
+    data = getattr(seg, "data", None)
+    if not data:
+        return None
+    start = getattr(data, "start", None)
+    end = getattr(data, "end", None)
+    if not start or not end:
+        return None
+    return end if is_start else start
+
+
+def detect_cross_path_elbows(
+    segment_groups: list,
+    vertex_map: dict[tuple[float, float, float], list[dict]] | None = None,
+    te_vertices: set | None = None,
+    colinear_tol: float = 0.01,
+) -> dict[tuple[int, int, bool], dict]:
+    """
+    Detecta nodos de codo entre paths distintos (grado=2 y no colineales).
+
+    Returns:
+        {
+          (path_idx, seg_idx, is_start): {
+              "node_key": (x, y, z),
+              "other_point": Point3D,
+          }
+        }
+    """
+    if vertex_map is None:
+        vertex_map, te_detected = build_vertex_map_all_paths(segment_groups)
+    else:
+        te_detected = set()
+    te_set = set(te_vertices or te_detected or [])
+
+    out: dict[tuple[int, int, bool], dict] = {}
+
+    for vkey, conns in (vertex_map or {}).items():
+        if vkey in te_set or len(conns) != 2:
+            continue
+
+        c1, c2 = conns[0], conns[1]
+        # Solo nos interesa el caso partido en dos paths distintos
+        if c1.get("path_idx") == c2.get("path_idx"):
+            continue
+
+        d1 = _seg_dir_from_conn(c1, segment_groups)
+        d2 = _seg_dir_from_conn(c2, segment_groups)
+        dot = d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2]
+        # Si son colineales, no es codo
+        if abs(abs(dot) - 1.0) < float(colinear_tol):
+            continue
+
+        for own, other in ((c1, c2), (c2, c1)):
+            other_pt = _other_endpoint_from_conn(other, segment_groups)
+            if other_pt is None:
+                continue
+            key = (own["path_idx"], own["seg_idx"], bool(own.get("is_start", True)))
+            out[key] = {
+                "node_key": vkey,
+                "other_point": other_pt,
+                "other_path_idx": other.get("path_idx"),
+                "other_seg_idx": other.get("seg_idx"),
+            }
+
+    return out
+
+
+def detect_cross_path_manguitos(
+    segment_groups: list,
+    vertex_map: dict[tuple[float, float, float], list[dict]] | None = None,
+    te_vertices: set | None = None,
+    colinear_tol: float = 0.02,
+) -> dict[tuple[int, int, bool], dict]:
+    """
+    Detecta nodos de manguito entre paths distintos (grado=2 y colineales).
+    """
+    if vertex_map is None:
+        vertex_map, te_detected = build_vertex_map_all_paths(segment_groups)
+    else:
+        te_detected = set()
+    te_set = set(te_vertices or te_detected or [])
+
+    out: dict[tuple[int, int, bool], dict] = {}
+
+    for vkey, conns in (vertex_map or {}).items():
+        if vkey in te_set or len(conns) != 2:
+            continue
+
+        c1, c2 = conns[0], conns[1]
+        if c1.get("path_idx") == c2.get("path_idx"):
+            continue
+
+        d1 = _seg_dir_from_conn(c1, segment_groups)
+        d2 = _seg_dir_from_conn(c2, segment_groups)
+        dot = d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2]
+        is_colinear = abs(abs(dot) - 1.0) < float(colinear_tol)
+        if not is_colinear:
+            continue
+
+        for own, other in ((c1, c2), (c2, c1)):
+            other_pt = _other_endpoint_from_conn(other, segment_groups)
+            if other_pt is None:
+                continue
+            key = (own["path_idx"], own["seg_idx"], bool(own.get("is_start", True)))
+            out[key] = {
+                "node_key": vkey,
+                "other_point": other_pt,
+            }
+
+    return out
+
+
+def register_cross_path_elbow_cuts_into(
+    segment_cuts: dict[tuple[int, int], dict[str, float]],
+    segment_groups: list,
+    vertex_map: dict[tuple[float, float, float], list[dict]] | None,
+    te_vertices: set | None,
+    get_diameter: Callable[[int, int], float],
+) -> None:
+    """
+    Añade recortes de codo en nodos compartidos por 2 paths distintos.
+
+    Caso objetivo: tras edición/borrado, un codo puede quedar representado por
+    dos segmentos en paths diferentes. Se detecta el nodo común y se recorta
+    el lado correspondiente de ambos segmentos.
+    """
+    cross_elbows = detect_cross_path_elbows(
+        segment_groups=segment_groups,
+        vertex_map=vertex_map,
+        te_vertices=te_vertices,
+    )
+    if not cross_elbows:
+        return
+
+    # Agrupar por nodo para no aplicar dos veces el mismo recorte
+    by_node: dict[tuple[float, float, float], list[tuple[int, int, bool]]] = {}
+    for conn_key, info in cross_elbows.items():
+        node_key = info.get("node_key")
+        if not node_key:
+            continue
+        by_node.setdefault(node_key, []).append(conn_key)
+
+    for _node_key, conn_keys in by_node.items():
+        if len(conn_keys) < 2:
+            continue
+
+        # En grado 2 esperamos exactamente 2 conexiones. Si por ruido hay más,
+        # usamos las dos primeras para recorte de codo.
+        c1 = conn_keys[0]
+        c2 = conn_keys[1]
+        p1, s1, _is_start_1 = c1
+        p2, s2, _is_start_2 = c2
+
+        d1 = int(round(float(get_diameter(p1, s1))))
+        d2 = int(round(float(get_diameter(p2, s2))))
+        elbow_diam = max(d1, d2)
+        trim = float(ELBOW_TRIM_BY_DIAM.get(elbow_diam, 0.0) or 0.0)
+        if trim <= 0.0:
+            continue
+
+        for path_idx, seg_idx, is_start in (c1, c2):
+            seg_key = (path_idx, seg_idx)
+            cuts = segment_cuts.setdefault(seg_key, {"start": 0.0, "end": 0.0})
+            side = "start" if is_start else "end"
+            cuts[side] = float(cuts.get(side, 0.0)) + trim
+
+
+def register_cross_path_manguito_cuts_into(
+    segment_cuts: dict[tuple[int, int], dict[str, float]],
+    segment_groups: list,
+    vertex_map: dict[tuple[float, float, float], list[dict]] | None,
+    te_vertices: set | None,
+    get_diameter: Callable[[int, int], float],
+) -> None:
+    """
+    Añade recortes de manguito en nodos compartidos por 2 paths distintos colineales.
+    """
+    cross_manguitos = detect_cross_path_manguitos(
+        segment_groups=segment_groups,
+        vertex_map=vertex_map,
+        te_vertices=te_vertices,
+    )
+    if not cross_manguitos:
+        return
+
+    by_node: dict[tuple[float, float, float], list[tuple[int, int, bool]]] = {}
+    for conn_key, info in cross_manguitos.items():
+        node_key = info.get("node_key")
+        if not node_key:
+            continue
+        by_node.setdefault(node_key, []).append(conn_key)
+
+    for _node_key, conn_keys in by_node.items():
+        if len(conn_keys) < 2:
+            continue
+
+        c1 = conn_keys[0]
+        c2 = conn_keys[1]
+        p1, s1, _ = c1
+        p2, s2, _ = c2
+
+        d1 = int(round(float(get_diameter(p1, s1))))
+        d2 = int(round(float(get_diameter(p2, s2))))
+        k_exact = (d1, d2)
+        k_sorted = tuple(sorted((d1, d2)))
+        trim = MANGUITO_TRIM_BY_DIAM.get(k_exact) or MANGUITO_TRIM_BY_DIAM.get(k_sorted)
+        if not trim or float(trim) <= 0.0:
+            continue
+        trim_val = float(trim)
+
+        for path_idx, seg_idx, is_start in (c1, c2):
+            seg_key = (path_idx, seg_idx)
+            cuts = segment_cuts.setdefault(seg_key, {"start": 0.0, "end": 0.0})
+            side = "start" if is_start else "end"
+            cuts[side] = float(cuts.get(side, 0.0)) + trim_val
+
+
 def register_te_cuts_into(
     segment_cuts: dict[tuple[int, int], dict[str, float]],
     vkey: tuple[float, float, float],
@@ -381,6 +605,26 @@ def compute_segment_cuts_for_all_paths(
 
     # 2) Vertex_map y TE
     vertex_map, te_vertices = build_vertex_map_all_paths(segment_groups)
+
+    # 2.A) Codo entre paths distintos (grado=2 y no colineales)
+    register_cross_path_elbow_cuts_into(
+        all_cuts,
+        segment_groups,
+        vertex_map,
+        te_vertices,
+        get_diameter,
+    )
+
+    # 2.B) Manguito entre paths distintos (grado=2 y colineales)
+    register_cross_path_manguito_cuts_into(
+        all_cuts,
+        segment_groups,
+        vertex_map,
+        te_vertices,
+        get_diameter,
+    )
+
+    # 2.C) TE
     for vkey in te_vertices:
         register_te_cuts_into(all_cuts, vkey, vertex_map, segment_groups, get_diameter)
 

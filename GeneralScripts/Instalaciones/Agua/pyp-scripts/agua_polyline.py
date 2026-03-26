@@ -27,6 +27,8 @@ from .utils.vertex_utils import (
     compute_segment_cuts_for_path,
     compute_segment_cuts_for_all_paths,
     detect_bifurcations,
+    detect_cross_path_elbows,
+    detect_cross_path_manguitos,
 )
 from .utils.te_orientation import build_te_params
 from .utils.attributes_utils import (
@@ -633,12 +635,53 @@ def _create_elements_for_segment_group(
             if te_vertices:
                 print(f"[AGUA] Bifurcaciones detectadas (TE): {len(te_vertices)}")
 
+            # Detección de codos entre paths distintos (nodo compartido con 2 conexiones).
+            # Cubre casos de edición/borrado donde un codo queda partido en dos caminos.
+            cross_path_elbows_all = detect_cross_path_elbows(
+                split_segment_groups, vertex_map=vertex_map, te_vertices=te_vertices
+            )
+            cross_path_manguitos_all = detect_cross_path_manguitos(
+                split_segment_groups, vertex_map=vertex_map, te_vertices=te_vertices
+            )
+
             # Preparar TE nodes (yaw por troncal) para el processor
             processor.te_nodes = (
                 build_te_params(split_segment_groups, vertex_map, te_vertices)
                 if te_vertices
                 else {}
             )
+            processor.cross_path_elbows = {
+                (seg_idx, is_start): data
+                for (p_idx, seg_idx, is_start), data in cross_path_elbows_all.items()
+                if p_idx == path_idx
+            }
+            processor.cross_path_manguitos = {
+                (seg_idx, is_start): {
+                    **data,
+                    "other_diameter": (
+                        getattr(
+                            getattr(
+                                split_segment_groups[data["other_path_idx"]][
+                                    data["other_seg_idx"]
+                                ],
+                                "info",
+                                None,
+                            ),
+                            "diameter",
+                            None,
+                        )
+                        if isinstance(data.get("other_path_idx"), int)
+                        and isinstance(data.get("other_seg_idx"), int)
+                        and 0 <= data["other_path_idx"] < len(split_segment_groups)
+                        and 0
+                        <= data["other_seg_idx"]
+                        < len(split_segment_groups[data["other_path_idx"]])
+                        else None
+                    ),
+                }
+                for (p_idx, seg_idx, is_start), data in cross_path_manguitos_all.items()
+                if p_idx == path_idx
+            }
 
             all_cuts = compute_segment_cuts_for_all_paths(split_segment_groups)
             segment_cuts = {
@@ -719,6 +762,7 @@ def _create_elements_with_layers_attrs(
     elements_generated_final = []
     current_tube_idx = -1
     last_segment_idx = 0
+    current_tube_assignment_key = None
 
     outer_inner_type_map = {
         "tubo_agua": "tubo_agua_inner",
@@ -736,6 +780,7 @@ def _create_elements_with_layers_attrs(
         if element_type == "tubo_agua":
             current_tube_idx += 1
             last_segment_idx = max(current_tube_idx, 0)
+            current_tube_assignment_key = f"seg_{path_idx}_elem_{current_tube_idx}"
 
         seg_info = None
         if path_segments and 0 <= last_segment_idx < len(path_segments):
@@ -752,6 +797,14 @@ def _create_elements_with_layers_attrs(
         storage_key = f"seg_{path_idx}_elem_{element_idx}"
         assignment_key = storage_key
         base_key = _default_attr_key_for(element_type)
+
+        # Para tubos, la paleta selecciona por índice de segmento (sin fittings),
+        # mientras la generación final usa índice secuencial con fittings insertados.
+        # Este fallback evita perder layer/atributos cuando aparece una TE en medio.
+        if element_type == "tubo_agua" and current_tube_assignment_key:
+            assignment_key = _resolve_assignment_key(
+                assignment_key, [current_tube_assignment_key]
+            )
 
         expected_outer_type = inner_outer_type_map.get(element_type)
         is_paired_inner = False
@@ -775,6 +828,8 @@ def _create_elements_with_layers_attrs(
                 fallback_keys.append(f"seg_{path_idx}_elem_{idx + 2}")
             except Exception:
                 pass
+            if element_type == "tubo_agua_inner" and current_tube_assignment_key:
+                fallback_keys.insert(0, current_tube_assignment_key)
             assignment_key = _resolve_assignment_key(assignment_key, fallback_keys)
 
         # 1) Defaults que ya trae el modelo generado por el PythonPart

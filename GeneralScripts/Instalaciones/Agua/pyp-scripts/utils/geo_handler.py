@@ -7213,12 +7213,33 @@ class PipelineProcessor:
         # info de TE: opcional, se puede inyectar desde fuera
         te_nodes = getattr(self, "te_nodes", {}) or {}
         inserted_te_keys = set()
+        cross_path_elbows = getattr(self, "cross_path_elbows", {}) or {}
+        inserted_cross_path_elbows = set()
+        cross_path_manguitos = getattr(self, "cross_path_manguitos", {}) or {}
+        inserted_cross_path_manguitos = set()
         debug_te_pos = str(os.getenv("AGUA_DEBUG_TE_POS", "1")).strip() not in (
             "",
             "0",
             "false",
             "False",
         )
+
+        def _build_aux_seg_data(p_start, p_end):
+            """Construye un objeto mínimo compatible con _aplicar_transformacion(codo)."""
+            obj = type("AuxSegData", (), {})()
+            obj.start = p_start
+            obj.end = p_end
+            dx = p_end.X - p_start.X
+            dy = p_end.Y - p_start.Y
+            dz = p_end.Z - p_start.Z
+            ln = math.sqrt(dx * dx + dy * dy + dz * dz)
+            if ln > 1e-9:
+                obj.vector_normalizado = AllplanGeo.Vector3D(dx / ln, dy / ln, dz / ln)
+            else:
+                obj.vector_normalizado = AllplanGeo.Vector3D(0.0, 0.0, 0.0)
+            obj.angulo_xy = math.degrees(math.atan2(dy, dx)) if ln > 1e-9 else 0.0
+            obj.angulo_z = 0.0
+            return obj
 
         for i, seg_item in enumerate(segments):
             seg = seg_item.data
@@ -7374,16 +7395,20 @@ class PipelineProcessor:
                 p_prev = getattr(seg, "start", None)
                 p_curr = getattr(seg, "end", None)
                 p_next = getattr(next_seg, "end", None)
+                node_key = (
+                    (round(p_curr.X, 3), round(p_curr.Y, 3), round(p_curr.Z, 3))
+                    if p_curr
+                    else None
+                )
+                te_info_at_node = te_nodes.get(node_key) if node_key else None
 
                 # -------------------------------------------------------
                 # 3.A TE (BIFURCACIÓN) EN EL NODO (si aplica)
                 # -------------------------------------------------------
                 if "te" in self.templates and p_curr:
-                    key = (round(p_curr.X, 3), round(p_curr.Y, 3), round(p_curr.Z, 3))
-                    te_info = te_nodes.get(key)
-                    if te_info and key not in inserted_te_keys:
-                        inserted_te_keys.add(key)
-                        center_pt_raw = te_info.get("center_pt")
+                    if te_info_at_node and node_key not in inserted_te_keys:
+                        inserted_te_keys.add(node_key)
+                        center_pt_raw = te_info_at_node.get("center_pt")
                         if (
                             isinstance(center_pt_raw, (tuple, list))
                             and len(center_pt_raw) == 3
@@ -7396,14 +7421,16 @@ class PipelineProcessor:
                         else:
                             # Fallback: conservar comportamiento previo si no hay center_pt.
                             pos_nodo = p_curr
-                        yaw = float(te_info.get("yaw_deg", 0.0) or 0.0)
+                        yaw = float(te_info_at_node.get("yaw_deg", 0.0) or 0.0)
 
                         # Selección de TE por diámetro (lógica equivalente a fontaneria.py)
-                        te_dist = str(te_info.get("distribution_type", "IS") or "IS")
+                        te_dist = str(
+                            te_info_at_node.get("distribution_type", "IS") or "IS"
+                        )
                         te_dist = "TD" if te_dist.upper() == "TD" else "IS"
-                        d_main_in = te_info.get("d_main_in", None)
-                        d_main_out = te_info.get("d_main_out", None)
-                        d_branch = te_info.get("d_branch", None)
+                        d_main_in = te_info_at_node.get("d_main_in", None)
+                        d_main_out = te_info_at_node.get("d_main_out", None)
+                        d_branch = te_info_at_node.get("d_branch", None)
                         if d_main_in is None or d_main_out is None or d_branch is None:
                             # Fallback: inferir con segmento actual/siguiente para no romper.
                             try:
@@ -7420,7 +7447,7 @@ class PipelineProcessor:
                                 d_main_in = d_main_out = d_branch = 20.0
 
                         mirror_model_x = bool(
-                            te_info.get("model_mirror_x", False)
+                            te_info_at_node.get("model_mirror_x", False)
                             or (
                                 (d_main_in is not None and d_main_out is not None)
                                 and int(round(float(d_main_in)))
@@ -7464,7 +7491,7 @@ class PipelineProcessor:
                             "[AGUA][TE] node=%s dist=%s di_in=%s di_out=%s di_branch=%s "
                             "modelo_outer=%s elems_dyn=%s"
                             % (
-                                str(key),
+                                str(node_key),
                                 te_dist,
                                 str(d_main_in),
                                 str(d_main_out),
@@ -7488,7 +7515,7 @@ class PipelineProcessor:
                                 print(
                                     "[DBG TE POS] CREATE key=%s center_pt=(%.3f,%.3f,%.3f) pos_nodo=(%.3f,%.3f,%.3f) seg_start=(%.3f,%.3f,%.3f) seg_end=(%.3f,%.3f,%.3f) v_unit=(%.3f,%.3f,%.3f) cut_start=%.2f cut_end=%.2f"
                                     % (
-                                        str(key),
+                                        str(node_key),
                                         pos_nodo.X,
                                         pos_nodo.Y,
                                         pos_nodo.Z,
@@ -7552,6 +7579,7 @@ class PipelineProcessor:
                     p_prev
                     and p_curr
                     and p_next
+                    and node_key not in te_nodes
                     and is_90_deg_turn(p_prev, p_curr, p_next)
                 ):
                     pos_nodo = seg.end
@@ -7598,12 +7626,7 @@ class PipelineProcessor:
                 if "manguito" in self.templates:
                     # Si este nodo es una TE, NO crear manguito (se muestra la TE).
                     if p_curr:
-                        key = (
-                            round(p_curr.X, 3),
-                            round(p_curr.Y, 3),
-                            round(p_curr.Z, 3),
-                        )
-                        if key in te_nodes:
+                        if node_key in te_nodes:
                             continue
 
                     # Regla:
@@ -7770,5 +7793,184 @@ class PipelineProcessor:
                                 }
                             )
                             element_index += 1
+
+            # -------------------------------------------------------
+            # 3.C CODO EN NODO COMPARTIDO ENTRE PATHS (grado=2)
+            # -------------------------------------------------------
+            if "codo_90" in self.templates:
+                for at_start in (False, True):
+                    cp_info = cross_path_elbows.get((i, at_start))
+                    if not cp_info:
+                        continue
+                    node_key_cp = cp_info.get("node_key")
+                    other_pt = cp_info.get("other_point")
+                    if not node_key_cp or not other_pt:
+                        continue
+                    if node_key_cp in te_nodes or node_key_cp in inserted_cross_path_elbows:
+                        continue
+
+                    if at_start:
+                        node_pt = getattr(seg, "start", None)
+                        away_pt = getattr(seg, "end", None)
+                    else:
+                        node_pt = getattr(seg, "end", None)
+                        away_pt = getattr(seg, "start", None)
+                    if not node_pt or not away_pt:
+                        continue
+
+                    seg_for_elbow = (
+                        _build_aux_seg_data(away_pt, node_pt) if at_start else seg
+                    )
+                    next_for_elbow = _build_aux_seg_data(node_pt, other_pt)
+
+                    element_codo_outer = self._aplicar_transformacion(
+                        self.templates["codo_90"],
+                        seg_for_elbow,
+                        elem_type="codo_90",
+                        custom_position=node_pt,
+                        next_seg=next_for_elbow,
+                    )
+                    result_list.append(
+                        {
+                            "element": element_codo_outer,
+                            "element_type": "codo_90",
+                            "index": element_index,
+                        }
+                    )
+                    element_index += 1
+
+                    if "codo_90_inner" in self.templates:
+                        element_codo_inner = self._aplicar_transformacion(
+                            self.templates["codo_90_inner"],
+                            seg_for_elbow,
+                            elem_type="codo_90",
+                            custom_position=node_pt,
+                            next_seg=next_for_elbow,
+                        )
+                        result_list.append(
+                            {
+                                "element": element_codo_inner,
+                                "element_type": "codo_90_inner",
+                                "index": element_index,
+                            }
+                        )
+                        element_index += 1
+
+                    inserted_cross_path_elbows.add(node_key_cp)
+                    break
+
+            # -------------------------------------------------------
+            # 3.D MANGUITO EN NODO COMPARTIDO ENTRE PATHS (grado=2 colineal)
+            # -------------------------------------------------------
+            if "manguito" in self.templates:
+                for at_start in (False, True):
+                    cp_info = cross_path_manguitos.get((i, at_start))
+                    if not cp_info:
+                        continue
+                    node_key_cp = cp_info.get("node_key")
+                    other_pt = cp_info.get("other_point")
+                    if not node_key_cp or not other_pt:
+                        continue
+                    if (
+                        node_key_cp in te_nodes
+                        or node_key_cp in inserted_cross_path_manguitos
+                    ):
+                        continue
+
+                    if at_start:
+                        node_pt = getattr(seg, "start", None)
+                        away_pt = getattr(seg, "end", None)
+                    else:
+                        node_pt = getattr(seg, "end", None)
+                        away_pt = getattr(seg, "start", None)
+                    if not node_pt or not away_pt:
+                        continue
+
+                    seg_for_conn = (
+                        _build_aux_seg_data(away_pt, node_pt) if at_start else seg
+                    )
+                    next_for_conn = _build_aux_seg_data(node_pt, other_pt)
+
+                    def _get_seg_diam(_seg_item):
+                        try:
+                            info = getattr(_seg_item, "info", None)
+                            d = getattr(info, "diameter", None) if info is not None else None
+                            if isinstance(d, (list, tuple)) and d:
+                                return float(d[0])
+                            if d is None:
+                                return None
+                            return float(d)
+                        except Exception:
+                            return None
+
+                    d_curr = _get_seg_diam(seg_item)
+                    d_next = cp_info.get("other_diameter", d_curr)
+                    if isinstance(d_next, (list, tuple)) and d_next:
+                        d_next = d_next[0]
+                    if d_next is None:
+                        d_next = d_curr
+                    dist_type = "IS"
+                    try:
+                        info_curr = getattr(seg_item, "info", None)
+                        dist_raw = getattr(info_curr, "distribution_type", None) or "IS"
+                        dist_type = "TD" if str(dist_raw).upper() == "TD" else "IS"
+                    except Exception:
+                        dist_type = "IS"
+
+                    dyn_models = self._get_manguito_models_for_diameters(
+                        d_curr if d_curr is not None else 20.0,
+                        d_next if d_next is not None else 20.0,
+                        distribution_type=dist_type,
+                    )
+                    manguito_outer_model = (
+                        dyn_models[0] if dyn_models else self.templates["manguito"]
+                    )
+                    is_inner_only_reducer = False
+
+                    element_manguito = self._aplicar_transformacion(
+                        manguito_outer_model,
+                        seg_for_conn,
+                        elem_type="manguito",
+                        custom_position=node_pt,
+                        next_seg=next_for_conn,
+                        custom_mirror_x_local=False,
+                    )
+                    result_list.append(
+                        {
+                            "element": element_manguito,
+                            "element_type": (
+                                "manguito_inner" if is_inner_only_reducer else "manguito"
+                            ),
+                            "index": element_index,
+                        }
+                    )
+                    element_index += 1
+
+                    manguito_inner_model = None
+                    if len(dyn_models) > 1:
+                        manguito_inner_model = dyn_models[1]
+                    elif "manguito_inner" in self.templates:
+                        manguito_inner_model = self.templates["manguito_inner"]
+
+                    if manguito_inner_model is not None:
+                        element_manguito_inner = self._aplicar_transformacion(
+                            manguito_inner_model,
+                            seg_for_conn,
+                            elem_type="manguito",
+                            custom_position=node_pt,
+                            next_seg=next_for_conn,
+                            custom_mirror_x_local=False,
+                        )
+                        result_list.append(
+                            {
+                                "element": element_manguito_inner,
+                                "element_type": "manguito_inner",
+                                "index": element_index,
+                            }
+                        )
+                        element_index += 1
+
+                    inserted_cross_path_manguitos.add(node_key_cp)
+                    break
 
         return result_list

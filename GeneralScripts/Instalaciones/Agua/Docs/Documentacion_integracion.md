@@ -218,3 +218,109 @@ Archivo: `Agua/pyp-scripts/te_003_td.py`
 - `Agua/pyp-scripts/te_003_td.py`
 - `Agua/pyp-scripts/multicapa_script.py`
 - `Agua/pyp-scripts/armaflex_script.py`
+
+---
+
+## 13) Reglas de conexiones tras edicion (1004 / borrar)
+
+Archivos:
+
+- `Agua/pyp-scripts/utils/vertex_utils.py`
+- `Agua/pyp-scripts/utils/geo_handler.py`
+- `Agua/pyp-scripts/agua_polyline.py`
+
+### 13.1 Prioridad de fittings en nodos compartidos
+
+En un mismo nodo se aplica la siguiente prioridad:
+
+1. Si el nodo tiene 3 conexiones -> `TE`.
+2. Si el nodo tiene 2 conexiones no colineales -> `codo`.
+3. Si el nodo tiene 2 conexiones colineales -> `manguito`.
+
+Regla clave: si hay `TE`, no se crea `codo` ni `manguito` en ese nodo.
+
+### 13.2 Soporte entre paths distintos (cross-path)
+
+Despues de editar/borrar, una union puede quedar repartida en paths distintos.
+Ahora se detectan y generan tambien en ese estado:
+
+- `codo` cross-path (grado 2 no colineal),
+- `manguito` cross-path (grado 2 colineal).
+
+Esto evita perder fittings cuando el nodo deja de estar en segmentos consecutivos del mismo path.
+
+### 13.3 Recortes de tramos asociados
+
+Los recortes `segment_cuts` se aplican tambien en nodos cross-path:
+
+- recorte de codo en ambos lados del nodo para `codo` cross-path,
+- recorte de manguito en ambos lados del nodo para `manguito` cross-path,
+- y en `TE` se mantiene prioridad de recortes de TE sobre recortes previos en ese lado.
+
+### 13.4 Comportamiento esperado al eliminar la rama perpendicular
+
+Caso tipico:
+
+- Hay 3 segmentos con `TE`.
+- Se elimina el tramo perpendicular (`on_control_event: 1004`).
+
+Resultado esperado:
+
+- el nodo deja de ser `TE`,
+- si los 2 tramos restantes quedan colineales -> se crea `manguito`,
+- si quedan en 90 grados -> se crea `codo`,
+- en ambos casos se aplican recortes de los segmentos correspondientes.
+
+---
+
+## 14) Segmento partido + bifurcación desde punto insertado (layers/atributos)
+
+Archivos:
+
+- `Agua/pyp-scripts/agua_polyline.py`
+- `PolyLib/interactor.py`
+
+### 14.1 Problema observado
+
+Escenario:
+
+1. Se inserta un punto en mitad de un tramo (el tramo se divide en dos).
+2. Desde ese punto insertado se crea una bifurcación (`TE`).
+3. Se aplican layer y atributos a los tubos seleccionados.
+
+Incidencia:
+
+- El tramo que queda "al final" del segmento dividido puede perder:
+  - layer aplicado desde paleta,
+  - valor de atributos personalizados (pmp_pare / 6_CC_IS en IS),
+  - y por ello no propagarse correctamente al flujo de archivo padre.
+
+Nota: el problema no se daba cuando el punto insertado se quedaba como unión/manguito sin crear `TE`.
+
+### 14.2 Causa técnica
+
+Al aparecer `TE`, cambia el orden/índice final de elementos generados en preview.
+La paleta guarda asignaciones con claves `seg_{path}_elem_{idx}` basadas en selección,
+pero en el pipeline final el índice puede desplazarse por inserción de fittings.
+
+Resultado: para algunos tubos (especialmente el segundo del tramo partido), la `storage_key`
+final no coincide con la key guardada en `applied_layers` / `applied_attributes`.
+
+### 14.3 Solución aplicada
+
+En `_create_elements_with_layers_attrs(...)` (`agua_polyline.py`) se añadió fallback
+de resolución de key para tubos:
+
+- key primaria: índice final generado (con fittings),
+- key fallback: índice lógico de tubo por orden de segmento (`current_tube_idx`).
+
+Con este fallback, los tubos recuperan correctamente layer/atributos incluso cuando una `TE`
+desplaza los índices de elemento.
+
+### 14.4 Resultado esperado
+
+En “segmento partido + TE desde punto insertado”:
+
+- los dos tramos del segmento original mantienen asignación de layer,
+- mantienen atributos personalizados asignados desde paleta,
+- y el comportamiento queda alineado con el caso donde solo había manguito.
