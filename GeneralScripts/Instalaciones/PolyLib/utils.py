@@ -644,6 +644,7 @@ class ElementSerializer:
                         "system":            seg_info.system,
                         "label":             seg_info.label,
                         "distribution_type": seg_info.distribution_type,
+                        "water_type":        seg_info.water_type,
                         "face":              seg_info.face,
                     }
                 else:
@@ -678,6 +679,7 @@ class ElementSerializer:
                     system=            value.get("system", ""),
                     label=             value.get("label", ""),
                     distribution_type= value.get("distribution_type", ""),
+                    water_type=        value.get("water_type", "") or None,
                     face=              value.get("face", ""),
                 )
 

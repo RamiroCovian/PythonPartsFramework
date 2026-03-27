@@ -5,7 +5,7 @@ import NemAll_Python_Geometry as AllplanGeo
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Any, Dict, NamedTuple, Type
+from typing import Callable, List, Optional, Any, Dict, NamedTuple, Type
 from .parameters import ParamNames
 
 
@@ -78,6 +78,7 @@ class AdditionalParametersBase:
     installation_type: bool = True
     diameter_type: bool = False
     diameter_type_str: bool = False
+    diameter_modify: bool = False
     distribution_type: bool = False
     water_type: bool = False
     face_en: bool = False
@@ -122,6 +123,7 @@ class AdditionalParametersBase:
             ParamNames.Installation.INSTALLATION_TYPE:  self.installation_type,
             ParamNames.Installation.DIAMETER_TYPE:      self.diameter_type,
             ParamNames.Installation.DIAMETER_TYPE_STR:  self.diameter_type_str,
+            ParamNames.Installation.DIAMETER_MODIFY:    self.diameter_modify,
             ParamNames.Installation.DISTRIBUTION_TYPE:  self.distribution_type,
             ParamNames.Installation.WATER_TYPE:         self.water_type,
             ParamNames.Installation.FACE_EN:            self.face_en,
@@ -214,6 +216,7 @@ class Agua(BaseInstallation):
         distribution_type: bool = True
         face_en: bool = False
         diameter_type: bool = True
+        diameter_modify: bool = True
         water_type: bool = True
 
     @dataclass
@@ -223,6 +226,7 @@ class Agua(BaseInstallation):
         face_en: bool = True
         create_python_part: bool = True
         diameter_type: bool = True
+        diameter_modify: bool = True
         water_type: bool = True
 
 
@@ -234,6 +238,7 @@ class Clima(BaseInstallation):
         distribution_type: bool = True
         face_en: bool = False
         diameter_type_str: bool = True
+        diameter_modify: bool = True
 
     @dataclass
     class Enabled(AdditionalParametersEnabled):
@@ -242,6 +247,7 @@ class Clima(BaseInstallation):
         face_en: bool = True
         create_python_part: bool = True
         diameter_type_str: bool = True
+        diameter_modify: bool = True
 
 
 class Electricidad(BaseInstallation):
@@ -287,6 +293,7 @@ class Saneamiento(BaseInstallation):
         distribution_type: bool = True
         face_en: bool = False
         diameter_type: bool = True
+        diameter_modify: bool = True
 
     @dataclass
     class Enabled(AdditionalParametersEnabled):
@@ -295,6 +302,7 @@ class Saneamiento(BaseInstallation):
         face_en: bool = True
         create_python_part: bool = True
         diameter_type: bool = True
+        diameter_modify: bool = True
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -343,6 +351,9 @@ class PolylineBaseConfig:
     limit_angles: bool = False  # Enable angle limiting (snap to predefined increments)
     allowed_angles: Optional[List[float]] = field(default_factory=lambda: [0.0, 45.0, 90.0, -45.0, -90.0])
     min_backtrack_deg: int = 0 # Permite establecer rango de angulos
+
+    # Opt-in marker manager: factory(script_object, build_ele) -> MarkerManager
+    marker_manager_factory: Optional[Callable] = None
 
 
 @dataclass
@@ -905,6 +916,7 @@ class SegmentInfo:
             "system":            self.system,
             "label":             self.label,
             "distribution_type": self.distribution_type if self.distribution_type is not None else "",
+            "water_type":        self.water_type if self.water_type is not None else "",
             "face":              self.face if self.face is not None else "",
             "view_mode":          self.view_mode if self.view_mode is not None else "",
         }
@@ -917,6 +929,7 @@ class SegmentInfo:
             system=            data.get("system", ""),
             label=             data.get("label", ""),
             distribution_type= data.get("distribution_type", "") or None,
+            water_type=        data.get("water_type", "") or None,
             face=              data.get("face", "") or None,
             view_mode=         data.get("view_mode", "")
         )

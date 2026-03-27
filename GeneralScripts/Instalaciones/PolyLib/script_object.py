@@ -117,6 +117,9 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         self.applied_default_attributes: Dict = {}
         self.hover_tooltip_text: str = ""
 
+        # --- Marker manager (opt-in via config.marker_manager_factory) ---
+        self.marker_manager: Any = None
+
         # Instrumentation/debugging
         self._debug = False  # Enable debug logging
         self._diagnostics: List[str] = []  # Store diagnostic messages
@@ -150,6 +153,32 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self._initialize_parameter_states()
             # if self._config.default_layers:
             #     self.script_object_interactor.apply_layer_default(layer=self._config.default_layer)
+
+        # --- Marker manager initialization (opt-in) ---
+        if self._config and self._config.marker_manager_factory and self.marker_manager is None:
+            try:
+                self.marker_manager = self._config.marker_manager_factory(self, self.build_ele)
+                # Restore markers from SavedState when editing
+                saved = getattr(self.build_ele, "SavedState", None)
+                if saved and hasattr(saved, "value") and saved.value:
+                    try:
+                        raw = saved.value
+                        # Unwrap repr() wrapping if present
+                        _s = raw.strip() if isinstance(raw, str) else ""
+                        if (_s.startswith("'") and _s.endswith("'")) or (_s.startswith('"') and _s.endswith('"')):
+                            try:
+                                _s = ast.literal_eval(_s)
+                                if isinstance(_s, str):
+                                    raw = _s
+                            except Exception:
+                                pass
+                        state = json.loads(raw)
+                        self.marker_manager.deserialize_markers(state)
+                    except Exception:
+                        pass
+            except Exception as ex:
+                print(f"[SO] Error creating marker_manager: {ex}")
+                self.marker_manager = None
 
         print(f"[SO] Returning interactor to Allplan: {self.script_object_interactor}")
         print("[SO] start_input() complete\n")
@@ -188,6 +217,11 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 ParamNames.Installation.INSTALLATION_TYPE,
                 "|".join(el['label'] for el in self.installation_types)
             )
+
+            # Asignar el valor del combo para que resolve_installation_config
+            # pueda encontrar el model_base al llamarse justo después
+            _first_label = self.installation_types[0]["label"]
+            getattr(self.build_ele, ParamNames.Installation.INSTALLATION_TYPE).value = _first_label
 
             if self._config and self._config.parameters_enabled.functional_name:
                 _value = self.installation_types[0]["label"]
@@ -282,6 +316,13 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self.show_parameter(ParamNames.Installation.DIAMETER_TYPE, is_list)
         if self._config and self._config.parameters_enabled.diameter_type_str:
             self.show_parameter(ParamNames.Installation.DIAMETER_TYPE_STR, is_list)
+        if self._config:
+            has_diameter_combo = (
+                self._config.parameters_enabled.diameter_type or
+                self._config.parameters_enabled.diameter_type_str
+            )
+            self.show_parameter(ParamNames.Installation.DIAMETER_MODIFY, bool(is_list and has_diameter_combo))
+            #self.enable_parameter(ParamNames.Installation.DIAMETER_MODIFY, bool(is_list and has_diameter_combo))
 
         if is_list:
             if self._config and self._config.parameters_enabled.diameter_type and self.diameter_list:
@@ -505,6 +546,10 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             param.value = value
 
             self.water_type = value
+
+            for seg_info in self.persistent_metadata.values():
+                seg_info.water_type = value
+
             update_necessary = True
 
         elif name == ParamNames.Installation.FACE_EN:
@@ -566,6 +611,19 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
         self._create_elements()
         if not self.element_list_final:
+            # If marker_manager has markers, generate their PythonParts even without polyline segments
+            if self.marker_manager and (self.marker_manager.macro_markers or self.marker_manager.element_markers):
+                print(f"[SO] Markers-only mode: macros={len(self.marker_manager.macro_markers)}, elements={len(self.marker_manager.element_markers)}")
+                self._fn_name = getattr(self.build_ele, ParamNames.General.FUNCTIONAL_NAME).value
+                self.pythonpart_group_list = []
+                self.marker_manager.append_macro_pythonparts(self.pythonpart_group_list, self.doc)
+                self.marker_manager.append_element_pythonparts(self.pythonpart_group_list, self.build_ele)
+                print(f"[SO] After marker append: {len(self.pythonpart_group_list)} PythonParts in list")
+                if self.pythonpart_group_list:
+                    self._create_pythonpart_container()
+                else:
+                    print("[SO] WARNING: pythonpart_group_list is empty after marker append!")
+                return
             print("[PolylineInteractor] No se generaron elementos.")
             return
 
@@ -607,6 +665,14 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 print(f"[SO] Fallback: Creando elementos individuales sin PythonPart.")
                 self._insert_elements_without_pythonpart()
                 return
+
+            # Inject macro/element PythonParts before building the PPG container
+            if self.marker_manager:
+                try:
+                    self.marker_manager.append_macro_pythonparts(self.pythonpart_group_list, self.doc)
+                    self.marker_manager.append_element_pythonparts(self.pythonpart_group_list, self.build_ele)
+                except Exception as ex:
+                    print(f"[SO] Error appending marker PythonParts: {ex}")
 
             # Crear el container final (PythonPartGroup)
             self._create_pythonpart_container()
@@ -778,9 +844,12 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         }
 
         # Serialización del Estado
+        # IMPORTANT: wrap with repr() so Allplan's eval() gets a Python string
+        # literal back instead of raw JSON (which contains null/true/false
+        # that are not valid Python identifiers).
         state_json = self._serialize_state_to_json()
         if state_json:
-            global_params["SavedState"] = state_json
+            global_params["SavedState"] = repr(state_json)
             print(f"[SO] Estado guardado ({len(state_json)} chars)")
 
         try:
@@ -1179,6 +1248,12 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 "applied_custom_attrs": ElementSerializer.serialize_attributes(self.applied_attributes),
                 "global_group_numbers": ElementSerializer.serialize_global_numbers(self.global_group_numbers),
             }
+            # Merge marker data if marker_manager is active
+            if self.marker_manager:
+                try:
+                    state.update(self.marker_manager.serialize_markers())
+                except Exception as ex:
+                    print(f"[SO] Error serializing markers: {ex}")
             return json.dumps(state)
         except Exception as e:
             print(f"[SO] Error serializando estado: {e}")

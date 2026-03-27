@@ -43,6 +43,7 @@ PARAM_SUPPORTED_ANGLES = "SupportedAngles"             # Ángulos soportados (te
 PARAM_INSTALLATION_TYPE = "InstallationType"           # ComboBox tipo de instalación
 PARAM_DIAMETER_TYPE = "DiameterType"
 PARAM_DIAMETER_TYPE_STR = "DiameterTypeStr"
+PARAM_DIAMETER_MODIFY = "DiameterModify"
 PARAM_DISTRIBUTION_TYPE = "DistributionType"
 PARAM_WATER_TYPE = "WaterType"
 PARAM_FACE_EN ="FaceEN"
@@ -134,6 +135,7 @@ class ParamNames:
         INSTALLATION_TYPE = PARAM_INSTALLATION_TYPE
         DIAMETER_TYPE = PARAM_DIAMETER_TYPE
         DIAMETER_TYPE_STR = PARAM_DIAMETER_TYPE_STR
+        DIAMETER_MODIFY = PARAM_DIAMETER_MODIFY
         DISTRIBUTION_TYPE = PARAM_DISTRIBUTION_TYPE
         WATER_TYPE = PARAM_WATER_TYPE
         FACE_EN = PARAM_FACE_EN
@@ -292,6 +294,16 @@ class EventIds:
     BORRAR_SECCION = 1004             # Click en botón "Borrar Segmento"
     APLICAR_LAYERS = 1009             # Click en botón "Aplicar layer"
     ATTRIBUTE_APPLY = 1011            # Click en botón "Aplicar atributo"
+
+    # --- Marker Manager events (Page 2: macros / defined elements) ---
+    SELECT_MACRO_POINT = 1013         # Iniciar captura de punto para macro
+    ADD_MACRO_LIBRARY = 1014          # Agregar macro de librería
+    SELECT_ELEMENT_POINT = 1015       # Iniciar captura de punto para elemento
+    ADD_ELEMENT_POINT = 1016          # Agregar punto de elemento
+    ACCEPT_MACRO = 1020               # Aceptar macro (salir de captura)
+    ACCEPT_ELEMENT = 1021             # Aceptar elemento (salir de captura)
+    SELECT_LOCAL = 1026               # Seleccionar local/story
+    CLEAR_LOCAL = 1027                # Limpiar selección de local
 
 
 # ══════════════════════════════════════════════════════════════════════════════════

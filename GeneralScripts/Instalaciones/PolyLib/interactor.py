@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import math, json, time
+import ast, math, json
 
 from collections import defaultdict
 from typing import TYPE_CHECKING, Optional, List, Any, Tuple, Dict, Set
@@ -27,21 +27,7 @@ from .models import (
 from .parameters import ParamNames, PointModeValues
 from .utils import ElementSerializer
 
-# Capture role identifiers
-CAPTURE_ROLE_INICIAL = 0
-CAPTURE_ROLE_PASO = 1
-CAPTURE_ROLE_BIFURCACION = 2
-CAPTURE_ROLE_FINAL = 3
 
-CAPTURE_ROLE_LABELS = {
-    CAPTURE_ROLE_INICIAL: "Inicial",
-    CAPTURE_ROLE_PASO: "Paso",
-    CAPTURE_ROLE_BIFURCACION: "Bifurcacion",
-    CAPTURE_ROLE_FINAL: "Final",
-}
-
-# User prompt message (can be modified by installation scripts)
-DEFAULT_USER_PROMPT = "Click to add points, right-click to finish. ESC to cancel."
 # ─────────────────── Parámetros de Interacción ───────────────────
 
 SNAP_SIZE = 70.0 # mm - tamaño del snap
@@ -155,10 +141,12 @@ class PolylineInteractor:
 
         # Drag de vértices guardados (edición)
         self.saved_dragging = None  # (path_idx, pt_idx)
+        self._last_move_pnt: Optional[AllplanGeo.Point3D] = None  # último pnt calculado en MouseMove
         self.saved_hover_point = None
         self.saved_dragging_original_point = (
             None  # Coordenadas originales antes del drag
         )
+        self.drag_ghost_path: list = []  # Copia del path antes del drag (referencia roja)
 
         self.extend_target = None
         self.elements_created = False  # Flag de control
@@ -236,6 +224,7 @@ class PolylineInteractor:
                 AllplanIFW.eDrawElementIdentPointSymbols.eDRAW_IDENT_ELEMENT_POINT_SYMBOL_NO
             )
             self.coord_input.InitFirstPointInput(prompt_msg, input_mode)
+            self.coord_input.IsCoordinateInputEnabled()
             self._restore_saved_state()
 
     # ============================================================================
@@ -422,6 +411,16 @@ class PolylineInteractor:
             if not json_str or not json_str.strip():
                 return False
 
+            # Unwrap repr() wrapping if present (Allplan may or may not eval() the value)
+            _s = json_str.strip()
+            if (_s.startswith("'") and _s.endswith("'")) or (_s.startswith('"') and _s.endswith('"')):
+                try:
+                    _s = ast.literal_eval(_s)
+                    if isinstance(_s, str):
+                        json_str = _s
+                except Exception:
+                    pass
+
             state = json.loads(json_str)
 
             try:
@@ -490,14 +489,14 @@ class PolylineInteractor:
                 self.script_object.distribution_type = state["distribution_type"]
 
             if "water_type" in state and self.config.parameters_enabled.water_type:
-                if self.script_object.distribution_type:
-                    water_types = WaterTypes.to_value_list(self.script_object.distribution_type)
-                    self.script_object.ctrl_prop_util.set_value_list(ParamNames.Installation.WATER_TYPE, water_types)
-
                 param = getattr(self.script_object.build_ele, ParamNames.Installation.WATER_TYPE)
                 param.value = state["water_type"]
 
                 self.script_object.water_type = state["water_type"]
+
+                if self.script_object.distribution_type:
+                    water_types = WaterTypes.to_value_list(self.script_object.distribution_type)
+                    self.script_object.ctrl_prop_util.set_value_list(ParamNames.Installation.WATER_TYPE, water_types)
 
             if "diameter_type" in state:
                 _value = int(state["diameter_type"])
@@ -549,6 +548,14 @@ class PolylineInteractor:
             # 3. RE-DIBUJO TOTAL
             self.script_object._create_elements_preview() # Limpia element_list y crea nuevos 3D
             self._generate_elements_for_preview()         # Envía al Viewport de Allplan
+
+            # 4. Restore marker manager state
+            mgr = getattr(self.script_object, 'marker_manager', None)
+            if mgr:
+                try:
+                    mgr.deserialize_markers(state)
+                except Exception as ex:
+                    print(f"[SO] Error restoring markers: {ex}")
 
             mode_value = getattr(self.script_object.build_ele, ParamNames.DrawMode.MODE)
             mode_value.value = PointModeValues.EXTEND
@@ -1299,6 +1306,13 @@ class PolylineInteractor:
                 elif mode == "YZ": current_pnt.X = last.X
 
 
+        # --- Marker manager intercept (capture modes, hover, selection) ---
+        mgr = getattr(self.script_object, 'marker_manager', None)
+        if mgr:
+            r = mgr.handle_mouse_msg(mouse_msg, current_pnt)
+            if r is not None:
+                return r
+
         if self.orientation_capture_mode:
             return self._handle_orientation_capture(mouse_msg, current_pnt)
 
@@ -1347,6 +1361,7 @@ class PolylineInteractor:
                     None if (self.saved_hover_point or self.hover_mid)
                     else self._find_hover_segment(current_pnt, mode)
                 )
+                self._last_move_pnt = AllplanGeo.Point3D(current_pnt)
                 self._draw_preview(current_pnt)
                 return True
 
@@ -1363,7 +1378,7 @@ class PolylineInteractor:
                             min_dist = dist
 
                 # Si encontramos un punto guardado cerca, usamos su 3D REAL
-                point_to_add = AllplanGeo.Point3D(snapped_point) if snapped_point else current_pnt
+                point_to_add = AllplanGeo.Point3D(snapped_point) if snapped_point else (self._last_move_pnt if self._last_move_pnt is not None else current_pnt)
 
                 # ── VALIDACIÓN DE LONGITUD MÍNIMA ──────────────────────────────────────
                 if self.points:
@@ -1396,6 +1411,7 @@ class PolylineInteractor:
                 self.points.append(point_to_add)
                 self.current_point = point_to_add
                 self.segment_modes.append(mode) # Guardamos "XY", "XZ" o "YZ"
+                self._last_move_pnt = None
                 self._draw_preview(current_pnt)
                 self.get_segments()
                 return True
@@ -1547,13 +1563,20 @@ class PolylineInteractor:
         # ----------------------------------------------------------------------
         elif self.extend_mode:
             self.box_selecting = False
+            # # Usar el punto original del vértice como base para GetInputPoint:
+            # # - movimiento libre → proyecta en el plano Z del vértice (conserva Z)
+            # # - snap a punto 3D  → toma la Z del punto snapeado
+            _base_pnt = (
+                self.saved_dragging_original_point
+                if self.saved_dragging is not None and self.saved_dragging_original_point is not None
+                else AllplanGeo.Point3D()
+            )
             current_pnt = self.coord_input.GetInputPoint(
-                mouse_msg, pnt, msg_info, AllplanGeo.Point3D(), True
+                mouse_msg, pnt, msg_info, _base_pnt, True
             ).GetPoint()
-
-            # Preserve Z of the vertex being dragged (GetInputPoint projects to Z=0)
-            if self.saved_dragging is not None and self.saved_dragging_original_point is not None:
-                current_pnt = AllplanGeo.Point3D(current_pnt.X, current_pnt.Y, self.saved_dragging_original_point.Z)
+            # current_pnt = self.coord_input.GetInputPoint(
+            #     mouse_msg, pnt, msg_info, AllplanGeo.Point3D(), True
+            # ).GetPoint()
 
             if self.coord_input.IsMouseMove(mouse_msg):
                 # A) Si ya estamos arrastrando algo, actualizamos posición
@@ -1619,6 +1642,7 @@ class PolylineInteractor:
                         else:
                             self.insert_preview_p = self.insert_target = None
 
+                self._last_move_pnt = AllplanGeo.Point3D(current_pnt)
                 self._draw_preview(current_pnt)
                 return True
 
@@ -1629,10 +1653,12 @@ class PolylineInteractor:
                 if self.saved_dragging is not None:
                     pidx, vidx = self.saved_dragging
                     if self.saved_dragging_original_point:
-                        p_final = AllplanGeo.Point3D(current_pnt)
+                        p_final = AllplanGeo.Point3D(self._last_move_pnt if self._last_move_pnt is not None else current_pnt)
                         self.script_object.saved_paths[pidx][vidx] = AllplanGeo.Point3D(p_final)
                         self._update_segments_after_vertex_drag(pidx, vidx, self.saved_dragging_original_point, mode)
                     self.saved_dragging = self.saved_dragging_original_point = None
+                    self._last_move_pnt = None
+                    self.drag_ghost_path = []
                     self._draw_preview(current_pnt)
                     return True
 
@@ -1650,6 +1676,11 @@ class PolylineInteractor:
                                 cut_pt = AllplanGeo.Point3D(pts[v_idx].X, pts[v_idx].Y, pts[v_idx].Z)
                                 left  = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in pts[:v_idx + 1]]
                                 right = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in pts[v_idx:]]
+
+                                _snap_vc = self._snapshot_applied_keys(v_path)
+                                # Remapear metadata ANTES de modificar saved_paths
+                                self._remap_metadata_after_vertex_cut(v_path, v_idx)
+
                                 self.script_object.saved_paths.pop(v_path)
                                 self.script_object.saved_paths.insert(v_path, right)
                                 self.script_object.saved_paths.insert(v_path, left)
@@ -1659,6 +1690,11 @@ class PolylineInteractor:
                                 self.selected_seg      = None
                                 self.selected_junction = None
                                 self.hover_seg         = None
+                                self.get_segments()
+                                self._update_segment_groups()
+                                self.script_object._create_elements_preview()
+                                self._generate_elements_for_preview()
+                                self._remap_applied_after_cut(v_path, v_idx, _snap_vc, {})
                                 self._draw_preview(current_pnt)
                                 return True
 
@@ -1701,10 +1737,23 @@ class PolylineInteractor:
                             return True
 
                         if kind == "tubo":
+                            _snap_sc = self._snapshot_applied_keys(path_idx)
+                            _orig_sc_key = f"seg_{path_idx}_elem_{seg_idx}"
+                            _sc_inherited: dict = {}
+                            _sa = self.script_object.applied_attributes.get(_orig_sc_key)
+                            _sl = self.script_object.applied_layers.get(_orig_sc_key)
+                            if _sa is not None:
+                                _sc_inherited['attrs'] = list(_sa)
+                            if _sl is not None:
+                                _sc_inherited['layer'] = dict(_sl)
+                            # Remapear metadata ANTES de modificar saved_paths
+                            self._remap_metadata_after_segment_cut(path_idx, seg_idx)
                             self.script_object.saved_paths.pop(path_idx)
                             self.script_object.saved_paths.insert(path_idx, right)
                             self.script_object.saved_paths.insert(path_idx, left)
                         else:
+                            _snap_sc = {}
+                            _sc_inherited = {}
                             self.points = left
                             self.script_object.saved_paths.append(right)
 
@@ -1717,6 +1766,14 @@ class PolylineInteractor:
                         self.selected_junction = None
                         self.hover_seg         = None
 
+                        self.get_segments()
+                        self._update_segment_groups()
+                        self.script_object._create_elements_preview()
+                        self._generate_elements_for_preview()
+                        if kind == "tubo":
+                            self._remap_applied_after_cut(
+                                path_idx, seg_idx, _snap_sc, _sc_inherited, new_key2_inherit=0
+                            )
                         self._draw_preview(current_pnt)
                         return True
                     except Exception as ex:
@@ -1757,6 +1814,14 @@ class PolylineInteractor:
                     original = self.script_object.saved_paths[pidx][vidx]
                     self.saved_dragging_original_point = AllplanGeo.Point3D(original)
                     self.saved_dragging = (pidx, vidx)
+                    # Solo guardar los segmentos adyacentes al vértice arrastrado
+                    _pts = self.script_object.saved_paths[pidx]
+                    _ghost: list = []
+                    if vidx > 0:
+                        _ghost.append((AllplanGeo.Point3D(_pts[vidx - 1]), AllplanGeo.Point3D(_pts[vidx])))
+                    if vidx < len(_pts) - 1:
+                        _ghost.append((AllplanGeo.Point3D(_pts[vidx]), AllplanGeo.Point3D(_pts[vidx + 1])))
+                    self.drag_ghost_path = _ghost
                     self._draw_preview(current_pnt)
                     return True
 
@@ -2695,6 +2760,19 @@ class PolylineInteractor:
                 elems.append(AllplanBasisElements.ModelElement3D(h_prop, self.highlight_geometry))
             except: pass
 
+        # ── GHOST: línea roja de referencia mientras se arrastra un vértice ──────────
+        # Solo dibuja los 2 segmentos adyacentes al vértice arrastrado (no el path completo)
+        if self.saved_dragging is not None and self.drag_ghost_path:
+            ghost_prop = self._clone_properties(self.com_prop)
+            ghost_prop.Color = 6            # Rojo
+            ghost_prop.ColorByLayer = False
+            ghost_prop.PenByLayer   = False
+            ghost_prop.StrokeByLayer = False
+            for ga, gb in self.drag_ghost_path:
+                elems.append(AllplanBasisElements.ModelElement3D(
+                    ghost_prop, AllplanGeo.Line3D(ga, gb)
+                ))
+
         # 3. Tooltip y Render end
         self._draw_tooltip(elems)
 
@@ -2708,6 +2786,26 @@ class PolylineInteractor:
             True, # Clean previous
             None,
         )
+
+        # --- Marker manager overlay (separate DrawElementPreview, clean=False) ---
+        mgr = getattr(self.script_object, 'marker_manager', None)
+        if mgr:
+            overlay_elems = []
+            try:
+                mgr.draw_marker_preview(overlay_elems, current_pnt)
+            except Exception as ex:
+                print(f"[INT] Marker preview error: {ex}")
+            if overlay_elems:
+                try:
+                    AllplanBaseElements.DrawElementPreview(
+                        self.coord_input.GetInputViewDocument(), # type: ignore
+                        AllplanGeo.Matrix3D(),
+                        overlay_elems,
+                        False,  # Don't clean — preserve PolyLib's preview
+                        None,
+                    )
+                except Exception:
+                    pass
 
     def _draw_selection_box(self, elems, prop):
         """Dibuja el rectángulo de selección proyectado en vista o XY"""
@@ -4022,6 +4120,211 @@ class PolylineInteractor:
     def max_eps(self, x: float) -> float:
         return max(min(x, 0.49), 0.0)
 
+    # ── Helpers de remapeo de persistent_metadata ──────────────────────────
+    def _remap_metadata_after_insert(self, path_idx: int, seg_idx: int) -> None:
+        """
+        Tras insertar un punto en path_idx al dividir el segmento seg_idx:
+        - seg_idx (izquierdo) → queda con la metadata original (sin cambio de clave)
+        - seg_idx+1 (derecho) → hereda una copia de la metadata de seg_idx
+        - seg_idx+1..N        → sus claves se desplazan +1
+        - El resto de paths no se toca.
+        """
+        original_meta = self.script_object.persistent_metadata.get(f"{path_idx}_{seg_idx}")
+        new_meta = {}
+        for k, v in self.script_object.persistent_metadata.items():
+            parts = k.split("_", 1)
+            if len(parts) == 2:
+                try:
+                    k_path, k_seg = int(parts[0]), int(parts[1])
+                    if k_path == path_idx and k_seg > seg_idx:
+                        new_meta[f"{path_idx}_{k_seg + 1}"] = v
+                        continue
+                except ValueError:
+                    pass
+            new_meta[k] = v
+        if original_meta is not None:
+            new_meta[f"{path_idx}_{seg_idx + 1}"] = original_meta
+        self.script_object.persistent_metadata = new_meta
+
+    def _remap_metadata_after_vertex_cut(self, v_path: int, v_idx: int) -> None:
+        """
+        Tras dividir saved_paths[v_path] en el vértice v_idx:
+        - Left  → v_path   con segmentos 0..v_idx-1       (sin cambio de clave)
+        - Right → v_path+1 con segmentos 0..N-v_idx-1     (claves reindexadas)
+        - Paths > v_path → su path_idx sube +1.
+        """
+        new_meta = {}
+        for k, v in self.script_object.persistent_metadata.items():
+            parts = k.split("_", 1)
+            if len(parts) == 2:
+                try:
+                    k_path, k_seg = int(parts[0]), int(parts[1])
+                    if k_path == v_path:
+                        if k_seg < v_idx:
+                            new_meta[k] = v
+                        else:
+                            new_meta[f"{v_path + 1}_{k_seg - v_idx}"] = v
+                        continue
+                    elif k_path > v_path:
+                        new_meta[f"{k_path + 1}_{k_seg}"] = v
+                        continue
+                except ValueError:
+                    pass
+            new_meta[k] = v
+        self.script_object.persistent_metadata = new_meta
+
+    def _remap_metadata_after_segment_cut(self, path_idx: int, seg_idx: int) -> None:
+        """
+        Tras cortar saved_paths[path_idx] proyectando un punto sobre el segmento seg_idx:
+        - Left  → path_idx   con segmentos 0..seg_idx      (sin cambio de clave)
+        - Right → path_idx+1:
+            · seg 0 hereda copia de la metadata de seg_idx (nuevo sub-segmento)
+            · seg j (j>0) ← metadata de seg_idx+j del path original
+        - Paths > path_idx → su path_idx sube +1.
+        """
+        original_meta = self.script_object.persistent_metadata.get(f"{path_idx}_{seg_idx}")
+        new_meta = {}
+        for k, v in self.script_object.persistent_metadata.items():
+            parts = k.split("_", 1)
+            if len(parts) == 2:
+                try:
+                    k_path, k_seg = int(parts[0]), int(parts[1])
+                    if k_path == path_idx:
+                        if k_seg <= seg_idx:
+                            new_meta[k] = v
+                        else:
+                            new_meta[f"{path_idx + 1}_{k_seg - seg_idx}"] = v
+                        continue
+                    elif k_path > path_idx:
+                        new_meta[f"{k_path + 1}_{k_seg}"] = v
+                        continue
+                except ValueError:
+                    pass
+            new_meta[k] = v
+        if original_meta is not None:
+            new_meta[f"{path_idx + 1}_0"] = original_meta
+        self.script_object.persistent_metadata = new_meta
+
+    # ───────────────────────────────────────────────────────────────────────
+    # Helpers para sincronizar applied_attributes / applied_layers
+    # ───────────────────────────────────────────────────────────────────────
+
+    def _snapshot_applied_keys(self, path_idx: int) -> dict:
+        """Captura {(key[2], elem_type): storage_key} para los elementos del path dado,
+        ANTES de cualquier modificación de saved_paths."""
+        snapshot: dict = {}
+        for _pg in self.generated_elements:
+            for _e in _pg:  # type: ignore[assignment]
+                _ek = _e.get('key', ())  # type: ignore[union-attr]
+                if len(_ek) >= 5 and _ek[4] == path_idx:
+                    _etype = _e.get('type')  # type: ignore[union-attr]
+                    snapshot[(_ek[2], _etype)] = f"seg_{_ek[4]}_elem_{_ek[3]}"
+        return snapshot
+
+    def _shift_applied_path_idx(self, from_path_idx: int) -> None:
+        """Incrementa en +1 el path_idx de todas las claves >= from_path_idx
+        en applied_attributes y applied_layers."""
+        for d in [self.script_object.applied_attributes, self.script_object.applied_layers]:
+            new_d: dict = {}
+            for k, v in d.items():
+                parts = k.split("_")  # "seg_{p}_elem_{s}" → ["seg","p","elem","s"]
+                if len(parts) == 4 and parts[0] == "seg" and parts[2] == "elem":
+                    try:
+                        p = int(parts[1])
+                        if p >= from_path_idx:
+                            new_d[f"seg_{p + 1}_elem_{parts[3]}"] = v
+                            continue
+                    except ValueError:
+                        pass
+                new_d[k] = v
+            d.clear()
+            d.update(new_d)
+
+    def _remap_applied_after_insert(
+        self, path_idx: int, seg_idx: int, snapshot: dict, inherited: dict
+    ) -> None:
+        """Tras insertar un punto y regenerar:
+        - Fase 1: mueve las claves de elementos desplazados (key[2] > seg_idx+1).
+        - Fase 2: aplica inherited a los elementos sin clave (nuevos tras la inserción).
+        """
+        # Fase 1: remap de elementos desplazados
+        for _pg in self.generated_elements:
+            for _e in _pg:  # type: ignore[assignment]
+                _ek = _e.get('key', ())  # type: ignore[union-attr]
+                if len(_ek) < 5 or _ek[4] != path_idx or _ek[2] <= seg_idx + 1:
+                    continue
+                _old_k = snapshot.get((_ek[2] - 1, _e.get('type')))  # type: ignore[union-attr]
+                if not _old_k:
+                    continue
+                _new_k = f"seg_{_ek[4]}_elem_{_ek[3]}"
+                if _old_k in self.script_object.applied_attributes:
+                    self.script_object.applied_attributes[_new_k] = self.script_object.applied_attributes.pop(_old_k)
+                if _old_k in self.script_object.applied_layers:
+                    self.script_object.applied_layers[_new_k] = self.script_object.applied_layers.pop(_old_k)
+        # Fase 2: heredar para elementos nuevos
+        if not inherited:
+            return
+        for _pg in self.generated_elements:
+            for _e in _pg:  # type: ignore[assignment]
+                _ek = _e.get('key', ())  # type: ignore[union-attr]
+                if len(_ek) < 5 or _ek[4] != path_idx:
+                    continue
+                _new_key = f"seg_{_ek[4]}_elem_{_ek[3]}"
+                if 'attrs' in inherited and _new_key not in self.script_object.applied_attributes:
+                    self.script_object.applied_attributes[_new_key] = inherited['attrs']
+                if 'layer' in inherited and _new_key not in self.script_object.applied_layers:
+                    self.script_object.applied_layers[_new_key] = inherited['layer']
+
+    def _remap_applied_after_cut(
+        self,
+        old_path_idx: int,
+        key2_offset: int,
+        snapshot: dict,
+        inherited: dict,
+        new_key2_inherit: int = -1
+    ) -> None:
+        """Tras un corte que divide old_path_idx en (izq=old_path_idx, der=old_path_idx+1):
+        - Incrementa path_idx de todos los paths > old_path_idx.
+        - Remap: cada elemento del path derecho con key[2] != new_key2_inherit busca su
+          clave anterior con old_key[2] = new_key[2] + key2_offset.
+        - Hereda: elementos con key[2] == new_key2_inherit o sin clave existente.
+        Args:
+            key2_offset : v_idx (vertex cut) o seg_idx (segment cut).
+            new_key2_inherit : key[2] en el path derecho que es NUEVO y debe heredar
+                               (0 para segment cut; -1 para vertex cut = ninguno).
+        """
+        new_path_idx = old_path_idx + 1
+        self._shift_applied_path_idx(new_path_idx)
+        # Remap del path derecho
+        for _pg in self.generated_elements:
+            for _e in _pg:  # type: ignore[assignment]
+                _ek = _e.get('key', ())  # type: ignore[union-attr]
+                if len(_ek) < 5 or _ek[4] != new_path_idx or _ek[2] == new_key2_inherit:
+                    continue
+                _old_k = snapshot.get((_ek[2] + key2_offset, _e.get('type')))  # type: ignore[union-attr]
+                if not _old_k:
+                    continue
+                _new_k = f"seg_{_ek[4]}_elem_{_ek[3]}"
+                if _old_k in self.script_object.applied_attributes:
+                    self.script_object.applied_attributes[_new_k] = self.script_object.applied_attributes.pop(_old_k)
+                if _old_k in self.script_object.applied_layers:
+                    self.script_object.applied_layers[_new_k] = self.script_object.applied_layers.pop(_old_k)
+        # Heredar para elementos nuevos del path derecho
+        if not inherited:
+            return
+        for _pg in self.generated_elements:
+            for _e in _pg:  # type: ignore[assignment]
+                _ek = _e.get('key', ())  # type: ignore[union-attr]
+                if len(_ek) < 5 or _ek[4] != new_path_idx:
+                    continue
+                _new_key = f"seg_{_ek[4]}_elem_{_ek[3]}"
+                if 'attrs' in inherited and _new_key not in self.script_object.applied_attributes:
+                    self.script_object.applied_attributes[_new_key] = inherited['attrs']
+                if 'layer' in inherited and _new_key not in self.script_object.applied_layers:
+                    self.script_object.applied_layers[_new_key] = inherited['layer']
+
+    # ───────────────────────────────────────────────────────────────────────
+
     def _insert_on_segment(
         self,
         seg: Tuple[str, int, int, int],
@@ -4049,6 +4352,20 @@ class PolylineInteractor:
             if not (0 <= path_idx < len(self.script_object.saved_paths)):
                 return
 
+            # 0. Capturar estado ANTES de modificar
+            _snapshot = self._snapshot_applied_keys(path_idx)
+            _orig_key = f"seg_{path_idx}_elem_{seg_idx}"
+            _ins_inherited: dict = {}
+            _a = self.script_object.applied_attributes.get(_orig_key)
+            _l = self.script_object.applied_layers.get(_orig_key)
+            if _a is not None:
+                _ins_inherited['attrs'] = list(_a)
+            if _l is not None:
+                _ins_inherited['layer'] = dict(_l)
+
+            # 0b. Remapear persistent_metadata ANTES de modificar saved_paths
+            self._remap_metadata_after_insert(path_idx, seg_idx)
+
             # 1. Modificación de la 'Fuente de Verdad'
             current_path = self.script_object.saved_paths[path_idx]
             new_point = AllplanGeo.Point3D(q.X, q.Y, q.Z)
@@ -4064,6 +4381,9 @@ class PolylineInteractor:
             # 3. RE-DIBUJO TOTAL
             self.script_object._create_elements_preview() # Limpia element_list y crea nuevos 3D
             self._generate_elements_for_preview()         # Envía al Viewport de Allplan
+
+            # 4. Remap de desplazados + herencia para nuevos
+            self._remap_applied_after_insert(path_idx, seg_idx, _snapshot, _ins_inherited)
 
             # Limpieza de UI de inserción
             self.insert_preview_p = None
@@ -4370,6 +4690,140 @@ class PolylineInteractor:
         for s_idx, meta_obj in enumerate(meta_list):
             if meta_obj:
                 meta_dict[f"{new_p_idx}_{s_idx}"] = meta_obj
+
+    # ============================================================================
+    # CHANGE DIAMETER POLYLINE FOR SEGMENT OR SEGEMENT GROUP
+    # ============================================================================
+    def change_diameter_selected_seg(self) -> bool:
+        """
+        Cambia el diámetro del segmento individual seleccionado (extend_mode / selected_seg)
+        al valor actual de script_object.diameter_type.
+        """
+        if self.selected_seg is None:
+            return False
+        try:
+            kind = self.selected_seg[0]
+            if kind != "tubo":
+                return False
+            path_idx = self.selected_seg[1]
+            seg_idx  = self.selected_seg[2]
+        except (IndexError, TypeError):
+            return False
+
+        new_diameter = self.script_object.diameter_type
+        if new_diameter is None:
+            return False
+
+        key = f"{path_idx}_{seg_idx}"
+        seg_info = self.script_object.persistent_metadata.get(key)
+        if seg_info is None:
+            return False
+
+        old_diameter = seg_info.diameter
+
+        result = PythonUtility.ShowMessageBox(
+            f"Ruta: {path_idx}  |  Segmento: {seg_idx}\n\n"
+            f"Diámetro anterior : {old_diameter} mm\n"
+            f"Nuevo diámetro    : {new_diameter} mm\n\n"
+            f"¿Deseas aplicar el cambio?",
+            PythonUtility.MB_YESNO
+        )
+        if result != 6:  # 6 = Yes
+            return False
+
+        seg_info.diameter     = new_diameter
+        seg_info.section_type = f"{new_diameter} mm"
+        seg_info.label        = self._format_segment_label(new_diameter, seg_info.system or "")
+
+        self.get_segments()
+        self.highlight_geometry = None
+        self.selected_segments.clear()
+        self.selected_seg      = None
+        self.hover_seg         = None
+        self.insert_preview_p  = None
+        self.insert_target     = None
+        self.hover_mid         = None
+        self.highlight_geometries.clear()
+        self.element_list_final = []
+
+        self._update_segment_groups()
+        self.script_object._create_elements_preview()
+        self._generate_elements_for_preview()
+
+        current_pnt = self.coord_input.GetCurrentPoint(self.current_point).GetPoint()  # type: ignore
+        self._draw_preview(current_pnt)
+        return True
+
+    def change_diameter_selected_segments_by_box(self) -> bool:
+        """
+        Cambia el diámetro de todos los segmentos seleccionados por marco (edit_mode / selected_segments)
+        al valor actual de script_object.diameter_type.
+        """
+        if not self.selected_segments:
+            return False
+
+        new_diameter = self.script_object.diameter_type
+        if new_diameter is None:
+            return False
+
+        to_change = [
+            (item[4], item[2])
+            for item in self.selected_segments
+            if item[0] == "tubo"
+        ]
+        if not to_change:
+            return False
+
+        # Recopilar diámetros anteriores para el mensaje
+        old_diameters = set()
+        for path_idx, seg_idx in to_change:
+            seg_info = self.script_object.persistent_metadata.get(f"{path_idx}_{seg_idx}")
+            if seg_info is not None:
+                old_diameters.add(seg_info.diameter)
+
+        old_diam_str = ", ".join(f"{d} mm" for d in sorted(old_diameters)) if old_diameters else "—"
+
+        result = PythonUtility.ShowMessageBox(
+            f"Segmentos seleccionados : {len(to_change)}\n\n"
+            f"Diámetro(s) anterior(es): {old_diam_str}\n"
+            f"Nuevo diámetro          : {new_diameter} mm\n\n"
+            f"¿Deseas aplicar el cambio a todos los segmentos seleccionados?",
+            PythonUtility.MB_YESNO
+        )
+        if result != 6:  # 6 = Yes
+            return False
+
+        changed = False
+        for path_idx, seg_idx in to_change:
+            key = f"{path_idx}_{seg_idx}"
+            seg_info = self.script_object.persistent_metadata.get(key)
+            if seg_info is None:
+                continue
+            seg_info.diameter     = new_diameter
+            seg_info.section_type = f"{new_diameter} mm"
+            seg_info.label        = self._format_segment_label(new_diameter, seg_info.system or "")
+            changed = True
+
+        if changed:
+            self.get_segments()
+            self.highlight_geometry = None
+            self.selected_segments.clear()
+            self.selected_seg      = None
+            self.hover_seg         = None
+            self.insert_preview_p  = None
+            self.insert_target     = None
+            self.hover_mid         = None
+            self.highlight_geometries.clear()
+            self.element_list_final = []
+
+            self._update_segment_groups()
+            self.script_object._create_elements_preview()
+            self._generate_elements_for_preview()
+
+            current_pnt = self.coord_input.GetCurrentPoint(self.current_point).GetPoint()  # type: ignore
+            self._draw_preview(current_pnt)
+        return changed
+
     # ============================================================================
     # APPLY LAYERS AND ATTRIBUTES
     # ============================================================================
@@ -4608,8 +5062,14 @@ class PolylineInteractor:
             return OnCancelFunctionResult.CANCEL_INPUT
 
     def on_control_event(self, event_id: int):
-        """1001=toggle crear; 1002=guardar; 1003=finalizar(ESC); 1004=borrar; 1006=toggle bifurcar"""
+        """1001=toggle crear; 1002=guardar; 1003=finalizar(ESC); 1004=borrar; 1006=toggle bifurcar; 1007=cambiar diámetro"""
         print(f"[SO] on_control_event: {event_id}")
+        # --- Marker manager intercept ---
+        mgr = getattr(self.script_object, 'marker_manager', None)
+        if mgr:
+            result = mgr.on_control_event(event_id)
+            if result is not None:
+                return result
         if event_id == 1004:
             # A) Borrar segmentos seleccionados por box
             if self.selected_segments and not self.selected_junction:
@@ -4622,6 +5082,26 @@ class PolylineInteractor:
             # C) Borrar segmento seleccionado individualmente (extend_mode)
             elif self.selected_seg is not None:
                 self._delete_selected_seg()
+
+        elif event_id == 1007:
+            # A) Cambiar diámetro de segmentos seleccionados por box (edit_mode)
+            if self.selected_segments and not self.selected_junction:
+                self.change_diameter_selected_segments_by_box()
+
+            # B) Cambiar diámetro de segmento individual (extend_mode)
+            elif self.selected_seg is not None:
+                self.change_diameter_selected_seg()
+
+            # C) Sin selección: informar al usuario
+            else:
+                current_diameter = self.script_object.diameter_type
+                PythonUtility.ShowMessageBox(
+                    f"No existen elementos seleccionados para cambiar el diámetro.\n\n"
+                    f"Diámetro activo en paleta: {current_diameter} mm\n\n"
+                    f"Selecciona un segmento o un grupo de segmentos\n"
+                    f"antes de pulsar el botón.",
+                    PythonUtility.MB_OK
+                )
 
         elif event_id == 1003:  # Finalizar -> guardar y crear inmediatament
             print("[SO] Finalizar -> guardar y crear inmediatamente")
