@@ -59,6 +59,7 @@ INSTALLATION_INFO = {
                 ElementTypes.UNION,
                 ElementTypes.CODO,
                 ElementTypes.REDUCION,
+                ElementTypes.BIFURCACION,
             ],
         },
         {
@@ -75,6 +76,7 @@ INSTALLATION_INFO = {
                 ElementTypes.UNION,
                 ElementTypes.CODO,
                 ElementTypes.REDUCION,
+                ElementTypes.BIFURCACION,
             ],
         },
         {
@@ -91,6 +93,7 @@ INSTALLATION_INFO = {
                 ElementTypes.UNION,
                 ElementTypes.CODO,
                 ElementTypes.REDUCION,
+                ElementTypes.BIFURCACION,
             ],
         },
     ],
