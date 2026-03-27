@@ -798,13 +798,25 @@ def _create_elements_with_layers_attrs(
         assignment_key = storage_key
         base_key = _default_attr_key_for(element_type)
 
-        # Para tubos, la paleta selecciona por índice de segmento (sin fittings),
-        # mientras la generación final usa índice secuencial con fittings insertados.
-        # Este fallback evita perder layer/atributos cuando aparece una TE en medio.
+        # Para tubos, la paleta puede guardar índices "desplazados" cuando hay
+        # fittings (p. ej. TE/manguito) antes del tramo en preview. En creación
+        # final el índice puede variar, por lo que buscamos key exacta y, si no
+        # existe, probamos vecinos inmediatos.
         if element_type == "tubo_agua" and current_tube_assignment_key:
-            assignment_key = _resolve_assignment_key(
-                assignment_key, [current_tube_assignment_key]
-            )
+            tube_fallback_keys = [current_tube_assignment_key]
+            try:
+                idx = int(element_idx)
+                tube_fallback_keys.extend(
+                    [
+                        f"seg_{path_idx}_elem_{idx - 1}",
+                        f"seg_{path_idx}_elem_{idx + 1}",
+                        f"seg_{path_idx}_elem_{idx - 2}",
+                        f"seg_{path_idx}_elem_{idx + 2}",
+                    ]
+                )
+            except Exception:
+                pass
+            assignment_key = _resolve_assignment_key(assignment_key, tube_fallback_keys)
 
         expected_outer_type = inner_outer_type_map.get(element_type)
         is_paired_inner = False
