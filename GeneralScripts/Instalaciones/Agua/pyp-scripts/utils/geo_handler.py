@@ -6459,9 +6459,10 @@ class PipelineProcessor:
                 te_obj = ModelClass(self.build_ele)
 
             if hasattr(te_obj, "set_diameters"):
-                # Igual que fontaneria.py:
-                # - normal: (main_in, branch, main_out)
-                # - invertida (mirror_x): (main_out, branch, main_in)
+                # Convención alineada con fontaneria.py:
+                # set_diameters(main_in, branch, main_out)
+                # - normal:    (main_in, branch, main_out)
+                # - invertida: (main_out, branch, main_in)
                 if mirror_model_x:
                     te_obj.set_diameters(di_out, di_branch, di_in)
                 else:
@@ -6679,23 +6680,6 @@ class PipelineProcessor:
                 di_in = int(round(float(te_params.get("d_main_in", 0) or 0)))
                 di_out = int(round(float(te_params.get("d_main_out", 0) or 0)))
                 di_branch = int(round(float(te_params.get("d_branch", 0) or 0)))
-
-                # Casos de TE mixta en XY (portado práctico de fontaneria):
-                # cuando el troncal cambia de diámetro y la rama coincide con uno
-                # de los dos diámetros del troncal (casos 25-25-20 / 25-20-20),
-                # forzamos mirror en Y para que las bocas coincidan con los tramos.
-                if (
-                    plane == "XY"
-                    and not branch_elevated
-                    and di_in != di_out
-                    and di_branch in (di_in, di_out)
-                ):
-                    need_mx = False
-                    need_my = True
-                    if debug_te:
-                        print(
-                            "[AGUA][TE] FIX ORIENTACION XY mixta: di_in!=di_out y di_branch en (di_in,di_out) -> mirror_y_local=True"
-                        )
 
                 if debug_te_pos:
                     try:

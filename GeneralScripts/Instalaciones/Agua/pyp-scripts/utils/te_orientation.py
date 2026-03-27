@@ -312,10 +312,12 @@ def build_te_params(
 
         center_pt = _P()
 
-        dirs_3d = [_norm_vec_3d_from_conn(segment_groups, center_pt, c) for c in conns]
-        dot_01 = _dot3(dirs_3d[0], dirs_3d[1])
-        dot_02 = _dot3(dirs_3d[0], dirs_3d[2])
-        dot_12 = _dot3(dirs_3d[1], dirs_3d[2])
+        # Port de fontaneria.py: detección de troncal por colinealidad en XY.
+        # Para orientación de TE en planta, esto es lo que usa _create_te().
+        dirs_2d = [_norm_vec_2d_from_conn(segment_groups, center_pt, c) for c in conns]
+        dot_01 = dirs_2d[0][0] * dirs_2d[1][0] + dirs_2d[0][1] * dirs_2d[1][1]
+        dot_02 = dirs_2d[0][0] * dirs_2d[2][0] + dirs_2d[0][1] * dirs_2d[2][1]
+        dot_12 = dirs_2d[1][0] * dirs_2d[2][0] + dirs_2d[1][1] * dirs_2d[2][1]
 
         best_pair = min(
             [(dot_01, 0, 1, 2), (dot_02, 0, 2, 1), (dot_12, 1, 2, 0)],
@@ -328,12 +330,34 @@ def build_te_params(
         main_infos = [conns[i], conns[j]]
         branch_info = conns[k]
 
+        dirs_3d = [_norm_vec_3d_from_conn(segment_groups, center_pt, c) for c in conns]
         v_branch = _norm_vec_3d_from_conn(segment_groups, center_pt, branch_info)
 
-        # Dirección troncal: tomamos la conexión i como base y elegimos su signo
-        # para que el troncal apunte “hacia” la pareja opuesta (más estable).
+        # Port literal de fontaneria.py para decidir el sentido del troncal en XY.
+        v_main1 = dirs_2d[i]
+        main_vec = v_main1
+
+        def _branch_from_main(mvec: tuple[float, float]) -> tuple[float, float]:
+            mx, my = mvec
+            return (my, mx)
+
+        def _dot2(a: tuple[float, float], b: tuple[float, float]) -> float:
+            return a[0] * b[0] + a[1] * b[1]
+
+        cand1_main = main_vec
+        cand1_branch = _branch_from_main(cand1_main)
+        cand2_main = (-main_vec[0], -main_vec[1])
+        cand2_branch = _branch_from_main(cand2_main)
+        v_branch_xy = (v_branch[0], v_branch[1])
+        score1 = _dot2(cand1_branch, v_branch_xy)
+        score2 = _dot2(cand2_branch, v_branch_xy)
+        if score2 > score1:
+            main_dir_vec = cand2_main
+        else:
+            main_dir_vec = cand1_main
+
+        # Base 3D (para detección de plano XZ/YZ) conservando la conexión real.
         base_main = dirs_3d[i]
-        # En teoría dirs_3d[j] ~ -base_main. Elegimos el signo que mejor alinee con -dirs_3d[j].
         if _dot3(base_main, dirs_3d[j]) > 0:
             base_main = (-base_main[0], -base_main[1], -base_main[2])
 
@@ -341,10 +365,11 @@ def build_te_params(
         d1 = float(get_diameter(main_infos[0]["path_idx"], main_infos[0]["seg_idx"]))
         d2 = float(get_diameter(main_infos[1]["path_idx"], main_infos[1]["seg_idx"]))
         d_branch = float(get_diameter(branch_info["path_idx"], branch_info["seg_idx"]))
-        v1 = _norm_vec_3d_from_conn(segment_groups, center_pt, main_infos[0])
-        v2 = _norm_vec_3d_from_conn(segment_groups, center_pt, main_infos[1])
-        dot1 = _dot3(v1, base_main)
-        dot2 = _dot3(v2, base_main)
+        # Asignación main_in/main_out igual que fontaneria.py (sobre XY).
+        v1 = _norm_vec_2d_from_conn(segment_groups, center_pt, main_infos[0])
+        v2 = _norm_vec_2d_from_conn(segment_groups, center_pt, main_infos[1])
+        dot1 = v1[0] * main_dir_vec[0] + v1[1] * main_dir_vec[1]
+        dot2 = v2[0] * main_dir_vec[0] + v2[1] * main_dir_vec[1]
         if dot1 > dot2:
             d_main_in, d_main_out = d1, d2
         else:
@@ -352,6 +377,7 @@ def build_te_params(
         di_main_in = int(round(d_main_in))
         di_main_out = int(round(d_main_out))
         di_branch = int(round(d_branch))
+
         dist_candidates = [
             get_distribution_type(main_infos[0]["path_idx"], main_infos[0]["seg_idx"]),
             get_distribution_type(main_infos[1]["path_idx"], main_infos[1]["seg_idx"]),
@@ -361,6 +387,9 @@ def build_te_params(
 
         plane = _detect_plane_from_dir(base_main)
         mx3, my3, mz3 = base_main
+        # En XY usamos el troncal de fontaneria.py (main_dir_vec) para clavar el ang.
+        if plane == "XY":
+            mx3, my3, mz3 = main_dir_vec[0], main_dir_vec[1], 0.0
 
         # Caso especial: troncal casi vertical (±Z). En fontaneria el "ang" y los mirrors X/Y
         # se calculan en el plano XY; para troncal vertical eso no es estable y puede invertir la rama.
@@ -434,12 +463,24 @@ def build_te_params(
             # Elevada: no se corrige con 180° en el plano
             pass
 
-        # Heurística de type_te (para activar mirrors 45/135 de la sección type_te<=3)
-        # Si hay mezcla de diámetros o rama elevada, tratamos como "mixta"
-        mixed = (di_main_in != di_main_out) or (
-            di_branch not in (di_main_in, di_main_out)
-        )
-        type_te = 4 if mixed else 1
+        # Determinar type_te igual que en set_diameters de los modelos TE.
+        # Esto evita heurísticas y replica la selección real de:
+        # TØ20, TØ25, TØ25-20-25, TØ25-20-20, TØ25-25-20.
+        type_te = 1
+        if di_main_in == 20 and di_main_out == 20 and di_branch == 20:
+            type_te = 0
+        elif di_main_in == 25 and di_main_out == 25 and di_branch == 25:
+            type_te = 1
+        else:
+            main_pair = tuple(sorted((di_main_in, di_main_out)))
+            triple_sorted = tuple(sorted((di_main_in, di_main_out, di_branch)))
+            # Regla usuario: invertir type_te 3/5 respecto al mapeo anterior.
+            if main_pair == (25, 25) and di_branch == 20:
+                type_te = 3
+            elif di_branch == 25 and triple_sorted == (20, 25, 25):
+                type_te = 5
+            elif di_branch == 20 and triple_sorted == (20, 20, 25):
+                type_te = 4  # TØ25-20-20
 
         # En fontaneria mirror_x depende del modelo (invertido). En Agua usamos heurística equivalente.
         mirror_x = di_main_in < di_main_out

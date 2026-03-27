@@ -310,17 +310,17 @@ class TeTDModel:
         )
         self.attr_material_id = AttributeService.GetAttributeID(self.doc, "Material")
 
-    def set_diameters(self, d_main_in, d_main_out, d_branch):
+    def set_diameters(self, d_main_in, d_branch, d_main_out):
         """
         Ajusta el tipo de Te según los diámetros:
         - d_main_in  : tramo antes del nodo (eje principal)
-        - d_main_out : tramo después del nodo (eje principal)
         - d_branch   : rama perpendicular
+        - d_main_out : tramo después del nodo (eje principal)
         """
         try:
             a = int(d_main_in)
-            b = int(d_main_out)
-            c = int(d_branch)
+            b = int(d_branch)
+            c = int(d_main_out)
         except Exception:
             # si algo raro viene, no tocamos nada
             return
@@ -337,19 +337,19 @@ class TeTDModel:
 
         # --- Combinaciones mixtas 20 / 25 ---
         else:
-            main_pair = tuple(sorted((a, b)))
+            main_pair = tuple(sorted((a, c)))
             triple_sorted = tuple(sorted((a, b, c)))
 
-            # 25-25-20  (main 25/25, rama 20)
-            if main_pair == (25, 25) and c == 20:
-                idx = 5  # TØ25-25-20
+            # 25-25-20  (main 25/25, rama 20) -> type_te=3 (regla usuario)
+            if main_pair == (25, 25) and b == 20:
+                idx = 3
 
-            # 25-20-25  (uno de los main es 20, rama 25)
-            elif c == 25 and triple_sorted == (20, 25, 25):
-                idx = 3  # TØ25-20-25
+            # 25-20-25  (uno de los main es 20, rama 25) -> type_te=5 (regla usuario)
+            elif b == 25 and triple_sorted == (20, 25, 25):
+                idx = 5
 
             # 25-20-20  (uno de los main es 25, rama 20)
-            elif c == 20 and triple_sorted == (20, 20, 25):
+            elif b == 20 and triple_sorted == (20, 20, 25):
                 idx = 4  # TØ25-20-20
 
             # Si en el futuro agregas TØ32 u otros, se suman acá.
