@@ -259,22 +259,72 @@ def _collect_missing_layer_and_parent(
     intr = getattr(so, "script_object_interactor", None)
     generated_paths = getattr(intr, "generated_elements", []) if intr else []
 
-    expected_storage_keys: set[str] = set()
+    expected_elements: list[tuple[str, str, int, int]] = []
     for path_group in generated_paths:
         for element in path_group or []:
-            key = element.get("key") if isinstance(element, dict) else None
+            if not isinstance(element, dict):
+                continue
+            key = element.get("key")
             if not key or len(key) < 5:
                 continue
             # Estructura usada por PolyLib: seg_{key[4]}_elem_{key[3]}
-            expected_storage_keys.add(f"seg_{key[4]}_elem_{key[3]}")
+            storage_key = f"seg_{key[4]}_elem_{key[3]}"
+            elem_type = str(element.get("type", "") or "")
+            expected_elements.append((storage_key, elem_type, int(key[4]), int(key[3])))
 
-    if not expected_storage_keys:
+    if not expected_elements:
         return [], []
 
     applied_layers = getattr(so, "applied_layers", {}) or {}
     applied_attrs = getattr(so, "applied_attributes", {}) or {}
 
-    missing_layers = [k for k in expected_storage_keys if k not in applied_layers]
+    def _resolve_assignment_key(
+        key: str,
+        source: dict,
+        elem_type: str,
+        path_idx: int,
+        elem_idx: int,
+    ) -> str | None:
+        """Resuelve key de asignación para validación previa (evita falsos positivos)."""
+        if key in source:
+            return key
+
+        # En tubos el desfase puede ser mayor por inserción de fittings (TE/manguito).
+        if elem_type == "tubo":
+            fallback_keys = [
+                f"seg_{path_idx}_elem_{elem_idx - 1}",
+                f"seg_{path_idx}_elem_{elem_idx + 1}",
+                f"seg_{path_idx}_elem_{elem_idx - 2}",
+                f"seg_{path_idx}_elem_{elem_idx + 2}",
+            ]
+        else:
+            # En fittings puntuales suele bastar vecino inmediato.
+            fallback_keys = [
+                f"seg_{path_idx}_elem_{elem_idx - 1}",
+                f"seg_{path_idx}_elem_{elem_idx + 1}",
+            ]
+        for fk in fallback_keys:
+            if fk in source:
+                return fk
+        return None
+
+    missing_layers = [
+        key
+        for key, elem_type, path_idx, elem_idx in expected_elements
+        if not _resolve_assignment_key(
+            key, applied_layers, elem_type, path_idx, elem_idx
+        )
+    ]
+
+    def _is_missing_parent(
+        key: str, elem_type: str, path_idx: int, elem_idx: int
+    ) -> bool:
+        resolved_key = _resolve_assignment_key(
+            key, applied_attrs, elem_type, path_idx, elem_idx
+        )
+        if not resolved_key:
+            return True
+        return not _attr_has_non_empty_value(applied_attrs.get(resolved_key, []))
 
     # Si hay padre global en paleta, no exigimos atributo por elemento.
     parent_global = _get_parent_value_from_palette(so)
@@ -283,9 +333,15 @@ def _collect_missing_layer_and_parent(
     else:
         missing_parent = [
             k
-            for k in expected_storage_keys
-            if not _attr_has_non_empty_value(applied_attrs.get(k, []))
+            for k, elem_type, path_idx, elem_idx in expected_elements
+            if _is_missing_parent(k, elem_type, path_idx, elem_idx)
         ]
+
+    if missing_layers or missing_parent:
+        # Debug mínimo para identificar el elemento exacto que dispara la advertencia.
+        print(
+            f"[AGUA][VALIDATION] missing_layers={missing_layers} missing_parent={missing_parent}"
+        )
 
     return missing_layers, missing_parent
 
