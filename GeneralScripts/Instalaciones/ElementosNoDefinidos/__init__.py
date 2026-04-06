@@ -32,11 +32,8 @@ from .constants import (
     get_shape_for_tipo,
     label_to_tipo,
 )
-from .caminos_optimos_adapter import (
-    build_caminos_optimos_caminos_data,
-    build_caminos_optimos_partial_input,
-)
 from .handlers import (
+    build_nodos_export_data,
     handle_click_add_punto_no_definido,
     materialize_puntos_no_definidos_to_saved_paths,
     on_anadir_punto_no_definido,
@@ -78,8 +75,6 @@ __all__ = [
     "TIPO_INTERMEDIO_ORDENADO",
     "get_shape_for_tipo",
     "label_to_tipo",
-    "build_caminos_optimos_caminos_data",
-    "build_caminos_optimos_partial_input",
     "color_name_to_id",
     "get_tipo_camino",
     "get_tipo_punto_orden",
@@ -97,6 +92,7 @@ __all__ = [
     "point_from_dict",
     "serialize_puntos_no_definidos",
     "deserialize_puntos_no_definidos",
+    "build_nodos_export_data",
     "on_anadir_punto_no_definido",
     "on_finalizar_puntos_no_definidos",
     "materialize_puntos_no_definidos_to_saved_paths",

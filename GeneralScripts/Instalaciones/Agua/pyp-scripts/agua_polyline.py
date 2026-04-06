@@ -44,6 +44,7 @@ from .utils.attributes_utils import (
 )
 from .utils.layers_utils import _apply_layer_to_element
 from ElementosNoDefinidos import (
+    build_nodos_export_data as end_build_nodos_export_data,
     deserialize_puntos_no_definidos as end_deserialize_puntos_no_definidos,
     draw_all_puntos_no_definidos as end_draw_all_puntos_no_definidos,
     draw_preview_at_cursor as end_draw_preview_at_cursor,
@@ -133,46 +134,11 @@ def _write_provisional_puntos_json(script_object) -> str | None:
         puntos_serializados = end_serialize_puntos_no_definidos(
             getattr(script_object, "puntos_no_definidos", []) or []
         )
-
-        puntos_por_camino: dict[str, list[dict]] = {}
-        for punto in puntos_serializados:
-            path_key = str(punto.get("path_key") or "default")
-            puntos_por_camino.setdefault(path_key, []).append(punto)
-
-        nodos = []
-        seq_global = 1
-        for path_key in sorted(puntos_por_camino.keys()):
-            grupo = puntos_por_camino[path_key]
-            grupo.sort(key=lambda item: int(item.get("orden", 0)))
-
-            ids_grupo = []
-            for _ in grupo:
-                ids_grupo.append(f"N{seq_global}")
-                seq_global += 1
-
-            for idx, punto in enumerate(grupo):
-                pos = punto.get("pos") or {}
-                nodo = {
-                    "id": ids_grupo[idx],
-                    "tipo": punto.get("tipo"),
-                    "coordenadas": {
-                        "X": float(pos.get("X", 0.0)),
-                        "Y": float(pos.get("Y", 0.0)),
-                        "Z": float(pos.get("Z", 0.0)),
-                    },
-                    "anteriores": [ids_grupo[idx - 1]] if idx > 0 else [],
-                    "siguientes": (
-                        [ids_grupo[idx + 1]] if idx < len(ids_grupo) - 1 else []
-                    ),
-                    "orden": int(punto.get("orden", 0)),
-                    "tipo_camino": punto.get("tipo_camino"),
-                    "color_id": punto.get("color_id"),
-                    "path_key": punto.get("path_key"),
-                    "es_punto_comun": bool(punto.get("es_punto_comun", False)),
-                    "common_node_id": punto.get("common_node_id"),
-                    "path_key_comun_con": punto.get("path_key_comun_con"),
-                }
-                nodos.append(nodo)
+        nodos = getattr(script_object, "nodos_export_data", None)
+        if nodos is None:
+            nodos = end_build_nodos_export_data(
+                getattr(script_object, "puntos_no_definidos", []) or []
+            )
 
         payload = {
             "installation": "AGUA",

@@ -13,10 +13,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import palette
-from .caminos_optimos_adapter import (
-    build_caminos_optimos_caminos_data,
-    build_caminos_optimos_partial_input,
-)
 from .common_points import detect_common_point_groups
 from .optimizer_graph import build_optimizer_graph_json
 
@@ -362,6 +358,72 @@ def _build_common_junctions(
     return junctions
 
 
+def build_nodos_export_data(puntos: list) -> list:
+    """
+    Convierte ``puntos_no_definidos`` al formato exportado consumible por otros módulos.
+
+    Salida por nodo:
+    - id
+    - tipo
+    - coordenadas {X, Y, Z}
+    - anteriores
+    - siguientes
+    - orden
+    - tipo_camino
+    - color_id
+    - path_key
+    - es_punto_comun
+    - common_node_id
+    - path_key_comun_con
+    """
+    if not puntos:
+        return []
+
+    by_key: dict[str, list] = defaultdict(list)
+    for p in puntos:
+        path_key = str(p.get("path_key") or "default")
+        by_key[path_key].append(p)
+
+    nodos = []
+    seq_global = 1
+    for path_key in sorted(by_key.keys()):
+        group = by_key[path_key]
+        group.sort(key=lambda item: int(item.get("orden", 0)))
+
+        ids_grupo = []
+        for _ in group:
+            ids_grupo.append(f"N{seq_global}")
+            seq_global += 1
+
+        for idx, punto in enumerate(group):
+            pos = punto.get("pos")
+            coords = {
+                "X": float(getattr(pos, "X", 0.0)) if pos is not None else 0.0,
+                "Y": float(getattr(pos, "Y", 0.0)) if pos is not None else 0.0,
+                "Z": float(getattr(pos, "Z", 0.0)) if pos is not None else 0.0,
+            }
+            nodos.append(
+                {
+                    "id": ids_grupo[idx],
+                    "tipo": punto.get("tipo"),
+                    "coordenadas": coords,
+                    "anteriores": [ids_grupo[idx - 1]] if idx > 0 else [],
+                    "siguientes": (
+                        [ids_grupo[idx + 1]] if idx < len(ids_grupo) - 1 else []
+                    ),
+                    "orden": int(punto.get("orden", 0)),
+                    "tipo_camino": punto.get("tipo_camino"),
+                    "color_id": punto.get("color_id"),
+                    "path_key": punto.get("path_key"),
+                    "es_punto_comun": bool(punto.get("es_punto_comun", False)),
+                    "common_node_id": punto.get("common_node_id"),
+                    "path_key_comun_con": punto.get("path_key_comun_con"),
+                }
+            )
+
+    return nodos
+
+
 def _suggest_element(path_count: int, tipos_punto: list) -> str:
     """
     Sugiere qué tipo de elemento generar en un nodo común.
@@ -581,25 +643,7 @@ def on_finalizar_puntos_no_definidos(
                 f"caminos={jn.get('path_keys', [])}, "
                 f"tipos={jn.get('tipos_punto', [])}"
             )
-        caminos_optimos_caminos = build_caminos_optimos_caminos_data(puntos)
-        script_object.caminos_optimos_caminos_data = caminos_optimos_caminos
-        caminos_optimos_partial_input = build_caminos_optimos_partial_input(
-            puntos,
-            project_id=getattr(script_object, "optimizer_graph_id", None),
-            project_name=getattr(script_object, "optimizer_graph_name", None),
-        )
-        script_object.caminos_optimos_input_data = caminos_optimos_partial_input
-        print(
-            "[CAMINOS OPTIMOS] Lista preparada para generador JSON: "
-            f"caminos={len(caminos_optimos_caminos)}"
-        )
-        for cam in caminos_optimos_caminos:
-            print(
-                f"[CAMINOS OPTIMOS] {cam.get('id')}: "
-                f"nodos={len(cam.get('nodos', []))}"
-            )
-        # El volcado a saved_paths lo hace fontaneria._on_finalizar_puntos_no_definidos
-        # para asegurar ejecución aunque el paquete ElementosNoDefinidos esté cacheado.
+        script_object.nodos_export_data = build_nodos_export_data(puntos)
     except Exception as ex:
         print(f"[PUNTOS COMUNES] Error generando topología: {ex}")
     _try_save_state(intr)
