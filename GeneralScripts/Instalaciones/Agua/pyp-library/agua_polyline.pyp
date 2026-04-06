@@ -77,7 +77,7 @@
                 <ValueList></ValueList>
                 <ValueType>StringComboBox</ValueType>
             </Parameter>
-             <Parameter>
+            <Parameter>
                 <Name>WaterType</Name>
                 <Text>Tipo de Agua</Text>
                 <Value></Value>
@@ -103,20 +103,20 @@
                 <Parameter>
                     <Name>InfoPicture</Name>
                     <Text>
-    Modos de dibujo (Ayuda):
+                        Modos de dibujo (Ayuda):
 
-    • EDICION
-        Permite estirar la polilinea desde sus vértices
-        y agregar puntos o cortes en los segmentos.
-        El CheckBox “Insertar punto” solo se habilita en este modo.
+                        • EDICION
+                        Permite estirar la polilinea desde sus vértices
+                        y agregar puntos o cortes en los segmentos.
+                        El CheckBox “Insertar punto” solo se habilita en este modo.
 
-    • CONFIGURACION
-        Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
-        para aplicar layers y atributos personalizados.
-        También permite eliminar uno o más segmentos mediante selección múltiple.
+                        • CONFIGURACION
+                        Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
+                        para aplicar layers y atributos personalizados.
+                        También permite eliminar uno o más segmentos mediante selección múltiple.
 
-    • CREACION - EXTENDER
-        Permite dibujar y extender la polilinea.
+                        • CREACION - EXTENDER
+                        Permite dibujar y extender la polilinea.
                     </Text>
                     <Value>AllplanSettings.PictResPalette.eHotinfo</Value>
                     <!-- ID del recurso de imagen de Allplan -->
@@ -353,7 +353,8 @@
             <Enable>False</Enable>
             <ValueType>Double</ValueType>
         </Parameter>
-        <!-- Parámetro oculto para guardar el estado de las polilíneas (para poder restaurar al editar) -->
+        <!-- Parámetro oculto para guardar el estado de las polilíneas (para poder restaurar al
+        editar) -->
         <Parameter>
             <Name>SavedState</Name>
             <Text>SavedState</Text>
@@ -380,6 +381,8 @@
         </Parameter>
     </Page>
     <Page>
+        <Name>OrdenPuntosUsuario</Name>
+        <Text>Orden de puntos de usuario</Text>
         <Parameter>
             <Name>OrdenPuntosUsuario</Name>
             <Text>Orden de puntos de usuario</Text>
@@ -388,30 +391,7 @@
                 <Name>SeparatorOrdenPuntos</Name>
                 <ValueType>Separator</ValueType>
             </Parameter>
-            <Parameter>
-                <Name>RowTipoCamino</Name>
-                <Text>Tipo de camino</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>TipoCamino</Name>
-                    <Text>Tipo de camino</Text>
-                    <Value>0</Value>
-                    <ValueType>RadioButtonGroup</ValueType>
-                    <Parameter>
-                        <Name>CaminoOrdenado</Name>
-                        <Text>Camino Ordenado</Text>
-                        <Value>0</Value>
-                        <ValueType>RadioButton</ValueType>
-                    </Parameter>
-                    <Parameter>
-                        <Name>CaminoLibre</Name>
-                        <Text>Camino Libre</Text>
-                        <Value>1</Value>
-                        <ValueType>RadioButton</ValueType>
-                    </Parameter>
-                </Parameter>
-            </Parameter>
+
             <Parameter>
                 <Name>RowTipoPuntoOrden</Name>
                 <Text>Tipo de punto</Text>
@@ -481,7 +461,7 @@
                 </Parameter>
                 <Parameter>
                     <Name>FinalizarPuntosNoDefinidos</Name>
-                    <Text>Finalizar</Text>
+                    <Text>Generar Info</Text>
                     <EventId>1032</EventId>
                     <Value>0</Value>
                     <ValueType>Button</ValueType>

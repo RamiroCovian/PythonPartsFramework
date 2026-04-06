@@ -5,8 +5,8 @@
       "id": "N1",
       "tipo": "inicio",
       "coordenadas": {
-        "X": 17596.85995632193,
-        "Y": -12337.177590303789,
+        "X": 17679.022993225513,
+        "Y": -12361.622791366015,
         "Z": 0.0
       },
       "anteriores": [],
@@ -14,9 +14,9 @@
         "N2"
       ],
       "orden": 0,
-      "tipo_camino": 1,
+      "tipo_camino": 0,
       "color_id": 1,
-      "path_key": "modo:1|color:1",
+      "path_key": "modo:0|color:1",
       "es_punto_comun": false,
       "common_node_id": null,
       "path_key_comun_con": null
@@ -25,8 +25,8 @@
       "id": "N2",
       "tipo": "intermedio_libre",
       "coordenadas": {
-        "X": 17765.260230306154,
-        "Y": -12347.363090746383,
+        "X": 17827.731299687388,
+        "Y": -12354.15342437478,
         "Z": 0.0
       },
       "anteriores": [
@@ -36,9 +36,9 @@
         "N3"
       ],
       "orden": 1,
-      "tipo_camino": 1,
+      "tipo_camino": 0,
       "color_id": 1,
-      "path_key": "modo:1|color:1",
+      "path_key": "modo:0|color:1",
       "es_punto_comun": false,
       "common_node_id": null,
       "path_key_comun_con": null
@@ -47,8 +47,8 @@
       "id": "N3",
       "tipo": "final",
       "coordenadas": {
-        "X": 17908.53626986531,
-        "Y": -12352.7953576491,
+        "X": 17941.808904644444,
+        "Y": -12390.821225968119,
         "Z": 0.0
       },
       "anteriores": [
@@ -56,20 +56,125 @@
       ],
       "siguientes": [],
       "orden": 2,
-      "tipo_camino": 1,
+      "tipo_camino": 0,
       "color_id": 1,
-      "path_key": "modo:1|color:1",
+      "path_key": "modo:0|color:1",
+      "es_punto_comun": true,
+      "common_node_id": "CP-1",
+      "path_key_comun_con": null
+    },
+    {
+      "id": "N4",
+      "tipo": "final",
+      "coordenadas": {
+        "X": 17941.808904644444,
+        "Y": -12390.821225968119,
+        "Z": 0.0
+      },
+      "anteriores": [],
+      "siguientes": [
+        "N5"
+      ],
+      "orden": 3,
+      "tipo_camino": 0,
+      "color_id": 3,
+      "path_key": "modo:0|color:3",
+      "es_punto_comun": true,
+      "common_node_id": "CP-1",
+      "path_key_comun_con": "modo:0|color:1"
+    },
+    {
+      "id": "N5",
+      "tipo": "inicio",
+      "coordenadas": {
+        "X": 17647.108425172053,
+        "Y": -12458.72456225208,
+        "Z": 0.0
+      },
+      "anteriores": [
+        "N4"
+      ],
+      "siguientes": [
+        "N6"
+      ],
+      "orden": 4,
+      "tipo_camino": 0,
+      "color_id": 3,
+      "path_key": "modo:0|color:3",
+      "es_punto_comun": false,
+      "common_node_id": null,
+      "path_key_comun_con": null
+    },
+    {
+      "id": "N6",
+      "tipo": "intermedio_ordenado",
+      "coordenadas": {
+        "X": 17768.655397120343,
+        "Y": -12276.064587648225,
+        "Z": 0.0
+      },
+      "anteriores": [
+        "N5"
+      ],
+      "siguientes": [],
+      "orden": 5,
+      "tipo_camino": 0,
+      "color_id": 3,
+      "path_key": "modo:0|color:3",
       "es_punto_comun": false,
       "common_node_id": null,
       "path_key_comun_con": null
     }
   ],
   "common_points_topology": {
-    "node_count": 0,
-    "edge_count": 0,
-    "nodes": [],
-    "edges": [],
-    "adjacency": {}
+    "node_count": 1,
+    "edge_count": 1,
+    "nodes": [
+      {
+        "id": "CP-1",
+        "path_keys": [
+          "modo:0|color:1",
+          "modo:0|color:3"
+        ],
+        "point_count": 2,
+        "center": [
+          17941.808904644444,
+          -12390.821225968119,
+          0.0
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "a": "modo:0|color:1",
+        "b": "modo:0|color:3",
+        "via_node": "CP-1"
+      }
+    ],
+    "adjacency": {
+      "modo:0|color:1": [
+        "modo:0|color:3"
+      ],
+      "modo:0|color:3": [
+        "modo:0|color:1"
+      ]
+    }
   },
-  "common_junctions": []
+  "common_junctions": [
+    {
+      "node_id": "CP-1",
+      "x": 17941.808904644444,
+      "y": -12390.821225968119,
+      "z": 0.0,
+      "path_keys": [
+        "modo:0|color:1",
+        "modo:0|color:3"
+      ],
+      "path_count": 2,
+      "tipos_punto": [
+        "final"
+      ],
+      "suggested_element": "colze"
+    }
+  ]
 }

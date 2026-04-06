@@ -43,7 +43,32 @@ from .utils.attributes_utils import (
     _has_material_cavitat,
 )
 from .utils.layers_utils import _apply_layer_to_element
-from ElementosNoDefinidos import (
+from .clau_de_pas_006 import ClauDePasModel
+from .colze_base_002 import ColzeBaseModel
+from .taps_010 import TapsModel
+from .te_sortida_004 import TeSortidaModel
+from Instalaciones.ElementosDefinidos import (
+    CallbackDefinedElement,
+    create_point_marker_geometry as ed_create_point_marker_geometry,
+    draw_marker_for_element_type as ed_draw_marker_for_element_type,
+    get_defined_element_settings as ed_get_defined_element_settings,
+    get_elementos_para_instalacion,
+    serialize_element_markers as ed_serialize_element_markers,
+    deserialize_element_markers as ed_deserialize_element_markers,
+    serialize_free_placed_points as ed_serialize_free_placed_points,
+    deserialize_free_placed_points as ed_deserialize_free_placed_points,
+    create_elements_from_free_placed_points as ed_create_elements_from_free_placed_points,
+)
+from Instalaciones.ElementosDefinidos.handlers import (
+    start_element_point_capture as ed_start_element_point_capture,
+    handle_element_point_capture_click as ed_handle_element_point_capture_click,
+    add_defined_element_marker as ed_add_defined_element_marker,
+    add_intermediate_element_at_point as ed_add_intermediate_element_at_point,
+    on_anadir_punto_libre as ed_on_anadir_punto_libre,
+    on_finalizar_puntos_libres as ed_on_finalizar_puntos_libres,
+    handle_click_add_free_point as ed_handle_click_add_free_point,
+)
+from Instalaciones.ElementosNoDefinidos import (
     build_nodos_export_data as end_build_nodos_export_data,
     deserialize_puntos_no_definidos as end_deserialize_puntos_no_definidos,
     draw_all_puntos_no_definidos as end_draw_all_puntos_no_definidos,
@@ -107,6 +132,43 @@ _TUBE_LABEL_BY_KEY = {
 
 AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO = 1031
 AGUA_EVENT_FINALIZAR_PUNTOS_NO_DEFINIDOS = 1032
+AGUA_EVENT_ADD_PUNTO_LIBRE = 1017
+AGUA_EVENT_FINALIZAR_PUNTOS_LIBRES = 1018
+
+
+def _build_te_sortida_geometry(build_ele, doc):
+    return TeSortidaModel(build_ele, doc).build()
+
+
+def _build_colze_base_geometry(build_ele, doc):
+    return ColzeBaseModel(build_ele, doc).build()
+
+
+def _build_clau_de_pas_geometry(build_ele, doc):
+    return ClauDePasModel(build_ele, doc).build()
+
+
+def _build_taps_geometry(build_ele, doc):
+    return TapsModel(build_ele, doc).build()
+
+
+_DEFINED_ELEMENT_CALLBACKS = {
+    "t_sortida": _build_te_sortida_geometry,
+    "colze_base": _build_colze_base_geometry,
+    "clau_de_pas": _build_clau_de_pas_geometry,
+    "taps": _build_taps_geometry,
+}
+
+_agua_defined_elements = {}
+for _info in get_elementos_para_instalacion("AGUA"):
+    _callback = _DEFINED_ELEMENT_CALLBACKS.get(_info["key"])
+    if _callback is not None:
+        _agua_defined_elements[_info["key"]] = CallbackDefinedElement(
+            nombre=_info["label"],
+            callback_geometria=_callback,
+            posibles_funciones=_info.get("posibles_funciones"),
+            funcion_defecto=_info.get("funcion_defecto"),
+        )
 
 
 def _ensure_elementos_no_definidos_state(script_object) -> None:
@@ -123,6 +185,147 @@ def _ensure_elementos_no_definidos_state(script_object) -> None:
         getattr(script_object, "common_junctions", None), list
     ):
         script_object.common_junctions = []
+
+
+def _ensure_elementos_definidos_state(script_object) -> None:
+    """Inicializa el estado usado por ElementosDefinidos en Agua."""
+    if not hasattr(script_object, "element_markers") or not isinstance(
+        getattr(script_object, "element_markers", None), list
+    ):
+        script_object.element_markers = []
+    if not hasattr(script_object, "free_placed_points") or not isinstance(
+        getattr(script_object, "free_placed_points", None), list
+    ):
+        script_object.free_placed_points = []
+
+
+def _set_palette_flag(build_ele, name: str, value) -> None:
+    try:
+        param = getattr(build_ele, name, None)
+        if param is not None and hasattr(param, "value"):
+            param.value = value
+    except Exception:
+        pass
+
+
+def _get_rotation_value(build_ele, *names: str) -> float:
+    for name in names:
+        try:
+            param = getattr(build_ele, name, None)
+            if param is None:
+                continue
+            raw = getattr(param, "value", param)
+            return float(raw or 0.0)
+        except Exception:
+            continue
+    return 0.0
+
+
+def _build_rotation_matrix_for_element(script_object, base_point: AllplanGeo.Point3D):
+    """Replica la rotación de ElementosDefinidos usada en fontaneria."""
+    build_ele = getattr(script_object, "build_ele", None)
+    mat = AllplanGeo.Matrix3D()
+
+    rot_x = _get_rotation_value(build_ele, "RotX", "ElementRotX")
+    rot_y = _get_rotation_value(build_ele, "RotY", "ElementRotY")
+    rot_z = _get_rotation_value(build_ele, "RotZ", "ElementRotZ")
+
+    axis_x = AllplanGeo.Line3D(
+        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0)
+    )
+    axis_y = AllplanGeo.Line3D(
+        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 1, 0)
+    )
+    axis_z = AllplanGeo.Line3D(
+        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
+    )
+
+    if abs(rot_x) > 1e-6:
+        mat_x = AllplanGeo.Matrix3D()
+        mat_x.SetRotation(axis_x, AllplanGeo.Angle(math.radians(rot_x)))
+        mat = mat_x * mat
+    if abs(rot_y) > 1e-6:
+        mat_y = AllplanGeo.Matrix3D()
+        mat_y.SetRotation(axis_y, AllplanGeo.Angle(math.radians(rot_y)))
+        mat = mat_y * mat
+    if abs(rot_z) > 1e-6:
+        mat_z = AllplanGeo.Matrix3D()
+        mat_z.SetRotation(axis_z, AllplanGeo.Angle(math.radians(rot_z)))
+        mat = mat_z * mat
+
+    mat.SetTranslation(AllplanGeo.Vector3D(base_point.X, base_point.Y, base_point.Z))
+    return mat
+
+
+def _get_element_model_list_agua(script_object, build_ele, doc, element_type: str):
+    element_type = (element_type or "").strip().lower()
+    elem = _agua_defined_elements.get(element_type)
+    if elem is None:
+        return []
+    try:
+        return elem.generate_preview(build_ele, doc) or []
+    except Exception as ex:
+        print(f"[AGUA] Error obteniendo preview de {element_type}: {ex}")
+        return []
+
+
+def _create_single_element_agua(script_object, build_ele, doc, element_type: str, p_mid):
+    element_type = (element_type or "").strip().lower()
+    elem = _agua_defined_elements.get(element_type)
+    if elem is None:
+        return False
+    try:
+        model_list = elem.generate_final_3d(build_ele, doc)
+        if not model_list:
+            return False
+        mat = _build_rotation_matrix_for_element(script_object, p_mid)
+        AllplanBaseElements.CreateElements(doc, mat, model_list, [], None)
+        return True
+    except Exception as ex:
+        print(f"[AGUA] Error creando elemento {element_type} en punto libre: {ex}")
+        return False
+
+
+def _create_elements_from_free_placed_points(script_object, coord_input=None):
+    return ed_create_elements_from_free_placed_points(
+        script_object,
+        coord_input or getattr(script_object, "coord_input", None),
+        lambda build_ele, doc, element_type, pos: _create_single_element_agua(
+            script_object, build_ele, doc, element_type, pos
+        ),
+    )
+
+
+def _materialize_defined_element_markers(script_object) -> int:
+    """Crea en documento los marcadores guardados al finalizar la polilínea."""
+    markers = getattr(script_object, "element_markers", []) or []
+    if not markers:
+        return 0
+    try:
+        doc = script_object.coord_input.GetInputViewDocument()
+    except Exception:
+        doc = None
+    if doc is None:
+        return 0
+
+    created = 0
+    for marker in markers:
+        pos = marker.get("pos")
+        element_type = str(marker.get("element_type", "t_sortida") or "t_sortida")
+        if pos is None or not hasattr(pos, "X"):
+            continue
+        p_mid = AllplanGeo.Point3D(pos.X, pos.Y, pos.Z)
+        if _create_single_element_agua(
+            script_object,
+            getattr(script_object, "build_ele", None),
+            doc,
+            element_type,
+            p_mid,
+        ):
+            created += 1
+    if created:
+        script_object.element_markers = []
+    return created
 
 
 def _write_provisional_puntos_json(script_object) -> str | None:
@@ -162,11 +365,24 @@ def _write_provisional_puntos_json(script_object) -> str | None:
 
 
 def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
-    """Añade soporte de clicks, preview y restauración para puntos no definidos."""
-    if intr is None or getattr(intr, "_agua_elementos_no_definidos_patched", False):
+    """Añade soporte de ElementosDefinidos y ElementosNoDefinidos al interactor."""
+    if intr is None or getattr(intr, "_agua_elementos_extra_patched", False):
         return
 
-    setattr(intr, "_agua_elementos_no_definidos_patched", True)
+    setattr(intr, "_agua_elementos_extra_patched", True)
+    _ensure_elementos_definidos_state(script_object)
+    intr.script_object = script_object
+    intr.element_markers = script_object.element_markers
+    intr.next_click_adds_intermediate_element = bool(
+        getattr(intr, "next_click_adds_intermediate_element", False)
+    )
+    intr.element_point_capture_mode = bool(
+        getattr(intr, "element_point_capture_mode", False)
+    )
+    intr.element_selected_point = getattr(intr, "element_selected_point", None)
+    intr.next_click_adds_free_point = bool(
+        getattr(intr, "next_click_adds_free_point", False)
+    )
     intr.next_click_adds_punto_no_definido = bool(
         getattr(intr, "next_click_adds_punto_no_definido", False)
     )
@@ -174,12 +390,63 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
     original_process_mouse_msg = intr.process_mouse_msg
     original_draw_preview = intr._draw_preview
     original_deserialize_state_from_json = intr._deserialize_state_from_json
+    original_on_control_event = intr.on_control_event
 
     def _process_mouse_msg_with_elementos_no_definidos(mouse_msg, pnt, msg_info):
+        is_move = bool(intr.coord_input and intr.coord_input.IsMouseMove(mouse_msg))
+        is_left_click = getattr(mouse_msg, "Button", 1) == 1
+
+        if getattr(intr, "next_click_adds_free_point", False):
+            try:
+                if is_move and intr.coord_input:
+                    current_point = getattr(intr, "current_point", None)
+                    if current_point is None:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    else:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            current_point,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    intr._draw_preview(raw_input.GetPoint())
+                    return True
+                if is_left_click and not is_move and intr.coord_input:
+                    current_point = getattr(intr, "current_point", None)
+                    if current_point is None:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    else:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            current_point,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    raw_pnt = raw_input.GetPoint()
+                    intr.next_click_adds_free_point = False
+                    ed_handle_click_add_free_point(intr, script_object, raw_pnt, "AGUA")
+                    try:
+                        intr._draw_preview(raw_pnt)
+                    except Exception:
+                        pass
+                    return True
+            except Exception as ex:
+                print(f"[AGUA] Error añadiendo punto libre: {ex}")
+
         if getattr(intr, "next_click_adds_punto_no_definido", False):
             try:
-                is_move = bool(intr.coord_input and intr.coord_input.IsMouseMove(mouse_msg))
-                is_left_click = getattr(mouse_msg, "Button", 1) == 1
                 if is_left_click and not is_move and intr.coord_input:
                     current_point = getattr(intr, "current_point", None)
                     if current_point is None:
@@ -207,6 +474,82 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
             except Exception as ex:
                 print(f"[AGUA] Error añadiendo punto no definido: {ex}")
 
+        if getattr(intr, "next_click_adds_intermediate_element", False):
+            try:
+                if is_left_click and not is_move and intr.coord_input:
+                    current_point = getattr(intr, "current_point", None)
+                    if current_point is None:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    else:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            current_point,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    raw_pnt = raw_input.GetPoint()
+                    intr.next_click_adds_intermediate_element = False
+                    try:
+                        seg = intr._find_hover_segment(raw_pnt, preferred_kind="saved")
+                    except Exception:
+                        seg = None
+                    if seg is not None and hasattr(intr, "_get_segment_endpoints"):
+                        a, b = intr._get_segment_endpoints(seg)
+                        if a and b and hasattr(intr, "_segment_project_point"):
+                            _t, q = intr._segment_project_point(a, b, raw_pnt)
+                            ed_add_intermediate_element_at_point(intr, q, "AGUA")
+                        else:
+                            ed_add_intermediate_element_at_point(intr, raw_pnt, "AGUA")
+                    else:
+                        ed_add_intermediate_element_at_point(intr, raw_pnt, "AGUA")
+                    script_object.element_markers = intr.element_markers
+                    try:
+                        intr._draw_preview(raw_pnt)
+                    except Exception:
+                        pass
+                    return True
+            except Exception as ex:
+                print(f"[AGUA] Error añadiendo marcador intermedio: {ex}")
+
+        if getattr(intr, "element_point_capture_mode", False):
+            try:
+                if is_left_click and not is_move and intr.coord_input:
+                    current_point = getattr(intr, "current_point", None)
+                    if current_point is None:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    else:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            current_point,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    raw_pnt = raw_input.GetPoint()
+                    handled = ed_handle_element_point_capture_click(
+                        intr, 1, raw_pnt
+                    )
+                    _set_palette_flag(
+                        getattr(script_object, "build_ele", None),
+                        "IsElementCaptureMode",
+                        False,
+                    )
+                    if handled:
+                        return True
+            except Exception as ex:
+                print(f"[AGUA] Error capturando punto de elemento: {ex}")
+
         return original_process_mouse_msg(mouse_msg, pnt, msg_info)
 
     def _draw_preview_with_elementos_no_definidos(current_pnt):
@@ -214,6 +557,100 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
         try:
             overlay = []
             build_ele = getattr(script_object, "build_ele", None)
+            doc = intr.coord_input.GetInputViewDocument() if intr.coord_input else None
+
+            for marker in getattr(script_object, "element_markers", []) or []:
+                pos = marker.get("pos")
+                element_type = marker.get("element_type", "t_sortida")
+                if pos is None or not hasattr(pos, "X"):
+                    continue
+                overlay.extend(
+                    ed_draw_marker_for_element_type(
+                        pos,
+                        element_type,
+                        getattr(intr, "com_prop", None),
+                        45.0,
+                    )
+                )
+
+            for fp in getattr(script_object, "free_placed_points", []) or []:
+                pos = fp.get("pos")
+                if pos is None or not hasattr(pos, "X") or doc is None:
+                    continue
+                model_list = _get_element_model_list_agua(
+                    script_object,
+                    build_ele,
+                    doc,
+                    fp.get("element_type", "t_sortida"),
+                )
+                if not model_list:
+                    overlay.extend(
+                        ed_create_point_marker_geometry(
+                            pos, getattr(intr, "com_prop", None), 45.0
+                        )
+                    )
+                    continue
+                prev_values = {}
+                try:
+                    for attr_name, fp_key, legacy_name in (
+                        ("RotX", "rot_x", "ElementRotX"),
+                        ("RotY", "rot_y", "ElementRotY"),
+                        ("RotZ", "rot_z", "ElementRotZ"),
+                    ):
+                        for name in (attr_name, legacy_name):
+                            param = getattr(build_ele, name, None)
+                            if param is not None and hasattr(param, "value"):
+                                prev_values[name] = param.value
+                                if fp.get(fp_key, None) is not None:
+                                    param.value = float(fp.get(fp_key) or 0.0)
+                    mat = _build_rotation_matrix_for_element(
+                        script_object,
+                        AllplanGeo.Point3D(pos.X, pos.Y, pos.Z),
+                    )
+                    transformed = AllplanBaseElements.Transform(
+                        model_list,
+                        mat,
+                    )
+                    overlay.extend(transformed or [])
+                except Exception:
+                    pass
+                finally:
+                    for name, old_value in prev_values.items():
+                        try:
+                            getattr(build_ele, name).value = old_value
+                        except Exception:
+                            pass
+
+            if getattr(intr, "next_click_adds_free_point", False) and current_pnt is not None:
+                cursor_preview_added = False
+                if doc is not None:
+                    model_list = _get_element_model_list_agua(
+                        script_object,
+                        build_ele,
+                        doc,
+                        ed_get_defined_element_settings(build_ele, "AGUA")[0],
+                    )
+                    if model_list:
+                        try:
+                            mat = _build_rotation_matrix_for_element(
+                                script_object,
+                                AllplanGeo.Point3D(
+                                    current_pnt.X, current_pnt.Y, current_pnt.Z
+                                ),
+                            )
+                            overlay.extend(
+                                AllplanBaseElements.Transform(model_list, mat) or []
+                            )
+                            cursor_preview_added = True
+                        except Exception:
+                            pass
+                if not cursor_preview_added:
+                    overlay.extend(
+                        ed_create_point_marker_geometry(
+                            current_pnt, getattr(intr, "com_prop", None), 45.0
+                        )
+                    )
+
             puntos = getattr(script_object, "puntos_no_definidos", []) or []
             if puntos:
                 overlay.extend(
@@ -258,6 +695,13 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
 
         try:
             state = json.loads(json_str)
+            script_object.element_markers = ed_deserialize_element_markers(
+                state.get("element_markers") or []
+            )
+            intr.element_markers = script_object.element_markers
+            script_object.free_placed_points = ed_deserialize_free_placed_points(
+                state.get("free_placed_points") or []
+            )
             script_object.puntos_no_definidos = end_deserialize_puntos_no_definidos(
                 state.get("puntos_no_definidos") or []
             )
@@ -269,9 +713,31 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
             print(f"[AGUA] Error restaurando puntos no definidos: {ex}")
         return result
 
+    def _on_control_event_with_defined_elements(event_id: int):
+        if event_id == AGUA_EVENT_ADD_PUNTO_LIBRE:
+            try:
+                intr.save_current_polyline()
+            except Exception:
+                pass
+            return bool(ed_on_anadir_punto_libre(script_object, intr, "AGUA"))
+
+        if event_id == AGUA_EVENT_FINALIZAR_PUNTOS_LIBRES:
+            return bool(
+                ed_on_finalizar_puntos_libres(
+                    script_object,
+                    intr,
+                    lambda coord_input=None: _create_elements_from_free_placed_points(
+                        script_object, coord_input
+                    ),
+                )
+            )
+
+        return original_on_control_event(event_id)
+
     intr.process_mouse_msg = _process_mouse_msg_with_elementos_no_definidos
     intr._draw_preview = _draw_preview_with_elementos_no_definidos
     intr._deserialize_state_from_json = _deserialize_state_with_elementos_no_definidos
+    intr.on_control_event = _on_control_event_with_defined_elements
 
 
 def _get_max_segment_length_for_group(
@@ -586,6 +1052,7 @@ def create_script_object(build_ele, script_object_data):
     script_object = PBL.script_object.initialize_script_object(
         build_ele, script_object_data, CONFIG
     )
+    _ensure_elementos_definidos_state(script_object)
     _ensure_elementos_no_definidos_state(script_object)
 
     original_start_input = script_object.start_input
@@ -605,6 +1072,12 @@ def create_script_object(build_ele, script_object_data):
             return raw
         try:
             state = json.loads(raw)
+            state["element_markers"] = ed_serialize_element_markers(
+                getattr(script_object, "element_markers", []) or []
+            )
+            state["free_placed_points"] = ed_serialize_free_placed_points(
+                getattr(script_object, "free_placed_points", []) or []
+            )
             state["puntos_no_definidos"] = end_serialize_puntos_no_definidos(
                 getattr(script_object, "puntos_no_definidos", []) or []
             )
@@ -634,6 +1107,48 @@ def create_script_object(build_ele, script_object_data):
 
     def _on_control_event_with_reminder(event_id: int):
         try:
+            if event_id in (
+                1015,
+                1016,
+                1021,
+                AGUA_EVENT_ADD_PUNTO_LIBRE,
+                AGUA_EVENT_FINALIZAR_PUNTOS_LIBRES,
+                AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO,
+                AGUA_EVENT_FINALIZAR_PUNTOS_NO_DEFINIDOS,
+            ):
+                intr = getattr(script_object, "script_object_interactor", None)
+                if intr is None:
+                    intr = script_object.start_input()
+                _patch_interactor_for_elementos_no_definidos(script_object, intr)
+
+            if event_id == 1015:
+                ok = bool(ed_start_element_point_capture(intr, "AGUA"))
+                _set_palette_flag(build_ele, "IsElementCaptureMode", ok)
+                return ok
+
+            if event_id == 1021:
+                intr.element_point_capture_mode = False
+                intr.element_selected_point = None
+                _set_palette_flag(build_ele, "IsElementCaptureMode", False)
+                return True
+
+            if event_id == 1016:
+                return bool(ed_add_defined_element_marker(intr, "AGUA"))
+
+            if event_id == AGUA_EVENT_ADD_PUNTO_LIBRE:
+                return bool(ed_on_anadir_punto_libre(script_object, intr, "AGUA"))
+
+            if event_id == AGUA_EVENT_FINALIZAR_PUNTOS_LIBRES:
+                return bool(
+                    ed_on_finalizar_puntos_libres(
+                        script_object,
+                        intr,
+                        lambda coord_input=None: _create_elements_from_free_placed_points(
+                            script_object, coord_input
+                        ),
+                    )
+                )
+
             if event_id in (
                 AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO,
                 AGUA_EVENT_FINALIZAR_PUNTOS_NO_DEFINIDOS,
@@ -715,7 +1230,17 @@ def create_script_object(build_ele, script_object_data):
         except Exception as ex:
             print(f"[AGUA] Error en recordatorio previo a finalizar: {ex}")
 
-        return original_on_control_event(event_id)
+        result = original_on_control_event(event_id)
+        if event_id == 1003:
+            try:
+                created_markers = _materialize_defined_element_markers(script_object)
+                if created_markers:
+                    print(
+                        f"[AGUA] Elementos definidos creados desde marcadores: {created_markers}"
+                    )
+            except Exception as ex:
+                print(f"[AGUA] Error materializando marcadores definidos: {ex}")
+        return result
 
     script_object.on_control_event = _on_control_event_with_reminder
 
