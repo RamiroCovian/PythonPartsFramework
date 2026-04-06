@@ -1,0 +1,310 @@
+{
+    "id": "prueba_7caminos",
+    "nombre": "Prueba 7 Caminos Cercanos",
+    "descripcion": "Siete caminos paralelos con ~100mm de separación entre ejes, múltiples obstáculos.",
+    "techo": [
+        {
+            "id": "techo_comedor",
+            "vertices": [
+                { "x": 0,    "y": 0,    "z": 2800 },
+                { "x": 8400, "y": 0,    "z": 2800 },
+                { "x": 8400, "y": 4000, "z": 2800 },
+                { "x": 0,    "y": 4000, "z": 2800 }
+            ]
+        },
+        {
+            "id": "techo_cocina",
+            "vertices": [
+                { "x": 8400,  "y": 0,    "z": 2800 },
+                { "x": 14000, "y": 0,    "z": 2800 },
+                { "x": 14000, "y": 4000, "z": 2800 },
+                { "x": 8400,  "y": 4000, "z": 2800 }
+            ]
+        }
+    ],
+    "subdivisiones_is": [
+        {
+            "id": "IS1",
+            "vertices": [
+                { "x": 50.0, "y": 50.0, "z": 2798 },
+                { "x": 4616.7, "y": 50.0, "z": 2798 },
+                { "x": 4616.7, "y": 1950.0, "z": 2798 },
+                { "x": 50.0, "y": 1950.0, "z": 2798 }
+            ]
+        },
+        {
+            "id": "IS2",
+            "vertices": [
+                { "x": 4716.7, "y": 50.0, "z": 2798 },
+                { "x": 9283.3, "y": 50.0, "z": 2798 },
+                { "x": 9283.3, "y": 1950.0, "z": 2798 },
+                { "x": 4716.7, "y": 1950.0, "z": 2798 }
+            ]
+        },
+        {
+            "id": "IS3",
+            "vertices": [
+                { "x": 9383.3, "y": 50.0, "z": 2798 },
+                { "x": 13950.0, "y": 50.0, "z": 2798 },
+                { "x": 13950.0, "y": 1950.0, "z": 2798 },
+                { "x": 9383.3, "y": 1950.0, "z": 2798 }
+            ]
+        },
+        {
+            "id": "IS4",
+            "vertices": [
+                { "x": 50.0, "y": 2050.0, "z": 2798 },
+                { "x": 4616.7, "y": 2050.0, "z": 2798 },
+                { "x": 4616.7, "y": 3950.0, "z": 2798 },
+                { "x": 50.0, "y": 3950.0, "z": 2798 }
+            ]
+        },
+        {
+            "id": "IS5",
+            "vertices": [
+                { "x": 4716.7, "y": 2050.0, "z": 2798 },
+                { "x": 9283.3, "y": 2050.0, "z": 2798 },
+                { "x": 9283.3, "y": 3950.0, "z": 2798 },
+                { "x": 4716.7, "y": 3950.0, "z": 2798 }
+            ]
+        },
+        {
+            "id": "IS6",
+            "vertices": [
+                { "x": 9383.3, "y": 2050.0, "z": 2798 },
+                { "x": 13950.0, "y": 2050.0, "z": 2798 },
+                { "x": 13950.0, "y": 3950.0, "z": 2798 },
+                { "x": 9383.3, "y": 3950.0, "z": 2798 }
+            ]
+        }
+    ],
+    "tubos_is": [
+        { "id": "T1", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 500, "z": 2948 }, "punto_fin": { "x": 4566, "y": 500, "z": 2948 } },
+        { "id": "T2", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 1500, "z": 2948 }, "punto_fin": { "x": 4566, "y": 1500, "z": 2948 } },
+        { "id": "T3", "is_id": "IS4", "punto_inicio": { "x": 100, "y": 2500, "z": 2948 }, "punto_fin": { "x": 4566, "y": 2500, "z": 2948 } },
+        { "id": "T4", "is_id": "IS4", "punto_inicio": { "x": 100, "y": 3500, "z": 2948 }, "punto_fin": { "x": 4566, "y": 3500, "z": 2948 } }
+    ],
+    "caminos": [
+        {
+            "id": "camino_1",
+            "nombre": "Camino 1",
+            "nodos": [
+                {
+                    "id": "A1",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 500, "z": 2900 },
+                    "anteriores": [],
+                    "siguientes": ["B1"]
+                },
+                {
+                    "id": "B1",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 2000, "z": 3147.5 },
+                    "anteriores": ["A1"],
+                    "siguientes": []
+                }
+            ]
+        },
+        {
+            "id": "camino_2",
+            "nombre": "Camino 2",
+            "nodos": [
+                {
+                    "id": "A2",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 700, "z": 2900 },
+                    "anteriores": [],
+                    "siguientes": ["B2"]
+                },
+                {
+                    "id": "B2",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 2200, "z": 3147.5 },
+                    "anteriores": ["A2"],
+                    "siguientes": []
+                }
+            ]
+        },
+        {
+            "id": "camino_3",
+            "nombre": "Camino 3",
+            "nodos": [
+                {
+                    "id": "A3",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 900, "z": 2900 },
+                    "anteriores": [],
+                    "siguientes": ["B3"]
+                },
+                {
+                    "id": "B3",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 2400, "z": 3147.5 },
+                    "anteriores": ["A3"],
+                    "siguientes": []
+                }
+            ]
+        },
+        {
+            "id": "camino_4",
+            "nombre": "Camino 4 (central)",
+            "nodos": [
+                {
+                    "id": "A4",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 1100, "z": 2900 },
+                    "anteriores": [],
+                    "siguientes": ["B4"]
+                },
+                {
+                    "id": "B4",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 2600, "z": 3147.5 },
+                    "anteriores": ["A4"],
+                    "siguientes": []
+                }
+            ]
+        },
+        {
+            "id": "camino_5",
+            "nombre": "Camino 5",
+            "nodos": [
+                {
+                    "id": "A5",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 1300, "z": 2900 },
+                    "anteriores": [],
+                    "siguientes": ["B5"]
+                },
+                {
+                    "id": "B5",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 2800, "z": 3147.5 },
+                    "anteriores": ["A5"],
+                    "siguientes": []
+                }
+            ]
+        },
+        {
+            "id": "camino_6",
+            "nombre": "Camino 6",
+            "nodos": [
+                {
+                    "id": "A6",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 1500, "z": 2900 },
+                    "anteriores": [],
+                    "siguientes": ["B6"]
+                },
+                {
+                    "id": "B6",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 3000, "z": 3147.5 },
+                    "anteriores": ["A6"],
+                    "siguientes": []
+                }
+            ]
+        },
+        {
+            "id": "camino_7",
+            "nombre": "Camino 7",
+            "nodos": [
+                {
+                    "id": "A7",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 1700, "z": 2900 },
+                    "anteriores": [],
+                    "siguientes": ["B7"]
+                },
+                {
+                    "id": "B7",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 3200, "z": 3147.5 },
+                    "anteriores": ["A7"],
+                    "siguientes": []
+                }
+            ]
+        }
+    ],
+    "obstaculos": [
+        {
+            "id": "Obs_1",
+            "descripcion": "Viga izquierda - afecta caminos centrales (saltar)",
+            "vertices": [
+                { "x": 2000.0, "y": 600.0, "z": 2910 },
+                { "x": 2800.0, "y": 600.0, "z": 2910 },
+                { "x": 2800.0, "y": 1400.0, "z": 2910 },
+                { "x": 2000.0, "y": 1400.0, "z": 2910 },
+                { "x": 2000.0, "y": 600.0, "z": 3100 },
+                { "x": 2800.0, "y": 600.0, "z": 3100 },
+                { "x": 2800.0, "y": 1400.0, "z": 3100 },
+                { "x": 2000.0, "y": 1400.0, "z": 3100 }
+            ],
+            "modo": ["saltar"]
+        },
+        {
+            "id": "Obs_2",
+            "descripcion": "Columna central-izquierda - afecta caminos superiores (saltar)",
+            "vertices": [
+                { "x": 4200.0, "y": 900.0, "z": 2910 },
+                { "x": 4800.0, "y": 900.0, "z": 2910 },
+                { "x": 4800.0, "y": 1800.0, "z": 2910 },
+                { "x": 4200.0, "y": 1800.0, "z": 2910 },
+                { "x": 4200.0, "y": 900.0, "z": 3100 },
+                { "x": 4800.0, "y": 900.0, "z": 3100 },
+                { "x": 4800.0, "y": 1800.0, "z": 3100 },
+                { "x": 4200.0, "y": 1800.0, "z": 3100 }
+            ],
+            "modo": ["saltar"]
+        },
+        {
+            "id": "Obs_3",
+            "descripcion": "Viga central - afecta caminos inferiores (saltar)",
+            "vertices": [
+                { "x": 6500.0, "y": 1200.0, "z": 2910 },
+                { "x": 7200.0, "y": 1200.0, "z": 2910 },
+                { "x": 7200.0, "y": 2200.0, "z": 2910 },
+                { "x": 6500.0, "y": 2200.0, "z": 2910 },
+                { "x": 6500.0, "y": 1200.0, "z": 3100 },
+                { "x": 7200.0, "y": 1200.0, "z": 3100 },
+                { "x": 7200.0, "y": 2200.0, "z": 3100 },
+                { "x": 6500.0, "y": 2200.0, "z": 3100 }
+            ],
+            "modo": ["saltar"]
+        },
+        {
+            "id": "Obs_4",
+            "descripcion": "Columna derecha - entre caminos 3-4-5 (saltar)",
+            "vertices": [
+                { "x": 9000.0, "y": 1600.0, "z": 2910 },
+                { "x": 9500.0, "y": 1600.0, "z": 2910 },
+                { "x": 9500.0, "y": 2600.0, "z": 2910 },
+                { "x": 9000.0, "y": 2600.0, "z": 2910 },
+                { "x": 9000.0, "y": 1600.0, "z": 3100 },
+                { "x": 9500.0, "y": 1600.0, "z": 3100 },
+                { "x": 9500.0, "y": 2600.0, "z": 3100 },
+                { "x": 9000.0, "y": 2600.0, "z": 3100 }
+            ],
+            "modo": ["saltar"]
+        },
+        {
+            "id": "Obs_5",
+            "descripcion": "Columna extremo derecho - entre caminos 5-6-7 (saltar)",
+            "vertices": [
+                { "x": 11000.0, "y": 2200.0, "z": 2910 },
+                { "x": 11600.0, "y": 2200.0, "z": 2910 },
+                { "x": 11600.0, "y": 3100.0, "z": 2910 },
+                { "x": 11000.0, "y": 3100.0, "z": 2910 },
+                { "x": 11000.0, "y": 2200.0, "z": 3100 },
+                { "x": 11600.0, "y": 2200.0, "z": 3100 },
+                { "x": 11600.0, "y": 3100.0, "z": 3100 },
+                { "x": 11000.0, "y": 3100.0, "z": 3100 }
+            ],
+            "modo": ["saltar"]
+        }
+    ],
+    "configuracion": {
+        "subtipo_tuberia": "aislado",
+        "estrategia_colision": ["saltar"]
+    }
+}

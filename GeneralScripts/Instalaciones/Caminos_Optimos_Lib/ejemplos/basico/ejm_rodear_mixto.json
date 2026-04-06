@@ -1,0 +1,155 @@
+{
+    "id": "ejm_rodear_mixto",
+    "nombre": "Rodear - Puntos Mixtos (1 Obligatorio + 2 Libres)",
+    "descripcion": "Ruta con punto obligatorio y puntos libres optimizados",
+    "techo": [
+        {
+            "id": "techo_principal",
+            "vertices": [
+                { "x": 0, "y": 0, "z": 2800 },
+                { "x": 6000, "y": 0, "z": 2900 },
+                { "x": 6000, "y": 4000, "z": 2900 },
+                { "x": 0, "y": 4000, "z": 2800 }
+            ]
+        }
+    ],
+    "subdivisiones_is": [
+        {
+            "id": "IS1",
+            "vertices": [
+                { "x": 50, "y": 50, "z": 2802 },
+                { "x": 2950, "y": 50, "z": 2851 },
+                { "x": 2950, "y": 1950, "z": 2851 },
+                { "x": 50, "y": 1950, "z": 2802 }
+            ]
+        },
+        {
+            "id": "IS2",
+            "vertices": [
+                { "x": 3000, "y": 50, "z": 2852 },
+                { "x": 5950, "y": 50, "z": 2898 },
+                { "x": 5950, "y": 1950, "z": 2898 },
+                { "x": 3000, "y": 1950, "z": 2852 }
+            ]
+        },
+        {
+            "id": "IS3",
+            "vertices": [
+                { "x": 50, "y": 2000, "z": 2802 },
+                { "x": 2950, "y": 2000, "z": 2851 },
+                { "x": 2950, "y": 3950, "z": 2851 },
+                { "x": 50, "y": 3950, "z": 2802 }
+            ]
+        },
+        {
+            "id": "IS4",
+            "vertices": [
+                { "x": 3000, "y": 2000, "z": 2852 },
+                { "x": 5950, "y": 2000, "z": 2898 },
+                { "x": 5950, "y": 3950, "z": 2898 },
+                { "x": 3000, "y": 3950, "z": 2852 }
+            ]
+        }
+    ],
+    "tubos_is": [
+        { "id": "T1", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 550.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 550.0, "z": 2976.5 } },
+        { "id": "T2", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 1000.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 1000.0, "z": 2976.5 } },
+        { "id": "T3", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 1450.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 1450.0, "z": 2976.5 } },
+        { "id": "T4", "is_id": "IS2", "punto_inicio": { "x": 3050, "y": 550.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 550.0, "z": 3025.0 } },
+        { "id": "T5", "is_id": "IS2", "punto_inicio": { "x": 3050, "y": 1000.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 1000.0, "z": 3025.0 } },
+        { "id": "T6", "is_id": "IS2", "punto_inicio": { "x": 3050, "y": 1450.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 1450.0, "z": 3025.0 } },
+        { "id": "T7", "is_id": "IS3", "punto_inicio": { "x": 100, "y": 2512.5, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 2512.5, "z": 2976.5 } },
+        { "id": "T8", "is_id": "IS3", "punto_inicio": { "x": 100, "y": 2975.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 2975.0, "z": 2976.5 } },
+        { "id": "T9", "is_id": "IS3", "punto_inicio": { "x": 100, "y": 3437.5, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 3437.5, "z": 2976.5 } },
+        { "id": "T10", "is_id": "IS4", "punto_inicio": { "x": 3050, "y": 2512.5, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 2512.5, "z": 3025.0 } },
+        { "id": "T11", "is_id": "IS4", "punto_inicio": { "x": 3050, "y": 2975.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 2975.0, "z": 3025.0 } },
+        { "id": "T12", "is_id": "IS4", "punto_inicio": { "x": 3050, "y": 3437.5, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 3437.5, "z": 3025.0 } }
+    ],
+    "nodos": [
+        {
+            "id": "A",
+            "tipo": "inicio",
+            "coordenadas": { "x": 500, "y": 500, "z": 2990.0 },
+            "anteriores": [],
+            "siguientes": [
+                "O1"
+            ]
+        },
+        {
+            "id": "O1",
+            "tipo": "orden_obligatorio",
+            "coordenadas": { "x": 3000, "y": 2000, "z": 3040.0 },
+            "anteriores": [
+                "A"
+            ],
+            "siguientes": [
+                "B"
+            ]
+        },
+        {
+            "id": "L1",
+            "tipo": "orden_libre",
+            "coordenadas": { "x": 1500, "y": 3000, "z": 3015.0 },
+            "anteriores": [],
+            "siguientes": []
+        },
+        {
+            "id": "L2",
+            "tipo": "orden_libre",
+            "coordenadas": { "x": 5000, "y": 1000, "z": 3073.3 },
+            "anteriores": [],
+            "siguientes": []
+        },
+        {
+            "id": "B",
+            "tipo": "fin",
+            "coordenadas": { "x": 5500, "y": 3500, "z": 3103.3 },
+            "anteriores": [
+                "O1"
+            ],
+            "siguientes": []
+        }
+    ],
+    "obstaculos": [
+        {
+            "id": "Lampara_Pasillo",
+            "vertices": [
+                { "x": 800.0, "y": 1550.0, "z": 2910 },
+                { "x": 1200.0, "y": 1550.0, "z": 2910 },
+                { "x": 1200.0, "y": 1950.0, "z": 2910 },
+                { "x": 800.0, "y": 1950.0, "z": 2910 },
+                { "x": 800.0, "y": 1550.0, "z": 3110 },
+                { "x": 1200.0, "y": 1550.0, "z": 3110 },
+                { "x": 1200.0, "y": 1950.0, "z": 3110 },
+                { "x": 800.0, "y": 1950.0, "z": 3110 }
+            ],
+            "modo": [
+                "rodear"
+            ],
+            "descripcion": "Obstáculo Lampara_Pasillo centrado en (1000, 1750)"
+        },
+        {
+            "id": "Conducto_Ventilacion",
+            "vertices": [
+                { "x": 2000.0, "y": 2250.0, "z": 2910 },
+                { "x": 2500.0, "y": 2250.0, "z": 2910 },
+                { "x": 2500.0, "y": 2750.0, "z": 2910 },
+                { "x": 2000.0, "y": 2750.0, "z": 2910 },
+                { "x": 2000.0, "y": 2250.0, "z": 3210 },
+                { "x": 2500.0, "y": 2250.0, "z": 3210 },
+                { "x": 2500.0, "y": 2750.0, "z": 3210 },
+                { "x": 2000.0, "y": 2750.0, "z": 3210 }
+            ],
+            "modo": [
+                "rodear"
+            ],
+            "descripcion": "Obstáculo Conducto_Ventilacion centrado en (2250, 2500)"
+        }
+    ],
+    "configuracion": {
+        "subtipo_tuberia": "recuperador",
+        "estrategia_colision": [
+            "saltar"
+        ]
+    }
+}

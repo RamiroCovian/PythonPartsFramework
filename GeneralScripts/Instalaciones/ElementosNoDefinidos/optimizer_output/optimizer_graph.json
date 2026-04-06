@@ -1,0 +1,156 @@
+{
+  "id": "elementos_no_definidos",
+  "nombre": "Elementos No Definidos",
+  "caminos": [
+    {
+      "id": "camino_1",
+      "nombre": "Camino 1 (modo:1|color:1)",
+      "nodos": [
+        {
+          "id": "A1",
+          "tipo": "inicio",
+          "coordenadas": {
+            "x": 17471.91781755945,
+            "y": -12239.396786054886,
+            "z": 0.0
+          },
+          "IS": "modo:1|color:1",
+          "anteriores": [],
+          "siguientes": [
+            "U1-1"
+          ]
+        },
+        {
+          "id": "U1-1",
+          "tipo": "union",
+          "coordenadas": {
+            "x": 17780.87799765147,
+            "y": -12252.977453311678,
+            "z": 0.0
+          },
+          "IS": "modo:1|color:1",
+          "anteriores": [
+            "A1"
+          ],
+          "siguientes": [
+            "U1-2"
+          ]
+        },
+        {
+          "id": "U1-2",
+          "tipo": "union",
+          "coordenadas": {
+            "x": 18076.257510486703,
+            "y": -12258.409720214395,
+            "z": 0.0
+          },
+          "IS": "modo:1|color:1",
+          "anteriores": [
+            "U1-1"
+          ],
+          "siguientes": [
+            "CP-1"
+          ]
+        },
+        {
+          "id": "CP-1",
+          "tipo": "final",
+          "coordenadas": {
+            "x": 18074.899443761024,
+            "y": -12580.27153420037,
+            "z": 0.0
+          },
+          "IS": "modo:1|color:1",
+          "anteriores": [
+            "U1-2"
+          ],
+          "siguientes": []
+        }
+      ],
+      "segmentos": [
+        {
+          "id": 1,
+          "n1_id": "A1",
+          "n2_id": "U1-1",
+          "IS": "modo:1|color:1"
+        },
+        {
+          "id": 2,
+          "n1_id": "U1-1",
+          "n2_id": "U1-2",
+          "IS": "modo:1|color:1"
+        },
+        {
+          "id": 3,
+          "n1_id": "U1-2",
+          "n2_id": "CP-1",
+          "IS": "modo:1|color:1"
+        }
+      ]
+    },
+    {
+      "id": "camino_2",
+      "nombre": "Camino 2 (modo:1|color:4)",
+      "nodos": [
+        {
+          "id": "A1",
+          "tipo": "inicio",
+          "coordenadas": {
+            "x": 17484.140418090563,
+            "y": -12544.282765969872,
+            "z": 0.0
+          },
+          "IS": "modo:1|color:4",
+          "anteriores": [],
+          "siguientes": [
+            "U2-1"
+          ]
+        },
+        {
+          "id": "U2-1",
+          "tipo": "union",
+          "coordenadas": {
+            "x": 17784.952197828512,
+            "y": -12552.431166323948,
+            "z": 0.0
+          },
+          "IS": "modo:1|color:4",
+          "anteriores": [
+            "A1"
+          ],
+          "siguientes": [
+            "CP-1"
+          ]
+        },
+        {
+          "id": "CP-1",
+          "tipo": "final",
+          "coordenadas": {
+            "x": 18074.899443761024,
+            "y": -12580.27153420037,
+            "z": 0.0
+          },
+          "IS": "modo:1|color:4",
+          "anteriores": [
+            "U2-1"
+          ],
+          "siguientes": []
+        }
+      ],
+      "segmentos": [
+        {
+          "id": 1,
+          "n1_id": "A1",
+          "n2_id": "U2-1",
+          "IS": "modo:1|color:4"
+        },
+        {
+          "id": 2,
+          "n1_id": "U2-1",
+          "n2_id": "CP-1",
+          "IS": "modo:1|color:4"
+        }
+      ]
+    }
+  ]
+}

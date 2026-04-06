@@ -1,0 +1,81 @@
+============================================================
+CAMINOS OPTIMOS - Sistema de Optimizacion de Tuberias
+============================================================
+
+Procesando: ejemplos/real/prueba_triple_cruce_90.json
+------------------------------------------------------------
+
+=== MODO MULTI-CAMINO: 3 caminos ===
+
+
+--- Camino 1/3: camino_1 ---
+Procesando: Prueba Triple Cruce 90 - Camino 1 (fila inferior)
+Subtipo: recuperador
+  - Angulos de codo permitidos: [90]
+  - Angulo de movimiento (pathfinding): 90 grados
+  - Radio: 80.0mm
+  - Estrategia de colision: ['saltar']
+Algoritmo general: angulos_codo=[90], direcciones=4
+  Tramo: A1 -> O1_1
+  Tramo: O1_1 -> O1_2
+  Tramo: O1_2 -> O1_3
+  Tramo: O1_3 -> B1
+
+============================================================
+RESULTADO DEL CALCULO DE CAMINO
+============================================================
+Estado: VALIDO
+
+SEGMENTOS DEL CAMINO:
+-------------------------------------------------------
+  Segmento           Longitud     Angulo
+-------------------------------------------------------
+  A₁-C₁₋₁             190.0 mm          -
+  C₁₋₁-C₁₋₂          1070.0 mm      90.0°
+  C₁₋₂-C₁₋₃           210.0 mm      90.0°
+  C₁₋₃-C₁₋₄           930.0 mm      90.0°
+  C₁₋₄-C₁₋₅           210.0 mm      90.0°
+  C₁₋₅-O₁₋₁          1000.0 mm      90.0°
+  O₁₋₁-O₁₋₂          3500.0 mm     180.0°
+  O₁₋₂-O₁₋₃          3500.0 mm     180.0°
+  O₁₋₃-C₁₋₆          3000.0 mm     180.0°
+  C₁₋₆-C₁₋₇          2000.0 mm      90.0°
+  C₁₋₇-B₁             110.0 mm      90.0°
+----------------------------------------
+  CONSUMO TOTAL DE TUBO:         15720.0 mm
+                                   15.72 m
+============================================================
+
+PUNTOS OBLIGATORIOS (orden de prioridad):
+  1. O₁₋₁ en (3500, 1000, 2990)
+  2. O₁₋₂ en (7000, 1000, 2990)
+  3. O₁₋₃ en (10500, 1000, 2990)
+
+
+Puntos de union IS detectados: 3
+  U₁₋₁: (4667, 1000, 2990)
+  U₁₋₂: (9333, 1000, 2990)
+  U₁₋₃: (13500, 2000, 2990)
+  -> Tuberia camino_1 convertida en 11 segmentos tubo (saltar via cruces_tubo)
+
+--- Camino 2/3: camino_2 ---
+Procesando: Prueba Triple Cruce 90 - Camino 2 (fila central, cruza 1 y 3)
+Subtipo: recuperador
+  - Angulos de codo permitidos: [90]
+  - Angulo de movimiento (pathfinding): 90 grados
+  - Radio: 80.0mm
+  - Estrategia de colision: ['saltar']
+Algoritmo general: angulos_codo=[90], direcciones=4
+  Tramo: A2 -> O2_1
+  Tramo: O2_1 -> O2_2
+  Tramo: O2_2 -> B2
+  [DEBUG saltos_tubo] ruta=9 pts, tubos=11, radio=80.0, angulos=[90]
+    ruta[0]: (500, 3000, 2990.0) id=A2
+    ruta[1]: (3500, 3000, 2990.0) id=O2_1
+    ruta[2]: (8570, 3000, 2990.0) id=C1
+    ruta[3]: (8570, 3000, 3200.0) id=C2
+    ruta[4]: (9430, 3000, 3200.0) id=C3
+    ruta[5]: (9430, 3000, 2990.0) id=C4
+    ruta[6]: (10500, 3000, 2990.0) id=O2_2
+    ruta[7]: (13500, 3000, 2990.0) id=C5
+    ruta[8]: (13500, 5000, 2990.0) id=B2

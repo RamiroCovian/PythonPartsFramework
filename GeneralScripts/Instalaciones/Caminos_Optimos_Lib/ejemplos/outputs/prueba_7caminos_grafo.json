@@ -1,0 +1,94 @@
+{
+  "id": "prueba_7caminos",
+  "nombre": "Prueba 7 Caminos Cercanos",
+  "caminos": [
+    {
+      "id": "camino_1",
+      "nombre": "Camino 1",
+      "nodos": [
+        {
+          "id": "A1",
+          "tipo": "inicio",
+          "coordenadas": { "x": 500.0, "y": 500.0, "z": 80.0 },
+          "IS": "IS1",
+          "anteriores": [],
+          "siguientes": [
+            "U1-1"
+          ]
+        },
+        {
+          "id": "U1-1",
+          "tipo": "union",
+          "coordenadas": { "x": 4666.7, "y": 500.0, "z": 80.0 },
+          "IS": "IS1",
+          "anteriores": [
+            "A1"
+          ],
+          "siguientes": [
+            "U1-2"
+          ]
+        },
+        {
+          "id": "U1-2",
+          "tipo": "union",
+          "coordenadas": { "x": 9333.3, "y": 500.0, "z": 80.0 },
+          "IS": "IS1",
+          "anteriores": [
+            "U1-1"
+          ],
+          "siguientes": [
+            "C1-1"
+          ]
+        },
+        {
+          "id": "C1-1",
+          "tipo": "codo",
+          "coordenadas": { "x": 12000.0, "y": 500.0, "z": 80.0 },
+          "IS": "IS3",
+          "anteriores": [
+            "U1-2"
+          ],
+          "siguientes": [
+            "B1"
+          ]
+        },
+        {
+          "id": "B1",
+          "tipo": "final",
+          "coordenadas": { "x": 13500.0, "y": 2000.0, "z": 80.0 },
+          "IS": "IS3",
+          "anteriores": [
+            "C1-1"
+          ],
+          "siguientes": []
+        }
+      ],
+      "segmentos": [
+        {
+          "id": 1,
+          "n1_id": "A1",
+          "n2_id": "U1-1",
+          "IS": "IS1"
+        },
+        {
+          "id": 2,
+          "n1_id": "U1-1",
+          "n2_id": "U1-2",
+          "IS": null
+        },
+        {
+          "id": 3,
+          "n1_id": "U1-2",
+          "n2_id": "C1-1",
+          "IS": "IS3"
+        },
+        {
+          "id": 4,
+          "n1_id": "C1-1",
+          "n2_id": "B1",
+          "IS": "IS3"
+        }
+      ]
+    }
+  ]
+}

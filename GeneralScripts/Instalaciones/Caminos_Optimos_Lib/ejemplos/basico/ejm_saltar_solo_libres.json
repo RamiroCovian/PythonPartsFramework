@@ -1,0 +1,113 @@
+{
+    "id": "ejm_saltar_solo_libres",
+    "nombre": "Saltar - Solo Puntos Libres (3)",
+    "descripcion": "3 puntos libres - algoritmo decide orden optimo",
+    "techo": [
+        {
+            "id": "techo_principal",
+            "vertices": [
+                { "x": 0, "y": 0, "z": 2800 },
+                { "x": 6000, "y": 0, "z": 2900 },
+                { "x": 6000, "y": 4000, "z": 2900 },
+                { "x": 0, "y": 4000, "z": 2800 }
+            ]
+        }
+    ],
+    "subdivisiones_is": [
+        {
+            "id": "IS1",
+            "vertices": [
+                { "x": 50, "y": 50, "z": 2802 },
+                { "x": 2950, "y": 50, "z": 2851 },
+                { "x": 2950, "y": 1950, "z": 2851 },
+                { "x": 50, "y": 1950, "z": 2802 }
+            ]
+        },
+        {
+            "id": "IS2",
+            "vertices": [
+                { "x": 3000, "y": 50, "z": 2852 },
+                { "x": 5950, "y": 50, "z": 2898 },
+                { "x": 5950, "y": 1950, "z": 2898 },
+                { "x": 3000, "y": 1950, "z": 2852 }
+            ]
+        },
+        {
+            "id": "IS3",
+            "vertices": [
+                { "x": 50, "y": 2000, "z": 2802 },
+                { "x": 2950, "y": 2000, "z": 2851 },
+                { "x": 2950, "y": 3950, "z": 2851 },
+                { "x": 50, "y": 3950, "z": 2802 }
+            ]
+        },
+        {
+            "id": "IS4",
+            "vertices": [
+                { "x": 3000, "y": 2000, "z": 2852 },
+                { "x": 5950, "y": 2000, "z": 2898 },
+                { "x": 5950, "y": 3950, "z": 2898 },
+                { "x": 3000, "y": 3950, "z": 2852 }
+            ]
+        }
+    ],
+    "tubos_is": [
+        { "id": "T1", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 550.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 550.0, "z": 2976.5 } },
+        { "id": "T2", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 1000.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 1000.0, "z": 2976.5 } },
+        { "id": "T3", "is_id": "IS1", "punto_inicio": { "x": 100, "y": 1450.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 1450.0, "z": 2976.5 } },
+        { "id": "T4", "is_id": "IS2", "punto_inicio": { "x": 3050, "y": 550.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 550.0, "z": 3025.0 } },
+        { "id": "T5", "is_id": "IS2", "punto_inicio": { "x": 3050, "y": 1000.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 1000.0, "z": 3025.0 } },
+        { "id": "T6", "is_id": "IS2", "punto_inicio": { "x": 3050, "y": 1450.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 1450.0, "z": 3025.0 } },
+        { "id": "T7", "is_id": "IS3", "punto_inicio": { "x": 100, "y": 2512.5, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 2512.5, "z": 2976.5 } },
+        { "id": "T8", "is_id": "IS3", "punto_inicio": { "x": 100, "y": 2975.0, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 2975.0, "z": 2976.5 } },
+        { "id": "T9", "is_id": "IS3", "punto_inicio": { "x": 100, "y": 3437.5, "z": 2976.5 }, "punto_fin": { "x": 2900, "y": 3437.5, "z": 2976.5 } },
+        { "id": "T10", "is_id": "IS4", "punto_inicio": { "x": 3050, "y": 2512.5, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 2512.5, "z": 3025.0 } },
+        { "id": "T11", "is_id": "IS4", "punto_inicio": { "x": 3050, "y": 2975.0, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 2975.0, "z": 3025.0 } },
+        { "id": "T12", "is_id": "IS4", "punto_inicio": { "x": 3050, "y": 3437.5, "z": 3025.0 }, "punto_fin": { "x": 5900, "y": 3437.5, "z": 3025.0 } }
+    ],
+    "nodos": [
+        {
+            "id": "A",
+            "tipo": "inicio",
+            "coordenadas": { "x": 500, "y": 2000, "z": 2947.5 },
+            "anteriores": [],
+            "siguientes": [
+                "B"
+            ]
+        },
+        {
+            "id": "B",
+            "tipo": "fin",
+            "coordenadas": { "x": 5500, "y": 2000, "z": 3111.7 },
+            "anteriores": [
+                "A"
+            ],
+            "siguientes": []
+        }
+    ],
+    "obstaculos": [
+        {
+            "id": "Obstaculo_Bloqueante",
+            "vertices": [
+                { "x": 2575.0, "y": 1575.0, "z": 2910 },
+                { "x": 3425.0, "y": 1575.0, "z": 2910 },
+                { "x": 3425.0, "y": 2425.0, "z": 2910 },
+                { "x": 2575.0, "y": 2425.0, "z": 2910 },
+                { "x": 2575.0, "y": 1575.0, "z": 3330 },
+                { "x": 3425.0, "y": 1575.0, "z": 3330 },
+                { "x": 3425.0, "y": 2425.0, "z": 3330 },
+                { "x": 2575.0, "y": 2425.0, "z": 3330 }
+            ],
+            "modo": [
+                "saltar"
+            ],
+            "descripcion": "Obstáculo Obstaculo_Bloqueante centrado en (3000, 2000)"
+        }
+    ],
+    "configuracion": {
+        "subtipo_tuberia": "extraccion_impulsion",
+        "estrategia_colision": [
+            "saltar"
+        ]
+    }
+}

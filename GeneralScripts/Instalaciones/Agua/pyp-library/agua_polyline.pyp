@@ -380,6 +380,116 @@
         </Parameter>
     </Page>
     <Page>
+        <Parameter>
+            <Name>OrdenPuntosUsuario</Name>
+            <Text>Orden de puntos de usuario</Text>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>SeparatorOrdenPuntos</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowTipoCamino</Name>
+                <Text>Tipo de camino</Text>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>TipoCamino</Name>
+                    <Text>Tipo de camino</Text>
+                    <Value>0</Value>
+                    <ValueType>RadioButtonGroup</ValueType>
+                    <Parameter>
+                        <Name>CaminoOrdenado</Name>
+                        <Text>Camino Ordenado</Text>
+                        <Value>0</Value>
+                        <ValueType>RadioButton</ValueType>
+                    </Parameter>
+                    <Parameter>
+                        <Name>CaminoLibre</Name>
+                        <Text>Camino Libre</Text>
+                        <Value>1</Value>
+                        <ValueType>RadioButton</ValueType>
+                    </Parameter>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowTipoPuntoOrden</Name>
+                <Text>Tipo de punto</Text>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>TipoPuntoOrden</Name>
+                    <Text>Tipo de punto</Text>
+                    <Value>Inicio</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>Inicio|Intermedio Libre|Intermedio Ordenado|Bifurcacion|Final</ValueList>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>SeparatorOrdenPuntos2</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowColorPuntos</Name>
+                <Text>Color de formas</Text>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>ColorPuntosNoDefinidos</Name>
+                    <Text>Color (distinguir caminos)</Text>
+                    <Value>Negro</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>Negro|Amarillo|Cyan|Verde|Magenta|Rojo|Azul</ValueList>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowDeteccionPuntosComunes</Name>
+                <Text>Puntos comunes</Text>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>DeteccionPuntosComunesActiva</Name>
+                    <Text>Detectar puntos comunes</Text>
+                    <Value>True</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ToleranciaPuntosComunesMm</Name>
+                    <Text>Tolerancia (mm)</Text>
+                    <Value>5</Value>
+                    <ValueType>Length</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ColorResaltadoPuntosComunes</Name>
+                    <Text>Color resaltado</Text>
+                    <Value>Rojo</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>Negro|Amarillo|Verde|Cyan|Magenta|Rojo|Azul</ValueList>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowPuntosNoDefinidosBotones</Name>
+                <Text>Acción</Text>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>AnadirPuntoNoDefinido</Name>
+                    <Text>Añadir punto</Text>
+                    <EventId>1031</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>FinalizarPuntosNoDefinidos</Name>
+                    <Text>Finalizar</Text>
+                    <EventId>1032</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+        </Parameter>
+    </Page>
+    <Page>
         <Name>PuntosLibresYMacros</Name>
         <Text>Puntos Libres y Macros</Text>
         <!-- MACRO: marcar punto inicial/final/libre y seleccionar SmartSymbol/Fixture -->

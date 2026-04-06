@@ -1,0 +1,13 @@
+{
+    "is_dimensiones": {
+        "ancho_min_mm": 1450,
+        "ancho_max_mm": 5650,
+        "alto_min_mm": 1450,
+        "alto_max_mm": 2150,
+        "margen_entre_is_mm": 50
+    },
+    "validacion": {
+        "tolerancia_plano_mm": 0.001,
+        "verificar_dentro_techo": true
+    }
+}

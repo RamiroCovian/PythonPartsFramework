@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "caminos-optimos"
+version = "1.0.0"
+description = "Sistema de optimizacion de rutas de tuberias de ventilacion bajo techos inclinados"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Proprietary" }
+dependencies = [
+    "numpy>=1.21.0",
+    "plotly>=5.15.0",
+    "networkx>=3.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["caminos_optimos*"]

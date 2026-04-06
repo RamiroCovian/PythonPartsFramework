@@ -1,0 +1,6 @@
+# Caminos Optimos - Dependencias
+# math (modulo estandar de Python, no requiere instalacion)
+numpy>=1.21.0
+plotly>=5.15.0
+pytest>=7.0.0
+networkx>=3.0

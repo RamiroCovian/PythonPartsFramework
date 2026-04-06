@@ -1,0 +1,44 @@
+{
+    "subtipos": {
+        "extraccion_impulsion": {
+            "nombre": "Extraccion e Impulsion",
+            "dimensiones": {
+                "ancho_mm": 75.0,
+                "alto_mm": 75.0
+            },
+            "angulos_permitidos": [45],
+            "distancia_techo_mm": 110.0,
+            "longitud_minima_mm": 150.0,
+            "margen_seguridad_mm": 10.0,
+            "descripcion": "Ductos de extraccion e impulsion de aire"
+        },
+        "aislado": {
+            "nombre": "Aislado",
+            "dimensiones": {
+                "ancho_mm": 160.0,
+                "alto_mm": 160.0
+            },
+            "angulos_permitidos": [45],
+            "distancia_techo_mm": 0.0,
+            "longitud_minima_mm": 150.0,
+            "margen_seguridad_mm": 10.0,
+            "descripcion": "Ductos con aislamiento termico"
+        },
+        "recuperador": {
+            "nombre": "Recuperador",
+            "dimensiones": {
+                "ancho_mm": 160.0,
+                "alto_mm": 160.0
+            },
+            "angulos_permitidos": [90],
+            "distancia_techo_mm": 110.0,
+            "longitud_minima_mm": 150.0,
+            "margen_seguridad_mm": 10.0,
+            "descripcion": "Ductos para recuperadores de calor (solo ortogonal)"
+        }
+    },
+    "configuracion_global": {
+        "margen_is_mm": 50,
+        "tolerancia_geometrica_mm": 0.001
+    }
+}

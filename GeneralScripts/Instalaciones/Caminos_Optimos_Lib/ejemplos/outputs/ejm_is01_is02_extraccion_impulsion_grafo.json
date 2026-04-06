@@ -1,0 +1,170 @@
+{
+  "nodos": [
+    {
+      "id": "A",
+      "tipo": "inicio",
+      "coordenadas": { "x": 375.0, "y": 500.0, "z": 6192.5 },
+      "IS": "IS01",
+      "anteriores": [],
+      "siguientes": [
+        "C1"
+      ]
+    },
+    {
+      "id": "C1",
+      "tipo": "codo",
+      "coordenadas": { "x": 375.0, "y": 1155.0, "z": 6192.5 },
+      "IS": "IS01",
+      "anteriores": [
+        "A"
+      ],
+      "siguientes": [
+        "C2"
+      ]
+    },
+    {
+      "id": "C2",
+      "tipo": "codo",
+      "coordenadas": { "x": 375.0, "y": 1305.0, "z": 6342.5 },
+      "IS": "IS01",
+      "anteriores": [
+        "C1"
+      ],
+      "siguientes": [
+        "C3"
+      ]
+    },
+    {
+      "id": "C3",
+      "tipo": "codo",
+      "coordenadas": { "x": 375.0, "y": 5695.0, "z": 6342.5 },
+      "IS": "IS02",
+      "anteriores": [
+        "C2"
+      ],
+      "siguientes": [
+        "C4"
+      ]
+    },
+    {
+      "id": "C4",
+      "tipo": "codo",
+      "coordenadas": { "x": 375.0, "y": 5845.0, "z": 6192.5 },
+      "IS": "IS02",
+      "anteriores": [
+        "C3"
+      ],
+      "siguientes": [
+        "B"
+      ]
+    },
+    {
+      "id": "B",
+      "tipo": "final",
+      "coordenadas": { "x": 375.0, "y": 6500.0, "z": 6192.5 },
+      "IS": "IS02",
+      "anteriores": [
+        "C4"
+      ],
+      "siguientes": []
+    }
+  ],
+  "segmentos": [
+    {
+      "id": 1,
+      "n1_id": "A",
+      "n2_id": "C1",
+      "IS": "IS01"
+    },
+    {
+      "id": 2,
+      "n1_id": "C1",
+      "n2_id": "C2",
+      "IS": "IS01"
+    },
+    {
+      "id": 3,
+      "n1_id": "C2",
+      "n2_id": "C3",
+      "IS": "IS01"
+    },
+    {
+      "id": 4,
+      "n1_id": "C3",
+      "n2_id": "C4",
+      "IS": "IS02"
+    },
+    {
+      "id": 5,
+      "n1_id": "C4",
+      "n2_id": "B",
+      "IS": "IS02"
+    }
+  ],
+  "soportes": [
+    {
+      "tipo": "horizontal",
+      "subtipo": "Ventilación",
+      "posicion1": [
+        25.0,
+        827.5,
+        6045.0
+      ],
+      "posicion2": [
+        725.0,
+        827.5,
+        6045.0
+      ],
+      "cota_a": 110.0,
+      "cota_b": 680.0
+    },
+    {
+      "tipo": "horizontal",
+      "subtipo": "Ventilación",
+      "posicion1": [
+        25.0,
+        2045.0,
+        6045.0
+      ],
+      "posicion2": [
+        725.0,
+        2045.0,
+        6045.0
+      ],
+      "cota_a": 110.0,
+      "cota_b": 680.0
+    },
+    {
+      "tipo": "horizontal",
+      "subtipo": "Ventilación",
+      "posicion1": [
+        25.0,
+        2785.0,
+        6045.0
+      ],
+      "posicion2": [
+        725.0,
+        2785.0,
+        6045.0
+      ],
+      "cota_a": 110.0,
+      "cota_b": 680.0
+    },
+    {
+      "tipo": "horizontal",
+      "subtipo": "Ventilación",
+      "posicion1": [
+        25.0,
+        6172.5,
+        6045.0
+      ],
+      "posicion2": [
+        725.0,
+        6172.5,
+        6045.0
+      ],
+      "cota_a": 110.0,
+      "cota_b": 680.0
+    }
+  ]
+}

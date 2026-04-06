@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import importlib
+import json
 import math
+from pathlib import Path
 
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
@@ -41,6 +43,15 @@ from .utils.attributes_utils import (
     _has_material_cavitat,
 )
 from .utils.layers_utils import _apply_layer_to_element
+from ElementosNoDefinidos import (
+    deserialize_puntos_no_definidos as end_deserialize_puntos_no_definidos,
+    draw_all_puntos_no_definidos as end_draw_all_puntos_no_definidos,
+    draw_preview_at_cursor as end_draw_preview_at_cursor,
+    handle_click_add_punto_no_definido as end_handle_click_add_punto_no_definido,
+    on_anadir_punto_no_definido as end_on_anadir_punto_no_definido,
+    on_finalizar_puntos_no_definidos as end_on_finalizar_puntos_no_definidos,
+    serialize_puntos_no_definidos as end_serialize_puntos_no_definidos,
+)
 
 # ---------------- CUSTOM NUM_TD PATH ----------------
 project_name, host_name = (
@@ -92,6 +103,209 @@ _TUBE_LABEL_BY_KEY = {
     "multicapa": "Multicapa",
     "armaflex": "Armaflex",
 }
+
+AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO = 1031
+AGUA_EVENT_FINALIZAR_PUNTOS_NO_DEFINIDOS = 1032
+
+
+def _ensure_elementos_no_definidos_state(script_object) -> None:
+    """Inicializa el estado usado por la paleta de puntos no definidos."""
+    if not hasattr(script_object, "puntos_no_definidos") or not isinstance(
+        getattr(script_object, "puntos_no_definidos", None), list
+    ):
+        script_object.puntos_no_definidos = []
+    if not hasattr(script_object, "common_points_topology") or not isinstance(
+        getattr(script_object, "common_points_topology", None), dict
+    ):
+        script_object.common_points_topology = {}
+    if not hasattr(script_object, "common_junctions") or not isinstance(
+        getattr(script_object, "common_junctions", None), list
+    ):
+        script_object.common_junctions = []
+
+
+def _write_provisional_puntos_json(script_object) -> str | None:
+    """Escribe un JSON provisional para revisar qué datos genera Agua."""
+    try:
+        output_dir = Path(__file__).resolve().parents[1] / "debug_output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        puntos_serializados = end_serialize_puntos_no_definidos(
+            getattr(script_object, "puntos_no_definidos", []) or []
+        )
+
+        puntos_por_camino: dict[str, list[dict]] = {}
+        for punto in puntos_serializados:
+            path_key = str(punto.get("path_key") or "default")
+            puntos_por_camino.setdefault(path_key, []).append(punto)
+
+        nodos = []
+        seq_global = 1
+        for path_key in sorted(puntos_por_camino.keys()):
+            grupo = puntos_por_camino[path_key]
+            grupo.sort(key=lambda item: int(item.get("orden", 0)))
+
+            ids_grupo = []
+            for _ in grupo:
+                ids_grupo.append(f"N{seq_global}")
+                seq_global += 1
+
+            for idx, punto in enumerate(grupo):
+                pos = punto.get("pos") or {}
+                nodo = {
+                    "id": ids_grupo[idx],
+                    "tipo": punto.get("tipo"),
+                    "coordenadas": {
+                        "X": float(pos.get("X", 0.0)),
+                        "Y": float(pos.get("Y", 0.0)),
+                        "Z": float(pos.get("Z", 0.0)),
+                    },
+                    "anteriores": [ids_grupo[idx - 1]] if idx > 0 else [],
+                    "siguientes": (
+                        [ids_grupo[idx + 1]] if idx < len(ids_grupo) - 1 else []
+                    ),
+                    "orden": int(punto.get("orden", 0)),
+                    "tipo_camino": punto.get("tipo_camino"),
+                    "color_id": punto.get("color_id"),
+                    "path_key": punto.get("path_key"),
+                    "es_punto_comun": bool(punto.get("es_punto_comun", False)),
+                    "common_node_id": punto.get("common_node_id"),
+                    "path_key_comun_con": punto.get("path_key_comun_con"),
+                }
+                nodos.append(nodo)
+
+        payload = {
+            "installation": "AGUA",
+            "nodos": nodos,
+            "common_points_topology": (
+                getattr(script_object, "common_points_topology", {}) or {}
+            ),
+            "common_junctions": getattr(script_object, "common_junctions", []) or [],
+        }
+
+        file_name = "agua_puntos_no_definidos_debug.json"
+        output_path = output_dir / file_name
+        with output_path.open("w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+
+        print(f"[AGUA] JSON provisional escrito en: {output_path}")
+        return str(output_path)
+    except Exception as ex:
+        print(f"[AGUA] Error escribiendo JSON provisional: {ex}")
+        return None
+
+
+def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
+    """Añade soporte de clicks, preview y restauración para puntos no definidos."""
+    if intr is None or getattr(intr, "_agua_elementos_no_definidos_patched", False):
+        return
+
+    setattr(intr, "_agua_elementos_no_definidos_patched", True)
+    intr.next_click_adds_punto_no_definido = bool(
+        getattr(intr, "next_click_adds_punto_no_definido", False)
+    )
+
+    original_process_mouse_msg = intr.process_mouse_msg
+    original_draw_preview = intr._draw_preview
+    original_deserialize_state_from_json = intr._deserialize_state_from_json
+
+    def _process_mouse_msg_with_elementos_no_definidos(mouse_msg, pnt, msg_info):
+        if getattr(intr, "next_click_adds_punto_no_definido", False):
+            try:
+                is_move = bool(intr.coord_input and intr.coord_input.IsMouseMove(mouse_msg))
+                is_left_click = getattr(mouse_msg, "Button", 1) == 1
+                if is_left_click and not is_move and intr.coord_input:
+                    current_point = getattr(intr, "current_point", None)
+                    if current_point is None:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    else:
+                        raw_input = intr.coord_input.GetInputPoint(
+                            mouse_msg,
+                            pnt,
+                            msg_info,
+                            current_point,
+                            bool(getattr(intr, "points", [])),
+                        )
+                    raw_pnt = raw_input.GetPoint()
+                    end_handle_click_add_punto_no_definido(intr, script_object, raw_pnt)
+                    try:
+                        intr._draw_preview(raw_pnt)
+                    except Exception:
+                        pass
+                    return True
+            except Exception as ex:
+                print(f"[AGUA] Error añadiendo punto no definido: {ex}")
+
+        return original_process_mouse_msg(mouse_msg, pnt, msg_info)
+
+    def _draw_preview_with_elementos_no_definidos(current_pnt):
+        result = original_draw_preview(current_pnt)
+        try:
+            overlay = []
+            build_ele = getattr(script_object, "build_ele", None)
+            puntos = getattr(script_object, "puntos_no_definidos", []) or []
+            if puntos:
+                overlay.extend(
+                    end_draw_all_puntos_no_definidos(
+                        puntos,
+                        default_color_id=6,
+                        base_props=getattr(intr, "com_prop", None),
+                        size=45.0,
+                        build_ele=build_ele,
+                    )
+                )
+
+            if (
+                getattr(intr, "next_click_adds_punto_no_definido", False)
+                and current_pnt is not None
+            ):
+                overlay.extend(
+                    end_draw_preview_at_cursor(
+                        current_pnt,
+                        build_ele,
+                        getattr(intr, "com_prop", None),
+                        45.0,
+                    )
+                )
+
+            if overlay:
+                AllplanBaseElements.DrawElementPreview(
+                    intr.coord_input.GetInputViewDocument(),
+                    AllplanGeo.Matrix3D(),
+                    overlay,
+                    False,
+                    None,
+                )
+        except Exception as ex:
+            print(f"[AGUA] Error dibujando preview de puntos no definidos: {ex}")
+        return result
+
+    def _deserialize_state_with_elementos_no_definidos(json_str: str):
+        result = original_deserialize_state_from_json(json_str)
+        if not result:
+            return result
+
+        try:
+            state = json.loads(json_str)
+            script_object.puntos_no_definidos = end_deserialize_puntos_no_definidos(
+                state.get("puntos_no_definidos") or []
+            )
+            script_object.common_points_topology = (
+                state.get("common_points_topology") or {}
+            )
+            script_object.common_junctions = state.get("common_junctions") or []
+        except Exception as ex:
+            print(f"[AGUA] Error restaurando puntos no definidos: {ex}")
+        return result
+
+    intr.process_mouse_msg = _process_mouse_msg_with_elementos_no_definidos
+    intr._draw_preview = _draw_preview_with_elementos_no_definidos
+    intr._deserialize_state_from_json = _deserialize_state_with_elementos_no_definidos
 
 
 def _get_max_segment_length_for_group(
@@ -406,6 +620,43 @@ def create_script_object(build_ele, script_object_data):
     script_object = PBL.script_object.initialize_script_object(
         build_ele, script_object_data, CONFIG
     )
+    _ensure_elementos_no_definidos_state(script_object)
+
+    original_start_input = script_object.start_input
+
+    def _start_input_with_elementos_no_definidos():
+        intr = original_start_input()
+        _patch_interactor_for_elementos_no_definidos(script_object, intr)
+        return intr
+
+    script_object.start_input = _start_input_with_elementos_no_definidos
+
+    original_serialize_state_to_json = script_object._serialize_state_to_json
+
+    def _serialize_state_to_json_with_elementos_no_definidos():
+        raw = original_serialize_state_to_json()
+        if not raw:
+            return raw
+        try:
+            state = json.loads(raw)
+            state["puntos_no_definidos"] = end_serialize_puntos_no_definidos(
+                getattr(script_object, "puntos_no_definidos", []) or []
+            )
+            state["common_points_topology"] = (
+                getattr(script_object, "common_points_topology", {}) or {}
+            )
+            state["common_junctions"] = (
+                getattr(script_object, "common_junctions", []) or []
+            )
+            return json.dumps(state)
+        except Exception as ex:
+            print(f"[AGUA] Error serializando puntos no definidos: {ex}")
+            return raw
+
+    script_object._serialize_state_to_json = (
+        _serialize_state_to_json_with_elementos_no_definidos
+    )
+
     # HOOK: Creación de elementos para previsualizacion
     script_object.element_creation_preview_hook = _create_elements_for_segment_group
 
@@ -417,6 +668,24 @@ def create_script_object(build_ele, script_object_data):
 
     def _on_control_event_with_reminder(event_id: int):
         try:
+            if event_id in (
+                AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO,
+                AGUA_EVENT_FINALIZAR_PUNTOS_NO_DEFINIDOS,
+            ):
+                intr = getattr(script_object, "script_object_interactor", None)
+                if intr is None:
+                    intr = script_object.start_input()
+                _patch_interactor_for_elementos_no_definidos(script_object, intr)
+
+                if event_id == AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO:
+                    return bool(end_on_anadir_punto_no_definido(script_object, intr))
+
+                ok = bool(
+                    end_on_finalizar_puntos_no_definidos(script_object, intr)
+                )
+                _write_provisional_puntos_json(script_object)
+                return ok
+
             if event_id == 1003:
                 _ensure_validation_context_ready(script_object)
                 missing_layers, missing_parent = _collect_missing_layer_and_parent(

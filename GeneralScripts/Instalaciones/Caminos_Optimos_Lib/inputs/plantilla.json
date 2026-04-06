@@ -1,0 +1,85 @@
+{
+    "nombre": "Mi Proyecto de Ventilación",
+    "descripcion": "Descripción del proyecto",
+    "subtipo": "extraccion_impulsion",
+    "// SUBTIPOS DISPONIBLES": [
+        "extraccion_impulsion  (ángulo 135°, radio 37.5mm)",
+        "aislado               (ángulo 135°, radio 80mm)",
+        "recuperador           (ángulo 90°,  radio 40mm)"
+    ],
+    "inicio": { "id": "A", "x": 0, "y": 0, "z": 2800, "descripcion": "Punto de inicio (ejemplo: salida del equipo)" },
+    "fin": { "id": "B", "x": 5000, "y": 3000, "z": 2800, "descripcion": "Punto final (ejemplo: rejilla de ventilación)" },
+    "puntos_obligatorios": [
+        { "id": "O1", "x": 2000, "y": 1500, "z": 2850, "descripcion": "Punto que DEBE pasar la tubería (ejemplo: conexión intermedia)" }
+    ],
+    "puntos_libres": [
+        { "id": "L1", "x": 3500, "y": 2000, "z": 2850, "descripcion": "Punto OPCIONAL que optimiza la ruta si es conveniente" }
+    ],
+    "obstaculos": [
+        {
+            "id": "Obstaculo1",
+            "vertices": [
+                { "x": 2250.0, "y": 1250.0, "z": 2910 },
+                { "x": 2750.0, "y": 1250.0, "z": 2910 },
+                { "x": 2750.0, "y": 1750.0, "z": 2910 },
+                { "x": 2250.0, "y": 1750.0, "z": 2910 },
+                { "x": 2250.0, "y": 1250.0, "z": 3310 },
+                { "x": 2750.0, "y": 1250.0, "z": 3310 },
+                { "x": 2750.0, "y": 1750.0, "z": 3310 },
+                { "x": 2250.0, "y": 1750.0, "z": 3310 }
+            ],
+            "modo": ["saltar"]
+        }
+    ],
+    "// MODOS DE OBSTACULO": [
+        "saltar  - La tubería sube para pasar por encima del obstáculo",
+        "rodear  - La tubería se desvía horizontalmente para evitar el obstáculo"
+    ],
+    "subdivisiones_is": [
+        {
+            "id": "IS1",
+            "vertices": [
+                { "x": 50, "y": 50, "z": 2802 },
+                { "x": 2950, "y": 50, "z": 2802 },
+                { "x": 2950, "y": 1950, "z": 2802 },
+                { "x": 50, "y": 1950, "z": 2802 }
+            ]
+        },
+        {
+            "id": "IS2",
+            "vertices": [
+                { "x": 3050, "y": 50, "z": 2802 },
+                { "x": 5950, "y": 50, "z": 2802 },
+                { "x": 5950, "y": 1950, "z": 2802 },
+                { "x": 3050, "y": 1950, "z": 2802 }
+            ]
+        },
+        {
+            "id": "IS3",
+            "vertices": [
+                { "x": 50, "y": 2050, "z": 2802 },
+                { "x": 2950, "y": 2050, "z": 2802 },
+                { "x": 2950, "y": 3950, "z": 2802 },
+                { "x": 50, "y": 3950, "z": 2802 }
+            ]
+        },
+        {
+            "id": "IS4",
+            "vertices": [
+                { "x": 3050, "y": 2050, "z": 2802 },
+                { "x": 5950, "y": 2050, "z": 2802 },
+                { "x": 5950, "y": 3950, "z": 2802 },
+                { "x": 3050, "y": 3950, "z": 2802 }
+            ],
+            "descripcion": "Cada IS tiene 4 vértices con (x, y, z). Dimensiones max: 5650x2150mm"
+        }
+    ],
+    "// NOTAS": [
+        "Coordenadas en milímetros (mm)",
+        "El eje Z es la altura (vertical)",
+        "Los puntos obligatorios se visitan en orden de ID",
+        "Los puntos libres se usan solo si optimizan la ruta",
+        "Los obstáculos se rodean o saltan según el modo"
+    ],
+    "// COMANDO PARA EJECUTAR": "python -m src.main inputs/mi_archivo.json"
+}
