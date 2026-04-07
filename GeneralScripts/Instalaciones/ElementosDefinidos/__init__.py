@@ -78,10 +78,20 @@ from .handlers import (
     start_macro_point_capture,
     add_macro_library_marker,
     detect_common_user_points_between_paths,
+    build_common_user_points_data,
 )
 from .creation import (
     create_elements_from_free_placed_points,
     iterate_element_markers,
+)
+from .common_points import (
+    detect_common_point_groups,
+    build_common_points_topology,
+    build_common_junctions,
+)
+from .optimizer_graph import (
+    build_nodos_export_data,
+    build_optimizer_graph_json,
 )
 
 __all__ = [
@@ -132,4 +142,10 @@ __all__ = [
     "create_elements_from_free_placed_points",
     "iterate_element_markers",
     "detect_common_user_points_between_paths",
+    "build_common_user_points_data",
+    "detect_common_point_groups",
+    "build_common_points_topology",
+    "build_common_junctions",
+    "build_nodos_export_data",
+    "build_optimizer_graph_json",
 ]

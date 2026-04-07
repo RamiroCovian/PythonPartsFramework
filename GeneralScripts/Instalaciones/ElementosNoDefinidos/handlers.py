@@ -14,7 +14,11 @@ from typing import Any, Optional
 
 from . import palette
 from .common_points import detect_common_point_groups
-from .optimizer_graph import build_optimizer_graph_json
+from .optimizer_graph import (
+    _build_node_id,
+    _normalize_node_tipo,
+    build_optimizer_graph_json,
+)
 
 try:
     import NemAll_Python_Geometry as AllplanGeo
@@ -385,15 +389,20 @@ def build_nodos_export_data(puntos: list) -> list:
         by_key[path_key].append(p)
 
     nodos = []
-    seq_global = 1
-    for path_key in sorted(by_key.keys()):
+    for path_index, path_key in enumerate(sorted(by_key.keys()), start=1):
         group = by_key[path_key]
         group.sort(key=lambda item: int(item.get("orden", 0)))
 
+        counters = {
+            "inicio": 0,
+            "final": 0,
+            "codo": 0,
+            "union": 0,
+        }
         ids_grupo = []
-        for _ in group:
-            ids_grupo.append(f"N{seq_global}")
-            seq_global += 1
+        for punto in group:
+            node_tipo = _normalize_node_tipo(punto)
+            ids_grupo.append(_build_node_id(punto, path_index, counters, node_tipo))
 
         for idx, punto in enumerate(group):
             pos = punto.get("pos")

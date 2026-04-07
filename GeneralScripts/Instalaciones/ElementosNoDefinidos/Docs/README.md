@@ -343,6 +343,47 @@ Al finalizar el flujo, `on_finalizar_puntos_no_definidos(...)` deja disponible:
 
 Esto convierte al módulo en el dueño del contrato exportado, y simplifica a los consumidores.
 
+#### Esquema de IDs del contrato exportado
+
+El contrato `nodos_export_data` usa ahora la misma estrategia de IDs que `optimizer_graph.py`.
+
+La asignación depende del tipo lógico normalizado del nodo:
+
+- `A1`, `A2`, ... para nodos de inicio
+- `B1`, `B2`, ... para nodos finales
+- `C1-1`, `C1-2`, ... para codos
+- `U1-1`, `U1-2`, ... para uniones
+
+Si el punto ya trae `common_node_id`, ese valor se preserva como `id` exportado.
+
+Snippet representativo:
+
+```python
+for punto in group:
+    node_tipo = _normalize_node_tipo(punto)
+    ids_grupo.append(_build_node_id(punto, path_index, counters, node_tipo))
+```
+
+Con este cambio, `nodos_export_data` y `build_optimizer_graph_json(...)` comparten el mismo criterio semántico de identificación.
+
+#### Diferencia con el exportador alternativo `optimizer_graph`
+
+Dentro del módulo todavía existe una segunda ruta de exportación en `optimizer_graph.py`. Esa salida es independiente de `nodos_export_data` y conserva IDs semánticos como:
+
+- `A1`, `A2`, ... para nodos de inicio
+- `B1`, `B2`, ... para nodos finales
+- `C1-1`, `C1-2`, ... para codos
+- `U1-1`, `U1-2`, ... para uniones
+
+Esa lógica vive en `_build_node_id(...)` y se usa exclusivamente en `build_optimizer_graph_json(...)`.
+
+En otras palabras:
+
+- si el consumidor usa `script_object.nodos_export_data`, los IDs correctos son `A1`, `B1`, `C...`, `U...` o el `common_node_id` existente
+- si el consumidor usa `build_optimizer_graph_json(...)`, los IDs correctos son `A1`, `B1`, `C...`, `U...`
+
+Ambos esquemas pueden coexistir porque pertenecen a contratos distintos.
+
 ### Paso 9. Preview visual en Allplan
 
 `preview.py` implementa la capa visual del módulo.

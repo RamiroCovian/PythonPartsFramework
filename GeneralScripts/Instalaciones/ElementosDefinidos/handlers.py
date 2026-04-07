@@ -10,6 +10,10 @@ from typing import Any, Optional, List, Tuple
 
 from . import catalogo
 from . import palette
+from .common_points import (
+    build_common_junctions,
+    build_common_points_topology,
+)
 
 try:
     import NemAll_Python_Geometry as AllplanGeo
@@ -150,6 +154,45 @@ def detect_common_user_points_between_paths(
     """Detecta puntos comunes entre los paths guardados en intr.saved_paths, usando una tolerancia en mm."""
     paths = getattr(intr, "saved_paths", None) or []
     return _detect_common_points_from_paths(paths, tolerance_mm)
+
+
+def build_common_user_points_data(
+    intr: Any,
+    tolerance_mm: float = 1.0,
+) -> dict:
+    """
+    Construye y guarda en el script/interactor la topología de puntos comunes y
+    las junctions derivadas, igual que en ElementosNoDefinidos.
+    """
+    paths = getattr(intr, "saved_paths", None) or []
+    script_object = getattr(intr, "script_object", None)
+    element_markers = getattr(intr, "element_markers", None)
+    if element_markers is None and script_object is not None:
+        element_markers = getattr(script_object, "element_markers", None)
+    element_markers = element_markers or []
+
+    topology = build_common_points_topology(
+        saved_paths=paths,
+        tolerance_mm=tolerance_mm,
+    )
+    junctions = build_common_junctions(
+        saved_paths=paths,
+        topology=topology,
+        element_markers=element_markers,
+        tolerance_mm=tolerance_mm,
+    )
+
+    if script_object is not None:
+        script_object.common_points_topology = topology
+        script_object.common_junctions = junctions
+
+    intr.common_points_topology = topology
+    intr.common_junctions = junctions
+
+    return {
+        "topology": topology,
+        "junctions": junctions,
+    }
 
 
 def _try_print_prompt(intr: Any) -> None:
