@@ -10,6 +10,13 @@ def check_allplan_version(_build_ele, version) -> bool:
     return True
 
 
+def create_preview(build_ele, script_object_data):
+    """Vista previa simplificada para el file-based loader."""
+    from .colze_base_002 import create_preview as _model_preview
+
+    return _model_preview(build_ele, None), []
+
+
 def create_script_object(build_ele, script_object_data):
     return ColzeBaseScript(build_ele, script_object_data)
 

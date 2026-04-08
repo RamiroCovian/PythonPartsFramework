@@ -614,109 +614,86 @@
                 <Visible>False</Visible>
             </Parameter>
         </Parameter>
-        <!-- ELEMENTOS DEFINIDOS: UI para colocar elementos predefinidos -->
+        <!-- Modo Puntos Libres -->
         <Parameter>
-            <Name>ElementExpander</Name>
-            <Text>Elemento</Text>
+            <Name>PuntosLibresExpander</Name>
+            <Text>Modo puntos libres</Text>
             <ValueType>Expander</ValueType>
             <Parameter>
-                <Name>DefinedElementType</Name>
+                <Name>SeparatorPuntosLibres</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowPuntosLibresElemento</Name>
                 <Text>Elemento</Text>
-                <Value>Caixa Connexions 200</Value>
-                <ValueList>Caixa Connexions 200</ValueList>
-                <ValueType>StringComboBox</ValueType>
-            </Parameter>
-            <Parameter>
-                <Name>ElementPointMode</Name>
-                <Text>Tipo de punto</Text>
-                <Value>2</Value>
-                <ValueType>RadioButtonGroup</ValueType>
-                <Visible>False</Visible>
-                <Parameter>
-                    <Name>ElementStart</Name>
-                    <Text>Punto inicial</Text>
-                    <Value>0</Value>
-                    <ValueType>RadioButton</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>ElementEnd</Name>
-                    <Text>Punto final</Text>
-                    <Value>1</Value>
-                    <ValueType>RadioButton</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>ElementFree</Name>
-                    <Text>Intermedio o libre</Text>
-                    <Value>2</Value>
-                    <ValueType>RadioButton</ValueType>
-                </Parameter>
-            </Parameter>
-            <Parameter>
                 <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
                 <Parameter>
-                    <Name>BtnSelectElementPoint</Name>
-                    <Text>Seleccionar punto</Text>
-                    <EventId>1015</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                    <Visible>IsElementCaptureMode == False</Visible>
-                </Parameter>
-                <Parameter>
-                    <Name>BtnAcceptElement</Name>
-                    <Text>Aceptar (Terminar selección)</Text>
-                    <EventId>1021</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                    <Visible>IsElementCaptureMode == True</Visible>
-                </Parameter>
-                <Parameter>
-                    <Name>IsElementCaptureMode</Name>
-                    <Text>IsElementCaptureMode</Text>
-                    <Value>False</Value>
-                    <ValueType>CheckBox</ValueType>
-                    <Visible>False</Visible>
+                    <Name>DefinedElementType</Name>
+                    <Text>Elemento</Text>
+                    <Value>T sortida</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>T sortida|Colze base|Clau de Pas|Taps</ValueList>
                 </Parameter>
             </Parameter>
             <Parameter>
-                <Name>ElementRotX</Name>
+                <Name>RowPuntosLibresTipo</Name>
+                <Text>Tipo de punto</Text>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>TipoPuntoLibre</Name>
+                    <Text>Tipo de punto</Text>
+                    <Value>Intermedio libre</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>
+if DefinedElementType == 'T sortida' or DefinedElementType == 'Clau de Pas':
+    return 'Intermedio ordenado|Intermedio libre'
+else:
+    return 'Inicio|Final'
+                    </ValueList>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RotX</Name>
                 <Text>Rot X (grados)</Text>
-                <Value>0</Value>
-                <MinValue>-360</MinValue>
-                <MaxValue>360</MaxValue>
-                <ValueType>Integer</ValueType>
+                <Value>0.0</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>-360.0</MinValue>
+                <MaxValue>360.0</MaxValue>
             </Parameter>
             <Parameter>
-                <Name>ElementRotY</Name>
+                <Name>RotY</Name>
                 <Text>Rot Y (grados)</Text>
-                <Value>0</Value>
-                <MinValue>-360</MinValue>
-                <MaxValue>360</MaxValue>
-                <ValueType>Integer</ValueType>
+                <Value>0.0</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>-360.0</MinValue>
+                <MaxValue>360.0</MaxValue>
             </Parameter>
             <Parameter>
-                <Name>ElementRotZ</Name>
+                <Name>RotZ</Name>
                 <Text>Rot Z (grados)</Text>
-                <Value>0</Value>
-                <MinValue>-360</MinValue>
-                <MaxValue>360</MaxValue>
-                <ValueType>Integer</ValueType>
+                <Value>0.0</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>-360.0</MinValue>
+                <MaxValue>360.0</MaxValue>
             </Parameter>
             <Parameter>
-                <Name>ElementActionRow</Name>
+                <Name>RowPuntosLibresBotones</Name>
                 <Text>Acción</Text>
                 <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
                 <Parameter>
-                    <Name>BtnAddElementPoint</Name>
+                    <Name>AnadirPuntoLibre</Name>
                     <Text>Añadir punto</Text>
-                    <EventId>1016</EventId>
+                    <EventId>1017</EventId>
                     <Value>0</Value>
                     <ValueType>Button</ValueType>
-                    <Visible>False</Visible>
                 </Parameter>
                 <Parameter>
-                    <Name>BtnFinalizarElementos</Name>
+                    <Name>FinalizarPuntosLibres</Name>
                     <Text>Finalizar</Text>
-                    <EventId>1003</EventId>
+                    <EventId>1018</EventId>
                     <Value>0</Value>
                     <ValueType>Button</ValueType>
                 </Parameter>
