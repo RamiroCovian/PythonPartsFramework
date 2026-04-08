@@ -498,10 +498,6 @@ def draw_free_point_preview(
                 doc,
                 fp.get("element_type", "t_sortida"),
             )
-        print(
-            f"{debug_prefix} Preview 3D punto libre: type={fp.get('element_type', 't_sortida')}, "
-            f"models={len(model_list)}"
-        )
         if model_list:
             mat = build_rotation_matrix(
                 pos,
@@ -511,9 +507,6 @@ def draw_free_point_preview(
             )
             draw_preview_models(doc, mat, model_list)
             if idx == fp_sel_idx:
-                print(
-                    f"{debug_prefix} Highlight punto libre: idx={idx}, type={fp.get('element_type', 't_sortida')}, models={len(model_list)}"
-                )
                 draw_highlight_preview(
                     doc,
                     mat,
@@ -555,9 +548,6 @@ def draw_free_point_preview(
                     build_ele,
                     doc,
                     element_type,
-                )
-                print(
-                    f"{debug_prefix} Preview 3D cursor: type={element_type}, models={len(model_list)}"
                 )
                 if model_list:
                     mat = build_rotation_matrix(

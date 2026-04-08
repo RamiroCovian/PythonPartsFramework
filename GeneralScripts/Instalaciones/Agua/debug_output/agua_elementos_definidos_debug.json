@@ -1,0 +1,151 @@
+{
+  "id": "elementos_definidos",
+  "nombre": "Elementos Definidos",
+  "nodos": [
+    {
+      "id": "U1-1",
+      "tipo": "union",
+      "coordenadas": {
+        "x": -7497.644721056302,
+        "y": -7800.936223076374,
+        "z": 0.0
+      },
+      "anteriores": [],
+      "siguientes": [
+        "U1-2"
+      ],
+      "anterior": null,
+      "path_id": "camino_1",
+      "path_name": "Camino 1 (defined_path_1)",
+      "path_key": "defined_path_1",
+      "path_idx": null,
+      "element_type": "t_sortida",
+      "source": "free_placed_point",
+      "order_index": 0,
+      "flag": "intermedio_libre",
+      "path_key_comun_con": null,
+      "es_punto_comun": false,
+      "common_node_id": null,
+      "common_path_keys": [],
+      "common_point_count": 0
+    },
+    {
+      "id": "U1-2",
+      "tipo": "union",
+      "coordenadas": {
+        "x": -7299.045769308101,
+        "y": -7859.875266821001,
+        "z": 0.0
+      },
+      "anteriores": [
+        "U1-1"
+      ],
+      "siguientes": [],
+      "anterior": "U1-1",
+      "path_id": "camino_1",
+      "path_name": "Camino 1 (defined_path_1)",
+      "path_key": "defined_path_1",
+      "path_idx": null,
+      "element_type": "t_sortida",
+      "source": "free_placed_point",
+      "order_index": 1,
+      "flag": "intermedio_libre",
+      "path_key_comun_con": null,
+      "es_punto_comun": false,
+      "common_node_id": null,
+      "common_path_keys": [],
+      "common_point_count": 0
+    }
+  ],
+  "caminos": [
+    {
+      "id": "camino_1",
+      "nombre": "Camino 1 (defined_path_1)",
+      "path_key": "defined_path_1",
+      "path_idx": null,
+      "nodos": [
+        {
+          "id": "U1-1",
+          "tipo": "union",
+          "coordenadas": {
+            "x": -7497.644721056302,
+            "y": -7800.936223076374,
+            "z": 0.0
+          },
+          "anteriores": [],
+          "siguientes": [
+            "U1-2"
+          ],
+          "anterior": null,
+          "path_id": "camino_1",
+          "path_name": "Camino 1 (defined_path_1)",
+          "path_key": "defined_path_1",
+          "path_idx": null,
+          "element_type": "t_sortida",
+          "source": "free_placed_point",
+          "order_index": 0,
+          "flag": "intermedio_libre",
+          "path_key_comun_con": null,
+          "es_punto_comun": false,
+          "common_node_id": null,
+          "common_path_keys": [],
+          "common_point_count": 0
+        },
+        {
+          "id": "U1-2",
+          "tipo": "union",
+          "coordenadas": {
+            "x": -7299.045769308101,
+            "y": -7859.875266821001,
+            "z": 0.0
+          },
+          "anteriores": [
+            "U1-1"
+          ],
+          "siguientes": [],
+          "anterior": "U1-1",
+          "path_id": "camino_1",
+          "path_name": "Camino 1 (defined_path_1)",
+          "path_key": "defined_path_1",
+          "path_idx": null,
+          "element_type": "t_sortida",
+          "source": "free_placed_point",
+          "order_index": 1,
+          "flag": "intermedio_libre",
+          "path_key_comun_con": null,
+          "es_punto_comun": false,
+          "common_node_id": null,
+          "common_path_keys": [],
+          "common_point_count": 0
+        }
+      ],
+      "segmentos": [
+        {
+          "id": 1,
+          "n1_id": "U1-1",
+          "n2_id": "U1-2"
+        }
+      ]
+    }
+  ],
+  "common_points_topology": {
+    "node_count": 0,
+    "edge_count": 0,
+    "nodes": [],
+    "edges": [],
+    "adjacency": {},
+    "points": [
+      {
+        "path_key": "defined_path_1",
+        "common_node_id": null,
+        "es_punto_comun": false
+      },
+      {
+        "path_key": "defined_path_1",
+        "common_node_id": null,
+        "es_punto_comun": false
+      }
+    ]
+  },
+  "common_junctions": []
+}

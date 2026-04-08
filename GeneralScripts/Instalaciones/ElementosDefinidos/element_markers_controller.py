@@ -23,6 +23,7 @@ from .interaction import (
     draw_selected_defined_element_preview,
     make_selection_common_properties,
 )
+from .handlers import _try_refresh_palette
 
 try:
     import NemAll_Python_Geometry as AllplanGeo
@@ -142,6 +143,7 @@ def prepare_element_marker_event(
 def apply_element_marker_rotation_to_palette(
     build_ele: Any,
     marker: dict,
+    script_object: Any = None,
 ) -> None:
     """
     Carga en la paleta los ángulos guardados dentro de un marker seleccionado.
@@ -158,6 +160,7 @@ def apply_element_marker_rotation_to_palette(
             ("ElementRotZ", "rot_z"),
         ),
     )
+    _try_refresh_palette(script_object)
 
 
 def update_element_marker_rotation_from_palette(
@@ -355,7 +358,11 @@ def handle_element_marker_mouse_message(
                     intr.element_marker_drag_start_position = AllplanGeo.Point3D(
                         raw_pnt.X, raw_pnt.Y, raw_pnt.Z
                     )
-                    apply_element_marker_rotation_to_palette(build_ele, markers[idx_hit])
+                    apply_element_marker_rotation_to_palette(
+                        build_ele,
+                        markers[idx_hit],
+                        script_object,
+                    )
                     save_element_marker_interaction_state(script_object, intr)
                     if callable(draw_preview_cb):
                         draw_preview_cb(raw_pnt)

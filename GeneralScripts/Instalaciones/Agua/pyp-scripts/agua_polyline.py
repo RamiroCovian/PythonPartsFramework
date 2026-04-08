@@ -209,6 +209,12 @@ def _ensure_elementos_definidos_state(script_object) -> None:
         getattr(script_object, "free_placed_points", None), list
     ):
         script_object.free_placed_points = []
+    script_object.defined_elements_optimizer_graph_output_dir = (
+        Path(__file__).resolve().parents[1] / "debug_output"
+    )
+    script_object.defined_elements_optimizer_graph_file_name = (
+        "agua_elementos_definidos_debug.json"
+    )
 
 
 def _set_palette_flag(build_ele, name: str, value) -> None:
@@ -296,13 +302,9 @@ def _get_element_model_list_agua(script_object, build_ele, doc, element_type: st
     element_type = (element_type or "").strip().lower()
     elem = _agua_defined_elements.get(element_type)
     if elem is None:
-        print(f"[AGUA] Preview lookup: element_type={element_type!r} not registered")
         return []
     try:
         result = elem.generate_preview(build_ele, doc) or []
-        print(
-            f"[AGUA] Preview lookup: element_type={element_type}, doc_is_none={doc is None}, models={len(result)}"
-        )
         return result
     except Exception as ex:
         print(f"[AGUA] Error obteniendo preview de {element_type}: {ex}")
@@ -406,7 +408,7 @@ def _write_provisional_puntos_json(script_object) -> str | None:
         return None
 
 
-def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
+def _patch_interactor_for_elementos_auxiliares(script_object, intr) -> None:
     """Añade soporte de ElementosDefinidos y ElementosNoDefinidos al interactor."""
     if intr is None or getattr(intr, "_agua_elementos_extra_patched", False):
         return
@@ -433,7 +435,7 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
     original_deserialize_state_from_json = intr._deserialize_state_from_json
     original_on_control_event = intr.on_control_event
 
-    def _process_mouse_msg_with_elementos_no_definidos(mouse_msg, pnt, msg_info):
+    def _process_mouse_msg_with_elementos_auxiliares(mouse_msg, pnt, msg_info):
         is_move = bool(intr.coord_input and intr.coord_input.IsMouseMove(mouse_msg))
         is_left_click = getattr(mouse_msg, "Button", 1) == 1
         build_ele = getattr(script_object, "build_ele", None)
@@ -563,18 +565,12 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
 
         return original_process_mouse_msg(mouse_msg, pnt, msg_info)
 
-    def _draw_preview_with_elementos_no_definidos(current_pnt):
+    def _draw_preview_with_elementos_auxiliares(current_pnt):
         result = original_draw_preview(current_pnt)
         try:
             overlay = []
             build_ele = getattr(script_object, "build_ele", None)
             doc = intr.coord_input.GetInputViewDocument() if intr.coord_input else None
-            print(
-                f"[AGUA] _draw_preview_with_elementos_no_definidos: "
-                f"doc_is_none={doc is None}, current_pnt={'yes' if current_pnt is not None else 'no'}, "
-                f"next_click_adds_free_point={getattr(intr, 'next_click_adds_free_point', False)}, "
-                f"free_points={len(getattr(script_object, 'free_placed_points', []) or [])}"
-            )
             ed_draw_defined_elements_preview(
                 script_object,
                 intr,
@@ -637,10 +633,10 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
                     None,
                 )
         except Exception as ex:
-            print(f"[AGUA] Error dibujando preview de puntos no definidos: {ex}")
+            print(f"[AGUA] Error dibujando preview de elementos auxiliares: {ex}")
         return result
 
-    def _deserialize_state_with_elementos_no_definidos(json_str: str):
+    def _deserialize_state_with_elementos_auxiliares(json_str: str):
         result = original_deserialize_state_from_json(json_str)
         if not result:
             return result
@@ -662,7 +658,7 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
             )
             script_object.common_junctions = state.get("common_junctions") or []
         except Exception as ex:
-            print(f"[AGUA] Error restaurando puntos no definidos: {ex}")
+            print(f"[AGUA] Error restaurando estado de elementos auxiliares: {ex}")
         return result
 
     def _on_control_event_with_defined_elements(event_id: int):
@@ -701,9 +697,9 @@ def _patch_interactor_for_elementos_no_definidos(script_object, intr) -> None:
 
         return original_on_control_event(event_id)
 
-    intr.process_mouse_msg = _process_mouse_msg_with_elementos_no_definidos
-    intr._draw_preview = _draw_preview_with_elementos_no_definidos
-    intr._deserialize_state_from_json = _deserialize_state_with_elementos_no_definidos
+    intr.process_mouse_msg = _process_mouse_msg_with_elementos_auxiliares
+    intr._draw_preview = _draw_preview_with_elementos_auxiliares
+    intr._deserialize_state_from_json = _deserialize_state_with_elementos_auxiliares
     intr.on_control_event = _on_control_event_with_defined_elements
 
 
@@ -1019,6 +1015,70 @@ def create_script_object(build_ele, script_object_data):
     script_object = PBL.script_object.initialize_script_object(
         build_ele, script_object_data, CONFIG
     )
+    # Reattach palette utilities exposed by Allplan so auxiliary modules can
+    # refresh the visible palette after synchronizing build_ele values.
+    def _find_palette_service_candidate(*objects):
+        for obj in objects:
+            if obj is None:
+                continue
+            try:
+                if callable(getattr(obj, "update_palette", None)):
+                    return obj
+            except Exception:
+                pass
+            try:
+                for attr_name in dir(obj):
+                    if attr_name.startswith("_"):
+                        continue
+                    try:
+                        candidate = getattr(obj, attr_name, None)
+                    except Exception:
+                        continue
+                    if callable(getattr(candidate, "update_palette", None)):
+                        print(
+                            f"[AGUA] palette_service detectado en atributo '{attr_name}'"
+                        )
+                        return candidate
+            except Exception:
+                pass
+        return None
+
+    try:
+        if not getattr(script_object, "palette_service", None):
+            script_object.palette_service = _find_palette_service_candidate(
+                getattr(script_object_data, "palette_service", None),
+                script_object_data,
+                script_object,
+            )
+        if not getattr(script_object, "palette_service", None):
+            try:
+                candidate_attrs = []
+                for attr_name in dir(script_object_data):
+                    if attr_name.startswith("_"):
+                        continue
+                    try:
+                        value = getattr(script_object_data, attr_name, None)
+                    except Exception:
+                        continue
+                    if callable(value):
+                        continue
+                    candidate_attrs.append(attr_name)
+                print(
+                    "[AGUA] No se encontró palette_service. "
+                    "Atributos públicos de script_object_data: "
+                    + ", ".join(candidate_attrs[:80])
+                )
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        if not getattr(script_object, "control_props_util", None):
+            script_object.control_props_util = getattr(
+                script_object_data, "control_props_util", None
+            )
+    except Exception:
+        pass
     _ensure_elementos_definidos_state(script_object)
     _ensure_elementos_no_definidos_state(script_object)
 
@@ -1026,7 +1086,7 @@ def create_script_object(build_ele, script_object_data):
 
     def _start_input_with_elementos_no_definidos():
         intr = original_start_input()
-        _patch_interactor_for_elementos_no_definidos(script_object, intr)
+        _patch_interactor_for_elementos_auxiliares(script_object, intr)
         return intr
 
     script_object.start_input = _start_input_with_elementos_no_definidos
@@ -1087,7 +1147,7 @@ def create_script_object(build_ele, script_object_data):
                 intr = getattr(script_object, "script_object_interactor", None)
                 if intr is None:
                     intr = script_object.start_input()
-                _patch_interactor_for_elementos_no_definidos(script_object, intr)
+                _patch_interactor_for_elementos_auxiliares(script_object, intr)
                 if event_id in (
                     AGUA_EVENT_ADD_PUNTO_LIBRE,
                     AGUA_EVENT_FINALIZAR_PUNTOS_LIBRES,
@@ -1144,7 +1204,7 @@ def create_script_object(build_ele, script_object_data):
                 intr = getattr(script_object, "script_object_interactor", None)
                 if intr is None:
                     intr = script_object.start_input()
-                _patch_interactor_for_elementos_no_definidos(script_object, intr)
+                _patch_interactor_for_elementos_auxiliares(script_object, intr)
 
                 if event_id == AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO:
                     return bool(end_on_anadir_punto_no_definido(script_object, intr))

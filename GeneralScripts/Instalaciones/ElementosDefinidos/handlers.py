@@ -6,6 +6,9 @@ interactor y/o script_object en lugar de duplicar la lógica.
 """
 from __future__ import annotations
 
+import json
+from collections import defaultdict
+from pathlib import Path
 from typing import Any, Optional, List, Tuple
 
 from . import catalogo
@@ -13,6 +16,11 @@ from . import palette
 from .common_points import (
     build_common_junctions,
     build_common_points_topology,
+    detect_common_point_groups,
+)
+from .optimizer_graph import (
+    build_nodos_export_data,
+    build_optimizer_graph_json,
 )
 
 try:
@@ -83,6 +91,111 @@ def _dist_sq_points(a: Any, b: Any) -> float:
         return float("inf")
     dx, dy, dz = ax - bx, ay - by, az - bz
     return dx * dx + dy * dy + dz * dz
+
+
+def _dist_sq_points_xy(a: Any, b: Any) -> float:
+    """Calcula la distancia al cuadrado en planta entre dos puntos 3D."""
+    try:
+        ax, ay = getattr(a, "X", 0.0), getattr(a, "Y", 0.0)
+        bx, by = getattr(b, "X", 0.0), getattr(b, "Y", 0.0)
+    except Exception:
+        return float("inf")
+    dx, dy = ax - bx, ay - by
+    return dx * dx + dy * dy
+
+
+def _next_common_node_id(script_object: Any) -> str:
+    """Genera un id incremental para nodos comunes de elementos definidos."""
+    try:
+        current = int(getattr(script_object, "_defined_elements_common_point_seq", 0))
+    except Exception:
+        current = 0
+    current += 1
+    setattr(script_object, "_defined_elements_common_point_seq", current)
+    return f"CP-{current}"
+
+
+def _ensure_anchor_common_node_id(script_object: Any, anchor: dict) -> str:
+    """Asegura que el punto ancla tenga `common_node_id` y lo devuelve."""
+    existing = anchor.get("common_node_id")
+    if existing:
+        return str(existing)
+    node_id = _next_common_node_id(script_object)
+    anchor["common_node_id"] = node_id
+    anchor["es_punto_comun"] = True
+    return node_id
+
+
+def _find_common_anchor(
+    puntos: List[dict],
+    raw_pnt: Any,
+    current_path_key: str,
+    tolerance_mm: float,
+) -> tuple[Optional[dict], Optional[float], Optional[str]]:
+    """
+    Busca un punto libre existente de otro camino dentro de tolerancia XY.
+
+    Devuelve:
+    - punto ancla o None
+    - distancia XY al punto más cercano de otro camino
+    - path_key del punto más cercano
+    """
+    if not puntos or raw_pnt is None:
+        return None, None, None
+    tol_sq = max(float(tolerance_mm), 0.0) ** 2
+    best = None
+    best_d2 = tol_sq + 1.0
+    nearest_d2 = None
+    nearest_path = None
+    for point in puntos:
+        pos = point.get("pos")
+        if pos is None or not hasattr(pos, "X"):
+            continue
+        other_path = str(point.get("path_key") or "default")
+        if other_path == str(current_path_key):
+            continue
+        d2 = _dist_sq_points_xy(raw_pnt, pos)
+        if nearest_d2 is None or d2 < nearest_d2:
+            nearest_d2 = d2
+            nearest_path = other_path
+        if d2 <= tol_sq and d2 < best_d2:
+            best_d2 = d2
+            best = point
+    nearest_mm = (nearest_d2 ** 0.5) if nearest_d2 is not None else None
+    return best, nearest_mm, nearest_path
+
+
+def _next_free_path_key(script_object: Any) -> str:
+    """Genera el siguiente `path_key` lógico para free_placed_points."""
+    try:
+        current = int(getattr(script_object, "_defined_elements_free_path_seq", 0))
+    except Exception:
+        current = 0
+    current += 1
+    setattr(script_object, "_defined_elements_free_path_seq", current)
+    return f"defined_path_{current}"
+
+
+def _resolve_free_point_path_key(script_object: Any, flag: str) -> str:
+    """
+    Resuelve el camino lógico del nuevo punto libre.
+
+    - `inicio` abre un camino nuevo
+    - el resto continúa el camino actual
+    - si aún no hay camino activo, se crea uno
+    """
+    current = getattr(script_object, "_defined_elements_current_path_key", None)
+    normalized_flag = str(flag or "").strip().lower()
+    if normalized_flag == "inicio" or not current:
+        current = _next_free_path_key(script_object)
+        setattr(script_object, "_defined_elements_current_path_key", current)
+    return str(current)
+
+
+def _close_free_point_path_if_needed(script_object: Any, flag: str) -> None:
+    """Cierra el camino activo cuando el punto agregado es un final lógico."""
+    if str(flag or "").strip().lower() == "final":
+        setattr(script_object, "_defined_elements_current_path_key", None)
 
 
 def _detect_common_points_from_paths(
@@ -156,6 +269,119 @@ def detect_common_user_points_between_paths(
     return _detect_common_points_from_paths(paths, tolerance_mm)
 
 
+def _build_common_topology_from_free_points(
+    free_placed_points: List[dict],
+    tolerance_mm: float,
+) -> dict:
+    """Construye topología de puntos comunes a partir de `free_placed_points`."""
+    nodes = []
+    node_ids_seen = set()
+    grouped_by_id = defaultdict(list)
+    for point in free_placed_points or []:
+        node_id = point.get("common_node_id")
+        if node_id:
+            grouped_by_id[str(node_id)].append(point)
+
+    explicit_nodes = []
+    for node_id, items in grouped_by_id.items():
+        path_keys = sorted({str(it.get("path_key") or "default") for it in items})
+        if len(path_keys) < 2:
+            continue
+        xs = [float(getattr(it.get("pos"), "X", 0.0)) for it in items if it.get("pos")]
+        ys = [float(getattr(it.get("pos"), "Y", 0.0)) for it in items if it.get("pos")]
+        zs = [float(getattr(it.get("pos"), "Z", 0.0)) for it in items if it.get("pos")]
+        center = (
+            (sum(xs) / len(xs)) if xs else 0.0,
+            (sum(ys) / len(ys)) if ys else 0.0,
+            (sum(zs) / len(zs)) if zs else 0.0,
+        )
+        node = {
+            "id": node_id,
+            "path_keys": path_keys,
+            "point_count": len(items),
+            "center": center,
+        }
+        nodes.append(node)
+        explicit_nodes.append(node)
+        node_ids_seen.add(node_id)
+
+    def _is_duplicate_of_explicit(group_paths: List[str], group_center: tuple) -> bool:
+        tol_sq = max(float(tolerance_mm), 0.0) ** 2
+        for explicit in explicit_nodes:
+            if sorted(explicit.get("path_keys", [])) != sorted(group_paths):
+                continue
+            center = explicit.get("center", (0.0, 0.0, 0.0))
+            dx = float(group_center[0]) - float(center[0])
+            dy = float(group_center[1]) - float(center[1])
+            dz = float(group_center[2]) - float(center[2])
+            if (dx * dx + dy * dy + dz * dz) <= tol_sq:
+                return True
+        return False
+
+    detect_input = [
+        {
+            "pos": point.get("pos"),
+            "path_key": str(point.get("path_key") or "default"),
+        }
+        for point in (free_placed_points or [])
+    ]
+    groups = detect_common_point_groups(
+        detect_input,
+        tolerance_mm=tolerance_mm,
+        min_distinct_paths=2,
+    )
+    for idx, group in enumerate(groups, start=1):
+        group_paths = list(group.get("path_keys", []))
+        group_center = tuple(group.get("center", (0.0, 0.0, 0.0)))
+        if _is_duplicate_of_explicit(group_paths, group_center):
+            continue
+        node_id = f"CP-AUTO-{idx}"
+        if node_id in node_ids_seen:
+            continue
+        node_ids_seen.add(node_id)
+        nodes.append(
+            {
+                "id": node_id,
+                "path_keys": group_paths,
+                "point_count": len(group.get("indices", [])),
+                "center": group_center,
+            }
+        )
+
+    edge_set = set()
+    edges = []
+    adjacency = defaultdict(set)
+    for node in nodes:
+        path_keys = list(node.get("path_keys", []))
+        for i in range(len(path_keys)):
+            for j in range(i + 1, len(path_keys)):
+                a = str(path_keys[i])
+                b = str(path_keys[j])
+                key = tuple(sorted((a, b)) + [str(node.get("id"))])
+                if key in edge_set:
+                    continue
+                edge_set.add(key)
+                edges.append({"a": a, "b": b, "via_node": str(node.get("id"))})
+                adjacency[a].add(b)
+                adjacency[b].add(a)
+
+    return {
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "nodes": nodes,
+        "edges": edges,
+        "adjacency": {k: sorted(list(v)) for k, v in adjacency.items()},
+        "points": [
+            {
+                "path_key": str(point.get("path_key") or "default"),
+                "common_node_id": point.get("common_node_id"),
+                "es_punto_comun": bool(point.get("es_punto_comun", False)),
+            }
+            for point in (free_placed_points or [])
+        ],
+    }
+
+
 def build_common_user_points_data(
     intr: Any,
     tolerance_mm: float = 1.0,
@@ -166,21 +392,31 @@ def build_common_user_points_data(
     """
     paths = getattr(intr, "saved_paths", None) or []
     script_object = getattr(intr, "script_object", None)
+    free_placed_points = []
+    if script_object is not None:
+        free_placed_points = getattr(script_object, "free_placed_points", None) or []
     element_markers = getattr(intr, "element_markers", None)
     if element_markers is None and script_object is not None:
         element_markers = getattr(script_object, "element_markers", None)
     element_markers = element_markers or []
 
-    topology = build_common_points_topology(
-        saved_paths=paths,
-        tolerance_mm=tolerance_mm,
-    )
-    junctions = build_common_junctions(
-        saved_paths=paths,
-        topology=topology,
-        element_markers=element_markers,
-        tolerance_mm=tolerance_mm,
-    )
+    if free_placed_points:
+        topology = _build_common_topology_from_free_points(
+            free_placed_points,
+            tolerance_mm=tolerance_mm,
+        )
+        junctions = []
+    else:
+        topology = build_common_points_topology(
+            saved_paths=paths,
+            tolerance_mm=tolerance_mm,
+        )
+        junctions = build_common_junctions(
+            saved_paths=paths,
+            topology=topology,
+            element_markers=element_markers,
+            tolerance_mm=tolerance_mm,
+        )
 
     if script_object is not None:
         script_object.common_points_topology = topology
@@ -193,6 +429,108 @@ def build_common_user_points_data(
         "topology": topology,
         "junctions": junctions,
     }
+
+
+def build_defined_elements_export_data(
+    intr: Any,
+    tolerance_mm: float = 1.0,
+) -> dict:
+    """
+    Construye y guarda el export completo de ElementosDefinidos.
+
+    El resultado incluye:
+    - `nodos`: lista plana enriquecida
+    - `caminos`: agrupación por camino con segmentos
+    - `common_points_topology`
+    - `common_junctions`
+    """
+    script_object = getattr(intr, "script_object", None)
+    paths = getattr(script_object, "saved_paths", None) or getattr(intr, "saved_paths", None) or []
+    element_markers = getattr(intr, "element_markers", None)
+    if element_markers is None and script_object is not None:
+        element_markers = getattr(script_object, "element_markers", None)
+    element_markers = element_markers or []
+
+    free_placed_points = []
+    if script_object is not None:
+        free_placed_points = getattr(script_object, "free_placed_points", None) or []
+
+    common_data = build_common_user_points_data(intr, tolerance_mm=tolerance_mm)
+    topology = common_data.get("topology", {}) or {}
+    junctions = common_data.get("junctions", []) or []
+
+    nodos = build_nodos_export_data(
+        element_markers=element_markers,
+        saved_paths=paths,
+        free_placed_points=free_placed_points,
+        common_points_topology=topology,
+        common_junctions=junctions,
+        tolerance_mm=tolerance_mm,
+    )
+    optimizer_graph = build_optimizer_graph_json(
+        element_markers=element_markers,
+        saved_paths=paths,
+        free_placed_points=free_placed_points,
+        common_points_topology=topology,
+        common_junctions=junctions,
+        tolerance_mm=tolerance_mm,
+    )
+
+    if script_object is not None:
+        script_object.nodos_export_data = nodos
+        script_object.optimizer_graph_data = optimizer_graph
+        output_path = _write_optimizer_graph_json(script_object, optimizer_graph)
+        if output_path:
+            script_object.optimizer_graph_output_path = output_path
+            print(f"[ED][OPTIMIZER GRAPH] JSON escrito en: {output_path}")
+
+    intr.nodos_export_data = nodos
+    intr.optimizer_graph_data = optimizer_graph
+
+    return {
+        "nodos": nodos,
+        "optimizer_graph": optimizer_graph,
+        "topology": topology,
+        "junctions": junctions,
+    }
+
+
+def _write_optimizer_graph_json(script_object: Any, optimizer_graph: dict) -> Optional[str]:
+    """
+    Escribe el JSON de debug del export de ElementosDefinidos.
+
+    Se guarda en `ElementosDefinidos/optimizer_output` para poder comparar la
+    salida del módulo con otros exports del proyecto.
+    """
+    try:
+        custom_output_dir = getattr(
+            script_object,
+            "defined_elements_optimizer_graph_output_dir",
+            None,
+        )
+        if custom_output_dir:
+            output_dir = Path(custom_output_dir)
+        else:
+            base_dir = Path(__file__).resolve().parent
+            output_dir = base_dir / "optimizer_output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        file_name = getattr(
+            script_object,
+            "defined_elements_optimizer_graph_file_name",
+            None,
+        )
+        if not file_name:
+            file_name = "optimizer_graph_defined_elements.json"
+
+        output_path = output_dir / str(file_name)
+        with output_path.open("w", encoding="utf-8") as fh:
+            json.dump(optimizer_graph, fh, ensure_ascii=False, indent=2)
+
+        return str(output_path)
+    except Exception as ex:
+        print(f"[ED][OPTIMIZER GRAPH] Error escribiendo JSON: {ex}")
+        return None
 
 
 def _try_print_prompt(intr: Any) -> None:
@@ -223,6 +561,117 @@ def _try_save_state_script(script_object: Any) -> None:
             script_object._save_state_to_build_ele()
     except Exception:
         pass
+
+
+def _try_refresh_palette(script_object: Any) -> None:
+    """Intenta forzar la actualización visual de la paleta tras cambiar `build_ele`."""
+    try:
+        if script_object is None:
+            return
+        interactor = getattr(script_object, "script_object_interactor", None)
+        if interactor is not None and hasattr(interactor, "_pending_palette_refresh"):
+            interactor._pending_palette_refresh = True
+        if (
+            hasattr(script_object, "palette_service")
+            and getattr(script_object, "palette_service", None)
+            and hasattr(script_object, "build_ele")
+        ):
+            print("[ED] Refrescando paleta con palette_service.update_palette")
+            script_object.palette_service.update_palette(
+                script_object.build_ele,
+                show_palette=True,
+            )
+            return
+
+        if getattr(script_object, "_ed_palette_sync_in_progress", False):
+            return
+
+        build_ele = getattr(script_object, "build_ele", None)
+        modify = getattr(script_object, "modify_element_property", None)
+        ctrl_prop_util = getattr(
+            script_object,
+            "control_props_util",
+            getattr(script_object, "ctrl_prop_util", None),
+        )
+        if build_ele is None or not callable(modify):
+            return
+
+        script_object._ed_palette_sync_in_progress = True
+        try:
+            print("[ED] Refrescando paleta con fallback modify_element_property")
+            values_to_sync = []
+            for name in ("RotX", "RotY", "RotZ", "ElementRotX", "ElementRotY", "ElementRotZ"):
+                param = getattr(build_ele, name, None)
+                if param is None:
+                    continue
+                value = getattr(param, "value", param)
+                values_to_sync.append((name, value))
+                try:
+                    modify(name, value)
+                except Exception:
+                    pass
+
+            # Fallback extra para entornos donde la paleta no repinta al tocar
+            # únicamente build_ele/modify_element_property.
+            if ctrl_prop_util is not None:
+                pushed = False
+                for method_name in (
+                    "set_value",
+                    "set_property_value",
+                    "change_value",
+                    "update_value",
+                ):
+                    method = getattr(ctrl_prop_util, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        for name, value in values_to_sync:
+                            method(name, value)
+                        print(
+                            f"[ED] Refrescando paleta con control_props_util.{method_name}"
+                        )
+                        pushed = True
+                        break
+                    except Exception:
+                        continue
+
+                if pushed:
+                    for refresh_name in (
+                        "update_palette",
+                        "refresh_palette",
+                        "update",
+                        "refresh",
+                    ):
+                        refresh_method = getattr(ctrl_prop_util, refresh_name, None)
+                        if not callable(refresh_method):
+                            continue
+                        try:
+                            refresh_method()
+                            print(
+                                f"[ED] Ejecutando control_props_util.{refresh_name}()"
+                            )
+                            break
+                        except Exception:
+                            continue
+                elif not getattr(script_object, "_ed_logged_ctrl_prop_methods", False):
+                    try:
+                        method_names = sorted(
+                            name
+                            for name in dir(ctrl_prop_util)
+                            if callable(getattr(ctrl_prop_util, name, None))
+                            and not name.startswith("_")
+                        )
+                        print(
+                            "[ED] Métodos disponibles en control_props_util: "
+                            + ", ".join(method_names[:40])
+                        )
+                        script_object._ed_logged_ctrl_prop_methods = True
+                    except Exception:
+                        pass
+        finally:
+            script_object._ed_palette_sync_in_progress = False
+    except Exception as ex:
+        print(f"[ED] No se pudo actualizar paleta: {ex}")
 
 
 def _try_draw_preview_after_add(intr: Any, pos: Any) -> None:
@@ -339,6 +788,10 @@ def add_defined_element_marker(intr: Any, instalacion: str = "AGUA") -> bool:
     element_markers = _ensure_element_markers_list(intr)
     element_markers.append(marker)
     intr.element_selected_point = None
+    try:
+        build_defined_elements_export_data(intr, tolerance_mm=5.0)
+    except Exception as ex:
+        print(f"[ED][EXPORT] Error actualizando export tras marker: {ex}")
     _try_save_state(intr)
     _try_draw_preview_after_add(intr, pos)
     return True
@@ -375,6 +828,10 @@ def add_intermediate_element_at_point(
     }
     element_markers = _ensure_element_markers_list(intr)
     element_markers.append(marker)
+    try:
+        build_defined_elements_export_data(intr, tolerance_mm=5.0)
+    except Exception as ex:
+        print(f"[ED][EXPORT] Error actualizando export tras intermedio: {ex}")
 
 
 def on_anadir_punto_libre(
@@ -395,6 +852,8 @@ def on_anadir_punto_libre(
         script_object.free_placed_points = (
             getattr(script_object, "free_placed_points", []) or []
         )
+    if not script_object.free_placed_points:
+        setattr(script_object, "_defined_elements_current_path_key", None)
     _try_print_prompt(intr)
     _try_save_state_script(script_object)
     return True
@@ -410,8 +869,13 @@ def on_finalizar_puntos_libres(
         intr.free_point_dragging = False
         intr.free_point_drag_index = None
         intr.free_point_selected_index = None
+        try:
+            build_defined_elements_export_data(intr, tolerance_mm=5.0)
+        except Exception as ex:
+            print(f"[ED][EXPORT] Error generando export previo a crear puntos libres: {ex}")
     if callable(create_callback):
         create_callback(intr.coord_input if intr else None)
+    setattr(script_object, "_defined_elements_current_path_key", None)
     _try_save_state_script(script_object)
     if intr and getattr(intr, "_draw_preview", None):
         try:
@@ -459,10 +923,51 @@ def handle_click_add_free_point(
         script_object.free_placed_points = []
         free_list = script_object.free_placed_points
     order = len(free_list)
-    if AllplanGeo is not None:
-        pos = AllplanGeo.Point3D(raw_pnt.X, raw_pnt.Y, raw_pnt.Z)
+    path_key = _resolve_free_point_path_key(script_object, flag)
+
+    detection_enabled = bool(
+        getattr(script_object, "defined_elements_common_points_enabled", True)
+    )
+    common_tol_mm = float(
+        getattr(script_object, "defined_elements_common_points_tolerance_mm", 5.0)
+        or 5.0
+    )
+    anchor = None
+    nearest_mm = None
+    nearest_path = None
+    common_node_id = None
+    if detection_enabled:
+        anchor, nearest_mm, nearest_path = _find_common_anchor(
+            puntos=free_list,
+            raw_pnt=raw_pnt,
+            current_path_key=path_key,
+            tolerance_mm=common_tol_mm,
+        )
+
+    if anchor is not None:
+        anchor_pos = anchor.get("pos")
+        common_node_id = _ensure_anchor_common_node_id(script_object, anchor)
+        if AllplanGeo is not None and anchor_pos is not None:
+            pos = AllplanGeo.Point3D(anchor_pos.X, anchor_pos.Y, anchor_pos.Z)
+        else:
+            pos = anchor_pos
+        print(
+            "[ED][PUNTOS COMUNES] Snap aplicado: "
+            f"nuevo_path={path_key} -> anclado_con={anchor.get('path_key', 'unknown')}, "
+            f"node_id={common_node_id}"
+        )
     else:
-        pos = raw_pnt
+        if AllplanGeo is not None:
+            pos = AllplanGeo.Point3D(raw_pnt.X, raw_pnt.Y, raw_pnt.Z)
+        else:
+            pos = raw_pnt
+        if detection_enabled:
+            print(
+                "[ED][PUNTOS COMUNES] Sin snap: "
+                f"path={path_key}, tolerancia={common_tol_mm}mm, puntos_previos={len(free_list)}, "
+                f"mas_cercano={nearest_mm if nearest_mm is not None else 'n/a'}mm"
+                f"{', path=' + str(nearest_path) if nearest_path else ''}"
+            )
 
     # Rotación inicial del punto libre según la paleta (RotX, RotY, RotZ)
     rot_x = rot_y = rot_z = 0.0
@@ -492,17 +997,28 @@ def handle_click_add_free_point(
             "flag": flag,
             "element_type": element_type,
             "order": order,
+            "path_key": path_key,
+            "es_punto_comun": anchor is not None,
+            "common_node_id": common_node_id if anchor is not None else None,
+            "path_key_comun_con": (
+                str(anchor.get("path_key")) if anchor is not None else None
+            ),
             "rot_x": rot_x,
             "rot_y": rot_y,
             "rot_z": rot_z,
         }
     )
+    _close_free_point_path_if_needed(script_object, flag)
     _try_save_state_script(script_object)
     from .editing import get_index_to_select_after_add
 
     idx = get_index_to_select_after_add(free_list)
     if idx >= 0:
         intr.free_point_selected_index = idx
+    try:
+        build_defined_elements_export_data(intr, tolerance_mm=5.0)
+    except Exception as ex:
+        print(f"[ED][EXPORT] Error actualizando export tras punto libre: {ex}")
     return True
 
 
@@ -513,20 +1029,12 @@ def apply_free_point_rotation_to_palette(script_object: Any, index: int) -> None
     Pensado para ser llamado al seleccionar un punto libre (p. ej. en un interactor).
     """
     if script_object is None or index is None or index < 0:
-        print(
-            "[ED] apply_free_point_rotation_to_palette: script_object/index no válidos"
-        )
         return
     free_list = getattr(script_object, "free_placed_points", None) or []
     if index >= len(free_list):
-        print(
-            f"[ED] apply_free_point_rotation_to_palette: index fuera de rango "
-            f"(index={index}, len={len(free_list)})"
-        )
         return
     build_ele = getattr(script_object, "build_ele", None)
     if build_ele is None:
-        print("[ED] apply_free_point_rotation_to_palette: build_ele es None")
         return
     fp = free_list[index]
 
@@ -534,19 +1042,10 @@ def apply_free_point_rotation_to_palette(script_object: Any, index: int) -> None
         try:
             param = getattr(build_ele, name, None)
             if param is None or not hasattr(param, "value"):
-                print(
-                    f"[ED] apply_free_point_rotation_to_palette: parámetro {name} "
-                    f"no existe o no tiene .value"
-                )
                 return
-            old = getattr(param, "value", None)
             param.value = float(value)
-            print(
-                f"[ED] apply_free_point_rotation_to_palette: {name} "
-                f"{old!r} -> {param.value!r}"
-            )
         except Exception:
-            print(f"[ED] apply_free_point_rotation_to_palette: error seteando {name}")
+            pass
 
     rot_x = fp.get("rot_x", 0.0)
     rot_y = fp.get("rot_y", 0.0)
@@ -554,6 +1053,7 @@ def apply_free_point_rotation_to_palette(script_object: Any, index: int) -> None
     _set_angle_in_palette("RotX", rot_x)
     _set_angle_in_palette("RotY", rot_y)
     _set_angle_in_palette("RotZ", rot_z)
+    _try_refresh_palette(script_object)
 
 
 def update_free_point_rotation_from_palette(script_object: Any, index: int) -> None:
@@ -588,10 +1088,6 @@ def update_free_point_rotation_from_palette(script_object: Any, index: int) -> N
     free_list[index] = fp
     script_object.free_placed_points = free_list
     _try_save_state_script(script_object)
-    print(
-        f"[ED] update_free_point_rotation_from_palette: idx={index} "
-        f"RotX={fp['rot_x']:.3f} RotY={fp['rot_y']:.3f} RotZ={fp['rot_z']:.3f}"
-    )
 
 
 def create_free_point_rotation_label(

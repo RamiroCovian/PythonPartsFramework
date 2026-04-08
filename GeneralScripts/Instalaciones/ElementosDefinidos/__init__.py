@@ -79,6 +79,7 @@ from .handlers import (
     add_macro_library_marker,
     detect_common_user_points_between_paths,
     build_common_user_points_data,
+    build_defined_elements_export_data,
 )
 from .creation import (
     create_elements_from_free_placed_points,
@@ -192,6 +193,7 @@ __all__ = [
     "iterate_element_markers",
     "detect_common_user_points_between_paths",
     "build_common_user_points_data",
+    "build_defined_elements_export_data",
     "detect_common_point_groups",
     "build_common_points_topology",
     "build_common_junctions",

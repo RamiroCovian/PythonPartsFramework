@@ -5,123 +5,13 @@
       "id": "A1",
       "tipo": "inicio",
       "coordenadas": {
-        "X": -10201.518897888956,
-        "Y": -93718.55426670931,
+        "X": -7243.309934462639,
+        "Y": -7546.601436482711,
         "Z": 0.0
       },
       "anteriores": [],
-      "siguientes": [
-        "U1-1"
-      ],
-      "orden": 0,
-      "tipo_camino": 0,
-      "color_id": 1,
-      "path_key": "modo:0|color:1",
-      "es_punto_comun": false,
-      "common_node_id": null,
-      "path_key_comun_con": null
-    },
-    {
-      "id": "U1-1",
-      "tipo": "intermedio_libre",
-      "coordenadas": {
-        "X": -10119.817603672094,
-        "Y": -93700.7364312684,
-        "Z": 0.0
-      },
-      "anteriores": [
-        "A1"
-      ],
-      "siguientes": [
-        "C1-1"
-      ],
-      "orden": 1,
-      "tipo_camino": 0,
-      "color_id": 1,
-      "path_key": "modo:0|color:1",
-      "es_punto_comun": false,
-      "common_node_id": null,
-      "path_key_comun_con": null
-    },
-    {
-      "id": "C1-1",
-      "tipo": "intermedio_ordenado",
-      "coordenadas": {
-        "X": -10075.490305745923,
-        "Y": -93755.92826300001,
-        "Z": 0.0
-      },
-      "anteriores": [
-        "U1-1"
-      ],
-      "siguientes": [
-        "U1-2"
-      ],
-      "orden": 2,
-      "tipo_camino": 0,
-      "color_id": 1,
-      "path_key": "modo:0|color:1",
-      "es_punto_comun": false,
-      "common_node_id": null,
-      "path_key_comun_con": null
-    },
-    {
-      "id": "U1-2",
-      "tipo": "bifurcación",
-      "coordenadas": {
-        "X": -10002.046057221189,
-        "Y": -93689.87189746296,
-        "Z": 0.0
-      },
-      "anteriores": [
-        "C1-1"
-      ],
-      "siguientes": [
-        "B1"
-      ],
-      "orden": 3,
-      "tipo_camino": 0,
-      "color_id": 1,
-      "path_key": "modo:0|color:1",
-      "es_punto_comun": false,
-      "common_node_id": null,
-      "path_key_comun_con": null
-    },
-    {
-      "id": "B1",
-      "tipo": "final",
-      "coordenadas": {
-        "X": -9912.95688001663,
-        "Y": -93753.3207748867,
-        "Z": 0.0
-      },
-      "anteriores": [
-        "U1-2"
-      ],
-      "siguientes": [
-        "B2"
-      ],
-      "orden": 4,
-      "tipo_camino": 0,
-      "color_id": 1,
-      "path_key": "modo:0|color:1",
-      "es_punto_comun": false,
-      "common_node_id": null,
-      "path_key_comun_con": null
-    },
-    {
-      "id": "B2",
-      "tipo": "final",
-      "coordenadas": {
-        "X": -9921.648507060978,
-        "Y": -93602.52104566728,
-        "Z": 0.0
-      },
-      "anteriores": [
-        "B1"
-      ],
       "siguientes": [],
-      "orden": 5,
+      "orden": 0,
       "tipo_camino": 0,
       "color_id": 1,
       "path_key": "modo:0|color:1",
