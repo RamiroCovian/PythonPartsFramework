@@ -6,13 +6,16 @@ Utilitarios: JSON_PATH, helpers para escritorio, color por path, flush stdout.
 import os, sys, math
 import importlib, pkgutil
 import json
+import unicodedata
 
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_BaseElements as AllplanBaseElements
 
-from typing import Dict
-from .models import SegmentInfo
+from typing import Dict, List, Tuple, Optional
+from pathlib import Path
+
+from .models import SegmentInfo, SupportJson
 
 
 def import_pythonpart_class(class_name):
@@ -235,6 +238,324 @@ def get_distance_between_points(self, points: list) -> float:
         result = first_point.GetDistance(last_point)
         return result
 
+def compute_segment_length(support: SupportJson) -> float:
+    """
+    Devuelve la longitud de la polilínea (distancia entre posicion1 y posicion2).
+    Esta longitud se puede usar, por ejemplo, para `set_length` en `SupportModel`.
+    """
+    (x1, y1, z1) = support.posicion1
+    (x2, y2, z2) = support.posicion2
+    dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
+    return (dx * dx + dy * dy + dz * dz) ** 0.5
+
+def _as_tuple_3(values) -> Tuple[float, float, float]:
+    """Convierte una lista del JSON en una tupla (x, y, z) de float."""
+    if not isinstance(values, (list, tuple)) or len(values) != 3:
+        raise ValueError(f"posicion inválida (se esperan 3 valores): {values!r}")
+    x, y, z = values
+    return float(x), float(y), float(z)
+
+def _normalize_token(raw: str) -> str:
+    normalized = unicodedata.normalize("NFKD", raw)
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = normalized.lower().strip()
+    return normalized
+
+def _normalize_support_type(raw_type: str) -> str:
+    token = _normalize_token(raw_type)
+    if token == "omega":
+        return "Omega"
+    if token == "zeta":
+        return "Zeta"
+    if token == "cinta":
+        return "Cinta"
+    return raw_type.strip()
+
+def _normalize_subtype(raw_subtype: str) -> str:
+    """
+    Normaliza subtipos a etiquetas semánticas canónicas.
+
+    Ejemplos de salida:
+    - "Venti.(SVP)" -> "Ventilación"
+    - "Electr./Clima(SEP)" -> "Clima"
+    - "VARIFIX" -> "Varifix"
+    """
+    token = _normalize_token(raw_subtype)
+    mapping = {
+        "ventilacion": "Ventilación",
+        "venti.(svp)": "Ventilación",
+        "venti svp": "Ventilación",
+        "svp": "Ventilación",
+        "clima": "Clima",
+        "electricidad": "Electricidad",
+        "agua": "Agua",
+        "saneamiento": "Saneamiento",
+        "varifix": "Varifix",
+        "electr./clima(sep)": "Clima",
+        "electr./clima": "Clima",
+    }
+    if token in mapping:
+        return mapping[token]
+
+    if "varifix" in token:
+        return "Varifix"
+    if "vent" in token or "svp" in token:
+        return "Ventilación"
+    if "electr" in token:
+        return "Electricidad"
+    if "clima" in token:
+        return "Clima"
+    if "agua" in token:
+        return "Agua"
+    if "sane" in token:
+        return "Saneamiento"
+    return raw_subtype.strip()
+
+def _normalize_surface(raw_surface: str) -> str:
+    """Normaliza `superficie` a 'Liso' o 'Perforado'."""
+    token = _normalize_token(raw_surface)
+    mapping = {
+        "liso": "Liso",
+        "perforado": "Perforado",
+    }
+    return mapping.get(token, raw_surface.strip())
+
+def _get_required_float(item: dict, names: Tuple[str, ...], label: str) -> float:
+    """
+    Devuelve el primer valor numérico encontrado en `names`.
+    Lanza ValueError si falta el dato obligatorio.
+    """
+    for name in names:
+        if name in item:
+            value = item[name]
+            if value is None:
+                break
+            return float(value)
+    raise ValueError(f"falta dato obligatorio '{label}'")
+
+def _get_optional_float(
+    item: dict, names: Tuple[str, ...], label: str
+) -> Optional[float]:
+    """
+    Devuelve el primer valor numérico opcional encontrado en `names`.
+    - Si no existe ninguna clave, devuelve None.
+    - Acepta strings con coma decimal (ej.: "90,0").
+    """
+    for name in names:
+        if name in item:
+            value = item[name]
+            if value is None:
+                return None
+            if isinstance(value, str):
+                value = value.strip()
+                if not value:
+                    return None
+                value = value.replace(",", ".")
+            try:
+                return float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"valor inválido en '{label}': {item[name]!r}"
+                ) from exc
+    return None
+
+# ------------------------------------------------------------
+# Carga / mock de JSON
+# ------------------------------------------------------------
+def get_default_json_path(name_folder: str | None = "Ventilacion") -> Path:
+    """
+    Busca 'Soportes_mock.json' en una carpeta hermana dentro de 'Instalaciones'.
+    Si la carpeta o el archivo no existen, retorna la ruta en la carpeta local.
+    """
+    # 1. Definimos la raíz común (Instalaciones/)
+    # Estamos en: .../Instalaciones/Polylib/utils.py
+    # .parents[1] nos sube a: .../Instalaciones/
+    root_dir = Path(__file__).resolve().parents[1]
+
+    # 2. Construimos la ruta deseada
+    if name_folder:
+        target_path = root_dir / name_folder / f"soporte_{name_folder.lower()}.json"
+
+    # 3. Validación de error: Si no existe el archivo en esa carpeta...
+    if not target_path.exists():
+        # ...pasamos a la ruta anterior (la misma carpeta del script)
+        fallback_path = Path(__file__).with_name("Soportes_mock.json")
+        return fallback_path
+
+    return target_path
+
+def ensure_mock_json(path: Path | None = None) -> Path:
+    """
+    Si no existe el JSON indicado, crea un mock mínimo de pruebas con
+    la estructura acordada.
+    """
+    json_path = Path(path) if path is not None else get_default_json_path()
+
+    if json_path.exists():
+        return json_path
+
+    # Contenido de ejemplo (se puede editar a mano desde Allplan / explorador)
+    mock_data = {
+        "soportes": [
+            {
+                "tipo": "OMEGA",
+                "subtipo": "Agua",
+                "superficie": "Perforado",
+                "posicion1": [0.0, 0.0, 0.0],
+                "posicion2": [1000.0, 0.0, 0.0],
+                "angulo_inclinacion": 0.0,
+                "cota_a": 110.0,
+                "cota_b": 300.0,
+            }
+        ]
+    }
+
+    try:
+        json_path.write_text(json.dumps(mock_data, indent=4), encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError(f"No se pudo crear el JSON de mock en {json_path}") from exc
+
+    return json_path
+
+def load_supports_from_json(path: str | Path | None = None) -> List[SupportJson]:
+    """
+    Lee el archivo JSON (real o de mock) y devuelve una lista de `SupportJson`.
+
+    Reglas de validación:
+    - Son obligatorios: `tipo`, `subtipo`, `superficie`, `posicion1`, `posicion2`,
+      `cota_a`, `cota_b`.
+    - Para Varifix, `cota_a` y `cota_b` deben ser > 0.
+    - Para Zeta, `cota_a` puede ser 0 pero `cota_b` debe ser > 0.
+    - Si un soporte es inválido, se informa por consola y se ignora.
+
+    Compatibilidad:
+    - Se aceptan temporalmente nombres legacy (`supports`, `type`, etc.).
+
+    Si `path` es None se usa el JSON por defecto en `Soportes/Soportes_mock.json`.
+    Si el archivo no existe, se crea automáticamente un mock válido.
+    """
+    json_path = Path(path) if path is not None else get_default_json_path()
+
+    # Crear mock si no existe
+    if not json_path.exists():
+        json_path = ensure_mock_json(json_path)
+
+    try:
+        raw = json.loads(json_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise RuntimeError(f"No se pudo leer el JSON {json_path}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"JSON inválido en {json_path}: {exc}") from exc
+
+    supports_raw = raw.get("soportes")
+    if supports_raw is None:
+        # Compatibilidad temporal con versiones antiguas del JSON
+        supports_raw = raw.get("supports", [])
+    supports: List[SupportJson] = []
+
+    print(f"[SoportesFromJson] JSON path: {json_path}")
+    print(f"[SoportesFromJson] Total soportes recibidos: {len(supports_raw)}")
+
+    for idx_item, item in enumerate(supports_raw, start=1):
+        try:
+            print(f"[SoportesFromJson] RAW soporte #{idx_item}: {item!r}")
+
+            # Clave oficial: `angulo_inclinacion`.
+            # Compatibilidad temporal: equivalentes en inglés, typo histórico y clave con acento.
+            angulo_inclinacion = _get_optional_float(
+                item,
+                (
+                    "angulo_inclinacion",
+                    "ángulo_inclinacion",
+                    "inclinacion_angulo",
+                ),
+                "angulo_inclinacion",
+            )
+            tipo_raw = str(item.get("tipo", item.get("type", ""))).strip()
+            subtipo_raw = str(item.get("subtipo", item.get("subtype", ""))).strip()
+
+            if not tipo_raw:
+                raise ValueError("falta dato obligatorio 'tipo'")
+            if not subtipo_raw:
+                raise ValueError("falta dato obligatorio 'subtipo'")
+
+            surface_raw = str(item.get("superficie", item.get("surface", ""))).strip()
+            if not surface_raw:
+                # Tolerancia para cargas incompletas: si no llega superficie,
+                # asumimos Perforado para no invalidar todo el soporte.
+                surface_raw = "Perforado"
+                print(
+                    "[SoportesFromJson] Aviso soporte #{}: 'superficie' vacía; se usa 'Perforado' por defecto".format(
+                        idx_item
+                    )
+                )
+
+            tipo = _normalize_support_type(tipo_raw)
+            subtipo = _normalize_subtype(subtipo_raw)
+            superficie = _normalize_surface(surface_raw)
+            if superficie not in ("Liso", "Perforado"):
+                raise ValueError(
+                    "valor inválido en 'superficie' (permitidos: 'Liso'/'Perforado')"
+                )
+
+            cota_a = _get_required_float(item, ("cota_a", "height_a"), "cota_a")
+            cota_b = _get_required_float(
+                item, ("cota_b", "height_b", "length_b"), "cota_b"
+            )
+
+            if tipo == "Omega" and subtipo in ("Varifix", "Agua", "Saneamiento"):
+                if cota_a <= 0.0 or cota_b <= 0.0:
+                    raise ValueError(
+                        "para soporte Varifix, 'cota_a' y 'cota_b' deben ser > 0"
+                    )
+
+            if tipo == "Zeta":
+                if cota_a < 0.0:
+                    raise ValueError("para soporte Zeta, 'cota_a' no puede ser < 0")
+                if cota_b <= 0.0:
+                    raise ValueError("para soporte Zeta, 'cota_b' debe ser > 0")
+
+            if tipo == "Cinta":
+                if cota_b <= 0.0:
+                    raise ValueError("para soporte Cinta, 'cota_b' debe ser > 0")
+
+            support = SupportJson(
+                tipo=tipo,
+                subtipo=subtipo,
+                superficie=superficie,
+                posicion1=_as_tuple_3(item.get("posicion1", item.get("position1"))),
+                posicion2=_as_tuple_3(item.get("posicion2", item.get("position2"))),
+                angulo_inclinacion=angulo_inclinacion,
+                cota_a=cota_a,
+                cota_b=cota_b,
+            )
+            print(
+                "[SoportesFromJson] PARSED soporte #{}: tipo='{}', subtipo='{}', "
+                "superficie='{}', angulo_inclinacion={}, "
+                "posicion1={}, posicion2={}, cota_a={}, cota_b={}".format(
+                    idx_item,
+                    support.tipo,
+                    support.subtipo,
+                    support.superficie,
+                    support.angulo_inclinacion,
+                    support.posicion1,
+                    support.posicion2,
+                    support.cota_a,
+                    support.cota_b,
+                )
+            )
+        except Exception as exc:
+            # En caso de error en un soporte concreto, lo ignoramos pero lo dejamos trazado.
+            print(f"[SoportesFromJson] Soporte inválido en JSON: {item!r} -> {exc}")
+            continue
+
+        if not support.tipo:
+            print(f"[SoportesFromJson] Soporte sin tipo, se ignora: {item!r}")
+            continue
+
+        supports.append(support)
+
+    return supports
 
 class ElementSerializer:
 

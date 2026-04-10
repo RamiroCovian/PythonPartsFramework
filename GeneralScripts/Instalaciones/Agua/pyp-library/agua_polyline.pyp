@@ -381,95 +381,6 @@
         </Parameter>
     </Page>
     <Page>
-        <Name>OrdenPuntosUsuario</Name>
-        <Text>Orden de puntos de usuario</Text>
-        <Parameter>
-            <Name>OrdenPuntosUsuario</Name>
-            <Text>Orden de puntos de usuario</Text>
-            <ValueType>Expander</ValueType>
-            <Parameter>
-                <Name>SeparatorOrdenPuntos</Name>
-                <ValueType>Separator</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>RowTipoPuntoOrden</Name>
-                <Text>Tipo de punto</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>TipoPuntoOrden</Name>
-                    <Text>Tipo de punto</Text>
-                    <Value>Inicio</Value>
-                    <ValueType>StringComboBox</ValueType>
-                    <ValueList>Inicio|Intermedio Libre|Intermedio Ordenado|Bifurcacion|Final</ValueList>
-                </Parameter>
-            </Parameter>
-            <Parameter>
-                <Name>SeparatorOrdenPuntos2</Name>
-                <ValueType>Separator</ValueType>
-            </Parameter>
-            <Parameter>
-                <Name>RowColorPuntos</Name>
-                <Text>Color de formas</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>ColorPuntosNoDefinidos</Name>
-                    <Text>Color (distinguir caminos)</Text>
-                    <Value>Negro</Value>
-                    <ValueType>StringComboBox</ValueType>
-                    <ValueList>Negro|Amarillo|Cyan|Verde|Magenta|Rojo|Azul</ValueList>
-                </Parameter>
-            </Parameter>
-            <Parameter>
-                <Name>RowDeteccionPuntosComunes</Name>
-                <Text>Puntos comunes</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>DeteccionPuntosComunesActiva</Name>
-                    <Text>Detectar puntos comunes</Text>
-                    <Value>True</Value>
-                    <ValueType>CheckBox</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>ToleranciaPuntosComunesMm</Name>
-                    <Text>Tolerancia (mm)</Text>
-                    <Value>5</Value>
-                    <ValueType>Length</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>ColorResaltadoPuntosComunes</Name>
-                    <Text>Color resaltado</Text>
-                    <Value>Rojo</Value>
-                    <ValueType>StringComboBox</ValueType>
-                    <ValueList>Negro|Amarillo|Verde|Cyan|Magenta|Rojo|Azul</ValueList>
-                </Parameter>
-            </Parameter>
-            <Parameter>
-                <Name>RowPuntosNoDefinidosBotones</Name>
-                <Text>Acción</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>AnadirPuntoNoDefinido</Name>
-                    <Text>Añadir punto</Text>
-                    <EventId>1031</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>FinalizarPuntosNoDefinidos</Name>
-                    <Text>Generar Info</Text>
-                    <EventId>1032</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                </Parameter>
-            </Parameter>
-        </Parameter>
-    </Page>
-    <Page>
         <Name>PuntosLibresYMacros</Name>
         <Text>Puntos Libres y Macros</Text>
         <!-- MACRO: marcar punto inicial/final/libre y seleccionar SmartSymbol/Fixture -->
@@ -642,7 +553,7 @@
                 <ValueType>Row</ValueType>
                 <Value>OVERALL:1</Value>
                 <Parameter>
-                    <Name>TipoPuntoLibre</Name>
+                    <Name>PointType</Name>
                     <Text>Tipo de punto</Text>
                     <Value>Intermedio libre</Value>
                     <ValueType>StringComboBox</ValueType>
@@ -698,6 +609,202 @@ else:
                     <ValueType>Button</ValueType>
                 </Parameter>
             </Parameter>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>PageSoportes</Name>
+        <Text>Soportes</Text>
+        <!-- ══════════════════════════════════════════
+         BLOQUE 1 · Tipo de soporte
+         ══════════════════════════════════════════ -->
+        <!-- Familia: Zeta / Omega -->
+        <Parameter>
+            <Name>TypeSupport</Name>
+            <Text>Tipo de soporte</Text>
+            <Value>Zeta</Value>
+            <ValueType>StringComboBox</ValueType>
+            <ValueList></ValueList>
+            <EventId>1030</EventId>
+        </Parameter>
+        <!-- Subtipo semántico → campo "subtipo" del mock JSON -->
+        <Parameter>
+            <Name>SubtipoSoporte</Name>
+            <Text>Subtipo instalación</Text>
+            <Value></Value>
+            <ValueType>Text</ValueType>
+            <FontSize>16</FontSize>
+            <FontStyle>2</FontStyle>
+            <!-- <Value></Value>
+            <ValueType>StringComboBox</ValueType>
+            <ValueList>Ventilación|Clima|Electricidad|Agua|Saneamiento</ValueList> -->
+        </Parameter>
+        <!-- Superficie → campo "superficie" del mock JSON -->
+        <Parameter>
+            <Name>Superficie</Name>
+            <Text>Superficie</Text>
+            <Value>Liso</Value>
+            <ValueType>StringComboBox</ValueType>
+            <ValueList>Liso|Perforado</ValueList>
+        </Parameter>
+        <Parameter>
+            <Name>SepDimensiones</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+        <!-- ══════════════════════════════════════════
+         BLOQUE 2 · Dimensiones
+         ══════════════════════════════════════════ -->
+        <Parameter>
+            <Name>CotaA</Name>
+            <Text>Cota A (mm)</Text>
+            <Value>0.0</Value>
+            <ValueType>Double</ValueType>
+            <MinValue>0.0</MinValue>
+        </Parameter>
+        <Parameter>
+            <Name>CotaB</Name>
+            <Text>Cota B (mm)</Text>
+            <Value>0.0</Value>
+            <ValueType>Double</ValueType>
+            <MinValue>0.0</MinValue>
+        </Parameter>
+        <Parameter>
+            <Name>AnguloInclinacion</Name>
+            <Text>Ángulo inclinación (°)</Text>
+            <Value>0.0</Value>
+            <ValueType>Angle</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>SepAcciones</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+        <!-- ══════════════════════════════════════════
+         BLOQUE 5 · Acciones de inserción
+         ══════════════════════════════════════════ -->
+        <Parameter>
+            <Name>RowInsertar</Name>
+            <Text>Insertar</Text>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>InsertarSoporte</Name>
+                <Text>Insertar soporte</Text>
+                <EventId>1033</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowCrear</Name>
+            <Text>Crear</Text>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>CrearSoporte</Name>
+                <Text>Crear Soporte</Text>
+                <EventId>1034</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <!-- Contador de soportes acumulados -->
+        <Parameter>
+            <Name>RowSoporteCount</Name>
+            <Text>Soportes</Text>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>SoporteCount</Name>
+                <Text>Estado</Text>
+                <Value>Acumulados: 0</Value>
+                <ValueType>Text</ValueType>
+                <FontSize>14</FontSize>
+                <FontStyle>2</FontStyle>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>SepGestion</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+        <!-- ══════════════════════════════════════════
+         BLOQUE 6 · Gestión de soportes acumulados
+         ══════════════════════════════════════════ -->
+        <!-- RadioButtonGroup modo edición: 0=Desactivado, 1=Edición, 2=Edición Mover -->
+        <Parameter>
+            <Name>SoporteEditMode</Name>
+            <Text>Modo edición</Text>
+            <Value>0</Value>
+            <ValueType>RadioButtonGroup</ValueType>
+            <EventId>1038</EventId>
+            <Parameter>
+                <Name>EditModeDisabled</Name>
+                <Text>Desactivado</Text>
+                <Value>0</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>EditModeEdit</Name>
+                <Text>Edición</Text>
+                <Value>1</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>EditModeMove</Name>
+                <Text>Edición Mover</Text>
+                <Value>2</Value>
+                <ValueType>RadioButton</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>SepAtributos</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+        <!-- Botones gestión: borrar + insertar en plano -->
+        <Parameter>
+            <Name>RowBorrarSoportes</Name>
+            <Text>Borrar Soporte</Text>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>BorrarSoportes</Name>
+                <Text>Borrar sel.</Text>
+                <EventId>1036</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>SepAtributos</Name>
+            <ValueType>Separator</ValueType>
+        </Parameter>
+        <!-- ══════════════════════════════════════════
+         BLOQUE 7 · Atributos de soporte
+         ══════════════════════════════════════════ -->
+        <Parameter>
+            <Name>RowSoporteAttr</Name>
+            <Text>Atributo de soporte</Text>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>SoporteAttributeValue</Name>
+                <Text>Valor atributo</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowAplicarAttr</Name>
+            <Text>Aplicar atributo soporte</Text>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>AplicarAtributoSoporte</Name>
+                <Text>Aplicar atributo</Text>
+                <EventId>1037</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <!-- ══════════════════════════════════════════
+         BLOQUE 8 · Estado interno (oculto)
+         ══════════════════════════════════════════ -->
+        <Parameter>
+            <Name>SoportesSavedState</Name>
+            <Text>SoportesSavedState</Text>
+            <Value></Value>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>String</ValueType>
         </Parameter>
     </Page>
 </Element>

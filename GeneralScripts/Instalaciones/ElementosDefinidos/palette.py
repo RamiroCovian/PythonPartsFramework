@@ -49,12 +49,14 @@ def get_free_point_type_flag(
     default_element_key: Optional[str] = None,
 ) -> str:
     """
-    Obtiene la función (inicio/final/intermedio_*) desde TipoPuntoLibre (ComboBox)
+    Obtiene la función (inicio/final/intermedio_*) desde PointType (ComboBox)
     en modo puntos libres. Si no hay valor, infiere según elemento.
     """
     if build_ele is None:
         return "intermedio_libre"
-    tipo_param = getattr(build_ele, "TipoPuntoLibre", None)
+    tipo_param = getattr(build_ele, "PointType", None)
+    if tipo_param is None:
+        tipo_param = getattr(build_ele, "TipoPuntoLibre", None)
     raw = None
     if tipo_param is not None:
         raw = getattr(tipo_param, "value", None) or getattr(tipo_param, "Value", None)

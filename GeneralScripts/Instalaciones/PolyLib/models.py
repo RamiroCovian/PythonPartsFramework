@@ -5,7 +5,7 @@ import NemAll_Python_Geometry as AllplanGeo
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, List, Optional, Any, Dict, NamedTuple, Type
+from typing import Callable, List, Optional, Any, Dict, NamedTuple, Type, Tuple
 from .parameters import ParamNames
 
 
@@ -58,6 +58,133 @@ class WaterTypes(str, Enum):
         if distribution == DistributionTypes.TD:
             return [cls.FRED, cls.CALENT]
         return list(cls)
+
+
+class SoporteEditModeValues(int, Enum):
+    """Valores del RadioButtonGroup SoporteEditMode."""
+    DISABLED = 0   # Sin edición — clicks pasan al flujo normal de polilínea
+    EDIT     = 1   # Edición — seleccionar, borrar, aplicar atributos
+    MOVE     = 2   # Edición Mover — pick-and-place como insertar soporte
+
+
+class TypeSupportTypes(str, Enum):
+    """Tipos de soporte disponibles en el combo TypeSupport."""
+    CINTA = "Cinta"
+    OMEGA = "Omega"
+    ZETA  = "Zeta"
+
+    @classmethod
+    def to_value_list(cls) -> str:
+        """Formato listo para ctrl_prop_util.set_value_list."""
+        return "|".join(e.value for e in cls)
+
+
+@dataclass
+class SoporteEntry:
+    """
+    Soporte acumulado, pendiente de inserción en el documento Allplan.
+    Combina los campos tipados de SupportJson con datos de sesión
+    (key único, Point3D canónicos, atributos Allplan).
+    """
+    # ── Identidad ────────────────────────────────────────────────────
+    key: int                            # ID único secuencial (1, 2, 3…)
+
+    # ── Campos del contrato JSON (de SupportJson) ─────────────────────
+    tipo: str                           # "Omega" | "Zeta" | "Cinta"
+    subtipo: str                        # "Ventilación", "Clima", "Varifix", …
+    superficie: str                     # "Liso" | "Perforado"
+    cota_a: float                       # cota A (altura vertical)
+    cota_b: float                       # cota B (longitud cinta / variante)
+    pos1: Any                           # Point3D — posicion1 canónica
+    pos2: Any                           # Point3D — posicion2 canónica
+    angulo_inclinacion: float = 0.0     # inclinación extra alrededor del eje
+
+    # ── Campos extra (variante Omega / Zeta / SEP / Varifix) ─────────
+    extra: dict = field(default_factory=dict)   # omega_variante, zeta_variante, tipo_instalacion, …
+
+    # ── Atributos Allplan ─────────────────────────────────────────────
+    attributes: dict = field(default_factory=dict)  # {"6_CC_IS": "val", …}
+
+    # ─────────────────────────────────────────────────────────────────
+    # Serialización
+    # ─────────────────────────────────────────────────────────────────
+    def as_dict(self) -> dict:
+        """
+        Serializa a dict plano compatible con el contrato JSON de SupportJson.
+        pos1/pos2 se toman de los campos Point3D (fuente canónica) para
+        garantizar consistencia tras operaciones de move.
+        """
+        d: dict = {
+            "tipo":               self.tipo,
+            "subtipo":            self.subtipo,
+            "superficie":         self.superficie,
+            "posicion1":          [self.pos1.X, self.pos1.Y, self.pos1.Z],
+            "posicion2":          [self.pos2.X, self.pos2.Y, self.pos2.Z],
+            "cota_a":             self.cota_a,
+            "cota_b":             self.cota_b,
+            "angulo_inclinacion": self.angulo_inclinacion,
+            "attributes":         dict(self.attributes),
+        }
+        d.update(self.extra)    # omega_variante, zeta_variante, tipo_instalacion, …
+        return d
+
+    def to_json(self, indent: Optional[int] = None) -> str:
+        """Serializa a JSON string."""
+        return json.dumps(self.as_dict(), ensure_ascii=False, indent=indent)
+
+    # ─────────────────────────────────────────────────────────────────
+    # Construcción
+    # ─────────────────────────────────────────────────────────────────
+    _CORE_KEYS = frozenset({
+        "tipo", "subtipo", "superficie",
+        "posicion1", "posicion2",
+        "cota_a", "cota_b", "angulo_inclinacion",
+        "attributes",
+    })
+
+    @staticmethod
+    def from_dict(d: dict, key: int) -> "SoporteEntry":
+        """Reconstruye SoporteEntry desde un dict generado por as_dict() o from_palette."""
+        p1r = d.get("posicion1", [0.0, 0.0, 0.0])
+        p2r = d.get("posicion2", [1000.0, 0.0, 0.0])
+        pos1 = AllplanGeo.Point3D(float(p1r[0]), float(p1r[1]), float(p1r[2]))
+        pos2 = AllplanGeo.Point3D(float(p2r[0]), float(p2r[1]), float(p2r[2]))
+        extra = {k: v for k, v in d.items() if k not in SoporteEntry._CORE_KEYS}
+        return SoporteEntry(
+            key=key,
+            tipo=str(d.get("tipo", "")),
+            subtipo=str(d.get("subtipo", "")),
+            superficie=str(d.get("superficie", "")),
+            cota_a=float(d.get("cota_a", 0.0) or 0.0),
+            cota_b=float(d.get("cota_b", 0.0) or 0.0),
+            pos1=pos1,
+            pos2=pos2,
+            angulo_inclinacion=float(d.get("angulo_inclinacion", 0.0) or 0.0),
+            extra=extra,
+            attributes=d.get("attributes", {}),
+        )
+
+    @staticmethod
+    def from_support_json(sj: "SupportJson", key: int,
+                          pos1: Any = None, pos2: Any = None) -> "SoporteEntry":
+        """Construye un SoporteEntry desde un SupportJson (flujo lectura JSON externo)."""
+        if pos1 is None:
+            p1 = sj.posicion1
+            pos1 = AllplanGeo.Point3D(float(p1[0]), float(p1[1]), float(p1[2]))
+        if pos2 is None:
+            p2 = sj.posicion2
+            pos2 = AllplanGeo.Point3D(float(p2[0]), float(p2[1]), float(p2[2]))
+        return SoporteEntry(
+            key=key,
+            tipo=sj.tipo,
+            subtipo=sj.subtipo,
+            superficie=sj.superficie,
+            cota_a=sj.cota_a,
+            cota_b=sj.cota_b,
+            pos1=pos1,
+            pos2=pos2,
+            angulo_inclinacion=float(sj.angulo_inclinacion or 0.0),
+        )
 
 
 class FacesEN(str, Enum):
@@ -114,6 +241,36 @@ class AdditionalParametersBase:
     borrar_seccion: bool = True            # Button borrar segmento
     finalizar_creacion: bool = True        # Button finalizar y crear
 
+    # ── Soportes (página separada) ──
+    type_support: bool = True             # ComboBox Zeta/Omega
+    type_support_zeta: bool = False        # ComboBox variante Zeta
+    type_support_omega: bool = False       # ComboBox variante Omega
+    type_installation_sep: bool = False    # ComboBox instalación Electr./Clima(SEP)
+    type_installation_varifix: bool = False  # ComboBox instalación Varifix
+    subtipo_soporte: bool = True          # ComboBox subtipo semántico
+    superficie: bool = True              # ComboBox Liso/Perforado
+    cota_a: bool = True                  # Double cota_a
+    cota_b: bool = True                  # Double cota_b
+    angulo_inclinacion: bool = True      # Angle angulo_inclinacion
+    # Posición 1 (posicion1 del mock JSON)
+    pos1_x: bool = True                  # Double X inicio
+    pos1_y: bool = True                  # Double Y inicio
+    pos1_z: bool = True                  # Double Z inicio
+    # Posición 2 (posicion2 del mock JSON)
+    pos2_x: bool = True                  # Double X fin
+    pos2_y: bool = True                  # Double Y fin
+    pos2_z: bool = True                  # Double Z fin
+    # Botones de acción de soportes
+    insertar_soporte: bool = True        # Button entra en modo inserción
+    crear_soportes: bool = True          # Button acumula soporte en lista
+
+    borrar_soportes: bool = True        # Button borra seleccionados
+    # Modo de edición (RadioButtonGroup 0=Desactivado, 1=Edición, 2=Edición Mover)
+    soporte_edit_mode: bool = True       # RadioButtonGroup SoporteEditMode
+    soporte_attr_value: bool = True      # Input valor atributo soporte
+    aplicar_attr_soporte: bool = True   # Button aplica atributo a seleccionados
+    soporte_count: bool = True          # Text solo lectura — contador
+
     # ──────────────────────────────────────────────────────────────
     # Mapeo: campo de este dataclass  →  nombre de parámetro XML
     # ──────────────────────────────────────────────────────────────
@@ -146,6 +303,27 @@ class AdditionalParametersBase:
             ParamNames.General.FUNCTIONAL_NAME:         self.functional_name,
             ParamNames.Actions.BORRAR_SECCION:          self.borrar_seccion,
             ParamNames.Actions.FINALIZAR_CREACION:      self.finalizar_creacion,
+            # Soportes — tipo/variante
+            ParamNames.Soportes.TYPE_SUPPORT:               self.type_support,
+            ParamNames.Soportes.TYPE_SUPPORT_ZETA:          self.type_support_zeta,
+            ParamNames.Soportes.TYPE_SUPPORT_OMEGA:         self.type_support_omega,
+            ParamNames.Soportes.TYPE_INSTALLATION_SEP:      self.type_installation_sep,
+            ParamNames.Soportes.TYPE_INSTALLATION_VARIFIX:  self.type_installation_varifix,
+            ParamNames.Soportes.SUBTIPO_SOPORTE:            self.subtipo_soporte,
+            ParamNames.Soportes.SUPERFICIE:                 self.superficie,
+            # Soportes — dimensiones
+            ParamNames.Soportes.COTA_A:                     self.cota_a,
+            ParamNames.Soportes.COTA_B:                     self.cota_b,
+            ParamNames.Soportes.ANGULO_INCLINACION:         self.angulo_inclinacion,
+            # Soportes — botones de acción
+            ParamNames.Soportes.INSERTAR_SOPORTE:           self.insertar_soporte,
+            ParamNames.Soportes.CREAR_SOPORTES:             self.crear_soportes,
+            ParamNames.Soportes.BORRAR_SOPORTES:            self.borrar_soportes,
+            # Soportes — modo edición (RadioButtonGroup) + atributos
+            ParamNames.Soportes.EDIT_MODE:                  self.soporte_edit_mode,
+            ParamNames.Soportes.ATTR_VALUE:                 self.soporte_attr_value,
+            ParamNames.Soportes.APLICAR_ATTR:               self.aplicar_attr_soporte,
+            ParamNames.Soportes.COUNT:                      self.soporte_count,
         }
 
 # ──────────────────────────────────────────────────────────────────────
@@ -173,6 +351,45 @@ class AdditionalParametersShow(AdditionalParametersBase):
     False → el parámetro se oculta completamente.
     """
     pass
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Support json file template
+# ──────────────────────────────────────────────────────────────────────
+@dataclass
+class SupportJson:
+    """
+    Representa un soporte leído desde JSON externo.
+
+    Contrato JSON oficial (consumido por optimización):
+    - raíz: `soportes` (lista)
+    - por soporte:
+      - `tipo` (obligatorio): "Omega" | "Zeta"
+      - `subtipo` (obligatorio): valores semánticos (ej.: "Ventilación", "Clima",
+        "Electricidad", "Agua", "Saneamiento", "Varifix")
+      - `superficie` (obligatorio): "Liso" | "Perforado"
+      - `posicion1` (obligatorio): [x, y, z]
+      - `posicion2` (obligatorio): [x, y, z]
+      - `cota_a` (obligatorio): cota A
+      - `cota_b` (obligatorio): cota B
+      - `angulo_inclinacion` (opcional): inclinación extra alrededor del eje del soporte
+
+    Nota de implementación:
+    - Internamente se usan nombres canónicos en español para mantener consistencia
+      de punta a punta (JSON -> dataclass -> Soportes.py).
+    - Se mantiene compatibilidad temporal con claves antiguas (`supports`, `type`, `subtype`,
+      `position1`, `position2`, `height_a`, `length_b`,
+      `inclination_angle_deg`, `inclination_angel_deg`).
+    """
+
+    tipo: str
+    subtipo: str
+    superficie: str
+    posicion1: Tuple[float, float, float]
+    posicion2: Tuple[float, float, float]
+    angulo_inclinacion: Optional[float] = None
+    cota_a: float = 0.0
+    cota_b: float = 0.0
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -305,6 +522,66 @@ class Saneamiento(BaseInstallation):
         diameter_modify: bool = True
 
 
+class Soportes(BaseInstallation):
+    """
+    Perfil de instalación para soportes estructurales (Zeta / Omega).
+
+    La geometría la maneja SupportModel (soportes.py) a partir de los
+    parámetros de la página 'PageSoportes' del .pyp de instalación.
+    Los campos de posicion1/posicion2 los aporta la polilínea; el resto
+    (tipo, subtipo, superficie, cotas, ángulo) vienen de esta página.
+    """
+
+    @dataclass
+    class Show(AdditionalParametersShow):
+        # Soportes: TODOS siempre visibles — no hay visibilidad dinámica.
+        type_support: bool = True
+        type_support_zeta: bool = True
+        type_support_omega: bool = True
+        type_installation_sep: bool = True
+        type_installation_varifix: bool = True
+        subtipo_soporte: bool = True
+        superficie: bool = True
+        cota_a: bool = True
+        cota_b: bool = True
+        angulo_inclinacion: bool = True
+        # Botones de acción
+        insertar_soporte: bool = True
+        crear_soportes: bool = True
+        insertar_en_plano: bool = True
+        borrar_soportes: bool = True
+        # Modo edición + atributos
+        soporte_edit_mode: bool = True
+        soporte_attr_value: bool = True
+        aplicar_attr_soporte: bool = True
+        soporte_count: bool = True
+
+    @dataclass
+    class Enabled(AdditionalParametersEnabled):
+        # Tipo / variante
+        type_support: bool = True
+        type_support_zeta: bool = True
+        type_support_omega: bool = True
+        type_installation_sep: bool = True
+        type_installation_varifix: bool = True
+        subtipo_soporte: bool = True
+        superficie: bool = True
+        # Dimensiones
+        cota_a: bool = True
+        cota_b: bool = True
+        angulo_inclinacion: bool = True
+        # Botones (borrar/insertar en plano deshabilitados cuando lista vacía)
+        insertar_soporte: bool = True
+        crear_soportes: bool = True
+
+        borrar_soportes: bool = False     # se habilita cuando hay selección
+        # Modo de edición (RadioButtonGroup) + atributos
+        soporte_edit_mode: bool = True
+        soporte_attr_value: bool = True
+        aplicar_attr_soporte: bool = False  # se habilita cuando hay selección
+        soporte_count: bool = False          # solo lectura — siempre deshabilitado
+
+
 # ══════════════════════════════════════════════════════════════════════
 #  REGISTRY  —  string → clase de instalación
 # ══════════════════════════════════════════════════════════════════════
@@ -314,6 +591,7 @@ _REGISTRY: dict[str, Type[BaseInstallation]] = {
     "VENTILACION": Ventilacion,
     "ELECTRICIDAD": Electricidad,
     "SANEAMIENTO": Saneamiento,
+    "SOPORTES": Soportes,
 }
 
 def get_installation_profile(installation: str) -> InstallationProfile:

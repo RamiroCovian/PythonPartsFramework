@@ -292,7 +292,9 @@ def _build_defined_elements_facade_config(intr) -> ED_FacadeConfig:
             marker_prop,
             55.0,
         ),
-        mouse_draw_preview_cb=(lambda point: intr._draw_preview(point)) if intr else None,
+        mouse_draw_preview_cb=(
+            (lambda point: intr._draw_preview(point)) if intr else None
+        ),
         free_point_debug_prefix="[INT]",
         marker_debug_prefix="[AGUA]",
     )
@@ -311,7 +313,9 @@ def _get_element_model_list_agua(script_object, build_ele, doc, element_type: st
         return []
 
 
-def _create_single_element_agua(script_object, build_ele, doc, element_type: str, p_mid):
+def _create_single_element_agua(
+    script_object, build_ele, doc, element_type: str, p_mid
+):
     return _create_single_element_agua_with_rotation(
         script_object, build_ele, doc, element_type, p_mid
     )
@@ -448,7 +452,11 @@ def _patch_interactor_for_elementos_auxiliares(script_object, intr) -> None:
             mouse_msg,
             pnt,
             msg_info,
-            getattr(intr, "_defined_elements_facade_config", _build_defined_elements_facade_config(intr)),
+            getattr(
+                intr,
+                "_defined_elements_facade_config",
+                _build_defined_elements_facade_config(intr),
+            ),
         )
         if facade_handled is not None:
             return facade_handled
@@ -546,9 +554,7 @@ def _patch_interactor_for_elementos_auxiliares(script_object, intr) -> None:
                             bool(getattr(intr, "points", [])),
                         )
                     raw_pnt = raw_input.GetPoint()
-                    handled = ed_handle_element_point_capture_click(
-                        intr, 1, raw_pnt
-                    )
+                    handled = ed_handle_element_point_capture_click(intr, 1, raw_pnt)
                     _set_palette_flag(
                         getattr(script_object, "build_ele", None),
                         "IsElementCaptureMode",
@@ -575,7 +581,11 @@ def _patch_interactor_for_elementos_auxiliares(script_object, intr) -> None:
                 script_object,
                 intr,
                 current_pnt,
-                getattr(intr, "_defined_elements_facade_config", _build_defined_elements_facade_config(intr)),
+                getattr(
+                    intr,
+                    "_defined_elements_facade_config",
+                    _build_defined_elements_facade_config(intr),
+                ),
             )
 
             if (
@@ -590,7 +600,9 @@ def _patch_interactor_for_elementos_auxiliares(script_object, intr) -> None:
                 )
 
             selected_element_point = getattr(intr, "element_selected_point", None)
-            if selected_element_point is not None and hasattr(selected_element_point, "X"):
+            if selected_element_point is not None and hasattr(
+                selected_element_point, "X"
+            ):
                 overlay.extend(
                     ed_create_point_marker_geometry(
                         selected_element_point,
@@ -668,13 +680,19 @@ def _patch_interactor_for_elementos_auxiliares(script_object, intr) -> None:
             except Exception:
                 pass
             ed_prepare_defined_elements_event(
-                script_object, intr, include_free_points=True, include_element_markers=False
+                script_object,
+                intr,
+                include_free_points=True,
+                include_element_markers=False,
             )
             return bool(ed_on_anadir_punto_libre(script_object, intr, "AGUA"))
 
         if event_id == AGUA_EVENT_FINALIZAR_PUNTOS_LIBRES:
             ed_prepare_defined_elements_event(
-                script_object, intr, include_free_points=True, include_element_markers=False
+                script_object,
+                intr,
+                include_free_points=True,
+                include_element_markers=False,
             )
             return bool(
                 ed_on_finalizar_puntos_libres(
@@ -688,7 +706,10 @@ def _patch_interactor_for_elementos_auxiliares(script_object, intr) -> None:
 
         if event_id == 1016:
             ed_prepare_defined_elements_event(
-                script_object, intr, include_free_points=False, include_element_markers=True
+                script_object,
+                intr,
+                include_free_points=False,
+                include_element_markers=True,
             )
             ok = bool(ed_add_defined_element_marker(intr, "AGUA"))
             if ok:
@@ -967,7 +988,9 @@ def _has_pending_geometry(so: PBL.script_object.PolylineScriptObject) -> bool:
     return False
 
 
-def _ensure_validation_context_ready(so: PBL.script_object.PolylineScriptObject) -> None:
+def _ensure_validation_context_ready(
+    so: PBL.script_object.PolylineScriptObject,
+) -> None:
     """
     Garantiza que existan elementos de preview para validar layers/atributos
     incluso si se finaliza directamente desde modo creación.
@@ -984,7 +1007,10 @@ def _ensure_validation_context_ready(so: PBL.script_object.PolylineScriptObject)
 
     try:
         # Si está dibujando en modo creación, guardar la polilínea activa primero.
-        if getattr(intr, "create_mode", False) and len(getattr(intr, "points", []) or []) >= 2:
+        if (
+            getattr(intr, "create_mode", False)
+            and len(getattr(intr, "points", []) or []) >= 2
+        ):
             save_fn = getattr(intr, "_save_current_polyline", None)
             if not callable(save_fn):
                 save_fn = getattr(intr, "save_current_polyline", None)
@@ -1015,6 +1041,7 @@ def create_script_object(build_ele, script_object_data):
     script_object = PBL.script_object.initialize_script_object(
         build_ele, script_object_data, CONFIG
     )
+
     # Reattach palette utilities exposed by Allplan so auxiliary modules can
     # refresh the visible palette after synchronizing build_ele values.
     def _find_palette_service_candidate(*objects):
@@ -1028,13 +1055,16 @@ def create_script_object(build_ele, script_object_data):
                 pass
             try:
                 for attr_name in dir(obj):
-                    if attr_name.startswith("_"):
-                        continue
                     try:
                         candidate = getattr(obj, attr_name, None)
                     except Exception:
                         continue
                     if callable(getattr(candidate, "update_palette", None)):
+                        print(
+                            f"[AGUA] palette_service detectado en atributo '{attr_name}'"
+                        )
+                        return candidate
+                    if callable(getattr(candidate, "refresh_palette", None)):
                         print(
                             f"[AGUA] palette_service detectado en atributo '{attr_name}'"
                         )
@@ -1153,16 +1183,25 @@ def create_script_object(build_ele, script_object_data):
                     AGUA_EVENT_FINALIZAR_PUNTOS_LIBRES,
                 ):
                     ed_prepare_defined_elements_event(
-                        script_object, intr, include_free_points=True, include_element_markers=False
+                        script_object,
+                        intr,
+                        include_free_points=True,
+                        include_element_markers=False,
                     )
                 if event_id in (1015, 1016):
                     ed_prepare_defined_elements_event(
-                        script_object, intr, include_free_points=False, include_element_markers=True
+                        script_object,
+                        intr,
+                        include_free_points=False,
+                        include_element_markers=True,
                     )
 
             if event_id == 1015:
                 ed_prepare_defined_elements_event(
-                    script_object, intr, include_free_points=False, include_element_markers=True
+                    script_object,
+                    intr,
+                    include_free_points=False,
+                    include_element_markers=True,
                 )
                 ok = bool(ed_start_element_point_capture(intr, "AGUA"))
                 _set_palette_flag(build_ele, "IsElementCaptureMode", ok)
@@ -1176,7 +1215,10 @@ def create_script_object(build_ele, script_object_data):
 
             if event_id == 1016:
                 ed_prepare_defined_elements_event(
-                    script_object, intr, include_free_points=False, include_element_markers=True
+                    script_object,
+                    intr,
+                    include_free_points=False,
+                    include_element_markers=True,
                 )
                 ok = bool(ed_add_defined_element_marker(intr, "AGUA"))
                 if ok:
@@ -1209,9 +1251,7 @@ def create_script_object(build_ele, script_object_data):
                 if event_id == AGUA_EVENT_ADD_PUNTO_NO_DEFINIDO:
                     return bool(end_on_anadir_punto_no_definido(script_object, intr))
 
-                ok = bool(
-                    end_on_finalizar_puntos_no_definidos(script_object, intr)
-                )
+                ok = bool(end_on_finalizar_puntos_no_definidos(script_object, intr))
                 _write_provisional_puntos_json(script_object)
                 return ok
 
@@ -1299,7 +1339,9 @@ def create_script_object(build_ele, script_object_data):
             if intr is not None:
                 ed_handle_defined_elements_property_change(script_object, intr, name)
         except Exception as ex:
-            print(f"[AGUA] Error refrescando preview tras modify_element_property: {ex}")
+            print(
+                f"[AGUA] Error refrescando preview tras modify_element_property: {ex}"
+            )
         return result
 
     script_object.modify_element_property = _modify_element_property_with_preview

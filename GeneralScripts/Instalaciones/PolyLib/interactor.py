@@ -22,10 +22,11 @@ from NemAll_Python_BaseElements import AttributeService
 from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResult
 
 from .models import (
-    PolylineBaseConfig, SegmentData, SegmentItem, InstallationElement, AppliedLayer, ElementTypes, SegmentInfo, WaterTypes
+    PolylineBaseConfig, SegmentData, SegmentItem, InstallationElement,
+    AppliedLayer, ElementTypes, SegmentInfo, WaterTypes, SoporteEditModeValues
 )
-from .parameters import ParamNames, PointModeValues
-from .utils import ElementSerializer
+from .parameters import ParamNames, PointModeValues, EventIds
+from .utils import ElementSerializer, load_supports_from_json, get_default_json_path
 
 
 # ─────────────────── Parámetros de Interacción ───────────────────
@@ -186,6 +187,29 @@ class PolylineInteractor:
         self._pending_description: str | None = None  # Flag de actualización pendiente
         self._pending_palette_refresh: bool = False
 
+        # ── Soportes: modo inserción ───────────────────────────────────────────
+        # Máquina de estados:
+        #   _soporte_phase 0 → botón pulsado, soporte dibujado desde JSON, sin línea fantasma
+        #   _soporte_phase 1 → click 1 hecho, pos1 fijada, línea fantasma pos1→cursor
+        #   _soporte_phase 2 → click 2 hecho, soporte final dibujado, sin línea fantasma
+        self._soporte_preview_active: bool = False
+        self._soporte_phase: int = 0                # 0 / 1 / 2 / 3 / 4 ...
+        self._soporte_click_count: int = 0          # alias (= _soporte_phase)
+        self._soporte_cursor_pnt: Optional[AllplanGeo.Point3D] = None
+        self._soporte_pos1: Optional[AllplanGeo.Point3D] = None   # origen (click impar)
+        self._soporte_pos2: Optional[AllplanGeo.Point3D] = None   # punto dir (click par)
+        # Vector dirección preservado entre ciclos (actualizado en cada click par)
+        self._soporte_dir_vec: Optional[AllplanGeo.Vector3D] = None
+
+        # ── Soportes: modo gestión (acumulados) ───────────────────────────────
+        self._soporte_manage_mode: bool = False          # True cuando hay soportes en lista
+        self._soporte_selected_keys: Set[int] = set()    # keys actualmente seleccionados
+        self._soporte_hover_key: Optional[int] = None    # key bajo el cursor
+        # Mover soporte (2 clicks: pick-up → place)
+        self._soporte_moving_key: Optional[int] = None   # key en modo "mover"
+        self._soporte_move_p1_origin: Optional[AllplanGeo.Point3D] = None
+        self._soporte_move_p2_origin: Optional[AllplanGeo.Point3D] = None
+
         self.script_object._load_default_inst_params(self.config.default_installation)
 
         self._on_installation_type_changed()
@@ -211,6 +235,12 @@ class PolylineInteractor:
         self._print_prompt()
         self._change_draw_mode()
         self.doc = coord_input.GetInputViewDocument() # type: ignore
+        self._init_soporte_from_json()
+        # Restaurar soportes guardados si el PythonPart viene de doble-click edit
+        self.script_object._restore_soportes_from_state()
+        if self.script_object.soportes_list:
+            self._soporte_manage_mode = True
+            print(f"[Soportes] Modo gestión activado: {len(self.script_object.soportes_list)} soporte(s) restaurados.")
         print("[INT] Interactor ready for input\n")
 
     def _print_prompt(self):
@@ -265,6 +295,8 @@ class PolylineInteractor:
             self.script_object.enable_parameter(ParamNames.DrawMode.CUT, False)
             self.script_object.show_parameter(ParamNames.Layers.DESCRIPTION, False)
             self.script_object.show_parameter(ParamNames.Layers.VIEW_INFO, False)
+            # Mover a Desactivado y deshabilitar el RadioGroup de edición de soportes
+            self._disable_soporte_edit_mode()
             print(f"[INT] CREATE MODE = ON - Nuevo camino iniciado")
         elif checkbox_value == PointModeValues.EDIT:
             self.highlight_geometries.clear()
@@ -287,6 +319,8 @@ class PolylineInteractor:
             self.script_object.show_parameter(ParamNames.Layers.VIEW_INFO)
             self.script_object.enable_parameter(ParamNames.Layers.VIEW_INFO)
 
+            # Mover a Desactivado y deshabilitar el RadioGroup de edición de soportes
+            self._disable_soporte_edit_mode()
             print(f"[INT] EDIT MODE = ON")
         else:
             if not self.saved_elements:
@@ -309,6 +343,8 @@ class PolylineInteractor:
 
             self.script_object.show_parameter(ParamNames.Layers.DESCRIPTION, False)
             self.script_object.show_parameter(ParamNames.Layers.VIEW_INFO, False)
+            # Re-habilitar modos de edición de soporte al volver a Extender
+            self.script_object.enable_parameter(ParamNames.Soportes.EDIT_MODE, True)
             print(f"[INT] EXTEND MODE = ON")
 
         self._pending_palette_refresh = True
@@ -559,6 +595,11 @@ class PolylineInteractor:
 
             mode_value = getattr(self.script_object.build_ele, ParamNames.DrawMode.MODE)
             mode_value.value = PointModeValues.EXTEND
+
+            # Restaurar soportes (desde state embebido en SavedState)
+            self.script_object._restore_soportes_from_state(state)
+            if self.script_object.soportes_list:
+                self._soporte_manage_mode = True
 
             return True
 
@@ -1318,6 +1359,17 @@ class PolylineInteractor:
 
         button = getattr(mouse_msg, 'Button', 1)
         is_left_click = (button == 1)
+
+        # ── Soportes: inserción tiene prioridad; manage mode en segundo lugar ──
+        if self._soporte_preview_active:
+            return self._handle_soporte_mouse(mouse_msg, current_pnt, is_left_click)
+        if self._soporte_manage_mode:
+            # Interceptar solo cuando el radio está en Edición (1) o Edición Mover (2).
+            # En Desactivado (0) el overlay sigue visible pero los clicks van al flujo normal.
+            edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+            if int(getattr(edit_raw, "value", 0)) >= 1:
+                return self._handle_soporte_manage_mouse(mouse_msg, current_pnt, is_left_click)
+
         # ----------------------------------------------------------------------
         # 1. MODO CREACIÓN (Fuente A: Lógica de Snap and Smart Creation)
         # ----------------------------------------------------------------------
@@ -2806,6 +2858,52 @@ class PolylineInteractor:
                     )
                 except Exception:
                     pass
+
+        # --- Soporte 3D preview overlay ---
+        if self._soporte_preview_active:
+            soporte_elems = getattr(self.script_object, '_soporte_preview_elems', [])
+            if soporte_elems:
+                try:
+                    AllplanBaseElements.DrawElementPreview(
+                        self.coord_input.GetInputViewDocument(), # type: ignore
+                        AllplanGeo.Matrix3D(),
+                        soporte_elems,
+                        False,  # Don't clean — overlay on top of main preview
+                        None,
+                    )
+                except Exception as ex:
+                    print(f"[Soportes] DrawElementPreview overlay error: {ex}")
+            # Línea fantasma: Pos1 → cursor; visible cuando la fase es impar (≥ 1)
+            if (self._soporte_phase % 2 == 1) and self._soporte_cursor_pnt and self._soporte_pos1:
+                try:
+                    guide_prop = self._clone_properties(self.com_prop)
+                    guide_prop.Color = 6  # amarillo
+                    guide_line = AllplanGeo.Line3D(self._soporte_pos1, self._soporte_cursor_pnt)
+                    guide_elem = AllplanBasisElements.ModelElement3D(guide_prop, guide_line)
+                    AllplanBaseElements.DrawElementPreview(
+                        self.coord_input.GetInputViewDocument(), # type: ignore
+                        AllplanGeo.Matrix3D(),
+                        [guide_elem],
+                        False,
+                        None,
+                    )
+                except Exception:
+                    pass
+
+        # --- Soportes acumulados: overlay con handles y selección ---
+        if self._soporte_manage_mode and self.script_object.soportes_list:
+            # Hover/selección activos solo en modo Editar (1) o Editar-Mover (2).
+            # En Desactivado (0) no se actualiza el hover — el overlay se dibuja en
+            # colores neutros y los clicks pasan al flujo normal de polilínea.
+
+            _edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+            _edit_val = int(getattr(_edit_raw, "value", 0))
+            if _edit_val >= SoporteEditModeValues.EDIT:
+                if self._soporte_moving_key is None:
+                    self._soporte_hover_key = self._find_soporte_at_point(current_pnt)
+            else:
+                self._soporte_hover_key = None  # limpiar hover cuando modo Desactivado
+            self._draw_soporte_manage_overlay(current_pnt)
 
     def _draw_selection_box(self, elems, prop):
         """Dibuja el rectángulo de selección proyectado en vista o XY"""
@@ -5070,7 +5168,8 @@ class PolylineInteractor:
             result = mgr.on_control_event(event_id)
             if result is not None:
                 return result
-        if event_id == 1004:
+
+        if event_id == EventIds.BORRAR_SECCION: # 1004
             # A) Borrar segmentos seleccionados por box
             if self.selected_segments and not self.selected_junction:
                 self.delete_selected_segments_by_box()
@@ -5083,7 +5182,7 @@ class PolylineInteractor:
             elif self.selected_seg is not None:
                 self._delete_selected_seg()
 
-        elif event_id == 1007:
+        elif event_id == EventIds.MODIFICAR_DIAMETRO: # 1007
             # A) Cambiar diámetro de segmentos seleccionados por box (edit_mode)
             if self.selected_segments and not self.selected_junction:
                 self.change_diameter_selected_segments_by_box()
@@ -5103,7 +5202,7 @@ class PolylineInteractor:
                     PythonUtility.MB_OK
                 )
 
-        elif event_id == 1003:  # Finalizar -> guardar y crear inmediatament
+        elif event_id == EventIds.FINALIZAR_CREACION:  # 1003 - Finalizar -> guardar y crear inmediatament
             print("[SO] Finalizar -> guardar y crear inmediatamente")
             name = "CancelInput"
             meth = getattr(self.coord_input, name, None)
@@ -5114,23 +5213,636 @@ class PolylineInteractor:
                 except Exception as ex:
                     print(f"[SO] coord_input.{name}() ex: {ex}")
 
-        elif event_id == 1009:
+        elif event_id == EventIds.APLICAR_LAYERS: # 1009
             self.apply_layers_to_selected()
 
-        elif event_id == 1010:
+        elif event_id == EventIds.MOSTRAR_INFO: # 1010
             self.applie_info_element_selected()
             return True
 
-        elif event_id == 1011:
+        elif event_id == EventIds.ATTRIBUTE_APPLY: # 1011
             self.apply_attributes_input()
 
-        elif event_id == 1012:
+        elif event_id == EventIds.DEFINIR_ORIENTACION: # 1012
             # Definir orientación 3D (captura de línea en XY)
             return bool(self.start_orientation_capture())
+
+        # ── Soportes: botones de acción (independientes de la instalación) ──
+        elif event_id == EventIds.INSERTAR_SOPORTE: # 1033
+            # 1) Salir de cualquier modo de dibujo de polilínea activo y pasar a EXTEND.
+            if self.create_mode and len(self.points) >= 2:
+                self._save_current_polyline()
+            if self.create_mode or self.edit_mode:
+                self.create_mode = False
+                self.edit_mode   = False
+                self.points.clear()
+            self.extend_mode = True
+            mode_param = getattr(self.script_object.build_ele, ParamNames.DrawMode.MODE, None)
+            if mode_param is not None:
+                mode_param.value = PointModeValues.EXTEND
+
+            # 2) Mostrar diálogo de confirmación con los parámetros del JSON
+            def _getv(param_name: str, default=""):
+                raw = getattr(self.script_object.build_ele, param_name, None)
+                if raw is None:
+                    return default
+                return getattr(raw, "value", raw) or default
+
+            tipo      = _getv(ParamNames.Soportes.TYPE_SUPPORT, "—")
+            subtipo   = _getv(ParamNames.Soportes.SUBTIPO_SOPORTE, "—")
+            sup       = _getv(ParamNames.Soportes.SUPERFICIE, "—")
+            cota_a    = _getv(ParamNames.Soportes.COTA_A, "0")
+            cota_b    = _getv(ParamNames.Soportes.COTA_B, "0")
+            angulo    = _getv(ParamNames.Soportes.ANGULO_INCLINACION, "0")
+            p1 = self._soporte_pos1
+            p2 = self._soporte_pos2
+            p1_str = f"({p1.X:.1f}, {p1.Y:.1f}, {p1.Z:.1f})" if p1 else "—"
+            p2_str = f"({p2.X:.1f}, {p2.Y:.1f}, {p2.Z:.1f})" if p2 else "—"
+
+            msg = (
+                "Se insertará el soporte con los siguientes parámetros del JSON:\n\n"
+                f"  Tipo:              {tipo}\n"
+                f"  Subtipo:           {subtipo}\n"
+                f"  Superficie:        {sup}\n"
+                f"  Cota A (alto):     {cota_a} mm\n"
+                f"  Cota B (largo):    {cota_b} mm\n"
+                f"  Ángulo inclin.:    {angulo}°\n"
+                f"  Posición 1:        {p1_str} mm\n"
+                f"  Posición 2:        {p2_str} mm\n\n"
+                "¿Desea continuar con la inserción?\n"
+                "[SÍ] Insertar en posición JSON y luego seleccionar nueva posición.\n"
+                "[NO] Cancelar."
+            )
+            result = PythonUtility.ShowMessageBox(msg, PythonUtility.MB_YESNO)
+            if result != PythonUtility.IDYES:
+                return True
+
+            # 3) Entrar en modo inserción — dibujar soporte en posición del JSON (fase 0)
+            self._soporte_preview_active = True
+            self._soporte_phase          = 0
+            self._soporte_click_count    = 0
+            self._soporte_cursor_pnt     = None
+            # Conservar _soporte_pos1/_soporte_pos2 del JSON para el primer dibujo.
+            # Si no estaban cargados, entrar en modo espera sin preview.
+            if self._soporte_pos1 is not None and self._soporte_pos2 is not None:
+                self._rebuild_soporte_preview()
+                self._draw_soporte_overlay()
+                print(
+                    f"[Soportes] FASE 0 — soporte JSON dibujado en {p1_str} → {p2_str}. "
+                    "Haz click para fijar nueva Pos1."
+                )
+            else:
+                self.script_object._soporte_preview_elems = []
+                print("[Soportes] FASE 0 — sin posición JSON, esperando 1er click.")
+
+            # Deshabilitar "Insertar Soporte" mientras se está en modo inserción,
+            # habilitar "Crear Soporte" y deshabilitar el RadioGroup de edición
+            self.script_object.enable_parameter(ParamNames.Soportes.INSERTAR_SOPORTE, False)
+            self.script_object._update_soporte_ui_state(preview_active=True)
+            return True
+
+        elif event_id == EventIds.CREAR_SOPORTES: # 1034
+            # ── ACUMULAR: agrega el soporte preview a la lista interna ──
+            pos1 = self._soporte_pos1
+            pos2 = self._soporte_pos2
+            if pos1 is None or pos2 is None:
+                PythonUtility.ShowMessageBox(
+                    "No hay soporte posicionado para acumular.\n"
+                    "Haz 2 clicks (Pos1 y Pos2) primero.",
+                    PythonUtility.MB_OK,
+                )
+                return True
+            self.script_object._accumulate_soporte(pos1, pos2)
+            # Salir de modo inserción → entrar en manage mode
+            self._soporte_preview_active = False
+            self._soporte_phase          = 0
+            self._soporte_click_count    = 0
+            self._soporte_cursor_pnt     = None
+            self._soporte_pos1           = None
+            self._soporte_pos2           = None
+            self._soporte_dir_vec        = None
+            self.script_object._soporte_preview_elems = []
+            self._soporte_manage_mode    = True
+            # Re-habilitar "Insertar Soporte", deshabilitar "Crear Soporte",
+            # re-habilitar RadioGroup de edición
+            self.script_object.enable_parameter(ParamNames.Soportes.INSERTAR_SOPORTE, True)
+            self.script_object._update_soporte_ui_state(preview_active=False)
+            return True
+
+        elif event_id == EventIds.BORRAR_SOPORTES:      # 1036
+            # ── BORRAR SELECCIONADOS ──
+            keys = set(self._soporte_selected_keys)
+            if not keys:
+                PythonUtility.ShowMessageBox(
+                    "Selecciona al menos un soporte antes de borrar.",
+                    PythonUtility.MB_OK,
+                )
+                return True
+            msg = (
+                f"Se eliminarán {len(keys)} soporte(s) de la lista.\n\n"
+                "¿Confirma?\n[SÍ] Borrar.  [NO] Cancelar."
+            )
+            if PythonUtility.ShowMessageBox(msg, PythonUtility.MB_YESNO) != PythonUtility.IDYES:
+                return True
+            self.script_object._remove_soportes_by_keys(keys)
+            self._soporte_selected_keys = set()
+            self._soporte_hover_key = None
+            self._soporte_moving_key = None
+            if not self.script_object.soportes_list:
+                self._soporte_manage_mode = False
+            # self.script_object.enable_parameter(ParamNames.Soportes.BORRAR_SOPORTES, False)
+            # self.script_object.enable_parameter(ParamNames.Soportes.APLICAR_ATTR, False)
+            return True
+
+        elif event_id == EventIds.APLICAR_ATTR_SOPORTE:  # 1037
+            # ── APLICAR ATRIBUTO A SELECCIONADOS (o a todos si no hay selección) ──
+            keys = set(self._soporte_selected_keys)
+            if not keys:
+                # Sin selección explícita: aplicar a todos los soportes acumulados
+                keys = {se.key for se in self.script_object.soportes_list}
+            if not keys:
+                PythonUtility.ShowMessageBox(
+                    "No hay soportes acumulados.",
+                    PythonUtility.MB_OK,
+                )
+                return True
+            raw = getattr(self.script_object.build_ele, ParamNames.Soportes.ATTR_VALUE)
+            attr_val = raw.value
+            if not attr_val:
+                PythonUtility.ShowMessageBox(
+                    "Escribe un valor de atributo antes de aplicar.",
+                    PythonUtility.MB_OK,
+                )
+                return True
+            self.script_object._apply_attributes_to_soportes(keys, attr_val)
+            PythonUtility.ShowMessageBox(
+                f"Atributo '{attr_val}' aplicado a {len(keys)} soporte(s).",
+                PythonUtility.MB_OK,
+            )
+            return True
 
     # ========================================
     # HELPERS
     # ========================================
+    # ══════════════════════════════════════════════════════════════════════
+    # SOPORTES — GESTIÓN (MANAGE MODE): selección, mover, handles
+    # ══════════════════════════════════════════════════════════════════════
+    def _find_soporte_at_point(self, pnt: AllplanGeo.Point3D) -> Optional[int]:
+        """
+        Busca el soporte (midpoint pos1→pos2) más cercano al cursor.
+        Retorna su key o None si ninguno está dentro de HIT_TOL_VERTEX.
+        """
+        if not self.coord_input or not self.script_object.soportes_list:
+            return None
+        try:
+            view_proj = self.coord_input.GetViewWorldProjection()
+            pnt_v = view_proj.WorldToView(pnt)
+            best_key: Optional[int] = None
+            best_dist = HIT_TOL_VERTEX
+            for se in self.script_object.soportes_list:
+                mid = AllplanGeo.Point3D(
+                    (se.pos1.X + se.pos2.X) * 0.5,
+                    (se.pos1.Y + se.pos2.Y) * 0.5,
+                    (se.pos1.Z + se.pos2.Z) * 0.5,
+                )
+                mid_v = view_proj.WorldToView(mid)
+                dist = ((pnt_v.X - mid_v.X) ** 2 + (pnt_v.Y - mid_v.Y) ** 2) ** 0.5
+                if dist < best_dist:
+                    best_dist = dist
+                    best_key = se.key
+            return best_key
+        except Exception:
+            return None
+
+    def _select_soportes_in_box(self, box_start: AllplanGeo.Point3D,
+                                 box_end: AllplanGeo.Point3D) -> Set[int]:
+        """Selecciona soportes cuyo midpoint está dentro del rectángulo de selección."""
+        selected: Set[int] = set()
+        for se in self.script_object.soportes_list:
+            mid = AllplanGeo.Point3D(
+                (se.pos1.X + se.pos2.X) * 0.5,
+                (se.pos1.Y + se.pos2.Y) * 0.5,
+                (se.pos1.Z + se.pos2.Z) * 0.5,
+            )
+            if self._point_in_rect_xy(mid, box_start, box_end):
+                selected.add(se.key)
+        return selected
+
+    def _draw_soporte_manage_overlay(self, current_pnt: AllplanGeo.Point3D) -> None:
+        """
+        Dibuja en overlay:
+          - Cada soporte con color según estado: hover=azul(5), seleccionado=rojo(3), moviendo=verde(6)
+          - Si hay un soporte en modo "mover": preview en posición actual del cursor
+          - Label "#key" sobre el midpoint de cada soporte
+        """
+        if not self.coord_input or not self.script_object.soportes_list:
+            return
+        try:
+            doc = self.coord_input.GetInputViewDocument()
+            # 1. Geometría de cada soporte coloreada según estado.
+            # IMPORTANTE: nunca modificar los elementos del cache — se reconstruye
+            # geometría fresca para colores de overlay (hover/selected/moving).
+            for se in self.script_object.soportes_list:
+                is_selected = se.key in self._soporte_selected_keys
+                is_hover    = se.key == self._soporte_hover_key
+                is_moving   = se.key == self._soporte_moving_key
+
+                if is_moving:
+                    color = 8   # naranja — en movimiento (posición original)
+                elif is_selected:
+                    color = 6   # rojo — seleccionado
+                elif is_hover:
+                    color = 7   # azul — bajo el cursor
+                else:
+                    color = None  # sin override — usar cache tal cual
+
+                if color is not None:
+                    # Reconstruir geometría limpia para colorear — jamás tocar el cache
+                    fresh = self.script_object.build_support_preview_elems(
+                        se.pos1, se.pos2, entry=se.as_dict()
+                    )
+                    colored = []
+                    for e in fresh:
+                        try:
+                            prop = AllplanBaseElements.CommonProperties()
+                            prop.GetGlobalProperties()
+                            prop.Color = color
+                            prop.ColorByLayer = False
+                            e.CommonProperties = prop
+                            colored.append(e)
+                        except Exception:
+                            colored.append(e)
+                    AllplanBaseElements.DrawElementPreview(
+                        doc, AllplanGeo.Matrix3D(), colored, False, None
+                    )
+                else:
+                    cached = self.script_object._soporte_geom_cache.get(se.key, [])
+                    if cached:
+                        AllplanBaseElements.DrawElementPreview(
+                            doc, AllplanGeo.Matrix3D(), cached, False, None
+                        )
+
+            # 2. Preview en nueva posición cuando hay soporte en modo "mover"
+            if self._soporte_moving_key is not None:
+                p1_orig = self._soporte_move_p1_origin
+                p2_orig = self._soporte_move_p2_origin
+                if p1_orig and p2_orig:
+                    delta = AllplanGeo.Vector3D(
+                        current_pnt.X - p1_orig.X,
+                        current_pnt.Y - p1_orig.Y,
+                        current_pnt.Z - p1_orig.Z,
+                    )
+                    new_p1 = AllplanGeo.Point3D(
+                        p1_orig.X + delta.X, p1_orig.Y + delta.Y, p1_orig.Z + delta.Z
+                    )
+                    new_p2 = AllplanGeo.Point3D(
+                        p2_orig.X + delta.X, p2_orig.Y + delta.Y, p2_orig.Z + delta.Z
+                    )
+                    se_mv = self.script_object._get_soporte_by_key(self._soporte_moving_key)
+                    move_geom = self.script_object.build_support_preview_elems(
+                        new_p1, new_p2, entry=se_mv.as_dict() if se_mv else None
+                    )
+                    if move_geom:
+                        colored = []
+                        for e in move_geom:
+                            try:
+                                ec = e
+                                prop = AllplanBaseElements.CommonProperties()
+                                prop.GetGlobalProperties()
+                                prop.Color = 5   # azul — preview posición nueva
+                                prop.ColorByLayer = False
+                                ec.CommonProperties = prop
+                                colored.append(ec)
+                            except Exception:
+                                colored.append(e)
+                        AllplanBaseElements.DrawElementPreview(
+                            doc, AllplanGeo.Matrix3D(), colored, False, None
+                        )
+
+            # 3. Label "#key" sobre el midpoint de cada soporte
+            for se in self.script_object.soportes_list:
+                mid = AllplanGeo.Point3D(
+                    (se.pos1.X + se.pos2.X) * 0.5,
+                    (se.pos1.Y + se.pos2.Y) * 0.5,
+                    (se.pos1.Z + se.pos2.Z) * 0.5 + HANDLE_SIZE * 1.5,
+                )
+                lbl_prop = self._clone_properties(self.com_prop)
+                lbl_prop.Color = 7
+                lbl_prop.ColorByLayer = False
+                try:
+                    text_prop = AllplanBasisElements.TextProperties()
+                    text_prop.Height = 0.30
+                    text_prop.Width  = 0.30
+                    text_prop.IsScaleDependent = False
+                    text_elem = AllplanBasisElements.TextElement(
+                        lbl_prop, text_prop, f"#{se.key}",
+                        AllplanGeo.Point2D(mid.X, mid.Y)
+                    )
+                    AllplanBaseElements.DrawElementPreview(
+                        doc, AllplanGeo.Matrix3D(), [text_elem], False, None
+                    )
+                except Exception:
+                    pass
+
+        except Exception as ex:
+            print(f"[Soportes] _draw_soporte_manage_overlay: {ex}")
+
+    def _handle_soporte_manage_mouse(
+        self,
+        mouse_msg: Any,
+        pnt: AllplanGeo.Point3D,
+        is_left_click: bool,
+    ) -> bool:
+        """
+        Gestiona el mouse en modo gestión de soportes acumulados.
+
+        Click izquierdo:
+          - Sobre handle                   → seleccionar / deseleccionar
+          - Sobre handle ya seleccionado   → iniciar modo "mover" (si Edit Mode ON)
+          - En modo "mover"                → colocar en nueva posición
+          - En espacio vacío               → limpiar selección
+        """
+        if not self.coord_input:
+            return True
+        self._soporte_cursor_pnt = pnt
+        self._soporte_hover_key  = self._find_soporte_at_point(pnt)
+
+        if self.coord_input.IsMouseMove(mouse_msg):
+            self._draw_preview(pnt)
+            return True
+
+        if not is_left_click:
+            return True
+
+        # ── Modo "mover" activo: colocar soporte en nueva posición ──
+        if self._soporte_moving_key is not None:
+            p1_orig = self._soporte_move_p1_origin
+            p2_orig = self._soporte_move_p2_origin
+            if p1_orig and p2_orig:
+                delta = AllplanGeo.Vector3D(
+                    pnt.X - p1_orig.X, pnt.Y - p1_orig.Y, pnt.Z - p1_orig.Z
+                )
+                new_p1 = AllplanGeo.Point3D(
+                    p1_orig.X + delta.X, p1_orig.Y + delta.Y, p1_orig.Z + delta.Z
+                )
+                new_p2 = AllplanGeo.Point3D(
+                    p2_orig.X + delta.X, p2_orig.Y + delta.Y, p2_orig.Z + delta.Z
+                )
+                self.script_object._update_soporte_position(self._soporte_moving_key, new_p1, new_p2)
+                print(
+                    f"[Soportes] Soporte #{self._soporte_moving_key} movido a "
+                    f"({new_p1.X:.1f},{new_p1.Y:.1f},{new_p1.Z:.1f})"
+                )
+            self._soporte_moving_key      = None
+            self._soporte_move_p1_origin  = None
+            self._soporte_move_p2_origin  = None
+            self._draw_preview(pnt)
+            return True
+
+        hover_key = self._soporte_hover_key
+
+        # ── Click en espacio vacío: limpiar selección ──
+        if hover_key is None:
+            self._soporte_selected_keys.clear()
+            self._update_manage_buttons()
+            self._draw_preview(pnt)
+            return True
+
+        # ── Click sobre handle ──
+        # Leer modo radio: 1=Edición, 2=Edición Mover (routing ya garantiza ≥1)
+        edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+        edit_mode_val = int(getattr(edit_raw, "value", 0))
+
+        if edit_mode_val == SoporteEditModeValues.MOVE:
+            # Modo Edición Mover: click en handle → pick-up inmediato
+            se = self.script_object._get_soporte_by_key(hover_key)
+            if se:
+                self._soporte_moving_key     = hover_key
+                self._soporte_move_p1_origin = AllplanGeo.Point3D(se.pos1)
+                self._soporte_move_p2_origin = AllplanGeo.Point3D(se.pos2)
+                print(f"[Soportes] Soporte #{hover_key} en modo mover — click para colocar.")
+        else:
+            # Modo Edición (1): toggle selección → habilita Borrar / Aplicar Attr
+            if hover_key in self._soporte_selected_keys:
+                self._soporte_selected_keys.discard(hover_key)
+            else:
+                self._soporte_selected_keys.add(hover_key)
+            self._update_manage_buttons()
+
+        self._draw_preview(pnt)
+        return True
+
+    def _update_manage_buttons(self) -> None:
+        """Botones habilitados siempre que haya soportes acumulados."""
+        self.script_object._update_soporte_ui_state()
+
+    def _disable_soporte_edit_mode(self) -> None:
+        """
+        Fija el RadioGroup de edición de soportes a Desactivado (0) y limpia
+        el estado interno de selección/hover/mover. Se llama al cambiar a
+        CREATE o EDIT mode en la polilínea.
+        """
+        from .models import SoporteEditModeValues
+        edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+        if edit_raw is not None:
+            edit_raw.value = SoporteEditModeValues.DISABLED
+        # Limpiar estado de edición
+        self._soporte_selected_keys.clear()
+        self._soporte_hover_key      = None
+        self._soporte_moving_key     = None
+        self._soporte_move_p1_origin = None
+        self._soporte_move_p2_origin = None
+        # Deshabilitar el RadioGroup visualmente
+        self.script_object.enable_parameter(ParamNames.Soportes.EDIT_MODE, False)
+
+    # ══════════════════════════════════════════════════════════════════════
+    # SOPORTES 3D PREVIEW
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _init_soporte_from_json(self) -> None:
+        """
+        Lee Soportes_mock.json al arrancar el interactor y escribe el primer
+        soporte encontrado en los campos de paleta (Pos1/Pos2, tipo, cotas…).
+        Si el JSON no existe o está vacío, no hace nada.
+        """
+        try:
+            json_path = get_default_json_path(self.config.default_installation)
+            supports = load_supports_from_json(json_path)
+            if not supports:
+                return
+            first = supports[0]
+
+            # Campos tipo / subtipo / superficie / cotas / ángulo
+            def _set(param_name: str, value) -> None:
+                raw = getattr(self.script_object.build_ele, param_name, None)
+                if raw is not None:
+                    try:
+                        raw.value = value
+                    except Exception:
+                        pass
+
+            def _jv(obj, *keys, default=None):
+                if isinstance(obj, dict):
+                    for k in keys:
+                        if k in obj:
+                            return obj[k]
+                    return default
+                for k in keys:
+                    v = getattr(obj, k, None)
+                    if v is not None:
+                        return v
+                return default
+
+            _set(ParamNames.Soportes.TYPE_SUPPORT,       str(_jv(first, "tipo", "type", default="Omega")))
+            _set(ParamNames.Soportes.SUBTIPO_SOPORTE,    str(_jv(first, "subtipo", "subtype", default="")))
+            _set(ParamNames.Soportes.SUPERFICIE,         str(_jv(first, "superficie", "surface", default="Perforado")))
+            _set(ParamNames.Soportes.COTA_A,             float(_jv(first, "cota_a", "height_a", default=0.0) or 0.0))
+            _set(ParamNames.Soportes.COTA_B,             float(_jv(first, "cota_b", "height_b", default=205.0) or 205.0))
+            _set(ParamNames.Soportes.ANGULO_INCLINACION, float(_jv(first, "angulo_inclinacion", "inclination_angle_deg", default=0.0) or 0.0))
+
+            # Posiciones — guardar en paleta Y en variables del interactor
+            p1 = _jv(first, "posicion1", "position1", default=[0.0, 0.0, 0.0])
+            p2 = _jv(first, "posicion2", "position2", default=[1000.0, 0.0, 0.0])
+            if p1:
+                self._soporte_pos1 = AllplanGeo.Point3D(float(p1[0]), float(p1[1]), float(p1[2]))
+            if p2:
+                self._soporte_pos2 = AllplanGeo.Point3D(float(p2[0]), float(p2[1]), float(p2[2]))
+
+            # No se calcula _soporte_dir_vec aquí: las posiciones del JSON son
+            # absolutas y no representan un vector de dirección relativo válido.
+            # El dir_vec se inicializa en el 1er click real del usuario (fase 1).
+            print(f"[Soportes] JSON cargado: p1={p1} p2={p2}")
+        except Exception as exc:
+            print(f"[Soportes] _init_soporte_from_json: {exc}")
+
+    def _write_support_pos(self, index: int, pnt: AllplanGeo.Point3D) -> None:
+        """
+        Almacena el punto en la variable interna del interactor (_soporte_pos1/2)
+        y también actualiza los inputs X/Y/Z visibles en la paleta.
+        """
+        # ── 1. Guardar en el interactor (fuente de verdad para la preview) ──
+        if index == 1:
+            self._soporte_pos1 = AllplanGeo.Point3D(pnt)
+        else:
+            self._soporte_pos2 = AllplanGeo.Point3D(pnt)
+
+        # ── 2. Actualizar los inputs de la paleta (para que el usuario los vea) ──
+        for axis, val in (("X", pnt.X), ("Y", pnt.Y), ("Z", pnt.Z)):
+            raw = getattr(self.script_object.build_ele, f"Pos{index}{axis}", None)
+            if raw is not None:
+                try:
+                    raw.value = float(val)
+                except Exception:
+                    pass
+
+    def _draw_soporte_overlay(self) -> None:
+        """Envía los elementos preview del soporte al viewport directamente."""
+        if not self.coord_input:
+            return
+        elems = getattr(self.script_object, '_soporte_preview_elems', [])
+        if not elems:
+            return
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                self.coord_input.GetInputViewDocument(),  # type: ignore
+                AllplanGeo.Matrix3D(),
+                elems,
+                False,
+                None,
+            )
+        except Exception as exc:
+            print(f"[Soportes] _draw_soporte_overlay: {exc}")
+
+    def _rebuild_soporte_preview(self) -> None:
+        """
+        Construye la geometría 3D del soporte usando _soporte_pos1 y _soporte_pos2.
+        Si pos2 es None se pasa None y build_support_preview_elems usará la
+        dirección de la paleta (valores del JSON inicial).
+        Requiere al menos pos1.
+        """
+        pos1 = self._soporte_pos1
+        pos2 = self._soporte_pos2
+        if pos1 is None or pos2 is None:
+            # Sin ambos puntos no hay soporte que dibujar
+            self.script_object._soporte_preview_elems = []
+            return
+        try:
+            elems = self.script_object.build_support_preview_elems(pos1, pos2)
+            self.script_object._soporte_preview_elems = elems or []
+            print(
+                f"[Soportes] Preview: {len(self.script_object._soporte_preview_elems)} elem(s) "
+                f"pos1=({pos1.X:.1f},{pos1.Y:.1f},{pos1.Z:.1f}) "
+                f"pos2=({pos2.X:.1f},{pos2.Y:.1f},{pos2.Z:.1f})"
+            )
+        except Exception as exc:
+            print(f"[Soportes] _rebuild_soporte_preview: {exc}")
+            self.script_object._soporte_preview_elems = []
+
+    def _handle_soporte_mouse(
+        self,
+        mouse_msg: Any,
+        pnt: AllplanGeo.Point3D,
+        is_left_click: bool,
+    ) -> bool:
+        """
+        Ciclo de clicks en modo inserción de soporte:
+          Click impar  (1, 3, 5…) → fija Pos1, aparece línea fantasma Pos1→cursor
+          Click par    (2, 4, 6…) → fija Pos2, redibuja soporte, desaparece línea fantasma
+
+        _soporte_phase se incrementa en cada click.
+        La línea fantasma es visible cuando _soporte_phase es impar (≥ 1).
+        """
+        if not self.coord_input:
+            return True
+
+        self._soporte_cursor_pnt = pnt
+
+        if self.coord_input.IsMouseMove(mouse_msg):
+            self._draw_preview(pnt)
+            return True
+
+        if not is_left_click:
+            return True
+
+        # Avanzar fase
+        self._soporte_phase       += 1
+        self._soporte_click_count  = self._soporte_phase
+
+        if self._soporte_phase % 2 == 1:
+            # ── Click impar → fijar Pos1, limpiar Pos2 ──
+            # Borrar posiciones anteriores; el soporte se dibujará en el 2do click.
+            self._soporte_pos1 = AllplanGeo.Point3D(pnt)
+            self._soporte_pos2 = None
+            self._soporte_dir_vec = None
+            self._write_support_pos(1, pnt)
+            # Limpiar preview hasta que el usuario indique Pos2
+            self.script_object._soporte_preview_elems = []
+            print(
+                f"[Soportes] click {self._soporte_phase} — "
+                f"Pos1=({pnt.X:.1f},{pnt.Y:.1f},{pnt.Z:.1f})  [esperando Pos2, línea fantasma activa]"
+            )
+        else:
+            # ── Click par → fijar Pos2, calcular dirección y dibujar soporte ──
+            self._soporte_pos2 = AllplanGeo.Point3D(pnt)
+            self._write_support_pos(2, pnt)
+
+            # Calcular y guardar dirección real pos1→pos2
+            if self._soporte_pos1:
+                dx = pnt.X - self._soporte_pos1.X
+                dy = pnt.Y - self._soporte_pos1.Y
+                dz = pnt.Z - self._soporte_pos1.Z
+                if abs(dx) > 1e-6 or abs(dy) > 1e-6 or abs(dz) > 1e-6:
+                    self._soporte_dir_vec = AllplanGeo.Vector3D(dx, dy, dz)
+
+            self._rebuild_soporte_preview()
+            print(
+                f"[Soportes] click {self._soporte_phase} — "
+                f"Pos2=({pnt.X:.1f},{pnt.Y:.1f},{pnt.Z:.1f})  [soporte posicionado]"
+            )
+
+        self._draw_preview(pnt)
+        return True
+
     def _is_geometry_valid(self):
         """Verifica si la geometría actual es válida para ser creada."""
         if not self.segment_groups:

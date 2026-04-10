@@ -90,6 +90,38 @@ PARAM_FINALIZAR_CREACION = "finalizarCreacion"        # Button finalizar y crear
 PARAM_Z_UNIQUE = "zUnique"                            # Double - Coordenada Z única (oculto)
 PARAM_SAVED_STATE = "SavedState"                      # String - Estado serializado JSON (oculto)
 
+# ─────────────────── Soportes (página separada) ───────────────────
+PARAM_TYPE_SUPPORT = "TypeSupport"                    # StringComboBox: Zeta | Omega
+PARAM_TYPE_SUPPORT_ZETA = "TypeSupportZeta"           # StringComboBox variante Zeta
+PARAM_TYPE_SUPPORT_OMEGA = "TypeSupportOmega"         # StringComboBox variante Omega
+PARAM_TYPE_INSTALLATION_SEP = "TypeInstallationSEP"   # StringComboBox instalación Electr./Clima
+PARAM_TYPE_INSTALLATION_VARIFIX = "TypeInstallationVarifix"  # StringComboBox instalación Varifix
+PARAM_SUBTIPO_SOPORTE = "SubtipoSoporte"              # StringComboBox subtipo semántico
+PARAM_SUPERFICIE = "Superficie"                       # StringComboBox: Liso | Perforado
+PARAM_COTA_A = "CotaA"                               # Double - cota_a del mock JSON
+PARAM_COTA_B = "CotaB"                               # Double - cota_b del mock JSON
+PARAM_ANGULO_INCLINACION = "AnguloInclinacion"        # Angle - angulo_inclinacion del mock JSON
+# Botones de acción
+PARAM_INSERTAR_SOPORTE = "InsertarSoporte"            # Button - entra en modo inserción
+PARAM_CREAR_SOPORTES = "CrearSoporte"                 # Button - acumula soporte en lista
+PARAM_BORRAR_SOPORTES = "BorrarSoportes"              # Button - borra seleccionados de lista
+# Modo de edición (RadioButtonGroup: 0=Desactivado, 1=Edición, 2=Edición Mover)
+PARAM_SOPORTE_EDIT_MODE = "SoporteEditMode"           # RadioButtonGroup Integer
+# Atributos de soporte
+PARAM_SOPORTE_ATTR_VALUE = "SoporteAttributeValue"   # String - valor atributo a aplicar
+PARAM_APLICAR_ATTR_SOPORTE = "AplicarAtributoSoporte" # Button - aplica atributo a seleccionados
+# Display
+PARAM_SOPORTE_COUNT = "SoporteCount"                  # Text - cantidad acumulada (solo lectura)
+# Estado interno
+PARAM_SOPORTES_SAVED_STATE = "SoportesSavedState"    # String JSON - lista de soportes acumulados
+
+# ─────────────────── Puntos Definidos / Puntos Libres ───────────────────
+PARAM_DEFINED_ELEMENT_TYPE = "DefinedElementType"    # StringComboBox: tipo de elemento
+PARAM_DEFINED_POINT_TYPE = "PointType"               # StringComboBox: tipo de punto libre
+PARAM_DEFINED_ROT_X = "RotX"                         # Double - rotación en X
+PARAM_DEFINED_ROT_Y = "RotY"                         # Double - rotación en Y
+PARAM_DEFINED_ROT_Z = "RotZ"                         # Double - rotación en Z
+
 
 # ══════════════════════════════════════════════════════════════════════════════════
 # 2. CLASE PARAMNAMES - AGRUPACIÓN JERÁRQUICA (RECOMENDADO PARA USO)
@@ -242,6 +274,68 @@ class ParamNames:
         Z_UNIQUE = PARAM_Z_UNIQUE
         SAVED_STATE = PARAM_SAVED_STATE
 
+    class Soportes:
+        """
+        Parámetros de la página "Soportes" (página separada en el .pyp de instalación).
+
+        Corresponden a los campos de Soportes_mock.json expuestos como controles
+        de paleta.
+
+        Flujo de uso:
+            1. Usuario configura tipo/variante/dimensiones/posiciones.
+            2. Pulsa INSERTAR_SOPORTE  → acumula en SAVED_STATE y sigue.
+            3. Pulsa CREAR_SOPORTES   → genera el elemento Allplan final.
+
+        Posiciones:
+            POS1_X/Y/Z  → campo "posicion1" del mock JSON (inicio del tramo).
+            POS2_X/Y/Z  → campo "posicion2" del mock JSON (fin del tramo).
+            En modo polilínea el interactor escribe estos campos automáticamente;
+            en modo standalone el usuario los introduce a mano.
+        """
+        TYPE_SUPPORT = PARAM_TYPE_SUPPORT
+        TYPE_SUPPORT_ZETA = PARAM_TYPE_SUPPORT_ZETA
+        TYPE_SUPPORT_OMEGA = PARAM_TYPE_SUPPORT_OMEGA
+        TYPE_INSTALLATION_SEP = PARAM_TYPE_INSTALLATION_SEP
+        TYPE_INSTALLATION_VARIFIX = PARAM_TYPE_INSTALLATION_VARIFIX
+        SUBTIPO_SOPORTE = PARAM_SUBTIPO_SOPORTE
+        SUPERFICIE = PARAM_SUPERFICIE
+        COTA_A = PARAM_COTA_A
+        COTA_B = PARAM_COTA_B
+        ANGULO_INCLINACION = PARAM_ANGULO_INCLINACION
+        # Botones de acción
+        INSERTAR_SOPORTE = PARAM_INSERTAR_SOPORTE
+        CREAR_SOPORTES = PARAM_CREAR_SOPORTES
+        BORRAR_SOPORTES = PARAM_BORRAR_SOPORTES
+        # Modo de edición (RadioButtonGroup: 0=Desactivado, 1=Edición, 2=Edición Mover)
+        EDIT_MODE = PARAM_SOPORTE_EDIT_MODE
+        ATTR_VALUE = PARAM_SOPORTE_ATTR_VALUE
+        APLICAR_ATTR = PARAM_APLICAR_ATTR_SOPORTE
+        # Display
+        COUNT = PARAM_SOPORTE_COUNT
+        # Estado interno
+        SAVED_STATE = PARAM_SOPORTES_SAVED_STATE
+
+    class DefinedPointInput:
+        """
+        Parámetros de la sección de puntos definidos / puntos libres.
+
+        Corresponden al bloque "Modo puntos libres" de `agua_polyline.pyp`
+        y permiten acceder desde `build_ele` a la configuración del elemento
+        definido que debe reflejarse en la paleta.
+
+        Atributos:
+            ELEMENT_TYPE: Tipo de elemento seleccionado.
+            POINT_TYPE: Tipo de punto libre seleccionado.
+            ROT_X: Rotación en eje X.
+            ROT_Y: Rotación en eje Y.
+            ROT_Z: Rotación en eje Z.
+        """
+        ELEMENT_TYPE = PARAM_DEFINED_ELEMENT_TYPE
+        POINT_TYPE = PARAM_DEFINED_POINT_TYPE
+        ROT_X = PARAM_DEFINED_ROT_X
+        ROT_Y = PARAM_DEFINED_ROT_Y
+        ROT_Z = PARAM_DEFINED_ROT_Z
+
 
 # ══════════════════════════════════════════════════════════════════════════════════
 # 3. CLASE POINTMODEVALUES - VALORES DE MODOS DE PUNTO
@@ -292,8 +386,22 @@ class EventIds:
     INSTALLATION_TYPE_CHANGED = 1002  # Cambio en ComboBox de tipo de instalación
     FINALIZAR_CREACION = 1003         # Click en botón "Finalizar - Crear"
     BORRAR_SECCION = 1004             # Click en botón "Borrar Segmento"
+    MODIFICAR_DIAMETRO = 1007            # Click en botón "Modificar diámetro"
     APLICAR_LAYERS = 1009             # Click en botón "Aplicar layer"
+    MOSTRAR_INFO = 1010             # Click en botón "Ver Info"
     ATTRIBUTE_APPLY = 1011            # Click en botón "Aplicar atributo"
+    DEFINIR_ORIENTACION = 1012            # Click en botón "Definir orientación"
+
+    # --- Soportes page events ---
+    TYPE_SUPPORT_CHANGED = 1030       # Cambio en ComboBox TypeSupport (Zeta/Omega)
+    TYPE_SUPPORT_ZETA_CHANGED = 1031  # Cambio en variante Zeta
+    TYPE_SUPPORT_OMEGA_CHANGED = 1032 # Cambio en variante Omega (muestra/oculta SEP/Varifix)
+    INSERTAR_SOPORTE = 1033           # Button "Insertar soporte" — entra en modo inserción
+    CREAR_SOPORTES = 1034             # Button "Acumular" — agrega soporte a lista interna
+    INSERTAR_EN_PLANO = 1035          # Button "Insertar en plano" — crea todos en documento
+    BORRAR_SOPORTES = 1036            # Button "Borrar seleccionados" — elimina de lista
+    APLICAR_ATTR_SOPORTE = 1037       # Button "Aplicar atributo" — aplica a seleccionados
+    SOPORTE_EDIT_MODE_CHANGED = 1038  # RadioButtonGroup modo edición cambiado
 
     # --- Marker Manager events (Page 2: macros / defined elements) ---
     SELECT_MACRO_POINT = 1013         # Iniciar captura de punto para macro
