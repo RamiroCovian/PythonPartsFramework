@@ -47,6 +47,8 @@ from .clau_de_pas_006 import ClauDePasModel
 from .colze_base_002 import ColzeBaseModel
 from .taps_010 import TapsModel
 from .te_sortida_004 import TeSortidaModel
+from .macros import macro_manager as _macro_manager_module
+from .macros.macro_manager import AguaMacroManager
 from Instalaciones.ElementosDefinidos import (
     CallbackDefinedElement,
     DefinedElementsFacadeConfig as ED_FacadeConfig,
@@ -115,6 +117,7 @@ CONFIG = PBL.script_object.PolylineBaseConfig(
     num_td_path=base_path,
     limit_angles=True,
     allowed_angles=[0.0, 45.0, 90.0, 135.0, 180.0, -45.0, -90.0, -135.0],
+    marker_manager_factory=lambda so, be: AguaMacroManager(so, be),
 )
 
 # ------ MODULES LOADED FOR TEST ------
@@ -122,6 +125,7 @@ reload_module = [
     PBL,
     PBL_interactor,
     PBL_object,
+    _macro_manager_module,
 ]
 
 MAX_SEGMENT_LENGTH = 5000.0  # 5m (fallback)
@@ -1034,6 +1038,9 @@ def check_allplan_version(_build_ele, _version):
             importlib.reload(module)
         except Exception as e:
             print(f"Error al recargar el módulo {module.__name__}: {e}")
+    global AguaMacroManager
+    from .macros.macro_manager import AguaMacroManager as _AMM
+    AguaMacroManager = _AMM
     return True
 
 
