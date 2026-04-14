@@ -628,7 +628,11 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 param_name = ParamNames.Installation.WATER_TYPE
                 self.show_parameter(param_name)
 
-                if value in [DistributionTypes.IS.value, DistributionTypes.TD.value]:
+                if value in [
+                    DistributionTypes.IS.value,
+                    DistributionTypes.TD.value,
+                    DistributionTypes.EN.value,
+                ]:
                     water_types = WaterTypes.to_value_list(value)
                     self.ctrl_prop_util.set_value_list(param_name, water_types)
                 else:

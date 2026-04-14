@@ -39,11 +39,11 @@ INSTALLATION_INFO = {
         "layer_polyline": "IS_CON_VENT_EIX",
     },
     "layers": [
-        {"key": "KN_XPS_RECESS", "label": "XPS RECESS"},
         {"key": "KN_AIGUA", "label": "AIGUA"},
-        {"key": "KN_XPS_CAVITAT", "label": "XPS CAVITAT"},
-        {"key": "KN_PLD_RECESS", "label": "KN PLD RECESS"},
+        {"key": "KN_X_AIGUA", "label": "AIGUA CARA X"},
+        {"key": "KN_Y_AIGUA", "label": "AIGUA CARA Y"},
         {"key": "IS_CON_AIGUA_FAB", "label": "IS CON AIGUA FAB"},
+        {"key": "IS_CON_AIGUA_OBR", "label": "IS CON AIGUA OBR"},
     ],
     "installation_types": [
         {
