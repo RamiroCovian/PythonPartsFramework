@@ -6980,7 +6980,13 @@ class PipelineProcessor:
         # Para codos, usamos la lógica completa de fontaneria (por puntos),
         # y evitamos el pipeline simplificado pitch/yaw de abajo.
         if elem_type == "codo_90" and next_seg:
-            from .elbow_orientation import apply_elbow_transform
+            # Allplan mantiene el intérprete vivo entre ejecuciones del PythonPart.
+            # Forzamos recarga para no quedarnos con una versión cacheada del helper.
+            import importlib
+            from . import elbow_orientation as elbow_orientation_module
+
+            elbow_orientation_module = importlib.reload(elbow_orientation_module)
+            apply_elbow_transform = elbow_orientation_module.apply_elbow_transform
 
             p_prev = getattr(segment_data, "start", None)
             p_mid = getattr(segment_data, "end", None)

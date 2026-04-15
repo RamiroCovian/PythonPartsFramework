@@ -10,6 +10,8 @@ from __future__ import annotations
 import math
 import NemAll_Python_Geometry as AllplanGeo
 
+ELBOW_ORIENTATION_REV = "2026-04-15-02"
+
 
 def _normalize_angle_rad_pi(angle_rad: float) -> float:
     while angle_rad > math.pi:
@@ -33,8 +35,18 @@ def _is_close_angle_deg(angle_deg: float, target_deg: float, tol_deg: float = 10
 
 
 def _dir_from_delta(dx: float, dy: float, eps: float = 1e-6) -> str:
-    """Devuelve 'E','W','N','S' según dx/dy (tramos ortogonales o dominantes)."""
-    if abs(dx) > abs(dy):
+    """
+    Devuelve 'E','W','N','S' según dx/dy.
+
+    Para diagonales ~45° estabilizamos el desempate usando el signo de X.
+    Sin esto, pequeñas diferencias de coma flotante pueden hacer que una misma
+    diagonal caiga aleatoriamente en X o Y entre ejecuciones.
+    """
+    abs_dx = abs(dx)
+    abs_dy = abs(dy)
+    if abs(abs_dx - abs_dy) <= eps:
+        return "E" if dx >= 0.0 else "W"
+    if abs_dx > abs_dy:
         return "E" if dx > eps else "W"
     return "N" if dy > eps else "S"
 
@@ -195,9 +207,10 @@ def apply_elbow_transform(
         )
 
         print(
-            f"[ELBOW][V] h_dir={h_dir} v_dir={v_dir} "
+            f"[ELBOW][V][rev={ELBOW_ORIENTATION_REV}] h_dir={h_dir} v_dir={v_dir} "
             f"axis={axis_code} ang_h={math.degrees(ang_h):.2f}° ang_v={math.degrees(ang_v):.2f}° "
-            f"seg1_vert={seg1_vert} seg2_vert={seg2_vert}"
+            f"seg1_vert={seg1_vert} seg2_vert={seg2_vert} "
+            f"hx={hx:.12f} hy={hy:.12f} diff={abs(abs(hx) - abs(hy)):.12e}"
         )
 
         # Igual que en fontaneria (base): cuando el vertical es el primero
