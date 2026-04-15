@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import NemAll_Python_Geometry as AllplanGeo
 
-ELBOW_ORIENTATION_REV = "2026-04-15-04"
+ELBOW_ORIENTATION_REV = "2026-04-15-05"
 
 
 def _normalize_angle_rad_pi(angle_rad: float) -> float:
@@ -187,28 +187,25 @@ def apply_elbow_transform(
 
         h_dir = _dir_from_delta(hx, hy, eps)
 
-        # Para el segundo codo (seg1 vertical, seg2 horizontal) los tramos
-        # diagonales que salen hacia el oeste no quedan bien resueltos si
-        # siempre los colapsamos a "W". En esas diagonales la familia se
-        # orienta mejor siguiendo el signo de Y:
+        # En diagonales exactas hacia el oeste, colapsar siempre a "W" no
+        # alcanza para orientar bien la familia. En esos casos resolvemos el
+        # cuadrante con el signo de Y:
         #   Q2 (-,+) -> "N"
         #   Q3 (-,-) -> "S"
         # Dejamos intactos los diagonales hacia el este para no romper los
-        # dos casos ya verificados (NE y SE).
+        # casos ya verificados (NE y SE).
         is_diagonal_tie = abs(abs(hx) - abs(hy)) <= eps
-        if seg1_vert and not seg2_vert and is_diagonal_tie and hx < 0.0:
+        if is_diagonal_tie and hx < 0.0:
             h_dir = "N" if hy >= 0.0 else "S"
         v_dir = "U" if v_dz > 0 else "D"
         needs_q2_extra_yaw = (
-            seg1_vert
-            and not seg2_vert
+            (seg1_vert or seg2_vert)
             and is_diagonal_tie
             and hx < 0.0
             and hy > 0.0
         )
         needs_q3_extra_yaw = (
-            seg1_vert
-            and not seg2_vert
+            (seg1_vert or seg2_vert)
             and is_diagonal_tie
             and hx < 0.0
             and hy < 0.0
