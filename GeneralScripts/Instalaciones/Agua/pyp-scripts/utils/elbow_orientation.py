@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import NemAll_Python_Geometry as AllplanGeo
 
-ELBOW_ORIENTATION_REV = "2026-04-15-03"
+ELBOW_ORIENTATION_REV = "2026-04-15-04"
 
 
 def _normalize_angle_rad_pi(angle_rad: float) -> float:
@@ -206,6 +206,13 @@ def apply_elbow_transform(
             and hx < 0.0
             and hy > 0.0
         )
+        needs_q3_extra_yaw = (
+            seg1_vert
+            and not seg2_vert
+            and is_diagonal_tie
+            and hx < 0.0
+            and hy < 0.0
+        )
 
         # (axis_code, yaw_Z_rad, rot_vert_rad)
         # Mapeo equivalente al de fontaneria.py para codos verticales.
@@ -274,6 +281,8 @@ def apply_elbow_transform(
         # segmento sin alterar los otros dos casos ya verificados.
         if needs_q2_extra_yaw and reference_orientation_angle is None:
             prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy - (math.pi / 2.0))
+        elif needs_q3_extra_yaw and reference_orientation_angle is None:
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + (math.pi / 2.0))
 
         # Rz adicional (si aplica)
         mat_z_rot = None
