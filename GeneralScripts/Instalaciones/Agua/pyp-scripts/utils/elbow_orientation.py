@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import NemAll_Python_Geometry as AllplanGeo
 
-ELBOW_ORIENTATION_REV = "2026-04-15-02"
+ELBOW_ORIENTATION_REV = "2026-04-15-03"
 
 
 def _normalize_angle_rad_pi(angle_rad: float) -> float:
@@ -186,7 +186,26 @@ def apply_elbow_transform(
         hy /= h_len
 
         h_dir = _dir_from_delta(hx, hy, eps)
+
+        # Para el segundo codo (seg1 vertical, seg2 horizontal) los tramos
+        # diagonales que salen hacia el oeste no quedan bien resueltos si
+        # siempre los colapsamos a "W". En esas diagonales la familia se
+        # orienta mejor siguiendo el signo de Y:
+        #   Q2 (-,+) -> "N"
+        #   Q3 (-,-) -> "S"
+        # Dejamos intactos los diagonales hacia el este para no romper los
+        # dos casos ya verificados (NE y SE).
+        is_diagonal_tie = abs(abs(hx) - abs(hy)) <= eps
+        if seg1_vert and not seg2_vert and is_diagonal_tie and hx < 0.0:
+            h_dir = "N" if hy >= 0.0 else "S"
         v_dir = "U" if v_dz > 0 else "D"
+        needs_q2_extra_yaw = (
+            seg1_vert
+            and not seg2_vert
+            and is_diagonal_tie
+            and hx < 0.0
+            and hy > 0.0
+        )
 
         # (axis_code, yaw_Z_rad, rot_vert_rad)
         # Mapeo equivalente al de fontaneria.py para codos verticales.
@@ -247,6 +266,14 @@ def apply_elbow_transform(
         )
         if is_cardinal:
             prev_angle_xy = 0.0
+
+        # Caso validado por prueba en obra:
+        # vertical descendente seguido de diagonal hacia noroeste (-,+).
+        # La corrección debe aplicarse sobre la referencia previa en planta
+        # (prev_angle_xy), no sobre ang_h. Así el codo acompaña el tercer
+        # segmento sin alterar los otros dos casos ya verificados.
+        if needs_q2_extra_yaw and reference_orientation_angle is None:
+            prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy - (math.pi / 2.0))
 
         # Rz adicional (si aplica)
         mat_z_rot = None
