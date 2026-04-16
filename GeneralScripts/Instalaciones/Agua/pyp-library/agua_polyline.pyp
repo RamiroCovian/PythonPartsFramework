@@ -524,6 +524,30 @@
                 <ValueDialog>FixtureDialog</ValueDialog>
                 <Visible>False</Visible>
             </Parameter>
+            <Parameter>
+                <Name>MacroRotX</Name>
+                <Text>Rot X macro (grados)</Text>
+                <Value>0.0</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>-360.0</MinValue>
+                <MaxValue>360.0</MaxValue>
+            </Parameter>
+            <Parameter>
+                <Name>MacroRotY</Name>
+                <Text>Rot Y macro (grados)</Text>
+                <Value>0.0</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>-360.0</MinValue>
+                <MaxValue>360.0</MaxValue>
+            </Parameter>
+            <Parameter>
+                <Name>MacroRotZ</Name>
+                <Text>Rot Z macro (grados)</Text>
+                <Value>0.0</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>-360.0</MinValue>
+                <MaxValue>360.0</MaxValue>
+            </Parameter>
         </Parameter>
         <!-- Modo Puntos Libres -->
         <Parameter>

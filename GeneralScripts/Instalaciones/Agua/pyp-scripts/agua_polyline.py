@@ -47,6 +47,7 @@ from .clau_de_pas_006 import ClauDePasModel
 from .colze_base_002 import ColzeBaseModel
 from .taps_010 import TapsModel
 from .te_sortida_004 import TeSortidaModel
+from Instalaciones.MacroCore import manager as _macrocore_manager_module
 from .macros import macro_manager as _macro_manager_module
 from .macros.macro_manager import AguaMacroManager
 from Instalaciones.ElementosDefinidos import (
@@ -125,6 +126,7 @@ reload_module = [
     PBL,
     PBL_interactor,
     PBL_object,
+    _macrocore_manager_module,
     _macro_manager_module,
 ]
 
