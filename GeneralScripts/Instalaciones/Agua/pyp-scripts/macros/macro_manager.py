@@ -23,6 +23,7 @@ import NemAll_Python_IFW_Input as AllplanIFW
 import NemAll_Python_Utility as PythonUtility
 
 from Instalaciones.PolyLib.marker_manager import MarkerManager
+from FileNameService import FileNameService
 
 from ScriptObjectInteractors.BaseScriptObjectInteractor import BaseScriptObjectInteractor
 
@@ -292,6 +293,58 @@ class AguaMacroManager(MarkerManager):
             )
         except Exception:
             return []
+
+    def get_macro_cursor_preview_geo(self, cursor_pos: AllplanGeo.Point3D) -> List[Any]:
+        """Return the actual library macro as preview geometry at cursor position.
+
+        Mirrors the approach from LibraryDialogs.py: build a LibraryElement
+        directly with a placement matrix instead of drawing a generic marker.
+        """
+        try:
+            settings = self.get_macro_settings_from_palette()
+            if not settings:
+                return []
+
+            lib_type = str(settings.get("lib_type", "SmartSymbol") or "SmartSymbol")
+            z_abs = float(settings.get("z_abs", cursor_pos.Z) or cursor_pos.Z)
+            placement_point = AllplanGeo.Point3D(cursor_pos.X, cursor_pos.Y, z_abs)
+            placement_mat = AllplanGeo.Matrix3D()
+            placement_mat.SetTranslation(AllplanGeo.Vector3D(placement_point))
+
+            if lib_type == "SmartSymbol":
+                smart_path = str(settings.get("smart_path", "") or "").strip()
+                if not smart_path:
+                    return []
+                smart_path = FileNameService.get_global_standard_path(smart_path) or smart_path
+                lib_ele_prop = AllplanBasisElements.LibraryElementProperties(
+                    smart_path,
+                    AllplanBasisElements.LibraryElementType.eSmartSymbol,
+                    placement_mat,
+                )
+                return [AllplanBasisElements.LibraryElement(lib_ele_prop)]
+
+            if lib_type == "Fixture":
+                fixture_path = str(settings.get("fixture_path", "") or "").strip()
+                if not fixture_path:
+                    return []
+                fixture_path = FileNameService.get_global_standard_path(fixture_path) or fixture_path
+                lib_ele_prop = AllplanBasisElements.LibraryElementProperties(
+                    "", "", "",
+                    fixture_path,
+                    AllplanBasisElements.LibraryElementType.eFixtureSingleFile,
+                    placement_mat,
+                )
+                try:
+                    if fixture_path.lower().endswith(".lfx"):
+                        pnt_list = [AllplanGeo.Point3D(), AllplanGeo.Point3D(1000, 0, 0)]
+                        lib_ele_prop.SetPolyline(AllplanGeo.Polyline3D(pnt_list))
+                except Exception:
+                    pass
+                return [AllplanBasisElements.LibraryElement(lib_ele_prop)]
+        except Exception as ex:
+            print(f"[AGUA_MGR] get_macro_cursor_preview_geo error: {ex}")
+
+        return []
 
     # ═══════════════════════════════════════════════════════════════════════
     #  OVERRIDE: Element PythonPart injection (uses interactor.pythonpart)
