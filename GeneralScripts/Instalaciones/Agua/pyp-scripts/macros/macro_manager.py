@@ -304,45 +304,82 @@ class AguaMacroManager(MarkerManager):
             settings = self.get_macro_settings_from_palette()
             if not settings:
                 return []
-
-            lib_type = str(settings.get("lib_type", "SmartSymbol") or "SmartSymbol")
-            z_abs = float(settings.get("z_abs", cursor_pos.Z) or cursor_pos.Z)
-            placement_point = AllplanGeo.Point3D(cursor_pos.X, cursor_pos.Y, z_abs)
-            placement_mat = AllplanGeo.Matrix3D()
-            placement_mat.SetTranslation(AllplanGeo.Vector3D(placement_point))
-
-            if lib_type == "SmartSymbol":
-                smart_path = str(settings.get("smart_path", "") or "").strip()
-                if not smart_path:
-                    return []
-                smart_path = FileNameService.get_global_standard_path(smart_path) or smart_path
-                lib_ele_prop = AllplanBasisElements.LibraryElementProperties(
-                    smart_path,
-                    AllplanBasisElements.LibraryElementType.eSmartSymbol,
-                    placement_mat,
-                )
-                return [AllplanBasisElements.LibraryElement(lib_ele_prop)]
-
-            if lib_type == "Fixture":
-                fixture_path = str(settings.get("fixture_path", "") or "").strip()
-                if not fixture_path:
-                    return []
-                fixture_path = FileNameService.get_global_standard_path(fixture_path) or fixture_path
-                lib_ele_prop = AllplanBasisElements.LibraryElementProperties(
-                    "", "", "",
-                    fixture_path,
-                    AllplanBasisElements.LibraryElementType.eFixtureSingleFile,
-                    placement_mat,
-                )
-                try:
-                    if fixture_path.lower().endswith(".lfx"):
-                        pnt_list = [AllplanGeo.Point3D(), AllplanGeo.Point3D(1000, 0, 0)]
-                        lib_ele_prop.SetPolyline(AllplanGeo.Polyline3D(pnt_list))
-                except Exception:
-                    pass
-                return [AllplanBasisElements.LibraryElement(lib_ele_prop)]
+            return self._create_library_preview_elements(settings, cursor_pos)
         except Exception as ex:
             print(f"[AGUA_MGR] get_macro_cursor_preview_geo error: {ex}")
+
+        return []
+
+    def draw_marker_preview(self, model_ele_list: List[Any], current_pnt: Any) -> None:
+        """Draw normal marker overlay plus real macro geometry for placed macros."""
+        super().draw_marker_preview(model_ele_list, current_pnt)
+
+        try:
+            pnt3d = self._ensure_point3d(current_pnt) if current_pnt is not None else None
+        except Exception:
+            pnt3d = None
+
+        selected_idx = self.macro_selected_index
+        for idx, marker in enumerate(self.macro_markers or []):
+            try:
+                pos = marker.get("pos")
+                if pos is None:
+                    continue
+
+                # While dragging a selected macro, preview the real macro at cursor.
+                preview_pos = pnt3d if selected_idx is not None and idx == selected_idx and pnt3d is not None else pos
+                preview_geo = self._create_library_preview_elements(marker, preview_pos)
+                if preview_geo:
+                    model_ele_list.extend(preview_geo)
+            except Exception as ex:
+                print(f"[AGUA_MGR] draw_marker_preview macro overlay error: {ex}")
+
+    def _create_library_preview_elements(
+        self,
+        settings_or_marker: dict,
+        placement_xy: AllplanGeo.Point3D,
+    ) -> List[Any]:
+        """Build a real LibraryElement preview at the given XY and Z."""
+        lib_type = str(settings_or_marker.get("lib_type", "SmartSymbol") or "SmartSymbol")
+        try:
+            z_abs = float(settings_or_marker.get("z_abs", placement_xy.Z) or placement_xy.Z)
+        except Exception:
+            z_abs = placement_xy.Z
+
+        placement_point = AllplanGeo.Point3D(placement_xy.X, placement_xy.Y, z_abs)
+        placement_mat = AllplanGeo.Matrix3D()
+        placement_mat.SetTranslation(AllplanGeo.Vector3D(placement_point))
+
+        if lib_type == "SmartSymbol":
+            smart_path = str(settings_or_marker.get("smart_path", "") or "").strip()
+            if not smart_path:
+                return []
+            smart_path = FileNameService.get_global_standard_path(smart_path) or smart_path
+            lib_ele_prop = AllplanBasisElements.LibraryElementProperties(
+                smart_path,
+                AllplanBasisElements.LibraryElementType.eSmartSymbol,
+                placement_mat,
+            )
+            return [AllplanBasisElements.LibraryElement(lib_ele_prop)]
+
+        if lib_type == "Fixture":
+            fixture_path = str(settings_or_marker.get("fixture_path", "") or "").strip()
+            if not fixture_path:
+                return []
+            fixture_path = FileNameService.get_global_standard_path(fixture_path) or fixture_path
+            lib_ele_prop = AllplanBasisElements.LibraryElementProperties(
+                "", "", "",
+                fixture_path,
+                AllplanBasisElements.LibraryElementType.eFixtureSingleFile,
+                placement_mat,
+            )
+            try:
+                if fixture_path.lower().endswith(".lfx"):
+                    pnt_list = [AllplanGeo.Point3D(), AllplanGeo.Point3D(1000, 0, 0)]
+                    lib_ele_prop.SetPolyline(AllplanGeo.Polyline3D(pnt_list))
+            except Exception:
+                pass
+            return [AllplanBasisElements.LibraryElement(lib_ele_prop)]
 
         return []
 
