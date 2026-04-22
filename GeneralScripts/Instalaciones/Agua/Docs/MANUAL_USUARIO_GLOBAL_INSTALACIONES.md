@@ -1,855 +1,459 @@
 # Manual de Usuario Global de Instalaciones
 
-## 1. Objetivo del documento
+## 1. Finalidad del manual
 
-Este manual describe el funcionamiento global del sistema de instalaciones implementado sobre `PolyLib`, `MacroCore`, `ElementosDefinidos` y `ElementosNoDefinidos`, tomando la instalación de `Agua` como ejemplo de referencia.
+Este manual explica cómo funciona una instalación dentro de Allplan desde el punto de vista del usuario.
 
-El objetivo es documentar el comportamiento funcional completo para usuario final y para personal técnico que necesite entender cómo se trabaja con la herramienta en Allplan:
+Se ha tomado la instalación de Agua como ejemplo, pero el funcionamiento general es común al resto de instalaciones. Lo que cambia entre unas y otras son algunos elementos concretos, ciertos nombres de layer y algunos atributos, pero la forma de trabajar es prácticamente la misma.
 
-- cómo se crea una instalación;
-- cómo se edita;
-- cómo se asignan atributos y layers;
-- cómo se insertan macros y elementos especiales;
-- cómo se usan los puntos no definidos y los puntos libres;
-- cómo funciona la copia por atributo padre;
-- cómo se guardan y restauran los datos;
-- y qué partes cambian entre instalaciones y cuáles son comunes.
+El objetivo de este documento es que cualquier usuario pueda entender:
 
-## 2. Alcance
+- cómo empezar una instalación;
+- cómo dibujarla;
+- cómo editarla;
+- cómo aplicar layers y atributos;
+- cómo insertar elementos definidos, macros y soportes;
+- cómo funcionan las copias o duplicados;
+- y qué comprobaciones conviene hacer antes de finalizar.
 
-Este manual aplica a todas las instalaciones que usan la misma base funcional. En la práctica, el flujo es común entre instalaciones como:
+## 2. A quién va dirigido
 
-- Agua;
-- Electricidad;
-- Ventilación;
-- y otras instalaciones futuras montadas sobre la misma arquitectura.
+Este manual está pensado para usuarios que necesiten modelar instalaciones en Allplan y entender el comportamiento general de la herramienta, sin entrar en detalles de programación ni en nombres internos del sistema.
 
-Lo que cambia entre instalaciones es, principalmente:
+## 3. Qué partes son comunes en todas las instalaciones
 
-- el nombre comercial de la instalación;
-- los elementos disponibles;
-- los layers por defecto;
-- ciertos atributos por defecto;
-- y algunas reglas geométricas concretas de tubos, codos, tes, manguitos o accesorios.
+Todas las instalaciones comparten la misma lógica de trabajo:
 
-Lo que no cambia es el funcionamiento general de la herramienta.
+1. Se selecciona el tipo de instalación.
+2. Se configuran los parámetros principales en la paleta.
+3. Se dibuja o edita el recorrido.
+4. Se revisa la previsualización.
+5. Se añaden, si hace falta, elementos definidos, macros o soportes.
+6. Se aplican layers y atributos.
+7. Se finaliza la creación.
 
-## 3. Cómo leer este manual
+Lo que cambia entre instalaciones suele ser:
 
-Cuando se cite `Agua`, debe entenderse como ejemplo real de una instalación concreta.
+- el tipo de elementos disponibles;
+- los diámetros;
+- las conexiones;
+- algunos layers;
+- y algunos atributos asociados a cada sistema.
 
-Cuando se hable de “instalación”, se está describiendo un comportamiento común reutilizable.
+## 4. Vista general del trabajo con una instalación
 
-Para las capturas se utiliza el marcador:
+El trabajo habitual con una instalación se basa en tres ideas:
 
-`[[CAPTURA-XX: descripción de la imagen a insertar]]`
+- dibujar un recorrido;
+- enriquecer ese recorrido con información;
+- y generar el resultado final.
 
-La recomendación es sustituir cada marcador por una captura real de la interfaz, del estado del modelo o del resultado en pantalla.
+En la práctica, esto significa que primero se crea el trazado principal y después se añaden o ajustan el resto de elementos necesarios.
 
-## 4. Visión general del sistema
+`[[CAPTURA-01: paleta principal completa de la instalación con sus apartados visibles]]`
+![alt text](CAPTURA-01.png)
 
-El sistema de instalaciones se apoya en cuatro bloques funcionales:
+## 5. Flujo de trabajo recomendado
 
-### 4.1. `PolyLib`
+El orden más recomendable para trabajar es este:
 
-Es la base del sistema. Gestiona:
+1. Elegir el tipo de instalación.
+2. Elegir el tipo de tubo o sistema.
+3. Definir diámetro, distribución y resto de parámetros básicos.
+4. Dibujar el recorrido principal.
+5. Revisar uniones, codos y bifurcaciones.
+6. Aplicar layers y atributos si es necesario.
+7. Insertar elementos definidos, macros o soportes.
+8. Comprobar que la información esté completa.
+9. Pulsar el botón de finalizar.
 
-- la polilínea;
-- los modos de dibujo;
-- la edición de segmentos;
-- la aplicación de atributos y layers;
-- la generación final de PythonParts;
-- la persistencia del estado;
-- y la copia de elementos a otros archivos de dibujo en función del atributo padre.
+Seguir este orden ayuda a evitar correcciones posteriores innecesarias.
 
-### 4.2. `MacroCore`
+## 6. Modos principales de trabajo
 
-Gestiona la lógica común de macros:
+La herramienta suele trabajar con tres modos principales.
 
-- lectura de parámetros de macro desde la paleta;
-- selección del punto de colocación;
-- previsualización real de la macro;
-- inserción final de macros en el documento;
-- y control de cota y rotación.
+### 6.1. Modo creación
 
-### 4.3. `ElementosDefinidos`
+Es el modo que se utiliza para dibujar un recorrido nuevo.
 
-Gestiona elementos especiales definidos por la instalación, por ejemplo:
+En este modo el usuario va definiendo puntos y la instalación crea el trazado entre ellos.
 
-- `T sortida`;
-- `Clau de Pas`;
-- `Colze Base`;
-- `Taps`.
+### 6.2. Modo edición
 
-Permite trabajar con dos modelos:
+Es el modo que se utiliza para corregir o modificar un recorrido ya dibujado.
 
-- marcadores sobre la polilínea;
-- puntos libres colocados directamente en el espacio.
+En este modo se pueden seleccionar tramos, borrar partes, cambiar diámetros o ajustar la geometría.
 
-### 4.4. `ElementosNoDefinidos`
+### 6.3. Modo extender
 
-Gestiona puntos lógicos de recorrido cuando todavía no existe geometría final.
+Es el modo que se utiliza para continuar un recorrido ya existente sin empezar desde cero.
 
-Sirve para:
+## 7. Qué debe configurar el usuario antes de dibujar
 
-- definir intenciones de trazado;
-- marcar inicios, finales y bifurcaciones;
-- detectar puntos comunes entre caminos;
-- y preparar una topología lógica que luego puede convertirse en geometría o exportarse.
+Antes de empezar a dibujar conviene revisar los campos principales de la paleta.
 
-## 5. Diferencia entre lo común y lo específico de cada instalación
+### 7.1. Tipo de instalación
 
-En todas las instalaciones existe un patrón común:
+Es el campo donde el usuario elige el sistema con el que va a trabajar.
 
-1. El usuario selecciona el tipo de instalación.
-2. Define parámetros de dibujo y configuración.
-3. Dibuja o edita la polilínea.
-4. La herramienta genera previsualización de segmentos y conexiones.
-5. El usuario puede aplicar layers, atributos y orientación.
-6. El usuario puede añadir macros, elementos definidos, puntos libres o puntos no definidos.
-7. Al finalizar, el sistema crea los PythonParts y, si corresponde, genera copias por atributo padre.
+En Agua, por ejemplo, puede elegir entre varias opciones como:
 
-Las diferencias por instalación suelen limitarse a:
+- Polietilè;
+- Multicapa;
+- Armaflex.
 
-- catálogo de elementos;
-- diámetros disponibles;
-- combinaciones permitidas;
-- tipo de distribución;
-- reglas geométricas específicas;
-- nombres de layers;
-- y atributos por defecto.
+Este campo define qué geometría y qué comportamiento tendrá la instalación.
 
-## 6. Flujo general de trabajo
+`[[CAPTURA-02: desplegable del tipo de instalación abierto con las opciones visibles]]`
+![alt text](CAPTURA-02.png)
 
-El flujo recomendado de uso es el siguiente:
+### 7.2. Diámetro
 
-1. Seleccionar la instalación.
-2. Seleccionar el tipo principal de elemento.
-3. Configurar diámetro, distribución y demás parámetros de paleta.
-4. Elegir modo de dibujo.
-5. Dibujar el recorrido principal.
-6. Revisar la previsualización de tubos y accesorios.
-7. Ajustar layers y atributos.
-8. Insertar macros o elementos especiales si procede.
-9. Insertar soportes si procede.
-10. Finalizar la creación.
-11. Revisar el resultado generado en el documento y las posibles copias en otros archivos de dibujo.
+El diámetro condiciona:
 
-`[[CAPTURA-01: paleta principal completa de la instalación con las secciones visibles]]`
+- el tamaño del elemento principal;
+- las piezas de conexión compatibles;
+- y parte de los atributos asociados.
 
-## 7. Modos principales de trabajo
+Antes de dibujar, conviene comprobar que el diámetro seleccionado es el correcto.
 
-La herramienta se organiza en torno a tres modos principales:
+### 7.3. Distribución
 
-### 7.1. Modo creación
+La distribución define cómo debe comportarse la instalación dentro del sistema.
 
-Es el modo en el que se dibuja una nueva polilínea.
+En Agua es habitual trabajar con modos como:
 
-En este modo el usuario:
+- TD;
+- IS.
 
-- hace clic para definir puntos;
-- genera segmentos consecutivos;
-- construye un camino nuevo;
-- y ve una previsualización de la instalación antes de crear los objetos definitivos.
+La distribución puede afectar a:
 
-### 7.2. Modo edición
+- la forma de los elementos;
+- los atributos aplicados;
+- y el comportamiento de ciertos accesorios.
 
-Es el modo en el que se modifica una polilínea ya existente o el recorrido activo.
+### 7.4. Tipo de agua u otras variantes
 
-En este modo el usuario puede:
+Algunas instalaciones incluyen campos adicionales para distinguir variantes internas del sistema. Si la paleta muestra este dato, conviene definirlo antes de empezar.
 
-- seleccionar segmentos;
-- borrar tramos;
-- modificar diámetros;
-- insertar puntos;
-- y corregir la geometría antes de finalizar.
+### 7.5. Ángulos y orientación
 
-### 7.3. Modo extender
+Si la instalación trabaja con limitación angular o con orientación definida, estos parámetros deben comprobarse al inicio para evitar tener que rehacer el recorrido más adelante.
 
-Es el modo en el que se continúa un trazado existente o se interactúa con elementos ya guardados sin iniciar una polilínea completamente nueva.
+## 8. Cómo dibujar una instalación
 
-## 8. Parámetros principales de la paleta
+El dibujo de la instalación se basa en una secuencia de clics que definen el recorrido.
 
-Los nombres exactos pueden variar en visibilidad según la instalación, pero funcionalmente los bloques son los mismos.
+### 8.1. Inicio del recorrido
 
-### 8.1. Selección de instalación
+El usuario hace clic en el primer punto del trazado.
 
-- `InstallationType`
+### 8.2. Continuación del recorrido
 
-Permite escoger el tipo base de instalación. En Agua, por ejemplo, puede corresponder a:
+Cada clic adicional añade un nuevo tramo.
 
-- `Polietilè`;
-- `Multicapa`;
-- `Armaflex`.
+La herramienta va construyendo la instalación entre esos puntos y mostrando una previsualización del resultado.
 
-Este parámetro condiciona:
+### 8.3. Qué ve el usuario mientras dibuja
 
-- el catálogo de geometrías;
-- las conexiones permitidas;
-- los diámetros disponibles;
-- y parte de los atributos y reglas geométricas.
+Mientras se dibuja, la herramienta no solo muestra la línea del recorrido, sino también el comportamiento previsto de la instalación:
 
-`[[CAPTURA-02: combo de tipo de instalación desplegado con opciones visibles]]`
+- tramos principales;
+- cambios de dirección;
+- uniones;
+- bifurcaciones.
 
-### 8.2. Diámetro
+`[[CAPTURA-03: ejemplo de instalación en fase de dibujo con previsualización activa]]`
+![alt text](CAPTURA-03.png)
 
-- `DiameterType`
-- `DiameterTypeStr`
-- `DiameterModify`
+## 9. Cómo se generan automáticamente los accesorios
 
-Permiten definir o modificar el diámetro del recorrido o de segmentos ya seleccionados.
+Una vez definido el recorrido, la herramienta interpreta la geometría y coloca automáticamente los accesorios necesarios.
 
-El diámetro influye en:
+### 9.1. Codos
 
-- la geometría generada;
-- la selección del PythonPart correcto;
-- los atributos por defecto;
-- y la compatibilidad con ciertos accesorios, como tes o reducciones.
+Cuando el recorrido cambia de dirección, la herramienta genera el codo correspondiente.
 
-### 8.3. Distribución
+### 9.2. Manguitos o uniones
 
-- `DistributionType`
+Cuando dos tramos deben unirse de forma alineada, la herramienta genera la unión correspondiente.
 
-En Agua, la distribución distingue principalmente entre:
+### 9.3. Bifurcaciones o tes
 
-- `TD`;
-- `IS`.
+Cuando un punto conecta tres direcciones, la herramienta genera la bifurcación adecuada.
 
-Esta selección afecta a:
+### 9.4. Regla general de prioridad
 
-- el tipo de geometría;
-- el conjunto de atributos aplicados;
-- el atributo padre;
-- y el tratamiento de capas y materiales en algunos elementos.
+Si un punto funciona como bifurcación, prevalece la bifurcación sobre otras soluciones.
 
-### 8.4. Tipo de agua
+Esto significa que el sistema no coloca varias piezas incompatibles en el mismo punto.
 
-- `WaterType`
+`[[CAPTURA-04: ejemplo comparativo de un codo, una unión y una bifurcación]]`
+![alt text](CAPTURA-04A.png)![alt text](CAPTURA-04B.png)![alt text](CAPTURA-04C.png)
 
-Se usa cuando la instalación necesita distinguir variantes internas del sistema.
+## 10. Cómo editar una instalación ya dibujada
 
-### 8.5. Modos de dibujo
+Una vez creado el recorrido, el usuario puede modificarlo.
 
-- `PointMode`
-- `ExtendPolyline`
-- `EditPolyline`
-- `CreatePolyline`
+### 10.1. Seleccionar tramos
 
-Controlan si el usuario está:
+Se pueden seleccionar:
 
-- extendiendo;
-- editando;
-- o creando.
+- tramos individuales;
+- varios tramos a la vez;
+- o zonas concretas del recorrido.
 
-### 8.6. Limitación angular
+### 10.2. Borrar una sección
 
-- `CheckBoxLimitarAngulos`
-- `RotationAngle`
-- botón `DefineOrientation`
+El botón de borrar elimina el tramo o la parte seleccionada.
 
-Permiten restringir el dibujo a determinados ángulos o definir una orientación de referencia.
+Después del borrado, la herramienta vuelve a analizar la conexión entre los tramos que quedan y reajusta automáticamente las piezas necesarias.
 
-En instalaciones como Agua, el sistema trabaja con restricciones reales de ángulo según el tipo de instalación.
+### 10.3. Cambiar el diámetro
 
-### 8.7. Layers
+El botón de modificar diámetro actualiza el diámetro del tramo o de la selección activa.
 
-- `LayerTypes`
-- botón `aplicarLayers`
+Después del cambio, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
 
-Permiten asignar el layer activo a elementos seleccionados.
+## 11. Layers
 
-Esta acción no genera elementos nuevos; modifica la configuración aplicada a los existentes o a los seleccionados.
+El usuario puede trabajar con los layers definidos por defecto o aplicar otros manualmente.
 
-### 8.8. Atributos manuales
+### 11.1. Layers por defecto
 
-- `AttributeValue`
-- botón `AttributeApply`
+Cada instalación ya trae una configuración base de layers.
 
-Permiten aplicar atributos manuales a los elementos seleccionados.
+### 11.2. Aplicar layers manualmente
 
-Su uso es especialmente importante cuando se quiere completar información antes de finalizar.
+Desde la paleta, el usuario puede seleccionar un layer y aplicar ese layer a los elementos seleccionados.
 
-### 8.9. Opciones generales
+Esto es útil cuando se necesita clasificar el modelo de una forma concreta antes de finalizar.
 
-- `CreatePythonPart`
-- `AddPolilyne`
-- `AddCube`
-- `FunctionalName`
+`[[CAPTURA-05: ejemplo del apartado de layers en la paleta y su aplicación sobre la instalación]]`
+![alt text](CAPTURA-05.png)
 
-Sirven para controlar:
+## 12. Atributos
 
-- si se crea PythonPartGroup;
-- si la polilínea de eje se añade al resultado;
-- si se crea geometría auxiliar;
-- y con qué nombre funcional se agrupa el resultado.
+Además de la geometría, la instalación puede llevar información adicional en forma de atributos.
 
-## 9. Botones y acciones principales
+### 12.1. Atributos automáticos
 
-Los eventos base del sistema son comunes a todas las instalaciones.
+Parte de los atributos se asignan automáticamente según el tipo de instalación, el elemento y la configuración elegida.
 
-### 9.1. `1003` Finalizar creación
+### 12.2. Atributos aplicados por el usuario
 
-Acción de cierre del proceso de modelado.
+La paleta también permite aplicar atributos manualmente a una selección.
 
-Esta acción:
+Esto es útil cuando el usuario necesita completar o corregir información antes de crear el resultado final.
 
-- valida el estado;
-- genera los elementos finales;
-- crea PythonParts;
-- inserta macros y elementos definidos;
-- añade soportes;
-- y ejecuta la copia por atributo padre si aplica.
+### 12.3. Atributo padre
 
-### 9.2. `1004` Borrar sección
+En determinadas instalaciones existe un atributo principal que sirve para organizar y relacionar elementos. Este dato es importante porque también puede influir en las copias o duplicados automáticos.
 
-Elimina:
+## 13. Qué revisar antes de finalizar
 
-- segmentos seleccionados por caja;
-- un punto de corte seleccionado;
-- o un tramo seleccionado individualmente.
+Antes de pulsar el botón de finalizar, se recomienda comprobar:
 
-### 9.3. `1007` Modificar diámetro
+- que el recorrido es correcto;
+- que los diámetros son los adecuados;
+- que los layers necesarios están aplicados;
+- que los atributos importantes están informados;
+- y que los elementos definidos están bien colocados.
 
-Aplica el nuevo diámetro:
+Si falta información, la herramienta puede mostrar un aviso antes de continuar.
 
-- a los segmentos seleccionados;
-- o al segmento activo.
+`[[CAPTURA-06: mensaje de aviso previo a finalizar cuando falta información]]`
+![alt text](CAPTURA-06.png)
 
-Si no hay selección, el sistema avisa al usuario.
+## 14. Rotación y orientación
 
-### 9.4. `1009` Aplicar layers
+Algunos elementos admiten rotación y orientación.
 
-Aplica el layer seleccionado a los elementos seleccionados.
+Esto se aplica especialmente a:
 
-### 9.5. `1011` Aplicar atributo
-
-Aplica el atributo manual introducido por el usuario a la selección activa.
-
-### 9.6. `1012` Definir orientación
-
-Inicia la captura de orientación 3D, normalmente mediante una referencia en XY.
-
-`[[CAPTURA-03: ejemplo de modo orientación activo y línea de referencia]]`
-
-## 10. Funcionamiento paso a paso del trazado principal
-
-### 10.1. Selección inicial
-
-El usuario debe comenzar configurando:
-
-- la instalación;
-- el tipo;
-- el diámetro;
-- la distribución;
-- y cualquier dato base de la paleta.
-
-### 10.2. Inicio del dibujo
-
-En modo creación, cada clic define un punto de la polilínea.
-
-A partir de esos puntos, el sistema:
-
-- guarda la secuencia del camino;
-- calcula segmentos;
-- detecta nodos;
-- y prepara la previsualización de tubos y accesorios.
-
-### 10.3. Previsualización
-
-Antes de generar el resultado final, la herramienta representa:
-
-- el elemento principal de la instalación;
-- los accesorios automáticos;
-- y, cuando aplica, elementos derivados como manguitos, codos o tes.
-
-La previsualización no es todavía el resultado final definitivo, pero sí refleja la lógica geométrica prevista.
-
-`[[CAPTURA-04: recorrido en previsualización antes de finalizar]]`
-
-### 10.4. Guardado y reconstrucción interna
-
-El sistema va almacenando:
-
-- paths guardados;
-- segmentos reconstruidos;
-- metadatos persistentes;
-- atributos aplicados;
-- layers aplicados;
-- y estado serializado.
-
-Esto permite que la instalación se pueda reabrir y seguir editando.
-
-## 11. Generación automática de accesorios
-
-Una vez definido el recorrido, la instalación genera automáticamente piezas auxiliares según la topología.
-
-### 11.1. Codo
-
-Se genera cuando en un nodo coinciden dos conexiones no colineales.
-
-### 11.2. Manguito
-
-Se genera cuando en un nodo coinciden dos conexiones colineales.
-
-### 11.3. Te o bifurcación
-
-Se genera cuando en un nodo existen tres conexiones.
-
-### 11.4. Prioridad entre accesorios
-
-La prioridad funcional es:
-
-1. `TE` si existen tres conexiones.
-2. `Codo` si hay dos conexiones no colineales.
-3. `Manguito` si hay dos conexiones colineales.
-
-Si un nodo se resuelve como `TE`, no se crea además un codo o un manguito en ese mismo nodo.
-
-`[[CAPTURA-05: ejemplo comparativo de codo, manguito y te en nodos distintos]]`
-
-## 12. Edición de recorridos existentes
-
-Una vez dibujada o recuperada una instalación, el usuario puede editarla.
-
-### 12.1. Selección
-
-La selección puede hacerse:
-
-- por tramo individual;
-- por caja;
-- o sobre ciertos nodos o puntos de corte.
-
-### 12.2. Borrado
-
-Al borrar segmentos o nodos, el sistema reconstruye la conectividad.
-
-Como consecuencia, puede:
-
-- desaparecer un accesorio;
-- aparecer otro distinto;
-- cambiar el tipo de unión;
-- o regenerarse la lógica de codos, manguitos y tes.
-
-### 12.3. Cambio de diámetro
-
-Al modificar el diámetro de un segmento o de un conjunto de segmentos:
-
-- se actualiza la metadata;
-- se recalculan elementos dependientes;
-- y en la generación final prevalecen los atributos del modelo real generado para ese diámetro.
-
-## 13. Layers
-
-El sistema trabaja con layers por defecto y con layers aplicados manualmente.
-
-### 13.1. Layers por defecto
-
-Cada instalación define sus propios layers base. Por ejemplo, Agua trabaja con layers como:
-
-- `KN_AIGUA_FAB`;
-- `IS_CON_VENT_EIX`;
-- y otros layers específicos de instalación.
-
-### 13.2. Layers aplicados por el usuario
-
-Cuando el usuario aplica un layer desde paleta:
-
-- ese valor se guarda para los elementos seleccionados;
-- y se utiliza durante la creación final si la lógica del elemento no lo bloquea.
-
-### 13.3. Casos en los que el layer no se pisa
-
-En Agua existen piezas TD con geometría `outer + inner` donde el `outer` puede conservar:
-
-- material propio;
-- y layer propio del modelo.
-
-En esos casos, el sistema protege esa parte externa para evitar que la paleta destruya una condición técnica necesaria.
-
-## 14. Atributos
-
-Los atributos pueden venir de tres fuentes:
-
-### 14.1. Atributos por defecto del modelo
-
-Se obtienen desde el PythonPart o desde la definición base del elemento.
-
-### 14.2. Atributos personalizados aplicados por el usuario
-
-Se aplican desde paleta sobre elementos seleccionados.
-
-### 14.3. Atributos padre
-
-Son atributos clave para la organización funcional y la copia entre archivos de dibujo.
-
-Los más importantes son:
-
-- `pmp_pare`;
-- `6_CC_IS`.
-
-### 14.4. Reglas funcionales típicas
-
-En Agua:
-
-- en `TD` se usa `pmp_pare`;
-- en `IS` se usa `pmp_pare` y `6_CC_IS`.
-
-### 14.5. Validación previa a finalizar
-
-Antes de crear el resultado definitivo, el sistema comprueba si hay elementos:
-
-- sin layer;
-- o sin atributo padre.
-
-Si detecta elementos incompletos, muestra una advertencia para que el usuario decida:
-
-- continuar;
-- o volver a configuración.
-
-`[[CAPTURA-06: mensaje de advertencia previo a finalizar por falta de layer o atributo padre]]`
-
-## 15. Rotación y orientación
-
-El sistema soporta rotaciones en:
-
-- `X`;
-- `Y`;
-- `Z`.
-
-Estas rotaciones se usan en:
-
-- macros;
 - elementos definidos;
-- y algunos flujos de colocación especial.
+- macros;
+- ciertos accesorios que requieren una posición concreta.
 
-En paleta aparecen habitualmente como:
+Cuando la paleta muestra campos de rotación u orientación, el usuario puede utilizarlos para ajustar la posición final del elemento.
 
-- `RotX`, `RotY`, `RotZ`;
-- o `MacroRotX`, `MacroRotY`, `MacroRotZ`.
+`[[CAPTURA-07: ejemplo de orientación o rotación aplicada a un elemento]]`
+![alt text](CAPTURA-07.png)
 
-## 16. Macros de librería
+## 15. Macros
 
-Las macros permiten insertar objetos de librería sobre la instalación.
+La herramienta permite colocar macros de librería dentro de la instalación.
 
-### 16.1. Tipos de macro
+### 15.1. Para qué sirven
 
-El sistema soporta:
+Las macros permiten insertar objetos ya preparados, por ejemplo elementos de librería que deben colocarse en puntos concretos del recorrido.
 
-- `SmartSymbol`;
-- `Fixture`.
+### 15.2. Qué debe hacer el usuario
 
-### 16.2. Parámetros principales
+El flujo habitual es:
 
-- `MarkerPointMode`
-- `MacroLibraryElementType`
-- `MacroSmartSymbolPath`
-- `MacroFixturePath`
-- `MacroSelectedLocalZ`
-- `MacroZAbs`
-- `MacroZRelative`
-- `MacroRotX`
-- `MacroRotY`
-- `MacroRotZ`
+1. Elegir el tipo de macro.
+2. Elegir el archivo correspondiente.
+3. Elegir dónde se colocará.
+4. Ajustar altura y rotación si es necesario.
+5. Insertar la macro.
 
-### 16.3. Modos de colocación
+### 15.3. Dónde puede colocarse
 
-La macro puede colocarse:
+La macro puede situarse:
 
-- al inicio de la polilínea;
+- al inicio del recorrido;
 - al final;
-- o en un punto libre seleccionado por el usuario.
+- o en un punto libre.
 
-### 16.4. Altura de la macro
+### 15.4. Altura de la macro
 
-La altura puede resolverse de dos maneras:
+La altura puede definirse directamente o en relación con un local seleccionado, según el caso.
 
-- mediante cota absoluta;
-- o mediante cota relativa a un local seleccionado.
+`[[CAPTURA-08: bloque de la paleta para insertar macros]]`
+![alt text](CAPTURA-08.png)
 
-Si se selecciona un local, la cota final se calcula como:
+`[[CAPTURA-09: ejemplo de macro previsualizada dentro de la instalación]]`
+![alt text](CAPTURA-09.png)
 
-`cota del local + cota relativa`
+## 16. Elementos definidos
 
-### 16.5. Flujo de trabajo
+Además del recorrido principal, la herramienta permite añadir elementos definidos propios de la instalación.
 
-1. Elegir tipo de macro.
-2. Elegir archivo de librería.
-3. Elegir modo de punto.
-4. Seleccionar local si se desea trabajar con altura relativa.
-5. Definir rotación.
-6. Agregar la macro.
-7. Revisar el preview real.
+En Agua, por ejemplo, pueden existir elementos como válvulas, salidas o piezas concretas del sistema.
 
-`[[CAPTURA-07: bloque de paleta de macros con ruta y parámetros de rotación]]`
+### 16.1. Cómo se insertan
 
-`[[CAPTURA-08: ejemplo de preview real de una macro colocada sobre el trazado]]`
+Hay dos formas habituales:
 
-## 17. Elementos definidos
+- insertarlos sobre un punto del recorrido;
+- o insertarlos como punto libre.
 
-Los elementos definidos son accesorios especiales controlados por la propia instalación.
+### 16.2. Qué debe hacer el usuario
 
-En Agua, ejemplos típicos son:
+El usuario debe:
 
-- `T sortida`;
-- `Clau de Pas`;
-- `Colze Base`;
-- `Taps`.
+1. elegir el tipo de elemento;
+2. seleccionar el punto de inserción;
+3. ajustar rotación o altura si hace falta;
+4. confirmar la colocación.
 
-### 17.1. Formas de trabajo
+`[[CAPTURA-10: bloque de la paleta para insertar Elementos Definidos]]`
+![alt text](CAPTURA-10.png)
 
-Existen dos modalidades:
+`[[CAPTURA-11: inserción de un elemento especial como punto libre]]`
+![alt text](CAPTURA-11.png)
 
-- elemento sobre marcador asociado al recorrido;
-- elemento colocado como punto libre.
+## 17. Puntos no definidos
 
-### 17.2. Parámetros principales
+Los puntos no definidos sirven para marcar la lógica del recorrido sin colocar todavía un elemento final.
 
-- `DefinedElementType`
-- `ElementPointMode`
-- `ElementRadius`
-- `ElementZAbs`
-- `RotX`
-- `RotY`
-- `RotZ`
-- `PointType` o `TipoPuntoLibre`
+Son útiles para describir:
 
-### 17.3. Inserción mediante marcador
+- inicios;
+- finales;
+- intermedios;
+- bifurcaciones;
+- conexiones entre caminos.
 
-Flujo:
+### 17.1. Para qué sirven
 
-1. Activar captura de punto del elemento.
-2. Seleccionar un punto válido.
-3. Confirmar la inserción del marcador.
-4. Ajustar rotación si es necesario.
-5. Finalizar la creación.
+Ayudan a organizar recorridos complejos y a definir la intención del trazado antes de convertirlo en una solución completa.
 
-### 17.4. Inserción mediante punto libre
+### 17.2. Puntos comunes
 
-Flujo:
+Si varios caminos coinciden en un punto o pasan muy cerca, la herramienta puede interpretar que existe una relación entre ellos.
 
-1. Elegir el tipo de elemento.
-2. Elegir la función del punto libre.
-3. Hacer clic en el plano.
-4. Revisar preview.
-5. Finalizar el modo.
+Esto ayuda a construir una topología coherente.
 
-### 17.5. Qué hace internamente el sistema
+`[[CAPTURA-12: ejemplo de puntos no definidos en distintos colores]]`
+![alt text](CAPTURA-12.png)
 
-El sistema:
+`[[CAPTURA-13: ejemplo de punto común entre dos caminos]]`
+![alt text](CAPTURA-13.png)
 
-- almacena el punto;
-- guarda su rotación;
-- genera preview 3D;
-- detecta puntos comunes;
-- y lo materializa al finalizar.
+## 18. Soportes
 
-`[[CAPTURA-09: inserción de un elemento definido mediante marcador]]`
+La herramienta también permite trabajar con soportes.
 
-`[[CAPTURA-10: inserción de un elemento definido mediante punto libre]]`
+### 18.1. Qué hace el usuario
 
-## 18. Puntos no definidos
+El flujo habitual es:
 
-Los puntos no definidos sirven para describir la lógica del recorrido sin construir todavía la geometría final.
+1. configurar el soporte en la paleta;
+2. pulsar el botón para insertarlo;
+3. definir su posición;
+4. revisar la previsualización;
+5. acumularlo o crearlo.
 
-### 18.1. Tipos de punto
+### 18.2. Cuándo conviene colocarlos
 
-El sistema puede trabajar con puntos como:
+Normalmente es más cómodo colocar los soportes cuando el recorrido principal ya está bastante definido.
 
-- inicio;
-- final;
-- intermedio libre;
-- intermedio ordenado;
-- bifurcación.
+`[[CAPTURA-14: bloque de soportes en la paleta y preview de un soporte]]`
+![alt text](CAPTURA-14.png)
 
-### 18.2. Parámetros de paleta
+## 19. Cómo funcionan los duplicados o copias
 
-- `TipoCamino`
-- `TipoPuntoOrden`
-- `ColorPuntosNoDefinidos`
-- `PathId`
-- `DeteccionPuntosComunesActiva`
-- `ToleranciaPuntosComunesMm`
+Este punto es importante porque puede generar dudas.
 
-### 18.3. Para qué sirven
+### 19.1. Duplicados no deseados
 
-Permiten:
+La herramienta evita repetir elementos iguales cuando no corresponde.
 
-- marcar la intención del recorrido;
-- definir topología;
-- compartir nodos entre caminos;
-- y generar una salida lógica estructurada.
+Esto ayuda a que no aparezcan piezas duplicadas por error en el resultado final.
 
-### 18.4. Detección de puntos comunes
+### 19.2. Copias intencionadas
 
-Si el usuario crea un punto cerca de otro camino y la detección está activa:
+En algunos casos, la instalación puede generar copias en otros archivos de dibujo según la información asociada al elemento.
 
-- el sistema puede anclarlo al punto existente;
-- marcarlo como punto común;
-- y agruparlo dentro de una topología compartida.
+Estas copias no son un error. Forman parte del funcionamiento previsto de la herramienta.
 
-### 18.5. Duplicados en puntos no definidos
+### 19.3. Qué debe entender el usuario
 
-El módulo evita generar ciertos nodos automáticos si ya existe un nodo explícito equivalente.
+El usuario debe saber que:
 
-Esto impide:
+- puede existir un elemento en el archivo principal;
+- y puede existir una copia relacionada en otro archivo de dibujo.
 
-- duplicar cruces;
-- contaminar la topología;
-- y producir resultados ambiguos.
+Cuando la instalación se actualiza, esas copias también se actualizan para que no queden versiones antiguas.
 
-`[[CAPTURA-11: ejemplo de puntos no definidos con colores distintos por camino]]`
+`[[CAPTURA-15: ejemplo de un elemento original y su copia relacionada en otro archivo]]`
+![alt text](CAPTURA-15.png)
 
-`[[CAPTURA-12: ejemplo de cruce compartido detectado como punto común]]`
+## 20. Qué ocurre al pulsar el botón de finalizar
 
-## 19. Soportes
+Cuando el usuario pulsa el botón de finalizar, la herramienta:
 
-La herramienta también incorpora un flujo independiente para soportes.
-
-### 19.1. Parámetros principales
-
-- tipo de soporte;
-- subtipo;
-- superficie;
-- cota A;
-- cota B;
-- ángulo de inclinación;
-- atributo de soporte.
-
-### 19.2. Flujo de uso
-
-1. Configurar parámetros del soporte.
-2. Pulsar `Insertar soporte`.
-3. Definir posiciones.
-4. Revisar preview.
-5. Pulsar `Crear soportes` para acumular.
-6. Repetir si es necesario.
-7. Aplicar atributos o borrar soportes acumulados.
-
-`[[CAPTURA-13: bloque de paleta de soportes y preview del soporte antes de acumular]]`
-
-## 20. Duplicados y copias: diferencias importantes
-
-Aquí es clave distinguir entre dos conceptos distintos:
-
-### 20.1. Eliminación de duplicados geométricos internos
-
-Durante la creación de PythonParts individuales o inserción sin PythonPart:
-
-- el sistema elimina duplicados manteniendo el orden;
-- esto evita repetir el mismo objeto dos veces en el resultado final;
-- y reduce errores de inserción.
-
-Esto afecta a listas internas de geometría, no a la lógica funcional del modelo.
-
-### 20.2. Duplicados lógicos evitados en topología
-
-En `ElementosDefinidos` y `ElementosNoDefinidos`, el sistema evita crear nodos automáticos duplicados si ya existe un nodo explícito equivalente.
-
-Esto protege:
-
-- la lectura del grafo;
-- la interpretación de cruces;
-- y la posterior generación de elementos.
-
-### 20.3. Copias a otros archivos de dibujo
-
-Este no es un duplicado erróneo. Es una funcionalidad deliberada.
-
-Cuando un elemento o PythonPart tiene atributo padre `pmp_pare`, el sistema:
-
-1. agrupa elementos por ese valor;
-2. busca un archivo de dibujo cargado cuyo nombre contenga ese identificador;
-3. copia allí los elementos 3D;
-4. guarda los UUID de esas copias;
-5. y en una edición posterior elimina las copias previas antes de generar las nuevas.
-
-Esto significa que:
-
-- la instalación principal permanece en el archivo actual;
-- y ciertas representaciones 3D pueden replicarse en otros archivos de dibujo relacionados.
-
-### 20.4. Cómo funciona la limpieza de copias previas
-
-Antes de una nueva generación:
-
-- se leen los UUID guardados;
-- se localizan los archivos donde se copiaron;
-- se eliminan las copias antiguas;
-- y se vuelve a generar el conjunto actualizado.
-
-Esto evita que cada edición deje residuos o copias obsoletas.
-
-`[[CAPTURA-14: ejemplo de atributo padre aplicado y archivo destino cargado en Allplan]]`
-
-`[[CAPTURA-15: ejemplo visual del mismo elemento en archivo original y en archivo copiado]]`
-
-## 21. Persistencia y restauración
-
-La herramienta guarda estado serializado para poder reabrir y seguir editando.
-
-Entre los datos persistidos se incluyen:
-
-- paths;
-- segmentos;
-- marcadores;
-- puntos libres;
-- puntos no definidos;
-- atributos aplicados;
-- layers aplicados;
-- y referencias a copias creadas en otros archivos.
-
-Esto permite que el usuario no tenga que reconstruir manualmente la instalación desde cero al reabrirla.
-
-## 22. Qué ocurre al pulsar “Finalizar”
-
-Cuando el usuario pulsa `Finalizar`, el sistema hace, en términos generales, lo siguiente:
-
-1. limpia copias previas si existen;
-2. reconstruye elementos de la instalación;
+1. revisa la información disponible;
+2. reconstruye los elementos necesarios;
 3. aplica atributos y layers;
-4. crea PythonParts individuales o agrupados;
-5. añade polilínea si está activado;
-6. añade macros;
-7. añade elementos definidos;
-8. añade soportes;
-9. crea el contenedor final;
-10. copia elementos a otros archivos si corresponde por `pmp_pare`;
-11. guarda el estado serializado.
+4. incorpora elementos definidos, macros o soportes;
+5. crea el resultado definitivo;
+6. y actualiza las copias relacionadas si las hubiera.
 
-## 23. Recomendaciones de uso para el usuario
+En ese momento la instalación pasa de estar en fase de preparación a quedar creada como resultado final en el documento.
 
-- Configurar primero la instalación y el diámetro antes de dibujar.
-- Revisar la distribución antes de modelar, porque condiciona atributos y geometría.
-- Aplicar layers y atributos antes de finalizar.
-- Usar elementos definidos y macros solo cuando el trazado principal esté razonablemente estable.
-- Revisar especialmente `pmp_pare` y `6_CC_IS` si la instalación depende de copias o de sectorización.
-- Si aparecen advertencias al finalizar, corregirlas antes de continuar salvo que exista un motivo claro para omitir esa información.
+## 21. Recomendaciones prácticas de uso
 
-## 24. Qué debe capturarse para completar este manual
+- Configurar primero el sistema antes de empezar a dibujar.
+- No cambiar de criterio de diámetro continuamente durante el dibujo si no es necesario.
+- Revisar la distribución antes de finalizar.
+- Aplicar layers y atributos cuando el recorrido ya esté claro.
+- Insertar macros y elementos definidos cuando la base principal esté estable.
+- Revisar los avisos antes de aceptar la creación final.
 
-Para dejar este documento listo para entrega final, conviene capturar al menos:
+## 22. Resumen final
 
-- vista general de la paleta;
-- selección del tipo de instalación;
-- ejemplo de creación de una polilínea;
-- ejemplo de edición de un tramo;
-- aplicación de layer;
-- aplicación de atributo;
-- advertencia de validación previa a finalizar;
-- inserción de macro;
-- inserción de elemento definido;
-- inserción de punto no definido;
-- flujo de soportes;
-- y ejemplo de copias por atributo padre.
+La herramienta de instalaciones está pensada para que el usuario dibuje un recorrido, lo complete con la información necesaria y genere un resultado final coherente dentro de Allplan.
 
-## 25. Resumen ejecutivo
+Aunque cada instalación tenga sus particularidades, el funcionamiento general es siempre el mismo:
 
-El sistema de instalaciones comparte una base común muy sólida. Aunque cada instalación cambie nombres, piezas o reglas puntuales, el usuario trabaja siempre sobre el mismo patrón:
-
+- configurar;
 - dibujar;
-- editar;
-- enriquecer con atributos y layers;
-- insertar elementos auxiliares;
-- y finalizar para generar el modelo definitivo.
+- revisar;
+- completar;
+- y finalizar.
 
-El caso de Agua demuestra este funcionamiento común y sirve como referencia válida para documentar el resto de instalaciones con cambios menores de catálogo, nomenclatura y configuración.
+Por eso, entendiendo bien el ejemplo de Agua, se entiende también el comportamiento general del resto de instalaciones.

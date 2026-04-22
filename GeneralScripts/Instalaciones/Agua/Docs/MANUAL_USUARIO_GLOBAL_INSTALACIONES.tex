@@ -12,7 +12,6 @@
 \usepackage{float}
 \usepackage{enumitem}
 \usepackage{xcolor}
-\usepackage{longtable}
 
 \hypersetup{
     colorlinks=true,
@@ -38,8 +37,30 @@
     \end{figure}
 }
 
-\newcommand{\captureflag}[2]{
-    \noindent\textcolor{red}{\textbf{[CAPTURA-#1: #2]}}
+\newcommand{\manualimage}[2]{
+    \IfFileExists{#1}{
+        \begin{figure}[H]
+            \centering
+            \includegraphics[width=0.9\textwidth]{#1}
+            \caption{#2}
+        \end{figure}
+    }{
+        \placeholderimage{#1}{#2}
+    }
+}
+
+\newcommand{\manualtripleimage}[4]{
+    \IfFileExists{#1}{
+        \begin{figure}[H]
+            \centering
+            \includegraphics[width=0.31\textwidth]{#1}\hfill
+            \includegraphics[width=0.31\textwidth]{#2}\hfill
+            \includegraphics[width=0.31\textwidth]{#3}
+            \caption{#4}
+        \end{figure}
+    }{
+        \placeholderimage{#1 / #2 / #3}{#4}
+    }
 }
 
 \title{Manual de Usuario Global de Instalaciones}
@@ -52,1029 +73,493 @@
 \tableofcontents
 \newpage
 
-\section{Objetivo del documento}
+\section{Finalidad del manual}
 
-Este manual describe el funcionamiento global del sistema de instalaciones implementado sobre \texttt{PolyLib}, \texttt{MacroCore}, \texttt{ElementosDefinidos} y \texttt{ElementosNoDefinidos}, tomando la instalación de \texttt{Agua} como ejemplo de referencia.
+Este manual explica cómo funciona una instalación dentro de Allplan desde el punto de vista del usuario.
 
-El objetivo es documentar el comportamiento funcional completo para usuario final y para personal técnico que necesite entender cómo se trabaja con la herramienta en Allplan:
+Se ha tomado la instalación de Agua como ejemplo, pero el funcionamiento general es común al resto de instalaciones. Lo que cambia entre unas y otras son algunos elementos concretos, ciertos nombres de layer y algunos atributos, pero la forma de trabajar es prácticamente la misma.
 
-\begin{itemize}
-\item cómo se crea una instalación;
-\item cómo se edita;
-\item cómo se asignan atributos y layers;
-\item cómo se insertan macros y elementos especiales;
-\item cómo se usan los puntos no definidos y los puntos libres;
-\item cómo funciona la copia por atributo padre;
-\item cómo se guardan y restauran los datos;
-\item y qué partes cambian entre instalaciones y cuáles son comunes.
-\end{itemize}
-
-\section{Alcance}
-
-Este manual aplica a todas las instalaciones que usan la misma base funcional. En la práctica, el flujo es común entre instalaciones como:
+El objetivo de este documento es que cualquier usuario pueda entender:
 
 \begin{itemize}
-\item Agua;
-\item Electricidad;
-\item Ventilación;
-\item y otras instalaciones futuras montadas sobre la misma arquitectura.
+\item cómo empezar una instalación;
+\item cómo dibujarla;
+\item cómo editarla;
+\item cómo aplicar layers y atributos;
+\item cómo insertar elementos definidos, macros y soportes;
+\item cómo funcionan las copias o duplicados;
+\item y qué comprobaciones conviene hacer antes de finalizar.
 \end{itemize}
 
-Lo que cambia entre instalaciones es, principalmente:
+\section{A quién va dirigido}
 
-\begin{itemize}
-\item el nombre comercial de la instalación;
-\item los elementos disponibles;
-\item los layers por defecto;
-\item ciertos atributos por defecto;
-\item y algunas reglas geométricas concretas de tubos, codos, tes, manguitos o accesorios.
-\end{itemize}
+Este manual está pensado para usuarios que necesiten modelar instalaciones en Allplan y entender el comportamiento general de la herramienta, sin entrar en detalles de programación ni en nombres internos del sistema.
 
-Lo que no cambia es el funcionamiento general de la herramienta.
+\section{Qué partes son comunes en todas las instalaciones}
 
-\section{Cómo leer este manual}
-
-Cuando se cite \texttt{Agua}, debe entenderse como ejemplo real de una instalación concreta.
-
-Cuando se hable de ``instalación'', se está describiendo un comportamiento común reutilizable.
-
-Para las capturas se utiliza el marcador:
-
-\texttt{[CAPTURA-XX: descripción de la imagen a insertar]}
-
-La recomendación es sustituir cada marcador por una captura real de la interfaz, del estado del modelo o del resultado en pantalla.
-
-\section{Visión general del sistema}
-
-El sistema de instalaciones se apoya en cuatro bloques funcionales:
-
-\subsection{\texttt{PolyLib}}
-
-Es la base del sistema. Gestiona:
-
-\begin{itemize}
-\item la polilínea;
-\item los modos de dibujo;
-\item la edición de segmentos;
-\item la aplicación de atributos y layers;
-\item la generación final de PythonParts;
-\item la persistencia del estado;
-\item y la copia de elementos a otros archivos de dibujo en función del atributo padre.
-\end{itemize}
-
-\subsection{\texttt{MacroCore}}
-
-Gestiona la lógica común de macros:
-
-\begin{itemize}
-\item lectura de parámetros de macro desde la paleta;
-\item selección del punto de colocación;
-\item previsualización real de la macro;
-\item inserción final de macros en el documento;
-\item y control de cota y rotación.
-\end{itemize}
-
-\subsection{\texttt{ElementosDefinidos}}
-
-Gestiona elementos especiales definidos por la instalación, por ejemplo:
-
-\begin{itemize}
-\item \texttt{T sortida};
-\item \texttt{Clau de Pas};
-\item \texttt{Colze Base};
-\item \texttt{Taps}.
-\end{itemize}
-
-Permite trabajar con dos modelos:
-
-\begin{itemize}
-\item marcadores sobre la polilínea;
-\item puntos libres colocados directamente en el espacio.
-\end{itemize}
-
-\subsection{\texttt{ElementosNoDefinidos}}
-
-Gestiona puntos lógicos de recorrido cuando todavía no existe geometría final.
-
-Sirve para:
-
-\begin{itemize}
-\item definir intenciones de trazado;
-\item marcar inicios, finales y bifurcaciones;
-\item detectar puntos comunes entre caminos;
-\item y preparar una topología lógica que luego puede convertirse en geometría o exportarse.
-\end{itemize}
-
-\section{Diferencia entre lo común y lo específico de cada instalación}
-
-En todas las instalaciones existe un patrón común:
+Todas las instalaciones comparten la misma lógica de trabajo:
 
 \begin{enumerate}
-\item El usuario selecciona el tipo de instalación.
-\item Define parámetros de dibujo y configuración.
-\item Dibuja o edita la polilínea.
-\item La herramienta genera previsualización de segmentos y conexiones.
-\item El usuario puede aplicar layers, atributos y orientación.
-\item El usuario puede añadir macros, elementos definidos, puntos libres o puntos no definidos.
-\item Al finalizar, el sistema crea los PythonParts y, si corresponde, genera copias por atributo padre.
+\item Se selecciona el tipo de instalación.
+\item Se configuran los parámetros principales en la paleta.
+\item Se dibuja o edita el recorrido.
+\item Se revisa la previsualización.
+\item Se añaden, si hace falta, elementos definidos, macros o soportes.
+\item Se aplican layers y atributos.
+\item Se finaliza la creación.
 \end{enumerate}
 
-Las diferencias por instalación suelen limitarse a:
+Lo que cambia entre instalaciones suele ser:
 
 \begin{itemize}
-\item catálogo de elementos;
-\item diámetros disponibles;
-\item combinaciones permitidas;
-\item tipo de distribución;
-\item reglas geométricas específicas;
-\item nombres de layers;
-\item y atributos por defecto.
+\item el tipo de elementos disponibles;
+\item los diámetros;
+\item las conexiones;
+\item algunos layers;
+\item y algunos atributos asociados a cada sistema.
 \end{itemize}
 
-\section{Flujo general de trabajo}
+\section{Vista general del trabajo con una instalación}
 
-El flujo recomendado de uso es el siguiente:
+El trabajo habitual con una instalación se basa en tres ideas:
+
+\begin{itemize}
+\item dibujar un recorrido;
+\item enriquecer ese recorrido con información;
+\item y generar el resultado final.
+\end{itemize}
+
+En la práctica, esto significa que primero se crea el trazado principal y después se añaden o ajustan el resto de elementos necesarios.
+
+\manualimage{CAPTURA-01.png}{Paleta principal completa de la instalación con sus apartados visibles}
+
+\section{Flujo de trabajo recomendado}
+
+El orden más recomendable para trabajar es este:
 
 \begin{enumerate}
-\item Seleccionar la instalación.
-\item Seleccionar el tipo principal de elemento.
-\item Configurar diámetro, distribución y demás parámetros de paleta.
-\item Elegir modo de dibujo.
+\item Elegir el tipo de instalación.
+\item Elegir el tipo de tubo o sistema.
+\item Definir diámetro, distribución y resto de parámetros básicos.
 \item Dibujar el recorrido principal.
-\item Revisar la previsualización de tubos y accesorios.
-\item Ajustar layers y atributos.
-\item Insertar macros o elementos especiales si procede.
-\item Insertar soportes si procede.
-\item Finalizar la creación.
-\item Revisar el resultado generado en el documento y las posibles copias en otros archivos de dibujo.
+\item Revisar uniones, codos y bifurcaciones.
+\item Aplicar layers y atributos si es necesario.
+\item Insertar elementos definidos, macros o soportes.
+\item Comprobar que la información esté completa.
+\item Pulsar el botón de finalizar.
 \end{enumerate}
 
-\captureflag{01}{paleta principal completa de la instalación con las secciones visibles}
-\placeholderimage{CAPTURA-01}{Paleta principal completa de la instalación con las secciones visibles}
+Seguir este orden ayuda a evitar correcciones posteriores innecesarias.
 
 \section{Modos principales de trabajo}
 
-La herramienta se organiza en torno a tres modos principales:
+La herramienta suele trabajar con tres modos principales.
 
 \subsection{Modo creación}
 
-Es el modo en el que se dibuja una nueva polilínea.
+Es el modo que se utiliza para dibujar un recorrido nuevo.
 
-En este modo el usuario:
-
-\begin{itemize}
-\item hace clic para definir puntos;
-\item genera segmentos consecutivos;
-\item construye un camino nuevo;
-\item y ve una previsualización de la instalación antes de crear los objetos definitivos.
-\end{itemize}
+En este modo el usuario va definiendo puntos y la instalación crea el trazado entre ellos.
 
 \subsection{Modo edición}
 
-Es el modo en el que se modifica una polilínea ya existente o el recorrido activo.
+Es el modo que se utiliza para corregir o modificar un recorrido ya dibujado.
 
-En este modo el usuario puede:
-
-\begin{itemize}
-\item seleccionar segmentos;
-\item borrar tramos;
-\item modificar diámetros;
-\item insertar puntos;
-\item y corregir la geometría antes de finalizar.
-\end{itemize}
+En este modo se pueden seleccionar tramos, borrar partes, cambiar diámetros o ajustar la geometría.
 
 \subsection{Modo extender}
 
-Es el modo en el que se continúa un trazado existente o se interactúa con elementos ya guardados sin iniciar una polilínea completamente nueva.
+Es el modo que se utiliza para continuar un recorrido ya existente sin empezar desde cero.
 
-\section{Parámetros principales de la paleta}
+\section{Qué debe configurar el usuario antes de dibujar}
 
-Los nombres exactos pueden variar en visibilidad según la instalación, pero funcionalmente los bloques son los mismos.
+Antes de empezar a dibujar conviene revisar los campos principales de la paleta.
 
-\subsection{Selección de instalación}
+\subsection{Tipo de instalación}
 
-\begin{itemize}
-\item \texttt{InstallationType}
-\end{itemize}
+Es el campo donde el usuario elige el sistema con el que va a trabajar.
 
-Permite escoger el tipo base de instalación. En Agua, por ejemplo, puede corresponder a:
+En Agua, por ejemplo, puede elegir entre varias opciones como:
 
 \begin{itemize}
-\item \texttt{Polietilè};
-\item \texttt{Multicapa};
-\item \texttt{Armaflex}.
+\item Polietilè;
+\item Multicapa;
+\item Armaflex.
 \end{itemize}
 
-Este parámetro condiciona:
+Este campo define qué geometría y qué comportamiento tendrá la instalación.
 
-\begin{itemize}
-\item el catálogo de geometrías;
-\item las conexiones permitidas;
-\item los diámetros disponibles;
-\item y parte de los atributos y reglas geométricas.
-\end{itemize}
-
-\captureflag{02}{combo de tipo de instalación desplegado con opciones visibles}
-\placeholderimage{CAPTURA-02}{Combo de tipo de instalación desplegado con opciones visibles}
+\manualimage{CAPTURA-02.png}{Desplegable del tipo de instalación abierto con las opciones visibles}
 
 \subsection{Diámetro}
 
-\begin{itemize}
-\item \texttt{DiameterType}
-\item \texttt{DiameterTypeStr}
-\item \texttt{DiameterModify}
-\end{itemize}
-
-Permiten definir o modificar el diámetro del recorrido o de segmentos ya seleccionados.
-
-El diámetro influye en:
+El diámetro condiciona:
 
 \begin{itemize}
-\item la geometría generada;
-\item la selección del PythonPart correcto;
-\item los atributos por defecto;
-\item y la compatibilidad con ciertos accesorios, como tes o reducciones.
+\item el tamaño del elemento principal;
+\item las piezas de conexión compatibles;
+\item y parte de los atributos asociados.
 \end{itemize}
+
+Antes de dibujar, conviene comprobar que el diámetro seleccionado es el correcto.
 
 \subsection{Distribución}
 
-\begin{itemize}
-\item \texttt{DistributionType}
-\end{itemize}
+La distribución define cómo debe comportarse la instalación dentro del sistema.
 
-En Agua, la distribución distingue principalmente entre:
+En Agua es habitual trabajar con modos como:
 
 \begin{itemize}
-\item \texttt{TD};
-\item \texttt{IS}.
+\item TD;
+\item IS.
 \end{itemize}
 
-Esta selección afecta a:
+La distribución puede afectar a:
 
 \begin{itemize}
-\item el tipo de geometría;
-\item el conjunto de atributos aplicados;
-\item el atributo padre;
-\item y el tratamiento de capas y materiales en algunos elementos.
+\item la forma de los elementos;
+\item los atributos aplicados;
+\item y el comportamiento de ciertos accesorios.
 \end{itemize}
 
-\subsection{Tipo de agua}
+\subsection{Tipo de agua u otras variantes}
+
+Algunas instalaciones incluyen campos adicionales para distinguir variantes internas del sistema. Si la paleta muestra este dato, conviene definirlo antes de empezar.
+
+\subsection{Ángulos y orientación}
+
+Si la instalación trabaja con limitación angular o con orientación definida, estos parámetros deben comprobarse al inicio para evitar tener que rehacer el recorrido más adelante.
+
+\section{Cómo dibujar una instalación}
+
+El dibujo de la instalación se basa en una secuencia de clics que definen el recorrido.
+
+\subsection{Inicio del recorrido}
+
+El usuario hace clic en el primer punto del trazado.
+
+\subsection{Continuación del recorrido}
+
+Cada clic adicional añade un nuevo tramo.
+
+La herramienta va construyendo la instalación entre esos puntos y mostrando una previsualización del resultado.
+
+\subsection{Qué ve el usuario mientras dibuja}
+
+Mientras se dibuja, la herramienta no solo muestra la línea del recorrido, sino también el comportamiento previsto de la instalación:
 
 \begin{itemize}
-\item \texttt{WaterType}
+\item tramos principales;
+\item cambios de dirección;
+\item uniones;
+\item bifurcaciones.
 \end{itemize}
 
-Se usa cuando la instalación necesita distinguir variantes internas del sistema.
+\manualimage{CAPTURA-03.png}{Ejemplo de instalación en fase de dibujo con previsualización activa}
 
-\subsection{Modos de dibujo}
+\section{Cómo se generan automáticamente los accesorios}
+
+Una vez definido el recorrido, la herramienta interpreta la geometría y coloca automáticamente los accesorios necesarios.
+
+\subsection{Codos}
+
+Cuando el recorrido cambia de dirección, la herramienta genera el codo correspondiente.
+
+\subsection{Manguitos o uniones}
+
+Cuando dos tramos deben unirse de forma alineada, la herramienta genera la unión correspondiente.
+
+\subsection{Bifurcaciones o tes}
+
+Cuando un punto conecta tres direcciones, la herramienta genera la bifurcación adecuada.
+
+\subsection{Regla general de prioridad}
+
+Si un punto funciona como bifurcación, prevalece la bifurcación sobre otras soluciones.
+
+Esto significa que el sistema no coloca varias piezas incompatibles en el mismo punto.
+
+\manualtripleimage{CAPTURA-04A.png}{CAPTURA-04B.png}{CAPTURA-04C.png}{Ejemplo comparativo de un codo, una unión y una bifurcación}
+
+\section{Cómo editar una instalación ya dibujada}
+
+Una vez creado el recorrido, el usuario puede modificarlo.
+
+\subsection{Seleccionar tramos}
+
+Se pueden seleccionar:
 
 \begin{itemize}
-\item \texttt{PointMode}
-\item \texttt{ExtendPolyline}
-\item \texttt{EditPolyline}
-\item \texttt{CreatePolyline}
+\item tramos individuales;
+\item varios tramos a la vez;
+\item o zonas concretas del recorrido.
 \end{itemize}
 
-Controlan si el usuario está:
+\subsection{Borrar una sección}
 
-\begin{itemize}
-\item extendiendo;
-\item editando;
-\item o creando.
-\end{itemize}
+El botón de borrar elimina el tramo o la parte seleccionada.
 
-\subsection{Limitación angular}
+Después del borrado, la herramienta vuelve a analizar la conexión entre los tramos que quedan y reajusta automáticamente las piezas necesarias.
 
-\begin{itemize}
-\item \texttt{CheckBoxLimitarAngulos}
-\item \texttt{RotationAngle}
-\item botón \texttt{DefineOrientation}
-\end{itemize}
+\subsection{Cambiar el diámetro}
 
-Permiten restringir el dibujo a determinados ángulos o definir una orientación de referencia.
+El botón de modificar diámetro actualiza el diámetro del tramo o de la selección activa.
 
-En instalaciones como Agua, el sistema trabaja con restricciones reales de ángulo según el tipo de instalación.
-
-\subsection{Layers}
-
-\begin{itemize}
-\item \texttt{LayerTypes}
-\item botón \texttt{aplicarLayers}
-\end{itemize}
-
-Permiten asignar el layer activo a elementos seleccionados.
-
-Esta acción no genera elementos nuevos; modifica la configuración aplicada a los existentes o a los seleccionados.
-
-\subsection{Atributos manuales}
-
-\begin{itemize}
-\item \texttt{AttributeValue}
-\item botón \texttt{AttributeApply}
-\end{itemize}
-
-Permiten aplicar atributos manuales a los elementos seleccionados.
-
-Su uso es especialmente importante cuando se quiere completar información antes de finalizar.
-
-\subsection{Opciones generales}
-
-\begin{itemize}
-\item \texttt{CreatePythonPart}
-\item \texttt{AddPolilyne}
-\item \texttt{AddCube}
-\item \texttt{FunctionalName}
-\end{itemize}
-
-Sirven para controlar:
-
-\begin{itemize}
-\item si se crea PythonPartGroup;
-\item si la polilínea de eje se añade al resultado;
-\item si se crea geometría auxiliar;
-\item y con qué nombre funcional se agrupa el resultado.
-\end{itemize}
-
-\section{Botones y acciones principales}
-
-Los eventos base del sistema son comunes a todas las instalaciones.
-
-\subsection{\texttt{1003} Finalizar creación}
-
-Acción de cierre del proceso de modelado.
-
-Esta acción:
-
-\begin{itemize}
-\item valida el estado;
-\item genera los elementos finales;
-\item crea PythonParts;
-\item inserta macros y elementos definidos;
-\item añade soportes;
-\item y ejecuta la copia por atributo padre si aplica.
-\end{itemize}
-
-\subsection{\texttt{1004} Borrar sección}
-
-Elimina:
-
-\begin{itemize}
-\item segmentos seleccionados por caja;
-\item un punto de corte seleccionado;
-\item o un tramo seleccionado individualmente.
-\end{itemize}
-
-\subsection{\texttt{1007} Modificar diámetro}
-
-Aplica el nuevo diámetro:
-
-\begin{itemize}
-\item a los segmentos seleccionados;
-\item o al segmento activo.
-\end{itemize}
-
-Si no hay selección, el sistema avisa al usuario.
-
-\subsection{\texttt{1009} Aplicar layers}
-
-Aplica el layer seleccionado a los elementos seleccionados.
-
-\subsection{\texttt{1011} Aplicar atributo}
-
-Aplica el atributo manual introducido por el usuario a la selección activa.
-
-\subsection{\texttt{1012} Definir orientación}
-
-Inicia la captura de orientación 3D, normalmente mediante una referencia en XY.
-
-\captureflag{03}{ejemplo de modo orientación activo y línea de referencia}
-\placeholderimage{CAPTURA-03}{Ejemplo de modo orientación activo y línea de referencia}
-
-\section{Funcionamiento paso a paso del trazado principal}
-
-\subsection{Selección inicial}
-
-El usuario debe comenzar configurando:
-
-\begin{itemize}
-\item la instalación;
-\item el tipo;
-\item el diámetro;
-\item la distribución;
-\item y cualquier dato base de la paleta.
-\end{itemize}
-
-\subsection{Inicio del dibujo}
-
-En modo creación, cada clic define un punto de la polilínea.
-
-A partir de esos puntos, el sistema:
-
-\begin{itemize}
-\item guarda la secuencia del camino;
-\item calcula segmentos;
-\item detecta nodos;
-\item y prepara la previsualización de tubos y accesorios.
-\end{itemize}
-
-\subsection{Previsualización}
-
-Antes de generar el resultado final, la herramienta representa:
-
-\begin{itemize}
-\item el elemento principal de la instalación;
-\item los accesorios automáticos;
-\item y, cuando aplica, elementos derivados como manguitos, codos o tes.
-\end{itemize}
-
-La previsualización no es todavía el resultado final definitivo, pero sí refleja la lógica geométrica prevista.
-
-\captureflag{04}{recorrido en previsualización antes de finalizar}
-\placeholderimage{CAPTURA-04}{Recorrido en previsualización antes de finalizar}
-
-\subsection{Guardado y reconstrucción interna}
-
-El sistema va almacenando:
-
-\begin{itemize}
-\item paths guardados;
-\item segmentos reconstruidos;
-\item metadatos persistentes;
-\item atributos aplicados;
-\item layers aplicados;
-\item y estado serializado.
-\end{itemize}
-
-Esto permite que la instalación se pueda reabrir y seguir editando.
-
-\section{Generación automática de accesorios}
-
-Una vez definido el recorrido, la instalación genera automáticamente piezas auxiliares según la topología.
-
-\subsection{Codo}
-
-Se genera cuando en un nodo coinciden dos conexiones no colineales.
-
-\subsection{Manguito}
-
-Se genera cuando en un nodo coinciden dos conexiones colineales.
-
-\subsection{Te o bifurcación}
-
-Se genera cuando en un nodo existen tres conexiones.
-
-\subsection{Prioridad entre accesorios}
-
-La prioridad funcional es:
-
-\begin{enumerate}
-\item \texttt{TE} si existen tres conexiones.
-\item \texttt{Codo} si hay dos conexiones no colineales.
-\item \texttt{Manguito} si hay dos conexiones colineales.
-\end{enumerate}
-
-Si un nodo se resuelve como \texttt{TE}, no se crea además un codo o un manguito en ese mismo nodo.
-
-\captureflag{05}{ejemplo comparativo de codo, manguito y te en nodos distintos}
-\placeholderimage{CAPTURA-05}{Ejemplo comparativo de codo, manguito y te en nodos distintos}
-
-\section{Edición de recorridos existentes}
-
-Una vez dibujada o recuperada una instalación, el usuario puede editarla.
-
-\subsection{Selección}
-
-La selección puede hacerse:
-
-\begin{itemize}
-\item por tramo individual;
-\item por caja;
-\item o sobre ciertos nodos o puntos de corte.
-\end{itemize}
-
-\subsection{Borrado}
-
-Al borrar segmentos o nodos, el sistema reconstruye la conectividad.
-
-Como consecuencia, puede:
-
-\begin{itemize}
-\item desaparecer un accesorio;
-\item aparecer otro distinto;
-\item cambiar el tipo de unión;
-\item o regenerarse la lógica de codos, manguitos y tes.
-\end{itemize}
-
-\subsection{Cambio de diámetro}
-
-Al modificar el diámetro de un segmento o de un conjunto de segmentos:
-
-\begin{itemize}
-\item se actualiza la metadata;
-\item se recalculan elementos dependientes;
-\item y en la generación final prevalecen los atributos del modelo real generado para ese diámetro.
-\end{itemize}
+Después del cambio, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
 
 \section{Layers}
 
-El sistema trabaja con layers por defecto y con layers aplicados manualmente.
+El usuario puede trabajar con los layers definidos por defecto o aplicar otros manualmente.
 
 \subsection{Layers por defecto}
 
-Cada instalación define sus propios layers base. Por ejemplo, Agua trabaja con layers como:
+Cada instalación ya trae una configuración base de layers.
 
-\begin{itemize}
-\item \texttt{KN\_AIGUA\_FAB};
-\item \texttt{IS\_CON\_VENT\_EIX};
-\item y otros layers específicos de instalación.
-\end{itemize}
+\subsection{Aplicar layers manualmente}
 
-\subsection{Layers aplicados por el usuario}
+Desde la paleta, el usuario puede seleccionar un layer y aplicar ese layer a los elementos seleccionados.
 
-Cuando el usuario aplica un layer desde paleta:
+Esto es útil cuando se necesita clasificar el modelo de una forma concreta antes de finalizar.
 
-\begin{itemize}
-\item ese valor se guarda para los elementos seleccionados;
-\item y se utiliza durante la creación final si la lógica del elemento no lo bloquea.
-\end{itemize}
-
-\subsection{Casos en los que el layer no se pisa}
-
-En Agua existen piezas TD con geometría \texttt{outer + inner} donde el \texttt{outer} puede conservar:
-
-\begin{itemize}
-\item material propio;
-\item y layer propio del modelo.
-\end{itemize}
-
-En esos casos, el sistema protege esa parte externa para evitar que la paleta destruya una condición técnica necesaria.
+\manualimage{CAPTURA-05.png}{Ejemplo del apartado de layers en la paleta y su aplicación sobre la instalación}
 
 \section{Atributos}
 
-Los atributos pueden venir de tres fuentes:
+Además de la geometría, la instalación puede llevar información adicional en forma de atributos.
 
-\subsection{Atributos por defecto del modelo}
+\subsection{Atributos automáticos}
 
-Se obtienen desde el PythonPart o desde la definición base del elemento.
+Parte de los atributos se asignan automáticamente según el tipo de instalación, el elemento y la configuración elegida.
 
-\subsection{Atributos personalizados aplicados por el usuario}
+\subsection{Atributos aplicados por el usuario}
 
-Se aplican desde paleta sobre elementos seleccionados.
+La paleta también permite aplicar atributos manualmente a una selección.
 
-\subsection{Atributos padre}
+Esto es útil cuando el usuario necesita completar o corregir información antes de crear el resultado final.
 
-Son atributos clave para la organización funcional y la copia entre archivos de dibujo.
+\subsection{Atributo padre}
 
-Los más importantes son:
+En determinadas instalaciones existe un atributo principal que sirve para organizar y relacionar elementos. Este dato es importante porque también puede influir en las copias o duplicados automáticos.
 
-\begin{itemize}
-\item \texttt{pmp\_pare};
-\item \texttt{6\_CC\_IS}.
-\end{itemize}
+\section{Qué revisar antes de finalizar}
 
-\subsection{Reglas funcionales típicas}
-
-En Agua:
+Antes de pulsar el botón de finalizar, se recomienda comprobar:
 
 \begin{itemize}
-\item en \texttt{TD} se usa \texttt{pmp\_pare};
-\item en \texttt{IS} se usa \texttt{pmp\_pare} y \texttt{6\_CC\_IS}.
+\item que el recorrido es correcto;
+\item que los diámetros son los adecuados;
+\item que los layers necesarios están aplicados;
+\item que los atributos importantes están informados;
+\item y que los elementos definidos están bien colocados.
 \end{itemize}
 
-\subsection{Validación previa a finalizar}
+Si falta información, la herramienta puede mostrar un aviso antes de continuar.
 
-Antes de crear el resultado definitivo, el sistema comprueba si hay elementos:
-
-\begin{itemize}
-\item sin layer;
-\item o sin atributo padre.
-\end{itemize}
-
-Si detecta elementos incompletos, muestra una advertencia para que el usuario decida:
-
-\begin{itemize}
-\item continuar;
-\item o volver a configuración.
-\end{itemize}
-
-\captureflag{06}{mensaje de advertencia previo a finalizar por falta de layer o atributo padre}
-\placeholderimage{CAPTURA-06}{Mensaje de advertencia previo a finalizar por falta de layer o atributo padre}
+\manualimage{CAPTURA-06.png}{Mensaje de aviso previo a finalizar cuando falta información}
 
 \section{Rotación y orientación}
 
-El sistema soporta rotaciones en:
+Algunos elementos admiten rotación y orientación.
+
+Esto se aplica especialmente a:
 
 \begin{itemize}
-\item \texttt{X};
-\item \texttt{Y};
-\item \texttt{Z}.
-\end{itemize}
-
-Estas rotaciones se usan en:
-
-\begin{itemize}
-\item macros;
 \item elementos definidos;
-\item y algunos flujos de colocación especial.
+\item macros;
+\item ciertos accesorios que requieren una posición concreta.
 \end{itemize}
 
-En paleta aparecen habitualmente como:
+Cuando la paleta muestra campos de rotación u orientación, el usuario puede utilizarlos para ajustar la posición final del elemento.
+
+\manualimage{CAPTURA-07.png}{Ejemplo de orientación o rotación aplicada a un elemento}
+
+\section{Macros}
+
+La herramienta permite colocar macros de librería dentro de la instalación.
+
+\subsection{Para qué sirven}
+
+Las macros permiten insertar objetos ya preparados, por ejemplo elementos de librería que deben colocarse en puntos concretos del recorrido.
+
+\subsection{Qué debe hacer el usuario}
+
+El flujo habitual es:
+
+\begin{enumerate}
+\item Elegir el tipo de macro.
+\item Elegir el archivo correspondiente.
+\item Elegir dónde se colocará.
+\item Ajustar altura y rotación si es necesario.
+\item Insertar la macro.
+\end{enumerate}
+
+\subsection{Dónde puede colocarse}
+
+La macro puede situarse:
 
 \begin{itemize}
-\item \texttt{RotX}, \texttt{RotY}, \texttt{RotZ};
-\item o \texttt{MacroRotX}, \texttt{MacroRotY}, \texttt{MacroRotZ}.
-\end{itemize}
-
-\section{Macros de librería}
-
-Las macros permiten insertar objetos de librería sobre la instalación.
-
-\subsection{Tipos de macro}
-
-El sistema soporta:
-
-\begin{itemize}
-\item \texttt{SmartSymbol};
-\item \texttt{Fixture}.
-\end{itemize}
-
-\subsection{Parámetros principales}
-
-\begin{itemize}
-\item \texttt{MarkerPointMode}
-\item \texttt{MacroLibraryElementType}
-\item \texttt{MacroSmartSymbolPath}
-\item \texttt{MacroFixturePath}
-\item \texttt{MacroSelectedLocalZ}
-\item \texttt{MacroZAbs}
-\item \texttt{MacroZRelative}
-\item \texttt{MacroRotX}
-\item \texttt{MacroRotY}
-\item \texttt{MacroRotZ}
-\end{itemize}
-
-\subsection{Modos de colocación}
-
-La macro puede colocarse:
-
-\begin{itemize}
-\item al inicio de la polilínea;
+\item al inicio del recorrido;
 \item al final;
-\item o en un punto libre seleccionado por el usuario.
+\item o en un punto libre.
 \end{itemize}
 
 \subsection{Altura de la macro}
 
-La altura puede resolverse de dos maneras:
+La altura puede definirse directamente o en relación con un local seleccionado, según el caso.
 
-\begin{itemize}
-\item mediante cota absoluta;
-\item o mediante cota relativa a un local seleccionado.
-\end{itemize}
+\manualimage{CAPTURA-08.png}{Bloque de la paleta para insertar macros}
 
-Si se selecciona un local, la cota final se calcula como:
-
-\texttt{cota del local + cota relativa}
-
-\subsection{Flujo de trabajo}
-
-\begin{enumerate}
-\item Elegir tipo de macro.
-\item Elegir archivo de librería.
-\item Elegir modo de punto.
-\item Seleccionar local si se desea trabajar con altura relativa.
-\item Definir rotación.
-\item Agregar la macro.
-\item Revisar el preview real.
-\end{enumerate}
-
-\captureflag{07}{bloque de paleta de macros con ruta y parámetros de rotación}
-\placeholderimage{CAPTURA-07}{Bloque de paleta de macros con ruta y parámetros de rotación}
-
-\captureflag{08}{ejemplo de preview real de una macro colocada sobre el trazado}
-\placeholderimage{CAPTURA-08}{Ejemplo de preview real de una macro colocada sobre el trazado}
+\manualimage{CAPTURA-09.png}{Ejemplo de macro previsualizada dentro de la instalación}
 
 \section{Elementos definidos}
 
-Los elementos definidos son accesorios especiales controlados por la propia instalación.
+Además del recorrido principal, la herramienta permite añadir elementos definidos propios de la instalación.
 
-En Agua, ejemplos típicos son:
+En Agua, por ejemplo, pueden existir elementos como válvulas, salidas o piezas concretas del sistema.
 
-\begin{itemize}
-\item \texttt{T sortida};
-\item \texttt{Clau de Pas};
-\item \texttt{Colze Base};
-\item \texttt{Taps}.
-\end{itemize}
+\subsection{Cómo se insertan}
 
-\subsection{Formas de trabajo}
-
-Existen dos modalidades:
+Hay dos formas habituales:
 
 \begin{itemize}
-\item elemento sobre marcador asociado al recorrido;
-\item elemento colocado como punto libre.
+\item insertarlos sobre un punto del recorrido;
+\item o insertarlos como punto libre.
 \end{itemize}
 
-\subsection{Parámetros principales}
+\subsection{Qué debe hacer el usuario}
 
-\begin{itemize}
-\item \texttt{DefinedElementType}
-\item \texttt{ElementPointMode}
-\item \texttt{ElementRadius}
-\item \texttt{ElementZAbs}
-\item \texttt{RotX}
-\item \texttt{RotY}
-\item \texttt{RotZ}
-\item \texttt{PointType} o \texttt{TipoPuntoLibre}
-\end{itemize}
-
-\subsection{Inserción mediante marcador}
-
-Flujo:
+El usuario debe:
 
 \begin{enumerate}
-\item Activar captura de punto del elemento.
-\item Seleccionar un punto válido.
-\item Confirmar la inserción del marcador.
-\item Ajustar rotación si es necesario.
-\item Finalizar la creación.
+\item elegir el tipo de elemento;
+\item seleccionar el punto de inserción;
+\item ajustar rotación o altura si hace falta;
+\item confirmar la colocación.
 \end{enumerate}
 
-\subsection{Inserción mediante punto libre}
+\manualimage{CAPTURA-10.png}{Bloque de la paleta para insertar Elementos Definidos}
 
-Flujo:
-
-\begin{enumerate}
-\item Elegir el tipo de elemento.
-\item Elegir la función del punto libre.
-\item Hacer clic en el plano.
-\item Revisar preview.
-\item Finalizar el modo.
-\end{enumerate}
-
-\subsection{Qué hace internamente el sistema}
-
-El sistema:
-
-\begin{itemize}
-\item almacena el punto;
-\item guarda su rotación;
-\item genera preview 3D;
-\item detecta puntos comunes;
-\item y lo materializa al finalizar.
-\end{itemize}
-
-\captureflag{09}{inserción de un elemento definido mediante marcador}
-\placeholderimage{CAPTURA-09}{Inserción de un elemento definido mediante marcador}
-
-\captureflag{10}{inserción de un elemento definido mediante punto libre}
-\placeholderimage{CAPTURA-10}{Inserción de un elemento definido mediante punto libre}
+\manualimage{CAPTURA-11.png}{Inserción de un elemento definido como punto libre}
 
 \section{Puntos no definidos}
 
-Los puntos no definidos sirven para describir la lógica del recorrido sin construir todavía la geometría final.
+Los puntos no definidos sirven para marcar la lógica del recorrido sin colocar todavía un elemento final.
 
-\subsection{Tipos de punto}
-
-El sistema puede trabajar con puntos como:
+Son útiles para describir:
 
 \begin{itemize}
-\item inicio;
-\item final;
-\item intermedio libre;
-\item intermedio ordenado;
-\item bifurcación.
-\end{itemize}
-
-\subsection{Parámetros de paleta}
-
-\begin{itemize}
-\item \texttt{TipoCamino}
-\item \texttt{TipoPuntoOrden}
-\item \texttt{ColorPuntosNoDefinidos}
-\item \texttt{PathId}
-\item \texttt{DeteccionPuntosComunesActiva}
-\item \texttt{ToleranciaPuntosComunesMm}
+\item inicios;
+\item finales;
+\item intermedios;
+\item bifurcaciones;
+\item conexiones entre caminos.
 \end{itemize}
 
 \subsection{Para qué sirven}
 
-Permiten:
+Ayudan a organizar recorridos complejos y a definir la intención del trazado antes de convertirlo en una solución completa.
 
-\begin{itemize}
-\item marcar la intención del recorrido;
-\item definir topología;
-\item compartir nodos entre caminos;
-\item y generar una salida lógica estructurada.
-\end{itemize}
+\subsection{Puntos comunes}
 
-\subsection{Detección de puntos comunes}
+Si varios caminos coinciden en un punto o pasan muy cerca, la herramienta puede interpretar que existe una relación entre ellos.
 
-Si el usuario crea un punto cerca de otro camino y la detección está activa:
+Esto ayuda a construir una topología coherente.
 
-\begin{itemize}
-\item el sistema puede anclarlo al punto existente;
-\item marcarlo como punto común;
-\item y agruparlo dentro de una topología compartida.
-\end{itemize}
+\manualimage{CAPTURA-12.png}{Ejemplo de puntos no definidos en distintos colores}
 
-\subsection{Duplicados en puntos no definidos}
-
-El módulo evita generar ciertos nodos automáticos si ya existe un nodo explícito equivalente.
-
-Esto impide:
-
-\begin{itemize}
-\item duplicar cruces;
-\item contaminar la topología;
-\item y producir resultados ambiguos.
-\end{itemize}
-
-\captureflag{11}{ejemplo de puntos no definidos con colores distintos por camino}
-\placeholderimage{CAPTURA-11}{Ejemplo de puntos no definidos con colores distintos por camino}
-
-\captureflag{12}{ejemplo de cruce compartido detectado como punto común}
-\placeholderimage{CAPTURA-12}{Ejemplo de cruce compartido detectado como punto común}
+\manualimage{CAPTURA-13.png}{Ejemplo de punto común entre dos caminos}
 
 \section{Soportes}
 
-La herramienta también incorpora un flujo independiente para soportes.
+La herramienta también permite trabajar con soportes.
 
-\subsection{Parámetros principales}
+\subsection{Qué hace el usuario}
 
-\begin{itemize}
-\item tipo de soporte;
-\item subtipo;
-\item superficie;
-\item cota A;
-\item cota B;
-\item ángulo de inclinación;
-\item atributo de soporte.
-\end{itemize}
-
-\subsection{Flujo de uso}
+El flujo habitual es:
 
 \begin{enumerate}
-\item Configurar parámetros del soporte.
-\item Pulsar \texttt{Insertar soporte}.
-\item Definir posiciones.
-\item Revisar preview.
-\item Pulsar \texttt{Crear soportes} para acumular.
-\item Repetir si es necesario.
-\item Aplicar atributos o borrar soportes acumulados.
+\item configurar el soporte en la paleta;
+\item pulsar el botón para insertarlo;
+\item definir su posición;
+\item revisar la previsualización;
+\item acumularlo o crearlo.
 \end{enumerate}
 
-\captureflag{13}{bloque de paleta de soportes y preview del soporte antes de acumular}
-\placeholderimage{CAPTURA-13}{Bloque de paleta de soportes y preview del soporte antes de acumular}
+\subsection{Cuándo conviene colocarlos}
 
-\section{Duplicados y copias: diferencias importantes}
+Normalmente es más cómodo colocar los soportes cuando el recorrido principal ya está bastante definido.
 
-Aquí es clave distinguir entre dos conceptos distintos:
+\manualimage{CAPTURA-14.png}{Bloque de soportes en la paleta y preview de un soporte}
 
-\subsection{Eliminación de duplicados geométricos internos}
+\section{Cómo funcionan los duplicados o copias}
 
-Durante la creación de PythonParts individuales o inserción sin PythonPart:
+Este punto es importante porque puede generar dudas.
+
+\subsection{Duplicados no deseados}
+
+La herramienta evita repetir elementos iguales cuando no corresponde.
+
+Esto ayuda a que no aparezcan piezas duplicadas por error en el resultado final.
+
+\subsection{Copias intencionadas}
+
+En algunos casos, la instalación puede generar copias en otros archivos de dibujo según la información asociada al elemento.
+
+Estas copias no son un error. Forman parte del funcionamiento previsto de la herramienta.
+
+\subsection{Qué debe entender el usuario}
+
+El usuario debe saber que:
 
 \begin{itemize}
-\item el sistema elimina duplicados manteniendo el orden;
-\item esto evita repetir el mismo objeto dos veces en el resultado final;
-\item y reduce errores de inserción.
+\item puede existir un elemento en el archivo principal;
+\item y puede existir una copia relacionada en otro archivo de dibujo.
 \end{itemize}
 
-Esto afecta a listas internas de geometría, no a la lógica funcional del modelo.
+Cuando la instalación se actualiza, esas copias también se actualizan para que no queden versiones antiguas.
 
-\subsection{Duplicados lógicos evitados en topología}
+\manualimage{CAPTURA-15.png}{Ejemplo de un elemento original y su copia relacionada en otro archivo}
 
-En \texttt{ElementosDefinidos} y \texttt{ElementosNoDefinidos}, el sistema evita crear nodos automáticos duplicados si ya existe un nodo explícito equivalente.
+\section{Qué ocurre al pulsar el botón de finalizar}
 
-Esto protege:
-
-\begin{itemize}
-\item la lectura del grafo;
-\item la interpretación de cruces;
-\item y la posterior generación de elementos.
-\end{itemize}
-
-\subsection{Copias a otros archivos de dibujo}
-
-Este no es un duplicado erróneo. Es una funcionalidad deliberada.
-
-Cuando un elemento o PythonPart tiene atributo padre \texttt{pmp\_pare}, el sistema:
+Cuando el usuario pulsa el botón de finalizar, la herramienta:
 
 \begin{enumerate}
-\item agrupa elementos por ese valor;
-\item busca un archivo de dibujo cargado cuyo nombre contenga ese identificador;
-\item copia allí los elementos 3D;
-\item guarda los UUID de esas copias;
-\item y en una edición posterior elimina las copias previas antes de generar las nuevas.
-\end{enumerate}
-
-Esto significa que:
-
-\begin{itemize}
-\item la instalación principal permanece en el archivo actual;
-\item y ciertas representaciones 3D pueden replicarse en otros archivos de dibujo relacionados.
-\end{itemize}
-
-\subsection{Cómo funciona la limpieza de copias previas}
-
-Antes de una nueva generación:
-
-\begin{itemize}
-\item se leen los UUID guardados;
-\item se localizan los archivos donde se copiaron;
-\item se eliminan las copias antiguas;
-\item y se vuelve a generar el conjunto actualizado.
-\end{itemize}
-
-Esto evita que cada edición deje residuos o copias obsoletas.
-
-\captureflag{14}{ejemplo de atributo padre aplicado y archivo destino cargado en Allplan}
-\placeholderimage{CAPTURA-14}{Ejemplo de atributo padre aplicado y archivo destino cargado en Allplan}
-
-\captureflag{15}{ejemplo visual del mismo elemento en archivo original y en archivo copiado}
-\placeholderimage{CAPTURA-15}{Ejemplo visual del mismo elemento en archivo original y en archivo copiado}
-
-\section{Persistencia y restauración}
-
-La herramienta guarda estado serializado para poder reabrir y seguir editando.
-
-Entre los datos persistidos se incluyen:
-
-\begin{itemize}
-\item paths;
-\item segmentos;
-\item marcadores;
-\item puntos libres;
-\item puntos no definidos;
-\item atributos aplicados;
-\item layers aplicados;
-\item y referencias a copias creadas en otros archivos.
-\end{itemize}
-
-Esto permite que el usuario no tenga que reconstruir manualmente la instalación desde cero al reabrirla.
-
-\section{Qué ocurre al pulsar ``Finalizar''}
-
-Cuando el usuario pulsa \texttt{Finalizar}, el sistema hace, en términos generales, lo siguiente:
-
-\begin{enumerate}
-\item limpia copias previas si existen;
-\item reconstruye elementos de la instalación;
+\item revisa la información disponible;
+\item reconstruye los elementos necesarios;
 \item aplica atributos y layers;
-\item crea PythonParts individuales o agrupados;
-\item añade polilínea si está activado;
-\item añade macros;
-\item añade elementos definidos;
-\item añade soportes;
-\item crea el contenedor final;
-\item copia elementos a otros archivos si corresponde por \texttt{pmp\_pare};
-\item guarda el estado serializado.
+\item incorpora elementos definidos, macros o soportes;
+\item crea el resultado definitivo;
+\item y actualiza las copias relacionadas si las hubiera.
 \end{enumerate}
 
-\section{Recomendaciones de uso para el usuario}
+En ese momento la instalación pasa de estar en fase de preparación a quedar creada como resultado final en el documento.
+
+\section{Recomendaciones prácticas de uso}
 
 \begin{itemize}
-\item Configurar primero la instalación y el diámetro antes de dibujar.
-\item Revisar la distribución antes de modelar, porque condiciona atributos y geometría.
-\item Aplicar layers y atributos antes de finalizar.
-\item Usar elementos definidos y macros solo cuando el trazado principal esté razonablemente estable.
-\item Revisar especialmente \texttt{pmp\_pare} y \texttt{6\_CC\_IS} si la instalación depende de copias o de sectorización.
-\item Si aparecen advertencias al finalizar, corregirlas antes de continuar salvo que exista un motivo claro para omitir esa información.
+\item Configurar primero el sistema antes de empezar a dibujar.
+\item No cambiar de criterio de diámetro continuamente durante el dibujo si no es necesario.
+\item Revisar la distribución antes de finalizar.
+\item Aplicar layers y atributos cuando el recorrido ya esté claro.
+\item Insertar macros y elementos definidos cuando la base principal esté estable.
+\item Revisar los avisos antes de aceptar la creación final.
 \end{itemize}
 
-\section{Qué debe capturarse para completar este manual}
+\section{Resumen final}
 
-Para dejar este documento listo para entrega final, conviene capturar al menos:
+La herramienta de instalaciones está pensada para que el usuario dibuje un recorrido, lo complete con la información necesaria y genere un resultado final coherente dentro de Allplan.
 
-\begin{itemize}
-\item vista general de la paleta;
-\item selección del tipo de instalación;
-\item ejemplo de creación de una polilínea;
-\item ejemplo de edición de un tramo;
-\item aplicación de layer;
-\item aplicación de atributo;
-\item advertencia de validación previa a finalizar;
-\item inserción de macro;
-\item inserción de elemento definido;
-\item inserción de punto no definido;
-\item flujo de soportes;
-\item y ejemplo de copias por atributo padre.
-\end{itemize}
-
-\section{Resumen ejecutivo}
-
-El sistema de instalaciones comparte una base común muy sólida. Aunque cada instalación cambie nombres, piezas o reglas puntuales, el usuario trabaja siempre sobre el mismo patrón:
+Aunque cada instalación tenga sus particularidades, el funcionamiento general es siempre el mismo:
 
 \begin{itemize}
+\item configurar;
 \item dibujar;
-\item editar;
-\item enriquecer con atributos y layers;
-\item insertar elementos auxiliares;
-\item y finalizar para generar el modelo definitivo.
+\item revisar;
+\item completar;
+\item y finalizar.
 \end{itemize}
 
-El caso de Agua demuestra este funcionamiento común y sirve como referencia válida para documentar el resto de instalaciones con cambios menores de catálogo, nomenclatura y configuración.
+Por eso, entendiendo bien el ejemplo de Agua, se entiende también el comportamiento general del resto de instalaciones.
 
 \end{document}
