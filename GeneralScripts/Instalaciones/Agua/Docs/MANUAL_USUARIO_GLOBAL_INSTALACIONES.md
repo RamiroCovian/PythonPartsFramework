@@ -398,19 +398,102 @@ Esto ayuda a construir una topología coherente.
 
 La herramienta también permite trabajar con soportes.
 
-### 18.1. Qué hace el usuario
+### 19.1. Qué hace el usuario
 
 El flujo habitual es:
 
 1. configurar el soporte en la paleta;
-2. pulsar el botón para insertarlo;
-3. definir su posición;
-4. revisar la previsualización;
-5. acumularlo o crearlo.
+2. elegir el tipo de soporte y revisar sus parámetros;
+3. pulsar el botón para insertarlo;
+4. definir su posición con los puntos necesarios;
+5. revisar la previsualización;
+6. acumularlo o crearlo.
 
-### 18.2. Cuándo conviene colocarlos
+Para que el soporte quede bien definido, conviene completar antes de insertarlo los campos de tipo, superficie, cotas y ángulo.
+
+### 19.2. Tipos de soporte
+
+De forma general, la herramienta permite trabajar con familias de soporte como:
+
+- `Zeta`
+- `Omega`
+- `Cinta`
+
+Cada una responde a una solución física distinta. Por eso, antes de colocarlo, el usuario debe elegir el tipo que corresponda al sistema y al montaje que quiere representar.
+
+En función de la instalación, pueden aparecer variantes o subtipos asociados a cada familia.
+
+### 19.3. Subtipo de instalación
+
+Además del tipo de soporte, la paleta puede mostrar el campo `Subtipo instalación`.
+
+Este campo ayuda a identificar con qué familia de instalación se relaciona el soporte. Es útil para mantener coherencia entre el soporte que se inserta y la instalación sobre la que se está trabajando.
+
+`[[CAPTURA-14B: tipo de soporte, subtipo instalación y superficie en la paleta de soportes]]`
+![alt text](CAPTURA-14B.png)
+
+### 19.4. Superficie
+
+El campo `Superficie` permite definir cómo debe considerarse el soporte:
+
+- `Liso`
+- `Perforado`
+
+Esta elección forma parte de la definición final del soporte y de la información que queda asociada a él. Por eso conviene revisarla antes de insertarlo.
+
+No todos los tipos de soporte utilizan esta distinción exactamente de la misma manera, pero para el usuario la regla práctica es sencilla: debe escoger la superficie que corresponda al soporte real que quiere representar.
+
+### 19.5. Cota A y Cota B
+
+Estas dos medidas son básicas para definir la geometría del soporte:
+
+- `Cota A`: indica la altura del soporte o su desarrollo vertical.
+- `Cota B`: indica el largo del soporte o su desarrollo horizontal.
+
+En soportes con parte vertical, `Cota A` tiene un papel especialmente importante. En otros tipos, como ciertas cintas, no siempre interviene de la misma forma.
+
+### 19.6. Ángulo de inclinación
+
+El campo `Ángulo de inclinación` permite girar o inclinar el soporte respecto a su posición base.
+
+Es útil cuando el soporte no debe quedar en una orientación neutra y necesita un ajuste adicional para adaptarse al montaje real.
+
+Lo recomendable es definir primero la posición del soporte y usar después el ángulo como ajuste fino.
+
+`[[CAPTURA-14C: ejemplo de Cota A, Cota B y ángulo de inclinación en la paleta]]`
+![alt text](CAPTURA-14C.png)
+
+### 19.7. Modos de edición
+
+Una vez que hay soportes acumulados, la herramienta permite trabajar con distintos modos de edición:
+
+- `Desactivado`: la herramienta no entra en edición de soportes y los clics siguen el flujo normal de trabajo.
+- `Edición`: permite seleccionar soportes para revisarlos, borrarlos o aplicarles atributos.
+- `Edición Mover`: permite recolocar un soporte ya insertado o acumulado.
+
+Estos modos son útiles cuando el recorrido principal ya está dibujado y solo falta ajustar la posición o la información de los soportes.
+
+`[[CAPTURA-14D: modos de edición de soportes en la paleta]]`
+![alt text](CAPTURA-14D.png)
+
+### 19.8. Atributos de soporte
+
+La paleta también incluye un campo para aplicar el `Atributo de soporte`.
+
+Este atributo sirve para identificar, clasificar o completar la información de los soportes antes de la creación final.
+
+Si el usuario tiene soportes seleccionados, el atributo se aplica a esa selección. Si no hay una selección activa, la aplicación afecta a los soportes acumulados dentro de la operación en curso.
+
+Esto resulta especialmente útil cuando se quiere dejar todos los soportes correctamente preparados antes de finalizar la instalación.
+
+`[[CAPTURA-14E: campo de atributo de soporte y aplicación sobre soportes seleccionados o acumulados]]`
+![alt text](CAPTURA-14E.png)
+
+### 19.9. Cuándo conviene colocarlos
 
 Normalmente es más cómodo colocar los soportes cuando el recorrido principal ya está bastante definido.
+
+También conviene tener en cuenta que, antes de acumular o crear un soporte, primero debe haberse posicionado correctamente. Si todavía no se ha definido su colocación, la herramienta avisa y no lo añade.
 
 `[[CAPTURA-14: bloque de soportes en la paleta y preview de un soporte]]`
 ![alt text](CAPTURA-14.png)
@@ -419,26 +502,47 @@ Normalmente es más cómodo colocar los soportes cuando el recorrido principal y
 
 Este punto es importante porque puede generar dudas.
 
-### 19.1. Duplicados no deseados
+### 20.1. Duplicados no deseados
 
 La herramienta evita repetir elementos iguales cuando no corresponde.
 
 Esto ayuda a que no aparezcan piezas duplicadas por error en el resultado final.
 
-### 19.2. Copias intencionadas
+### 20.2. Copias intencionadas
 
 En algunos casos, la instalación puede generar copias en otros archivos de dibujo según la información asociada al elemento.
 
 Estas copias no son un error. Forman parte del funcionamiento previsto de la herramienta.
 
-### 19.3. Qué debe entender el usuario
+La lógica general es esta:
+
+1. un elemento se crea en el archivo principal;
+2. si tiene informado un atributo padre, la herramienta puede buscar otro archivo de dibujo relacionado;
+3. si encuentra ese archivo entre los archivos cargados, crea allí una copia de la geometría;
+4. y esa copia queda vinculada al proceso de actualización de la instalación.
+
+### 20.3. Qué debe entender el usuario
 
 El usuario debe saber que:
 
 - puede existir un elemento en el archivo principal;
 - y puede existir una copia relacionada en otro archivo de dibujo.
 
+Para que esta copia funcione correctamente, deben cumplirse estas condiciones:
+
+- el elemento debe tener informado el atributo padre correspondiente;
+- el archivo de dibujo de destino debe estar cargado;
+- y el nombre de ese archivo debe coincidir con la referencia que usa la instalación para localizarlo.
+
+Si el archivo destino no está cargado o no coincide con esa referencia, la copia no se crea.
+
+### 20.4. Qué pasa cuando la instalación se vuelve a editar
+
 Cuando la instalación se actualiza, esas copias también se actualizan para que no queden versiones antiguas.
+
+Antes de generar las nuevas copias, la herramienta localiza las copias previas que había creado y las elimina de los archivos correspondientes.
+
+Después crea la versión actualizada.
 
 `[[CAPTURA-15: ejemplo de un elemento original y su copia relacionada en otro archivo]]`
 ![alt text](CAPTURA-15.png)
@@ -600,6 +704,7 @@ Conviene revisarlo siempre en pantalla para comprobar que la reducción se ha ge
 `[[CAPTURA-AGUA-07: ejemplo de manguito reductor entre dos tramos consecutivos en la misma dirección]]`
 ![alt text](CAPTURA-AGUA-07.png)
 
+
 ### 25.4. Accesorios automáticos en Agua
 
 En Agua los accesorios automáticos dependen de la geometría del recorrido y de los diámetros de los tramos que se encuentran.
@@ -620,6 +725,8 @@ Cuando dos tramos consecutivos están alineados y mantienen el mismo diámetro, 
 #### 25.4.3. Manguitos reductores
 
 Cuando esos dos tramos alineados tienen distinto diámetro, la unión se resuelve mediante un manguito reductor.
+
+Cuando el cambio de diámetro se produce en un tramo recto, esta es la solución habitual. En cambio, si el cambio aparece justo a la salida de un codo, conviene revisar el resultado porque en ese caso manda la lógica del propio giro.
 
 #### 25.4.4. Tes o bifurcaciones
 
@@ -681,7 +788,93 @@ Por eso, cuando se trabaja con recorridos largos, conviene revisar el resultado 
 `[[CAPTURA-AGUA-12: ejemplo de tramo largo dividido automáticamente al superar la longitud máxima]]`
 ![alt text](CAPTURA-AGUA-12.png)
 
-### 25.6. Elementos definidos propios de Agua
+### 25.6. Layers y atributo padre en Agua
+
+En Agua hay dos temas que conviene entender juntos:
+
+- los `layers` de la instalación;
+- y el valor que se aplica como `atributo padre`.
+
+#### 25.6.1. Layers propios de Agua
+
+En la configuración actual, Agua trabaja con una base de layers como:
+
+- `AIGUA`
+- `AIGUA CARA X`
+- `AIGUA CARA Y`
+- `IS CON AIGUA FAB`
+- `IS CON AIGUA OBR`
+
+Además, la instalación parte de un layer por defecto para la geometría principal y de un layer específico para la polilínea de eje cuando esta se genera como apoyo.
+
+Por eso, aunque el usuario vea solo un desplegable de layers en la paleta, detrás hay una lógica propia de Agua que conviene respetar.
+
+`[[CAPTURA-AGUA-17: desplegable de layers de Agua mostrando las opciones disponibles en paleta]]`
+![alt text](CAPTURA-AGUA-17.png)
+
+#### 25.6.2. Qué debe entender el usuario sobre los layers en Agua
+
+Si el usuario no aplica un layer manualmente, la instalación utiliza su configuración por defecto.
+
+Si el usuario selecciona elementos y usa `Aplicar layer`, esa asignación queda guardada para esos elementos y se utiliza al crear el resultado final.
+
+Esto es especialmente importante en Agua cuando:
+
+- se quiere distinguir fabricación y obra;
+- se necesita separar `Cara X` y `Cara Y`;
+- o se quiere corregir la clasificación de un tramo o accesorio antes de finalizar.
+
+En general, después de cambiar distribución, geometría o selección de elementos, conviene revisar también los layers.
+
+#### 25.6.3. Casos en los que conviene revisar el layer final
+
+En Agua hay piezas, sobre todo en algunos casos `TD`, en las que la geometría puede resolverse con varias partes y no siempre interesa forzar todas ellas con el mismo criterio visual.
+
+Por eso, si después de aplicar un layer el usuario ve una pieza que no responde exactamente como esperaba, conviene revisar el resultado final en pantalla en lugar de asumir que se trata de un error.
+
+La regla práctica para el manual es esta:
+
+- el layer aplicado desde paleta manda en el flujo habitual;
+- pero algunas piezas técnicas pueden conservar parte de su lógica propia de modelo.
+
+`[[CAPTURA-AGUA-18: ejemplo de layer aplicado en Agua sobre tramos o accesorios seleccionados]]`
+![alt text](CAPTURA-AGUA-18.png)
+
+#### 25.6.4. Qué es el atributo padre en Agua
+
+En Agua, el `Valor atributo` que el usuario aplica desde la paleta no es solo una etiqueta descriptiva.
+
+Ese valor se utiliza como `atributo padre`, que sirve para:
+
+- identificar elementos que pertenecen a una misma referencia;
+- organizar la instalación;
+- y validar que la información esté completa antes de finalizar.
+
+En Agua, la lógica es esta:
+
+- en `TD`, el valor aplicado se utiliza como `pmp_pare`;
+- en `IS`, ese mismo valor se utiliza como `pmp_pare` y también como `6_CC_IS`.
+
+Es decir, el usuario escribe un único valor, pero la instalación lo reutiliza según la distribución activa.
+
+#### 25.6.5. Cómo aplica el usuario el atributo padre
+
+El flujo práctico es:
+
+1. seleccionar el tramo o los elementos que deban compartir referencia;
+2. escribir el valor en el campo `Valor atributo`;
+3. pulsar `Aplicar atributo`.
+
+Cuando se hace esto, la herramienta confirma que los atributos han sido aplicados y guarda esa información para la creación final.
+
+Si el usuario no asigna layer o atributo padre a ciertos elementos, antes de finalizar puede aparecer un aviso indicando que hay elementos sin configuración completa.
+
+`[[CAPTURA-AGUA-19: aplicación de Valor atributo en Agua y aviso de elementos sin layer o sin atributo padre]]`
+![alt text](CAPTURA-AGUA-19.png)
+
+La mecánica de copia a otros archivos es común al sistema y se explica en el apartado global `20. Cómo funcionan los duplicados o copias`.
+
+### 25.7. Elementos definidos propios de Agua
 
 Además del trazado automático, Agua permite insertar elementos definidos propios del sistema.
 
@@ -699,15 +892,126 @@ Además, algunos de estos elementos pueden mostrar un aviso si se intentan coloc
 `[[CAPTURA-AGUA-13: paleta de Elementos Definidos en Agua con los tipos disponibles]]`
 ![alt text](CAPTURA-AGUA-13.png)
 
-### 25.7. Puntos a revisar con especial atención en Agua
+#### 25.7.1. Tipo de punto en Elementos Definidos
+
+Además de elegir el elemento, en Agua es importante revisar el campo `Tipo de punto`, porque no todos los elementos pueden colocarse en cualquier posición de la instalación.
+
+En la configuración actual, la relación es esta:
+
+- `Colze base`: `Inicio` o `Final`.
+- `Taps`: `Inicio` o `Final`.
+- `T sortida`: `Intermedio ordenado` o `Intermedio libre`.
+- `Clau de Pas`: `Intermedio ordenado` o `Intermedio libre`.
+
+`[[CAPTURA-AGUA-13B: campo Tipo de punto en Elementos Definidos mostrando las opciones según el elemento seleccionado]]`
+![alt text](CAPTURA-AGUA-13B.png)
+
+#### 25.7.2. Qué significa cada tipo de punto
+
+- `Inicio`: el elemento se coloca en el arranque de la polilínea o del recorrido correspondiente.
+- `Final`: el elemento se coloca en el extremo final del recorrido.
+- `Intermedio ordenado`: el elemento se coloca en una posición intermedia asociada al orden del recorrido.
+- `Intermedio libre`: el elemento se coloca en un punto intermedio elegido libremente por el usuario.
+
+En otras palabras, `Inicio` y `Final` se usan para piezas que deben rematar o arrancar el recorrido, mientras que los tipos `Intermedio` se usan para piezas que deben quedar dentro del desarrollo de la instalación.
+
+#### 25.7.3. Qué debe tener en cuenta el usuario
+
+- Si el elemento es de `Inicio/Final`, no debe intentarse como punto intermedio.
+- Si el elemento es intermedio, no debe intentarse como arranque o remate del recorrido.
+- Cuando la combinación no es válida, la herramienta avisa y no permite continuar con esa colocación.
+
+Esto es especialmente importante en Agua porque el tipo de punto forma parte de la lógica de colocación del elemento, no es solo una etiqueta descriptiva.
+
+### 25.8. Soportes en Agua
+
+Además de las reglas comunes de soportes, en Agua hay particularidades de clasificación y de geometría que conviene revisar.
+
+#### 25.8.1. Qué hace especial a los soportes de Agua
+
+En Agua no basta con fijarse en la forma del soporte. También hay que comprobar cómo queda asociado dentro de la instalación.
+
+Esto es importante porque algunos soportes comparten familia geométrica con otras instalaciones. El caso más claro es `Omega`, ya que Agua y Saneamiento pueden trabajar con la misma base de soporte tipo `Varifix`.
+
+Por eso, antes de insertar, conviene revisar que el campo `Subtipo instalación` quede realmente asociado a `Agua`. Si aparece otro subtipo, el soporte puede quedar clasificado como perteneciente a otra instalación aunque visualmente se parezca.
+
+La confirmación previa a la inserción es un buen momento para comprobar `Tipo`, `Subtipo instalación`, `Superficie`, `Cota A`, `Cota B` y `Ángulo de inclinación` antes de continuar.
+
+`[[CAPTURA-AGUA-14: soporte de Agua con Subtipo instalación Agua visible en la paleta y en la confirmación previa a insertar]]`
+![alt text](CAPTURA-AGUA-14.png)
+
+#### 25.8.2. Tipos de soporte más representativos en Agua
+
+En la configuración actual, los casos más representativos en Agua son:
+
+- `Omega`, cuando se trabaja con la lógica de soporte `Varifix`.
+- `Zeta`, cuando se necesita un soporte lineal o un soporte con desarrollo vertical.
+- `Cinta`, cuando se resuelve el soporte mediante cinta.
+
+La diferencia en Agua no depende solo de la forma. También depende de cómo quede clasificado el soporte dentro de la instalación.
+
+#### 25.8.3. Cotas que cambian el resultado en Agua
+
+En Agua, las cotas no son un detalle menor, porque cambian directamente el tipo de resultado que se obtiene:
+
+- en `Omega` asociado a Agua, `Cota A` y `Cota B` deben ser mayores que `0`;
+- en `Zeta`, `Cota B` debe ser mayor que `0`;
+- en `Zeta`, si `Cota A = 0 mm`, el soporte se resuelve como variante lineal `0 mm`;
+- en `Zeta`, si `Cota A` es mayor que `0 mm`, el soporte pasa a una variante con desarrollo vertical;
+- en `Cinta`, la medida decisiva es `Cota B`, que también debe estar informada.
+
+Esto conviene revisarlo siempre en previsualización, porque un mismo tipo de soporte puede dar un resultado muy distinto solo por cambiar las cotas.
+
+`[[CAPTURA-AGUA-15: comparación en Agua entre un soporte Zeta con Cota A igual a 0 mm y otro con Cota A mayor que 0 mm]]`
+![alt text](CAPTURA-AGUA-15.png)
+
+#### 25.8.4. Layers e identificación de soporte en Agua
+
+Cuando el soporte queda correctamente asociado a Agua, la clasificación habitual de salida es:
+
+- layer `IS_SUPORTS_AIGUA`;
+- o `IS_SUPORTS_AGUA`, si el proyecto usa esa nomenclatura;
+- denominación de soporte `SUPORT AIGUA`.
+
+En cambio, el `Zeta 0 mm` mantiene su condición de soporte lineal y conserva la lógica de layer lineal general, en lugar de pasar al layer específico de Agua.
+
+Esto es importante porque permite distinguir entre:
+
+- soportes de Agua ya clasificados como parte de esa instalación;
+- y soportes lineales genéricos que no deben interpretarse igual.
+
+`[[CAPTURA-AGUA-16: propiedades finales de un soporte de Agua mostrando su layer e identificación]]`
+![alt text](CAPTURA-AGUA-16.png)
+
+#### 25.8.5. Atributos de soporte en Agua
+
+En Agua, el `Atributo de soporte` no solo sirve para etiquetar visualmente el soporte. También ayuda a dejarlo correctamente identificado dentro de la instalación.
+
+Si el flujo del proyecto utiliza organización por atributo padre, conviene revisar este valor antes de finalizar, porque puede influir en cómo se organiza el soporte dentro de la instalación.
+
+Por eso, cuando los soportes formen parte de una misma sectorización o deban seguir la misma lógica que la instalación principal, es recomendable aplicar ese atributo antes de cerrar el trabajo.
+
+#### 25.8.6. Qué conviene revisar antes de acumular o finalizar soportes en Agua
+
+- que `Subtipo instalación` sea realmente `Agua`;
+- que un `Omega` no se haya quedado clasificado como otra instalación que use la misma familia de soporte;
+- que `Cota A` y `Cota B` correspondan al tipo de soporte elegido;
+- que un `Zeta 0 mm` no se haya usado por error cuando se necesitaba un soporte con desarrollo vertical;
+- que el layer y la identificación final del soporte sean los esperados;
+- y que el `Atributo de soporte` esté informado si el proyecto necesita clasificación por atributo.
+
+### 25.9. Puntos a revisar con especial atención en Agua
 
 Antes de finalizar una instalación de Agua conviene revisar especialmente:
 
 - que el sistema seleccionado sea realmente `Polietilè`, `Multicapa` o `Armaflex`, según el caso;
 - que la distribución sea la correcta y, si procede, que `Cara (EN)` también esté bien definida;
-- que después de un cambio de diámetro se hayan regenerado correctamente codos, manguitos reductores y Tes;
+- que después de un cambio de diámetro se hayan regenerado correctamente codos, manguitos reductores y Tes, especialmente si la reducción aparece justo después de un codo;
 - que los giros del recorrido respondan a la lógica de `90 grados`;
 - que los avisos de longitud mínima se hayan resuelto conscientemente;
+- que los layers de Agua se correspondan con el criterio de trabajo que se necesita en ese plano;
+- que el atributo padre se haya aplicado realmente a los elementos que deben compartir referencia;
+- que los soportes de Agua hayan quedado asociados al subtipo correcto, con sus cotas y layers bien resueltos;
 - y que los recorridos largos no hayan generado divisiones automáticas en puntos no deseados.
 
 ## 26. Próximas unidades por instalación
