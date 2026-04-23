@@ -41,6 +41,8 @@ En la segunda parte se recogen las diferencias específicas de cada instalación
 
 De este modo, el usuario puede entender primero el funcionamiento general y después consultar, dentro del mismo manual, la unidad concreta de la instalación con la que vaya a trabajar.
 
+Cuando aparezca el marcador **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]**, significa que ese dato todavía debe validarse en Allplan antes de cerrar la versión definitiva del manual.
+
 ## 4. Qué partes son comunes en todas las instalaciones
 
 Todas las instalaciones comparten la misma lógica de trabajo:
@@ -1014,12 +1016,313 @@ Antes de finalizar una instalación de Agua conviene revisar especialmente:
 - que los soportes de Agua hayan quedado asociados al subtipo correcto, con sus cotas y layers bien resueltos;
 - y que los recorridos largos no hayan generado divisiones automáticas en puntos no deseados.
 
-## 26. Próximas unidades por instalación
+## 26. Instalación de Saneamiento
+
+En esta unidad solo se recogen las particularidades de Saneamiento. El uso general de la herramienta ya se ha explicado en los apartados anteriores, por lo que aquí se detallan únicamente las reglas, avisos y casos propios de esta instalación.
+
+### 26.1. Sistemas disponibles en Saneamiento
+
+En la instalación de Saneamiento, el usuario puede trabajar con estos sistemas:
+
+- Pluvial;
+- Fecal.
+
+La diferencia práctica entre ambos no está solo en el nombre del sistema, sino también en el catálogo de diámetros que puede utilizarse.
+
+En la configuración actual:
+
+- `Pluvial` trabaja con una configuración más limitada de diámetro;
+- `Fecal` permite más opciones.
+
+Cuando el usuario cambia de sistema, la herramienta adapta automáticamente el comportamiento del trazado y los elementos que se colocan sobre él.
+
+`[[CAPTURA-SANEAMIENTO-01: paleta de Saneamiento con los sistemas Pluvial y Fecal visibles]]`
+![alt text](CAPTURA-SANEAMIENTO-01.png)
+
+### 26.2. Distribuciones en Saneamiento
+
+En la configuración actual, Saneamiento no utiliza la distribución como un parámetro práctico de trabajo para el usuario.
+
+Por eso, a diferencia de Agua, aquí no hace falta documentar combinaciones especiales de distribución. Para el uso diario, lo importante es revisar el sistema activo, el diámetro y el sentido del trazado.
+
+### 26.3. Diámetros y cambios de diámetro en Saneamiento
+
+En Saneamiento, el diámetro disponible depende del sistema seleccionado.
+
+#### 26.3.1. Diámetros por sistema
+
+En la configuración actual:
+
+- `Pluvial`: `110 mm`;
+- `Fecal`: `25 mm`, `40 mm` y `110 mm`.
+
+Esto significa que, antes de dibujar o de modificar un tramo, conviene comprobar primero qué sistema está activo.
+
+`[[CAPTURA-SANEAMIENTO-02: selector de diámetro en Saneamiento con las opciones visibles para Fecal]]`
+![alt text](CAPTURA-SANEAMIENTO-02.png)
+
+#### 26.3.2. Qué ocurre al cambiar el diámetro de un tramo
+
+Cuando el usuario modifica el diámetro de un tramo:
+
+- se actualiza ese tramo;
+- se recalculan automáticamente las uniones cercanas;
+- y se regeneran los accesorios afectados en esa zona.
+
+Por eso, después de un cambio de diámetro conviene revisar el resultado local, no solo el tramo modificado.
+
+`[[CAPTURA-SANEAMIENTO-03: acción Modificar diámetro aplicada sobre un tramo de Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-03.png)
+
+#### 26.3.3. Qué ocurre si hay dos tramos consecutivos en línea recta con distinto diámetro
+
+Si dos tramos consecutivos siguen en línea recta pero cambian de diámetro, la herramienta coloca automáticamente una unión de transición o reducción.
+
+Este es el caso habitual para resolver una transición recta entre dos diámetros distintos.
+
+`[[CAPTURA-SANEAMIENTO-04: transición automática de diámetro entre dos tramos rectos consecutivos]]`
+![alt text](CAPTURA-SANEAMIENTO-04.png)
+
+#### 26.3.4. Qué ocurre si el cambio de diámetro afecta a un codo
+
+Si el cambio de diámetro afecta a un giro, la herramienta recalcula el codo y reajusta la unión de la zona afectada.
+
+Cuando antes y después del giro aparecen diámetros distintos, conviene revisar en pantalla cómo ha quedado resuelto el encuentro, porque el resultado final depende de la combinación entre el giro y la transición de diámetro.
+
+#### 26.3.5. Qué ocurre si el cambio de diámetro afecta a una bifurcación
+
+Si el cambio de diámetro afecta a una bifurcación, la herramienta intenta colocar la pieza compatible con la combinación detectada.
+
+Si no existe una combinación válida, aparece un aviso como este:
+
+`No existe una TE para la combinación de diámetros seleccionada.`
+
+`Combinación detectada: ...`
+
+`Modifique los diámetros de los segmentos para que coincidan con los tipos de TE disponibles.`
+
+En ese caso, el usuario debe revisar los diámetros de la entrada, la salida y la rama hasta encajar con una combinación disponible.
+
+`[[CAPTURA-SANEAMIENTO-07: aviso mostrado cuando no existe una bifurcación compatible en Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-07.png)
+
+### 26.4. Accesorios automáticos en Saneamiento
+
+En Saneamiento, los accesorios automáticos dependen de la geometría del recorrido, del diámetro de los tramos y también del sentido del trazado.
+
+#### 26.4.1. Codos
+
+En Saneamiento la resolución automática de giros puede hacerse con:
+
+- `codos de 45 grados`;
+- `codos de 90 grados`.
+
+Esto la diferencia claramente de Agua, donde el comportamiento habitual documentado es el codo de `90 grados`.
+
+`[[CAPTURA-SANEAMIENTO-05: ejemplo comparativo de un codo de 45 grados y un codo de 90 grados en Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-05.png)
+
+#### 26.4.2. Uniones y reducciones
+
+Cuando dos tramos consecutivos están alineados:
+
+- si mantienen el mismo diámetro, la herramienta coloca una unión;
+- si cambian de diámetro, la unión se resuelve mediante una transición o reducción.
+
+Este comportamiento debe revisarse especialmente después de modificar el diámetro de un tramo ya dibujado.
+
+#### 26.4.3. Bifurcaciones
+
+Cuando en un mismo punto confluyen tres direcciones, la instalación intenta resolver el encuentro con la bifurcación compatible.
+
+En la información recibida para Saneamiento se indica el uso de bifurcaciones tipo `Y` y de algunas bifurcaciones de transición en casos concretos.
+
+`[[CAPTURA-SANEAMIENTO-06: ejemplo de bifurcación válida en Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-06.png)
+
+#### 26.4.4. Qué ocurre si no existe una bifurcación compatible
+
+No todas las combinaciones de diámetro están disponibles en bifurcación.
+
+Cuando no existe una pieza compatible, la herramienta muestra el aviso correspondiente y el usuario debe corregir los diámetros hasta adaptarlos a una combinación admitida.
+
+### 26.5. Reglas geométricas y validaciones en Saneamiento
+
+Además del sistema y del diámetro, en Saneamiento hay reglas geométricas que conviene tener presentes.
+
+#### 26.5.1. Longitud mínima
+
+La longitud mínima de tramo indicada para Saneamiento es `350 mm`.
+
+Si el usuario dibuja un tramo por debajo de ese valor, el resultado puede no resolverse correctamente.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El mensaje exacto de esa validación debe confirmarse en Allplan antes del cierre definitivo del manual.
+
+#### 26.5.2. Longitud máxima
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** La longitud máxima de tramo en Saneamiento debe confirmarse en Allplan.
+
+Por eso, antes de cerrar la versión final de esta unidad conviene validar en entorno real:
+
+- si existe un límite máximo;
+- qué ocurre cuando se supera;
+- y si aparece o no un aviso específico.
+
+#### 26.5.3. Ajustes automáticos y sentido del trazado
+
+En Saneamiento, la herramienta recorta automáticamente algunos extremos de tramo para poder encajar los accesorios.
+
+Además, el sentido del trazado influye en el resultado de determinadas piezas. Por eso, el usuario no debe fijarse solo en la geometría, sino también en la dirección en la que se ha construido el recorrido.
+
+Esto es importante porque existe la acción `Invertir caval`, que permite cambiar el sentido de la instalación cuando el resultado geométrico no es el esperado.
+
+`[[CAPTURA-SANEAMIENTO-13: botón Invertir caval con mensaje de confirmación en Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-13.png)
+
+### 26.6. Layers, atributos y comportamiento visual en Saneamiento
+
+En Saneamiento conviene revisar tres cosas:
+
+- los layers aplicados;
+- los atributos aplicados sobre la selección;
+- y ciertos casos de superposición visual que no deben confundirse con una copia errónea.
+
+#### 26.6.1. Layers que conviene revisar
+
+En la información recibida aparecen como layers importantes:
+
+- `IS CON SANE FAB`;
+- `IS CON SANE OBR`.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** También se mencionan otros layers de proyecto que conviene validar en Allplan antes de cerrar definitivamente esta unidad del manual.
+
+`[[CAPTURA-SANEAMIENTO-11: aplicación de layer sobre tramos o accesorios de Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-11.png)
+
+#### 26.6.2. Atributos que conviene revisar
+
+Los atributos más relevantes en la información recibida son:
+
+- el valor de atributo aplicado sobre elementos seleccionados;
+- y los atributos de soporte aplicados desde la página específica de soportes.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Los atributos padre o campos críticos de Saneamiento todavía deben confirmarse.
+
+`[[CAPTURA-SANEAMIENTO-12: aplicación de atributo sobre elementos seleccionados en Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-12.png)
+
+#### 26.6.3. Superposiciones que no deben confundirse con duplicados
+
+En algunos casos, Saneamiento puede generar elementos superpuestos como parte del propio resultado gráfico o constructivo.
+
+Esto puede parecer un duplicado, pero no debe interpretarse automáticamente como una copia entre archivos. Según la información recibida, en esta instalación puede formar parte de la definición prevista de ciertos elementos.
+
+La mecánica de copia a otros archivos, cuando exista, sigue siendo un comportamiento global del sistema y se explica en el apartado `20. Cómo funcionan los duplicados o copias`.
+
+### 26.7. Elementos definidos propios de Saneamiento
+
+En la información recibida para Saneamiento aparece, como elemento definido principal:
+
+- `Caixa Connexions 200`.
+
+Su función es insertar un elemento de conexión o registro sobre un punto de la instalación.
+
+Suele ser útil:
+
+- en puntos de inicio;
+- en puntos finales;
+- y en puntos intermedios donde se necesite resolver una conexión o un registro.
+
+`[[CAPTURA-SANEAMIENTO-08: uso de Caixa Connexions 200 en Saneamiento]]`
+![alt text](CAPTURA-SANEAMIENTO-08.png)
+
+#### 26.7.1. Tipos de punto admitidos
+
+Según la información recibida, `Caixa Connexions 200` admite:
+
+- `Inicio`;
+- `Final`;
+- `Intermedio ordenado`;
+- `Intermedio libre`.
+
+En paleta, la opción intermedia puede aparecer como `Intermedio o libre`.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El mensaje exacto mostrado cuando se intenta usar un tipo de punto no válido todavía debe confirmarse.
+
+### 26.8. Macros en Saneamiento
+
+Saneamiento incluye una página propia para el uso de macros.
+
+En la información recibida, el flujo específico se apoya en:
+
+- selección del punto de inserción;
+- definición de la cota;
+- y ajuste de altura respecto al piso cuando procede.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Los detalles exactos de orientación todavía deben confirmarse en Allplan.
+
+`[[CAPTURA-SANEAMIENTO-09: página de macros de Saneamiento con selección de punto de inserción]]`
+![alt text](CAPTURA-SANEAMIENTO-09.png)
+
+### 26.9. Soportes en Saneamiento
+
+Saneamiento dispone también de una página específica de soportes.
+
+Según la información recibida:
+
+- el tipo `Zeta` aparece como valor visible por defecto;
+- las superficies habituales son `Liso` y `Perforado`;
+- y el flujo de trabajo incluye inserción, creación y edición desde la misma paleta.
+
+También conviene revisar:
+
+- `Cota A`;
+- `Cota B`;
+- y `Ángulo de inclinación`.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El listado completo de tipos de soporte de Saneamiento todavía debe confirmarse.
+
+`[[CAPTURA-SANEAMIENTO-10: página de soportes de Saneamiento con inserción y edición]]`
+![alt text](CAPTURA-SANEAMIENTO-10.png)
+
+### 26.10. Mensajes y avisos propios de Saneamiento
+
+En la información recibida aparecen como mensajes relevantes:
+
+- `No hay instalación guardada para invertir.`
+  Aparece al intentar invertir una instalación sin trazado guardado.
+- `Instalación invertida: ahora va de final a inicio.`
+  Aparece cuando la inversión se realiza correctamente.
+- `No se pudo invertir la instalación: ...`
+  Aparece cuando la inversión falla y conviene revisar el trazado.
+- `No existe una TE para la combinación de diámetros seleccionada...`
+  Aparece cuando no existe una bifurcación compatible con los diámetros detectados.
+- `caval sin sentido sera creado`
+  Aparece en casos concretos relacionados con la orientación de la bifurcación.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Conviene validar estos mensajes en Allplan antes del cierre definitivo del manual, especialmente si alguno de ellos se ha abreviado en la información inicial.
+
+### 26.11. Puntos a revisar con especial atención en Saneamiento
+
+Antes de finalizar una instalación de Saneamiento conviene revisar especialmente:
+
+- que el sistema activo sea realmente `Pluvial` o `Fecal`;
+- que el diámetro elegido sea compatible con ese sistema;
+- que los cambios de diámetro hayan regenerado correctamente uniones, reducciones, codos y bifurcaciones;
+- que una bifurcación no haya quedado en una combinación no válida;
+- que los giros se estén resolviendo con el ángulo esperado, especialmente en casos de `45 grados` y `90 grados`;
+- que los avisos de longitud mínima se hayan resuelto conscientemente;
+- que el sentido del trazado sea el correcto antes de usar `Invertir caval`;
+- que los layers y atributos aplicados respondan al criterio del plano;
+- que `Caixa Connexions 200` esté colocada con el tipo de punto adecuado;
+- y que los soportes se hayan revisado con sus cotas, superficie y tipo correctos.
+
+## 27. Próximas unidades por instalación
 
 Este mismo esquema puede repetirse dentro del manual para el resto de instalaciones, por ejemplo:
 
-- Saneamiento;
 - Ventilación;
-- Electricidad.
+- Electricidad;
+- y otras instalaciones futuras.
 
 La idea es que cada una tenga su propia unidad específica dentro del mismo manual, manteniendo una estructura común para que la consulta sea sencilla.
