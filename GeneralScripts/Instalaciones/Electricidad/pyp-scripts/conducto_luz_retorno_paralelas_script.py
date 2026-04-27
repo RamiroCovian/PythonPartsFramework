@@ -66,7 +66,7 @@ class ConductoLuzRetornoParalelasScript(BaseScriptObject):
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["6_CC_IS"], ""))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_altura"], ""))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_amplada"], ""))
-            user_attributes.append(AllplanBaseElements.AttributeDouble(attr_ids["pmp_area"], area))
+            user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_area"], str(int(area))))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_armaflex"], ""))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_cargols"], ""))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_CARTICULO"], "KN02_004_002"))
@@ -74,7 +74,7 @@ class ConductoLuzRetornoParalelasScript(BaseScriptObject):
             user_attributes.append(AllplanBaseElements.AttributeDouble(attr_ids["pmp_densitat"], 0.0))
             user_attributes.append(AllplanBaseElements.AttributeDouble(attr_ids["pmp_densitat_lineal"], 0.29))
             user_attributes.append(AllplanBaseElements.AttributeDouble(attr_ids["pmp_densitat_superficial"], 0.0))
-            user_attributes.append(AllplanBaseElements.AttributeDouble(attr_ids["pmp_diametre"], float(diameter)))
+            user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_diametre"], str(int(diameter))))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_longitud"], ""))
             user_attributes.append(AllplanBaseElements.AttributeDouble(attr_ids["pmp_longitud_extra"], 0.0))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_nom"], ""))
@@ -136,20 +136,19 @@ class ConductoLuzRetornoParalelasScript(BaseScriptObject):
                 self.doc, "Atributo personalizado 07"
             )
             if id_attr07 and id_attr07 > 0:
-                attr_list.append(AllplanBaseElements.AttributeDouble(id_attr07, diameter))
+                attr_list.append(AllplanBaseElements.AttributeString(id_attr07, str(int(diameter))))
 
             id_attr09 = AttributeService.GetAttributeID(
                 self.doc, "Atributo personalizado 09"
             )
             if id_attr09 and id_attr09 > 0:
-                attr_list.append(AllplanBaseElements.AttributeDouble(id_attr09, area))
+                attr_list.append(AllplanBaseElements.AttributeString(id_attr09, str(int(area))))
 
-            if overlap_mm:
-                id_attr10 = AttributeService.GetAttributeID(
-                    self.doc, "Atributo personalizado 10"
-                )
-                if id_attr10 and id_attr10 > 0:
-                    attr_list.append(AllplanBaseElements.AttributeDouble(id_attr10, float(overlap_mm)))
+            id_attr10 = AttributeService.GetAttributeID(
+                self.doc, "Atributo personalizado 10"
+            )
+            if id_attr10 and id_attr10 > 0:
+                attr_list.append(AllplanBaseElements.AttributeString(id_attr10, "0"))
 
         except Exception as e:
             print(f"[LuzRetornoParalelas] Error en get_attributes_custom: {e}")

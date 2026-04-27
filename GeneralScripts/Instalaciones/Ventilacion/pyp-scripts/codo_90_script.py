@@ -111,7 +111,7 @@ class Codo90Script(BaseScriptObject):
 
         return user_attributes
 
-    def get_attributes(self, value = None):
+    def get_attributes(self,  *args, **kwargs):
         attr_list = []
         custom_attributes = self.get_attributes_custom()
         user_attributes = self.get_attributes_user()
@@ -120,7 +120,7 @@ class Codo90Script(BaseScriptObject):
         attr_list.extend(user_attributes)
         return attr_list
 
-    def execute(self) -> CreateElementResult:
+    def execute(self,  *args, **kwargs) -> CreateElementResult:
         codo_90_3d = Codo90Object3D()
         model_ele_list = codo_90_3d.create_codo_90_geometry_3D()
 

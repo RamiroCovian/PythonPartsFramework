@@ -122,7 +122,8 @@ def _create_elements_for_segment_group(segments, so: PBL.script_object.PolylineS
             # Antes: value=base_color -> Ahora: exec_args=(base_color,)
             _model_conduct = so._get_pythonpart_installed(
                 element_key=selected_inst[0].key,
-                exec_args=(base_color,)
+                exec_args=(base_color,),
+                attr_kwargs={"color": base_color}
             )
 
             model3D_manguito = [
@@ -198,9 +199,9 @@ def _create_elements_for_segment_group(segments, so: PBL.script_object.PolylineS
 
 def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PBL.script_object.PolylineScriptObject) -> list:
     """
-    Versión corregida: Gestión de subdivisión con re-numeración y limpieza de caché.
+    Funcion hook para aplicar atributos y layers por defecto y personalizados.
+    elements_generated = self.element_list: List[List[GeneratedElement]]
     """
-    # print("###################################### elements_generated: ", elements_generated)
     if so._config and not so.init_storage:
         inst_name = str(so._config.default_installation).lower()
         so.init_storage = PolylineStorage(name=inst_name)
@@ -306,18 +307,29 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
             if prev_element_type != so.element_type_core:
                 is_first_after_manguito = True
 
-        if element_type in ["conducto_normal"] and (is_first_in_path or is_first_after_manguito):
+        if element_type in ["conducto_normal", "conducto_aislado"] and (is_first_in_path or is_first_after_manguito):
             model_base = so.current_inst_config
             diameter = 100
             if model_base:
-                # print("############################### diameter_type: ", so.diameter_list, so.diameter_type)
                 if so.diameter_list and so.diameter_type:
                     diameter = so.diameter_type
                 else:
                     diameter = model_base["diameter"]
-            # Creamos el cuboide
-            cuboid_model = _create_cuboide_label(diameter, i, path_idx, so)
+            # Índice real en saved_paths = cantidad de conductos ANTES de posición i
+            # (los manguitos intercalados en data_list no consumen puntos en saved_paths)
+            pt_idx = sum(1 for j in range(i)
+                         if elements_generated[j].element_type in ["conducto_normal", "conducto_aislado"])
 
+            # Creamos el cuboide con pt_idx correcto
+            cuboid_model = _create_cuboide_label(diameter, pt_idx, path_idx, so, attr_list=processed_attrs)
+
+            # Guardar attrs para la polilínea: {path_idx: {pt_idx: attrs}}
+            if so._polyline_attrs is None:
+                so._polyline_attrs = {}
+            if path_idx not in so._polyline_attrs:
+                so._polyline_attrs[path_idx] = {}
+            if pt_idx not in so._polyline_attrs[path_idx]:
+                so._polyline_attrs[path_idx][pt_idx] = processed_attrs
             # Lo envolvemos en el formato de diccionario esperado
             # En lugar de crear un diccionario {}, creamos una instancia de la clase
             cuboid_item = GeneratedElement(
@@ -333,7 +345,9 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
 
     return elements_generated_final
 
-def _create_cuboide_label(width: int, index: int, path_index: int, so: PBL.script_object.PolylineScriptObject) -> AllplanBasisElements.ModelElement3D | None:
+def _create_cuboide_label(width: int, index: int, path_index: int,
+                          so: PBL.script_object.PolylineScriptObject,
+                          attr_list: list | None = None) -> AllplanBasisElements.ModelElement3D | None:
     """Crea un cuboide y lo rota según el ángulo Z del segmento actual."""
     import math
 
@@ -353,7 +367,7 @@ def _create_cuboide_label(width: int, index: int, path_index: int, so: PBL.scrip
     # 2. Propiedades y Layer
     default_id = 0
     if hasattr(so, "default_layers") and "layer_cuboid_label" in so.default_layers:
-        default_id = LayerService.GetIDByShortName(so.default_layers["default"], so.doc)
+        default_id = LayerService.GetIDByShortName(so.default_layers["layer_cuboid_label"], so.doc)
 
     com_prop = AllplanBaseElements.CommonProperties()
     com_prop.GetGlobalProperties()
@@ -409,7 +423,13 @@ def _create_cuboide_label(width: int, index: int, path_index: int, so: PBL.scrip
 
     cuboide_geo = AllplanGeo.Transform(cuboide_geo, matriz_posicion)
 
-    return AllplanBasisElements.ModelElement3D(com_prop, cuboide_geo)
+    model_elem = AllplanBasisElements.ModelElement3D(com_prop, cuboide_geo)
+
+    # Aplicar atributos personalizados si se pasaron
+    if attr_list:
+        model_elem = _apply_attributes_to_model_elem(model_elem, attr_list)
+
+    return model_elem
 
 # ========================================
 # APLICACIÓN DE ATRIBUTOS

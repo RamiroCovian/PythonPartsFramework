@@ -41,11 +41,12 @@ class ConductoAisladoScript(BaseScriptObject):
 
         try:
             # Value assignment for attributeID
+            custom_attributes.append(AllplanBaseElements.AttributeString(1083, "TV"))
             if diameter == 150:
-                custom_attributes.append(AllplanBaseElements.AttributeString(1083, "CONDUCTE CUINA Ø150"))
+                # custom_attributes.append(AllplanBaseElements.AttributeString(1083, "CONDUCTE CUINA Ø150"))
                 custom_attributes.append(AllplanBaseElements.AttributeString(1084, "Ø150"))
             elif diameter == 160:
-                custom_attributes.append(AllplanBaseElements.AttributeString(1083, "CONDUCTE CUINA Ø160"))
+                # custom_attributes.append(AllplanBaseElements.AttributeString(1083, "CONDUCTE CUINA Ø160"))
                 custom_attributes.append(AllplanBaseElements.AttributeString(1084, "Ø160"))
 
             custom_attributes.append(AllplanBaseElements.AttributeString(1085, ""))

@@ -73,6 +73,82 @@ def check_allplan_version(_build_ele, _version):
     ElectricidadMacroManager = _EMM
     return True
 
+# ---- Mapa IS → TD: clave del script y color de sustitución ----
+# Cuando distribution_type == "TD" o "EN", se usa el script TD equivalente.
+# EN reutiliza los mismos scripts TD: la única diferencia es el layer asignado.
+_TD_ELEMENT_MAP: dict[str, tuple[str, int]] = {
+    "conducto_telecomunicaciones":             ("conducto_telecomunicaciones_td",             15),
+    "conducto_luz_retorno_paralelas":          ("conducto_luz_retorno_paralelas_td",          13),
+    "conducto_alimentacion_horno":             ("conducto_alimentacion_horno_td",             28),
+    "conducto_alimentacion_luces_cajetines":   ("conducto_alimentacion_luces_cajetines_td",   16),
+    "conducto_cajetin_a_enchufe":              ("conducto_cajetin_a_enchufe_td",              6),
+    "conducto_interruptores_domotica":         ("conducto_interruptores_domotica_td",         27),
+}
+_EN_ELEMENT_MAP = _TD_ELEMENT_MAP   # misma geometría, distinto layer
+
+_TD_COLOR_INNER = 15    # tubo interior (igual que IS telecom)
+_TD_COLOR_OUTER = 4     # recubrimiento exterior XPS
+_TD_OUTER_OFFSET = 2.5  # mm: desplazamiento del recubrimiento hacia -Y (abajo en plano XY)
+
+# ---- Mapa de default_layers por tipo de distribución ----
+_DEFAULT_LAYERS_BY_DISTRIBUTION: dict[str, dict] = {
+    "IS": {
+        "default": "IS_COR_ELECTRICITAT_FAB",
+        "layer_polyline": "IS_COR_ELECTRICITAT_FAB",
+    },
+    "TD": {
+        "default": "KN_ELECTRICITAT",
+        "layer_polyline": "KN_ELECTRICITAT",
+    },
+    "EN_X": {
+        "default": "KN_X_ELECTRICITAT",
+        "layer_polyline": "KN_X_ELECTRICITAT",
+    },
+    "EN_Y": {
+        "default": "KN_Y_ELECTRICITAT",
+        "layer_polyline": "KN_Y_ELECTRICITAT",
+    },
+}
+
+
+def _patch_create_group_pythonpart_for_td(script_object) -> None:
+    """
+    Monkey-patch de create_group_pythonpart para TD y EN.
+    En IS, delega al original sin cambios.
+    En TD/EN, llama al original dos veces: una por cada color (inner + outer=4),
+    de forma que ambos tubos superpuestos queden como PythonParts independientes.
+    """
+    _original = script_object.create_group_pythonpart
+
+    def _td_aware_create_group(elements_list, build_ele, base_c=0):
+        dist = getattr(script_object, "distribution_type", None)
+        if dist not in ("TD", "EN"):
+            return _original(elements_list, build_ele, base_c=base_c)
+        inner_color = getattr(script_object, "inst_color", _TD_COLOR_INNER)
+        pp_inner = _original(elements_list, build_ele, base_c=inner_color)
+        pp_outer = _original(elements_list, build_ele, base_c=_TD_COLOR_OUTER)
+        return pp_inner + pp_outer
+
+    script_object.create_group_pythonpart = _td_aware_create_group
+
+
+def _update_default_layers_for_distribution(
+    so: PBL.script_object.PolylineScriptObject,
+    distribution_type: str,
+    face_en: str | None = None,
+) -> None:
+    """Actualiza default_layers según el tipo de distribución y, para EN, la cara seleccionada."""
+    if distribution_type == "EN":
+        key = "EN_Y" if face_en == "CARA Y" else "EN_X"
+    else:
+        key = distribution_type
+    layers = _DEFAULT_LAYERS_BY_DISTRIBUTION.get(key)
+    if layers:
+        so.default_layers = layers
+        if so.script_object_interactor:
+            so.script_object_interactor.apply_layer_default()
+
+
 def create_script_object(build_ele, script_object_data):
     script_object = PBL.script_object.initialize_script_object(
         build_ele, script_object_data, CONFIG
@@ -87,10 +163,34 @@ def create_script_object(build_ele, script_object_data):
     _original_generate = script_object._generate_pythonparts
 
     def _synced_generate():
+        print(f"[DBG-UNION] >>> _synced_generate START | inst_color={script_object.inst_color} | dist={script_object.distribution_type}")
         _sync_segments_before_create(script_object)
+        print(f"[DBG-UNION] >>> after _sync_segments | inst_color={script_object.inst_color}")
         _original_generate()
+        print(f"[DBG-UNION] >>> after _original_generate | inst_color={script_object.inst_color}")
 
     script_object._generate_pythonparts = _synced_generate
+
+    # PATCH: Wrap modify_element_property to update default_layers when DistributionType changes
+    _original_modify = script_object.modify_element_property
+
+    def _patched_modify(name, value):
+        result = _original_modify(name, value)
+        if name == "DistributionType":
+            _update_default_layers_for_distribution(
+                script_object, value,
+                face_en=getattr(script_object, "face_en", None),
+            )
+        elif name == "FaceEN":
+            _update_default_layers_for_distribution(
+                script_object, script_object.distribution_type, face_en=value,
+            )
+        return result
+
+    script_object.modify_element_property = _patched_modify
+
+    # PATCH: Para TD, create_group_pythonpart une cada color por separado
+    _patch_create_group_pythonpart_for_td(script_object)
 
     # NOTE: Macro/element integration is now handled natively by PolyLib
     # via marker_manager_factory in CONFIG. No monkey-patches needed.
@@ -395,12 +495,27 @@ def _create_elements_for_segment_group(segments, so: PBL.script_object.PolylineS
         base_color = model_base["color"]
         diameter = model_base["diameter"]
 
+    is_rejiband = "rejiband" in str(element_type_core).lower()
+
+    # ------------------------------------------------------------------
+    # TD / EN: redirigir al script TD equivalente si existe en el mapa.
+    # EN reutiliza los mismos scripts TD; solo difiere el layer asignado.
+    # ------------------------------------------------------------------
+    _dist = getattr(so, "distribution_type", None)
+    if not is_rejiband and _dist in ("TD", "EN"):
+        _elem_map = _TD_ELEMENT_MAP if _dist == "TD" else _EN_ELEMENT_MAP
+        td_key, td_inst_color = _elem_map.get(element_type_core, (None, None))
+        if td_key:
+            element_type_core = td_key
+            base_color = None                   # preserva colores por elemento (inner/outer)
+            so.inst_color = td_inst_color       # alinea base_c para MakeUnion en create_group_pythonpart
+            so.element_type_core = td_key       # alinea el filtro de _create_grouped_pythonparts
+            print(f"[DBG-UNION] {_dist} remap → key={element_type_core} | base_color={base_color} | so.inst_color={so.inst_color} | so.element_type_core={so.element_type_core}")
+
     selected_inst = [
         item for item in so.pythonparts_modules
         if item.key == element_type_core
     ]
-
-    is_rejiband = "rejiband" in str(element_type_core).lower()
 
     # ------------------------------------------------------------------
     # Detectar extremos que coinciden con puntos de corte manual
@@ -482,6 +597,46 @@ def _create_elements_for_segment_group(segments, so: PBL.script_object.PolylineS
             debug=True
         )
 
+    # TD: desplazar tubo exterior en la dirección del "height axis" del cubo tras rotación.
+    # geo_handler centra cada elemento por su propio centroide: el exterior (25mm) queda
+    # ±12.5mm y el interior (20mm) queda ±10mm → 2.5mm en cada lado.
+    # Movemos el exterior _TD_OUTER_OFFSET mm en la dirección H para que el solape
+    # quede todo en un lado (abajo en plano XY según orientación del segmento).
+    if not is_rejiband and getattr(so, "distribution_type", None) in ("TD", "EN") and elements_generated:
+        _hx, _hy, _hz = 0.0, -1.0, 0.0  # fallback: vertical rot_xy=90°
+        try:
+            if segments:
+                _sdata = segments[0].data
+                _ang_rad = math.radians(float(getattr(_sdata, 'angulo_xy', 90.0)))
+                _len_xy  = float(getattr(_sdata, 'longitud_xy', 0.0))
+                _dz      = float(getattr(_sdata, 'delta_z', 1.0))
+                _pitch   = math.atan2(_dz, _len_xy if abs(_len_xy) > 1e-6 else 1e-6)
+                _hx = -math.cos(_ang_rad) * math.sin(_pitch)
+                _hy = -math.sin(_ang_rad) * math.sin(_pitch)
+                _hz =  math.cos(_pitch)
+        except Exception as _ex:
+            print(f"[DBG-TD] Error calculando H direction: {_ex}")
+
+        _offset_vec = AllplanGeo.Vector3D(
+            _hx * _TD_OUTER_OFFSET,
+            _hy * _TD_OUTER_OFFSET,
+            _hz * _TD_OUTER_OFFSET,
+        )
+        print(f"[DBG-TD] offset_vec=({_hx*_TD_OUTER_OFFSET:.2f}, {_hy*_TD_OUTER_OFFSET:.2f}, {_hz*_TD_OUTER_OFFSET:.2f})")
+        adjusted = []
+        for item in elements_generated:
+            elem = item.get("element")
+            try:
+                if elem is not None and elem.GetCommonProperties().Color == _TD_COLOR_OUTER:
+                    new_brep = AllplanGeo.Move(elem.GetGeometryObject(), _offset_vec)
+                    item = {**item, "element": AllplanBasisElements.ModelElement3D(
+                        elem.GetCommonProperties(), new_brep
+                    )}
+            except Exception as _ex:
+                print(f"[DBG-TD] Error aplicando offset: {_ex}")
+            adjusted.append(item)
+        elements_generated = adjusted
+
     return elements_generated
 
 # Coincide con TIPOS_ACCESORIOS en geo_handler.center_and_connect_models
@@ -527,55 +682,73 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
 
     doc = so.coord_input.GetInputViewDocument()
 
+    print(f"[DBG-UNION] _create_elements_with_layers_attrs START | path_idx={path_idx} | so.inst_color={so.inst_color} | dist={so.distribution_type}")
+
     elements_generated_final = []
 
     for i, element in enumerate(elements_generated):
         element_model = element.element
         etype = getattr(element, "element_type", None)
+        try:
+            _dbg_color = element_model.GetCommonProperties().Color
+        except Exception:
+            _dbg_color = "?"
+        print(f"[DBG-UNION]   elem[{i}] type={etype} | color_on_model={_dbg_color}")
         ui_seg = int(getattr(element, "index", i))
         layer_storage_key, attr_storage_key = _layer_and_attr_storage_keys(
             path_idx, etype, ui_seg
         )
 
         # 1. Layer (clave alineada con tubos de la vista previa)
-        element_model = _apply_layer_to_element(element_model, layer_storage_key, so)
+        # Para TD/EN: tubo externo (color _TD_COLOR_OUTER) → siempre KN_XPS_RECESS
+        #             tubo interno → layer normal (KN_ELECTRICITAT / KN_X/Y_ELECTRICITAT)
+        _dist = getattr(so, "distribution_type", "IS")
+        try:
+            _elem_color = element_model.GetCommonProperties().Color
+        except Exception:
+            _elem_color = None
+        if _dist in ("TD", "EN") and _elem_color == _TD_COLOR_OUTER:
+            _xps_id = LayerService.GetIDByShortName("KN_XPS_RECESS", doc)
+            if _xps_id:
+                try:
+                    _props = element_model.CommonProperties
+                    _props.Layer = _xps_id
+                    element_model.CommonProperties = _props
+                except Exception as _e:
+                    print(f"[Error] Fallo al setear KN_XPS_RECESS: {_e}")
+        else:
+            element_model = _apply_layer_to_element(element_model, layer_storage_key, so)
 
         # 2. Tipo derivado del layer (para attr04)
         layer_key = _get_element_layer_key(layer_storage_key, so)
-        tipo = _get_tipo_from_layer(layer_key)
+        # tipo del layer (para uso futuro; ya no se pasa a get_attributes)
+        _get_tipo_from_layer(layer_key)
 
         # 1. Obtener la clase desde el registry e instanciarla (sin generar el 3D)
         element_key = getattr(element, 'element_type', None) or so.current_inst_config.get("key", "")
         diameter = so.current_inst_config.get("diameter", 0)
         color = so.current_inst_config.get("color", 0)
-        overlap_mm = so.current_inst_config.get("overlap_mm", 0.0)
 
         script_class = get_pythonpart(element_key)
 
         raw_attrs = []
         if script_class:
             script_inst = script_class(so.build_ele, so)
-            # 2. Obtener atributos base del script (custom + user vacíos)
-            raw_attrs = script_inst.get_attributes(value=diameter, tipo=tipo, color=color, overlap_mm=overlap_mm)
+            # tipo=None: attr04 no se genera desde el layer; overlap_mm=0.0: attr10 no se genera en scripts
+            raw_attrs = script_inst.get_attributes(value=diameter, tipo=None, color=color, overlap_mm=0.0)
+
+        # 2. Post-proceso de raw_attrs para cumplir valores esperados por la biblioteca:
+        #    - attr04 = pmp_tipus_cablejat (tipo de cable/tubo, no descripción del layer)
+        #    - attr07, attr09 = enteros sin decimales
+        #    - attr10 = siempre 0 (valor calculado pendiente)
+        raw_attrs = _fix_numeric_and_attr04(doc, raw_attrs)
 
         # 3. Atributos de UI solo en tramos principales (misma clave que al aplicar desde marco)
         elem_attrs = so.applied_attributes.get(attr_storage_key, []) if attr_storage_key else []
 
-        # 4. Extraer el texto ingresado para aplicar la regla de negocio del sufijo ;0
-        user_name = ""
-        if elem_attrs:
-            cc_is_id = AllplanBaseElements.AttributeService.GetAttributeID(doc, "6_CC_IS")
-            for attr in elem_attrs:
-                if hasattr(attr, "Id") and attr.Id == cc_is_id:
-                    user_name = str(attr.Value)
-                    break
-
-        # 5. Construir attr01 (el del sufijo ;0)
-        attr01_list = _build_attr01(doc, user_name, element_key)
-
-        # 6. Fusión en orden de prioridad: Base <- Usuario (UI) <- attr01 (Regla negocio)
+        # 4. Fusión en orden de prioridad: Base <- Usuario (UI)
+        #    attr01 NO se autogenera: se deja vacío para que el usuario lo rellene manualmente
         final_attrs = _merge_attributes(raw_attrs, elem_attrs)
-        final_attrs = _merge_attributes(final_attrs, attr01_list)
 
         # 7. Aplicar al modelo
         if final_attrs:
@@ -779,6 +952,47 @@ def _extract_number_from_attrs(attribute_list: list) -> int | None:
 
     return None
 
+def _fix_numeric_and_attr04(doc, raw_attrs: list) -> list:
+    """
+    Post-procesa raw_attrs:
+      - Escribe attr01 = "CC" para todos los conductos eléctricos.
+      - Extrae pmp_tipus_cablejat y lo escribe como Atributo personalizado 04.
+      - Convierte pmp_diametre y pmp_area a AttributeString (sin decimales).
+    Los attrs 07, 09, 10 ya se generan como AttributeInteger directamente en cada script.
+    """
+    try:
+        id_attr01  = AllplanBaseElements.AttributeService.GetAttributeID(doc, "Atributo personalizado 01")
+        id_attr04  = AllplanBaseElements.AttributeService.GetAttributeID(doc, "Atributo personalizado 04")
+        id_tc      = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_tipus_cablejat")
+        id_diam    = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_diametre")
+        id_area    = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_area")
+    except Exception:
+        return raw_attrs
+
+    tipo_cablejat = ""
+    result = []
+    for attr in raw_attrs:
+        attr_id = getattr(attr, "Id", None)
+        if id_tc and attr_id == id_tc:
+            tipo_cablejat = str(attr.Value)
+            result.append(attr)
+        elif id_diam and attr_id == id_diam:
+            result.append(AllplanBaseElements.AttributeString(id_diam, str(int(float(attr.Value)))))
+        elif id_area and attr_id == id_area:
+            result.append(AllplanBaseElements.AttributeString(id_area, str(int(float(attr.Value)))))
+        else:
+            result.append(attr)
+
+    # attr01 = "CC" para todos los conductos con tipo de cable definido
+    if tipo_cablejat and id_attr01 and id_attr01 > 0:
+        result.append(AllplanBaseElements.AttributeString(id_attr01, "CC"))
+
+    if tipo_cablejat and id_attr04 and id_attr04 > 0:
+        result.append(AllplanBaseElements.AttributeString(id_attr04, tipo_cablejat))
+
+    return result
+
+
 def _apply_attributes_to_model_elem(model_elem, attr_list):
         """
         Empaqueta y aplica una lista de atributos a un elemento 3D de Allplan
@@ -824,11 +1038,21 @@ def _apply_layer_to_element(model_elem: AllplanBasisElements.ModelElement3D,
 def _get_layer_id(key_applied_layer_attr: str, so: PBL.script_object.PolylineScriptObject):
         """
         Obtiene el ID del layer apropiado para un elemento.
+        Para EN, resuelve automáticamente KN_X_ELECTRICITAT o KN_Y_ELECTRICITAT según face_en.
         Prioriza layers específicos guardados sobre el layer por defecto.
         """
         doc = so.coord_input.GetInputViewDocument()
         layer_id = 0
-        if so.default_layers:
+
+        # Para EN, el default_layers ya fue actualizado según face_en en _update_default_layers_for_distribution.
+        # Si por algún motivo no está sincronizado, lo resolvemos aquí directamente.
+        if getattr(so, "distribution_type", None) == "EN":
+            face = getattr(so, "face_en", None)
+            en_layer = "KN_Y_ELECTRICITAT" if face == "CARA Y" else "KN_X_ELECTRICITAT"
+            en_id = LayerService.GetIDByShortName(en_layer, doc)  # type: ignore
+            if en_id:
+                layer_id = en_id
+        elif so.default_layers:
             default_id = LayerService.GetIDByShortName(so.default_layers.get("default", ""), doc)  # type: ignore
             if default_id:
                 layer_id = default_id

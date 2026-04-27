@@ -50,14 +50,14 @@ class ManguitoScript(BaseScriptObject):
 
         return user_attributes
 
-    def get_attributes(self, value = None):
+    def get_attributes(self, *args, **kwargs):
         attr_list = []
         user_attributes = self.get_attributes_user()
 
         attr_list.extend(user_attributes)
         return attr_list
 
-    def execute(self) -> CreateElementResult:
+    def execute(self, *args, **kwargs) -> CreateElementResult:
         manguito_3d = MenguitoObject3D()
         model_ele_list = manguito_3d.create_manguito_geometry_3D()
 

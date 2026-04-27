@@ -120,10 +120,10 @@ class ConductoNormalScript(BaseScriptObject):
     def get_attributes(self, *args, **kwargs):
 
         value = kwargs.get("value") or (args[0] if args else 0)
-
+        color = kwargs.get("color") or int(value)
         attr_list = []
         custom_attributes = self.get_attributes_custom()
-        user_attributes = self.get_attributes_user(color=value)
+        user_attributes = self.get_attributes_user(color=color)
 
         attr_list.extend(custom_attributes)
         attr_list.extend(user_attributes)

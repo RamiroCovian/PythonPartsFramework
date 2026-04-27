@@ -1,0 +1,18 @@
+{
+    "soportes": [
+        {
+            "tipo": "Omega",
+            "subtipo": "Ventilacion",
+            "superficie": "Perforado",
+            "posicion1": [
+                8926.274, 6102.210, 2750.000
+            ],
+            "posicion2": [
+               9106.046, 6114.710, 2750.000
+            ],
+            "angulo_inclinacion": 0.0,
+            "cota_a": 100.0,
+            "cota_b": 650.0
+        }
+    ]
+}

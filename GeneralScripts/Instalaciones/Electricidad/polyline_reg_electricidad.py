@@ -44,6 +44,10 @@ INSTALLATION_INFO = {
         {"key": "IS_COR_ELECTRICITAT_FAB", "label": "Corrugats Sobre Rejiband"},
         {"key": "IS_COR_ELECTRICITAT_FAB_IN", "label": "Corrugats D'Entrada"},
         {"key": "IS_COR_ELECTRICITAT_FAB_OUT", "label": "Corrugats De Sortida"},
+        {"key": "KN_ELECTRICITAT", "label": "TD - Electricitat"},
+        {"key": "KN_XPS_RECESS", "label": "TD - XPS Recess"},
+        {"key": "KN_X_ELECTRICITAT", "label": "EN - Cara X"},
+        {"key": "KN_Y_ELECTRICITAT", "label": "EN - Cara Y"},
     ],
     "installation_types": [
         {
@@ -95,11 +99,17 @@ INSTALLATION_INFO = {
         create_element("rejiband_u", "Rejiband U 100mm", dynamic=True, diameter=100),
         create_element("rejiband_u", "Rejiband U 200mm", dynamic=True, diameter=200),
         create_element("conducto_telecomunicaciones", "Telecomunicaciones", dynamic=True, diameter=20.0),
+        create_element("conducto_telecomunicaciones_td", "Telecomunicaciones TD", dynamic=True, diameter=20.0),
         create_element("conducto_luz_retorno_paralelas", "Luz retorno / Paralelas", dynamic=True, diameter=20.0),
+        create_element("conducto_luz_retorno_paralelas_td", "Luz retorno / Paralelas TD", dynamic=True, diameter=20.0),
         create_element("conducto_alimentacion_horno", "Alimentación horno", dynamic=True, diameter=25.0),
+        create_element("conducto_alimentacion_horno_td", "Alimentación horno TD", dynamic=True, diameter=25.0),
         create_element("conducto_alimentacion_luces_cajetines", "Alimentación luces / Cajetines", dynamic=True, diameter=20.0),
+        create_element("conducto_alimentacion_luces_cajetines_td", "Alimentación luces / Cajetines TD", dynamic=True, diameter=20.0),
         create_element("conducto_cajetin_a_enchufe", "Conducto Aislado 150 mm", dynamic=True, diameter=20),
+        create_element("conducto_cajetin_a_enchufe_td", "Cajetín a enchufe TD", dynamic=True, diameter=20.0),
         create_element("conducto_interruptores_domotica", "Conducto Aislado 160 mm", dynamic=True, diameter=20),
+        create_element("conducto_interruptores_domotica_td", "Interruptores / Domótica TD", dynamic=True, diameter=20.0),
         # Elementos definidos (estáticos, colocados en puntos libres)
         {
             "key": "caixa_connexions_200",

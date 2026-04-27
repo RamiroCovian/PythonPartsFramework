@@ -112,7 +112,7 @@ class ConexionScript(BaseScriptObject):
 
         return user_attributes
 
-    def get_attributes(self, value = None):
+    def get_attributes(self, *args, **kwargs):
         attr_list = []
         custom_attributes = self.get_attributes_custom()
         user_attributes = self.get_attributes_user()
@@ -121,7 +121,7 @@ class ConexionScript(BaseScriptObject):
         attr_list.extend(user_attributes)
         return attr_list
 
-    def execute(self) -> CreateElementResult:
+    def execute(self,  *args, **kwargs) -> CreateElementResult:
         conexion_3d = ConexionObject3D()
         model_ele_list = conexion_3d.create_conexion_geometry_3D()
 

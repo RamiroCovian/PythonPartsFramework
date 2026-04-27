@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Element>
+    <StringTable>saneamiento_polyline - English</StringTable>
+    <Item><TextId>2000</TextId><Text>Definir polilínea para una instalación y generar elementos.</Text></Item>
+    <Item><TextId>2001</TextId><Text>Instalacion</Text></Item>
+    <Item><TextId>2002</TextId><Text>Tipos de instalacion</Text></Item>
+    <Item><TextId>2003</TextId><Text>Angulos Soportados</Text></Item>
+    <Item><TextId>2004</TextId><Text>Elegir instalacion</Text></Item>
+    <Item><TextId>2005</TextId><Text>Diámetro a aplicar</Text></Item>
+    <Item><TextId>2006</TextId><Text>Diámetro a aplicar</Text></Item>
+    <Item><TextId>2007</TextId><Text>Modificar</Text></Item>
+    <Item><TextId>2008</TextId><Text>Modificar diámetro</Text></Item>
+    <Item><TextId>2009</TextId><Text>Nombre PythonPartGroup</Text></Item>
+    <Item><TextId>2010</TextId><Text>Tipo de Distribucion</Text></Item>
+    <Item><TextId>2011</TextId><Text>Tipo de Agua</Text></Item>
+    <Item><TextId>2012</TextId><Text>Cara (EN)</Text></Item>
+    <Item><TextId>2013</TextId><Text>Modos de dibujo</Text></Item>
+    <Item><TextId>2014</TextId><Text>Información</Text></Item>
+    <Item><TextId>2015</TextId><Text>
+    Modos de dibujo (Ayuda):
+
+    • EDICION
+        Permite estirar la polilinea desde sus vértices
+        y agregar puntos o cortes en los segmentos.
+        El CheckBox “Insertar punto” solo se habilita en este modo.
+
+    • CONFIGURACION
+        Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
+        para aplicar layers y atributos personalizados.
+        También permite eliminar uno o más segmentos mediante selección múltiple.
+
+    • CREACION - EXTENDER
+        Permite dibujar y extender la polilinea.
+                    </Text></Item>
+    <Item><TextId>2016</TextId><Text>Elegir modo</Text></Item>
+    <Item><TextId>2017</TextId><Text>Modo Edicion</Text></Item>
+    <Item><TextId>2018</TextId><Text>Modo Configuracion</Text></Item>
+    <Item><TextId>2019</TextId><Text>Modo Creacion - Ext</Text></Item>
+    <Item><TextId>2020</TextId><Text>Limitar ángulos</Text></Item>
+    <Item><TextId>2021</TextId><Text>Insertar punto</Text></Item>
+    <Item><TextId>2022</TextId><Text>Añadir cortes</Text></Item>
+    <Item><TextId>2023</TextId><Text>Borrar</Text></Item>
+    <Item><TextId>2024</TextId><Text>Borrar Seccion o Corte</Text></Item>
+    <Item><TextId>2025</TextId><Text>Elemento seleccionado</Text></Item>
+    <Item><TextId>2026</TextId><Text>Info</Text></Item>
+    <Item><TextId>2027</TextId><Text>Ver Info</Text></Item>
+    <Item><TextId>2028</TextId><Text>Orientación 3D (segmento unico)</Text></Item>
+    <Item><TextId>2029</TextId><Text>Angulo rotacion</Text></Item>
+    <Item><TextId>2030</TextId><Text>Definir orientación</Text></Item>
+    <Item><TextId>2031</TextId><Text>Layers</Text></Item>
+    <Item><TextId>2032</TextId><Text>Tipos de layer</Text></Item>
+    <Item><TextId>2033</TextId><Text>Aplicar layer</Text></Item>
+    <Item><TextId>2034</TextId><Text>Atributos</Text></Item>
+    <Item><TextId>2035</TextId><Text>Valor atributo</Text></Item>
+    <Item><TextId>2036</TextId><Text>Aplicar atributo</Text></Item>
+    <Item><TextId>2037</TextId><Text>General options</Text></Item>
+    <Item><TextId>2038</TextId><Text></Text></Item>
+    <Item><TextId>2039</TextId><Text>PythonPartGroup</Text></Item>
+    <Item><TextId>2040</TextId><Text>Crear como PythonPartGroup</Text></Item>
+    <Item><TextId>2041</TextId><Text>Agregar Polilinea</Text></Item>
+    <Item><TextId>2042</TextId><Text>Polilinea</Text></Item>
+    <Item><TextId>2043</TextId><Text>Polilinea</Text></Item>
+    <Item><TextId>2044</TextId><Text>Finalizar</Text></Item>
+    <Item><TextId>2045</TextId><Text>Finalizar - Crear</Text></Item>
+    <Item><TextId>2046</TextId><Text>Unic</Text></Item>
+    <Item><TextId>2047</TextId><Text>SavedState</Text></Item>
+    <Item><TextId>2048</TextId><Text>CopiedElementsUUIDs</Text></Item>
+    <Item><TextId>2049</TextId><Text>CopiedElementsFiles</Text></Item>
+    <Item><TextId>2050</TextId><Text>Puntos Libres y Macros</Text></Item>
+    <Item><TextId>2051</TextId><Text>Macro</Text></Item>
+    <Item><TextId>2052</TextId><Text>Elegir punto</Text></Item>
+    <Item><TextId>2053</TextId><Text>Punto inicial</Text></Item>
+    <Item><TextId>2054</TextId><Text>Punto final</Text></Item>
+    <Item><TextId>2055</TextId><Text>Libre</Text></Item>
+    <Item><TextId>2056</TextId><Text>Seleccionar punto</Text></Item>
+    <Item><TextId>2057</TextId><Text>Aceptar (Terminar selección)</Text></Item>
+    <Item><TextId>2058</TextId><Text>IsMacroCaptureMode</Text></Item>
+    <Item><TextId>2059</TextId><Text>Z local seleccionado</Text></Item>
+    <Item><TextId>2060</TextId><Text>Seleccionar Local</Text></Item>
+    <Item><TextId>2061</TextId><Text>Quitar local</Text></Item>
+    <Item><TextId>2062</TextId><Text>Cota Z (mm)</Text></Item>
+    <Item><TextId>2063</TextId><Text>Altura sobre el piso (mm)</Text></Item>
+    <Item><TextId>2064</TextId><Text>Tipo de macro</Text></Item>
+    <Item><TextId>2065</TextId><Text>Macro (SmartSymbol .nmk)</Text></Item>
+    <Item><TextId>2066</TextId><Text>Fixture (.lfx/.pxf)</Text></Item>
+    <Item><TextId>2067</TextId><Text>Seleccionar macro (SmartSymbol)</Text></Item>
+    <Item><TextId>2068</TextId><Text>Seleccionar fixture</Text></Item>
+    <Item><TextId>2069</TextId><Text>Elemento</Text></Item>
+    <Item><TextId>2070</TextId><Text>Elemento</Text></Item>
+    <Item><TextId>2071</TextId><Text>Tipo de punto</Text></Item>
+    <Item><TextId>2072</TextId><Text>Punto inicial</Text></Item>
+    <Item><TextId>2073</TextId><Text>Punto final</Text></Item>
+    <Item><TextId>2074</TextId><Text>Intermedio o libre</Text></Item>
+    <Item><TextId>2075</TextId><Text>Seleccionar punto</Text></Item>
+    <Item><TextId>2076</TextId><Text>Aceptar (Terminar selección)</Text></Item>
+    <Item><TextId>2077</TextId><Text>IsElementCaptureMode</Text></Item>
+    <Item><TextId>2078</TextId><Text>Rot X (grados)</Text></Item>
+    <Item><TextId>2079</TextId><Text>Rot Y (grados)</Text></Item>
+    <Item><TextId>2080</TextId><Text>Rot Z (grados)</Text></Item>
+    <Item><TextId>2081</TextId><Text>Acción</Text></Item>
+    <Item><TextId>2082</TextId><Text>Añadir punto</Text></Item>
+    <Item><TextId>2083</TextId><Text>Finalizar</Text></Item>
+</Element>

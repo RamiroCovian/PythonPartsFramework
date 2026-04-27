@@ -77,7 +77,7 @@ class RejibandUScript(BaseScriptObject):
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["6_CC_IS"], ""))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_altura"], str(int(height))))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_amplada"], str(int(width))))
-            user_attributes.append(AllplanBaseElements.AttributeDouble(attr_ids["pmp_area"], area))
+            user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_area"], str(int(area))))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_armaflex"], ""))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_cargols"], ""))
             user_attributes.append(AllplanBaseElements.AttributeString(attr_ids["pmp_CARTICULO"], ""))
@@ -141,7 +141,7 @@ class RejibandUScript(BaseScriptObject):
                 self.doc, "Atributo personalizado 09"
             )
             if id_attr09 and id_attr09 > 0:
-                attr_list.append(AllplanBaseElements.AttributeDouble(id_attr09, area))
+                attr_list.append(AllplanBaseElements.AttributeString(id_attr09, str(int(area))))
 
             id_attr11 = AttributeService.GetAttributeID(
                 self.doc, "Atributo personalizado 11"
