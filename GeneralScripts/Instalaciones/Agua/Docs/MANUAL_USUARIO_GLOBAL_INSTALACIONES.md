@@ -74,7 +74,9 @@ El trabajo habitual con una instalación se basa en tres ideas:
 En la práctica, esto significa que primero se crea el trazado principal y después se añaden o ajustan el resto de elementos necesarios.
 
 `[[CAPTURA-01: paleta principal completa de la instalación con sus apartados visibles]]`
-![alt text](CAPTURA-01.png)
+<p align="center">
+  <img src="CAPTURA-01.png" alt="Paleta principal completa de la instalación" width="430">
+</p>
 
 ## 6. Flujo de trabajo recomendado
 
@@ -335,10 +337,14 @@ La macro puede situarse:
 La altura puede definirse directamente o en relación con un local seleccionado, según el caso.
 
 `[[CAPTURA-08: bloque de la paleta para insertar macros]]`
-![alt text](CAPTURA-08.png)
+<p align="center">
+  <img src="CAPTURA-08.png" alt="Bloque de la paleta para insertar macros" width="430">
+</p>
 
 `[[CAPTURA-09: ejemplo de macro previsualizada dentro de la instalación]]`
-![alt text](CAPTURA-09.png)
+<p align="center">
+  <img src="CAPTURA-09.png" alt="Ejemplo de macro previsualizada dentro de la instalación" width="520">
+</p>
 
 ## 17. Elementos definidos
 
@@ -363,7 +369,9 @@ El usuario debe:
 4. confirmar la colocación.
 
 `[[CAPTURA-10: bloque de la paleta para insertar Elementos Definidos]]`
-![alt text](CAPTURA-10.png)
+<p align="center">
+  <img src="CAPTURA-10.png" alt="Bloque de la paleta para insertar Elementos Definidos" width="430">
+</p>
 
 `[[CAPTURA-11: inserción de un elemento especial como punto libre]]`
 ![alt text](CAPTURA-11.png)
@@ -432,7 +440,9 @@ Además del tipo de soporte, la paleta puede mostrar el campo `Subtipo instalaci
 Este campo ayuda a identificar con qué familia de instalación se relaciona el soporte. Es útil para mantener coherencia entre el soporte que se inserta y la instalación sobre la que se está trabajando.
 
 `[[CAPTURA-14B: tipo de soporte, subtipo instalación y superficie en la paleta de soportes]]`
-![alt text](CAPTURA-14B.png)
+<p align="center">
+  <img src="CAPTURA-14B.png" alt="Tipo de soporte, subtipo instalación y superficie en la paleta de soportes" width="480">
+</p>
 
 ### 19.4. Superficie
 
@@ -546,8 +556,10 @@ Antes de generar las nuevas copias, la herramienta localiza las copias previas q
 
 Después crea la versión actualizada.
 
-`[[CAPTURA-15: ejemplo de un elemento original y su copia relacionada en otro archivo]]`
-![alt text](CAPTURA-15.png)
+`[[CAPTURA-15: ejemplo del archivo original TEST y de las copias relacionadas generadas en TD01 e IS01]]`
+| ![Archivo original TEST](CAPTURA-15A.png) | ![Copia relacionada en TD01](CAPTURA-15B.png) | ![Copia relacionada en IS01](CAPTURA-15C.png) |
+| --- | --- | --- |
+| Archivo original en `TEST` | Copias relacionadas visibles en `TD01` | Copias relacionadas visibles en `IS01` |
 
 ## 21. Qué ocurre al pulsar el botón de finalizar
 
@@ -718,7 +730,9 @@ En Agua la resolución automática de giros se hace con `codos de 90 grados`.
 Esto significa que no debe esperarse un codo automático de `45 grados` dentro de esta instalación.
 
 `[[CAPTURA-AGUA-08: ejemplo de codo de 90 grados generado automáticamente en Agua]]`
-![alt text](CAPTURA-AGUA-08.png)
+<p align="center">
+  <img src="CAPTURA-04A.png" alt="Ejemplo de codo de 90 grados generado automáticamente en Agua" width="380">
+</p>
 
 #### 25.4.2. Manguitos
 
@@ -750,7 +764,13 @@ En la configuración actual, los casos más representativos son:
 Si el nodo se resuelve como `Te`, en ese mismo punto no se coloca además un codo ni un manguito.
 
 `[[CAPTURA-AGUA-09: ejemplo comparativo de los distintos tipos de Te utilizados en Agua]]`
-![alt text](CAPTURA-AGUA-09.png)
+| ![Te Ø20](CAPTURA-AGUA-09-TE20.png) | ![Te Ø25](CAPTURA-AGUA-09-TE25.png) | ![Te Ø25-20-25](CAPTURA-AGUA-09-TE252025.png) |
+| --- | --- | --- |
+| `Te Ø20` | `Te Ø25` | `Te Ø25-20-25` |
+
+| ![Te Ø25-20-20](CAPTURA-AGUA-09-TE252020.png) | ![Te Ø25-25-20](CAPTURA-AGUA-09-TE252520.png) |
+| --- | --- |
+| `Te Ø25-20-20` | `Te Ø25-25-20` |
 
 #### 25.4.5. Qué ocurre si no existe una Te compatible
 
@@ -840,7 +860,7 @@ La regla práctica para el manual es esta:
 - pero algunas piezas técnicas pueden conservar parte de su lógica propia de modelo.
 
 `[[CAPTURA-AGUA-18: ejemplo de layer aplicado en Agua sobre tramos o accesorios seleccionados]]`
-![alt text](CAPTURA-AGUA-18.png)
+![alt text](CAPTURA-05.png)
 
 #### 25.6.4. Qué es el atributo padre en Agua
 
@@ -906,7 +926,9 @@ En la configuración actual, la relación es esta:
 - `Clau de Pas`: `Intermedio ordenado` o `Intermedio libre`.
 
 `[[CAPTURA-AGUA-13B: campo Tipo de punto en Elementos Definidos mostrando las opciones según el elemento seleccionado]]`
-![alt text](CAPTURA-AGUA-13B.png)
+| ![T sortida con tipos intermedios](CAPTURA-AGUA-13B1.png) | ![Colze base con tipos inicio o final](CAPTURA-AGUA-13B2.png) |
+| --- | --- |
+| `T sortida`: `Intermedio ordenado` o `Intermedio libre` | `Colze base`: `Inicio` o `Final` |
 
 #### 25.7.2. Qué significa cada tipo de punto
 
@@ -940,7 +962,9 @@ Por eso, antes de insertar, conviene revisar que el campo `Subtipo instalación`
 La confirmación previa a la inserción es un buen momento para comprobar `Tipo`, `Subtipo instalación`, `Superficie`, `Cota A`, `Cota B` y `Ángulo de inclinación` antes de continuar.
 
 `[[CAPTURA-AGUA-14: soporte de Agua con Subtipo instalación Agua visible en la paleta y en la confirmación previa a insertar]]`
-![alt text](CAPTURA-AGUA-14.png)
+<p align="center">
+  <img src="CAPTURA-14B.png" alt="Soporte de Agua con subtipo instalación Agua visible en la paleta y en la confirmación previa a insertar" width="480">
+</p>
 
 #### 25.8.2. Tipos de soporte más representativos en Agua
 
@@ -983,7 +1007,9 @@ Esto es importante porque permite distinguir entre:
 - y soportes lineales genéricos que no deben interpretarse igual.
 
 `[[CAPTURA-AGUA-16: propiedades finales de un soporte de Agua mostrando su layer e identificación]]`
-![alt text](CAPTURA-AGUA-16.png)
+<p align="center">
+  <img src="CAPTURA-AGUA-16.png" alt="Propiedades finales de un soporte de Agua mostrando su layer e identificación" width="430">
+</p>
 
 #### 25.8.5. Atributos de soporte en Agua
 
@@ -1317,12 +1343,652 @@ Antes de finalizar una instalación de Saneamiento conviene revisar especialment
 - que `Caixa Connexions 200` esté colocada con el tipo de punto adecuado;
 - y que los soportes se hayan revisado con sus cotas, superficie y tipo correctos.
 
-## 27. Próximas unidades por instalación
+## 27. Instalación de Ventilación
+
+En esta unidad solo se recogen las particularidades de Ventilación. El uso general de la herramienta ya se ha explicado en los apartados anteriores, por lo que aquí se detallan únicamente las reglas, avisos y casos propios de esta instalación.
+
+### 27.1. Descripción general de Ventilación
+
+- Esta instalación sirve para dibujar y editar redes de ventilación dentro de Allplan.
+- Está pensada para trabajar con conductos y accesorios automáticos a partir de un recorrido polilineal.
+- Lo que la diferencia de otras instalaciones es la combinación de tipos de conducto, diámetros, ángulos permitidos y accesorios específicos de ventilación.
+
+### 27.2. Sistemas disponibles en Ventilación
+
+En la configuración actual de Ventilación aparecen estos sistemas:
+
+- `Conducto Impulsion`;
+- `Conducto Extraccion`;
+- `Conducto Aislado`;
+- `Conducto Recuperador`.
+
+Las diferencias principales entre ellos son estas:
+
+- `Conducto Impulsion` y `Conducto Extraccion` comparten geometría base, pero usan color y artículo distintos.
+- `Conducto Aislado` trabaja con conducto dinámico y con reducción como conexión característica.
+- `Conducto Recuperador` trabaja con otra lógica de generación y solo admite giros de `90 grados`.
+
+Cuando el usuario cambia de sistema, la herramienta adapta automáticamente el comportamiento del trazado, el diámetro base y los accesorios disponibles.
+
+`[[CAPTURA-VENTILACION-01: paleta de Ventilación con los cuatro sistemas visibles]]`
+![alt text](CAPTURA-VENTILACION-01.png)
+
+### 27.3. Distribución en Ventilación
+
+En la paleta existe el campo `Tipo de Distribucion`, pero en la configuración registrada de Ventilación no aparece una distribución funcional específica como sí ocurre en Agua.
+
+Por eso, para esta instalación:
+
+- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse si este campo se usa realmente o si permanece sin aplicación práctica para el usuario.
+
+### 27.4. Diámetros y cambios de diámetro en Ventilación
+
+#### 27.4.1. Diámetros por sistema
+
+Los diámetros confirmados en la configuración actual son:
+
+- `Conducto Impulsion`: `75 mm`;
+- `Conducto Extraccion`: `75 mm`;
+- `Conducto Aislado`: `150 mm` y `160 mm`;
+- `Conducto Recuperador`: `160 mm`.
+
+Esto significa que el diámetro disponible depende del sistema seleccionado.
+
+`[[CAPTURA-VENTILACION-02: selector de diámetro en Conducto Aislado mostrando 150 mm y 160 mm]]`
+![alt text](CAPTURA-VENTILACION-02.png)
+
+#### 27.4.2. Qué ocurre al modificar el diámetro
+
+El botón `Modificar diámetro` recalcula el tramo y las uniones afectadas.
+
+Cuando el cambio de diámetro se produce entre dos tramos consecutivos en línea recta:
+
+- en conductos compatibles, la herramienta genera automáticamente la transición o la unión correspondiente.
+
+En los sistemas donde existen accesorios automáticos, conviene revisar en pantalla cómo se rehace la unión después del cambio.
+
+#### 27.4.3. Caso particular de Conducto Aislado
+
+En `Conducto Aislado`, la conexión característica registrada es la `reducción`.
+
+Por eso, cuando el usuario trabaja con `150 mm` y `160 mm`, conviene revisar explícitamente la transición resultante.
+
+### 27.5. Accesorios automáticos en Ventilación
+
+Los accesorios automáticos dependen del sistema seleccionado.
+
+En la configuración actual se confirma este comportamiento:
+
+- `Conducto Impulsion` y `Conducto Extraccion`: `manguito` y `difusor`;
+- `Conducto Aislado`: `reducción`;
+- `Conducto Recuperador`: `conexion` y `codo 90`.
+
+Los accesorios registrados para esta instalación son:
+
+- `Manguito`;
+- `Difusor`;
+- `Conexion`;
+- `Codo 90`.
+
+#### 27.5.1. Manguitos
+
+En los sistemas normales, el manguito no actúa solo como accesorio visual.
+
+También actúa como frontera de grupo para numeración y agrupación interna de la instalación.
+
+`[[CAPTURA-VENTILACION-03: ejemplo de Conducto Impulsion con manguito automático]]`
+![alt text](CAPTURA-VENTILACION-03.png)
+
+#### 27.5.2. Difusores
+
+En los sistemas que los usan, los difusores forman parte del comportamiento automático previsto por la instalación.
+
+Conviene revisar su colocación final cuando el trazado cambia de dirección o de plano.
+
+`[[CAPTURA-VENTILACION-04: ejemplo de Conducto Extraccion con difusor]]`
+![alt text](CAPTURA-VENTILACION-04.png)
+
+#### 27.5.3. Recuperador con conexión y codo
+
+En `Conducto Recuperador`, el flujo de creación trabaja con un conjunto de piezas encadenadas:
+
+- conducto;
+- conexión;
+- codo.
+
+Esto lo diferencia claramente del resto de sistemas de Ventilación.
+
+`[[CAPTURA-VENTILACION-05: recuperador con conexión y codo 90]]`
+![alt text](CAPTURA-VENTILACION-05.png)
+
+#### 27.5.4. Limitaciones o incompatibilidades
+
+`Conducto Recuperador` no sigue la misma lógica de ángulos que el resto.
+
+- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse si aparecen avisos específicos cuando el usuario intenta forzar una combinación no compatible.
+
+### 27.6. Reglas geométricas y validaciones en Ventilación
+
+#### 27.6.1. Ángulos permitidos
+
+Los ángulos generales soportados en la instalación son:
+
+- `45 grados`;
+- `90 grados`.
+
+Por sistema, la regla actual es esta:
+
+- `Conducto Impulsion` y `Conducto Extraccion`: `45` y `90 grados`;
+- `Conducto Aislado`: `45` y `90 grados`;
+- `Conducto Recuperador`: solo `90 grados`.
+
+#### 27.6.2. Longitud mínima
+
+La longitud mínima por sistema es:
+
+- `Conducto Impulsion` y `Conducto Extraccion`: `300 mm`;
+- `Conducto Aislado`: `300 mm`;
+- `Conducto Recuperador`: `350 mm`.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
+
+#### 27.6.3. Orientación 3D y cambios de plano
+
+En Ventilación, la orientación 3D del tramo afecta al resultado de:
+
+- conductos;
+- codos;
+- conexiones;
+- difusores.
+
+Además, existen casos específicos para:
+
+- segmentos verticales;
+- y cambios de plano.
+
+Por eso, no basta con revisar la planta. En esta instalación conviene comprobar también cómo se resuelve la orientación final del elemento.
+
+`[[CAPTURA-VENTILACION-08: orientación 3D o tramo vertical/inclinado]]`
+![alt text](CAPTURA-VENTILACION-08.png)
+
+### 27.7. Layers y atributos específicos de Ventilación
+
+#### 27.7.1. Layers base
+
+Los layers base confirmados en el registro de Ventilación son:
+
+- `IS_CON_VENT_FAB`;
+- `IS_CON_VENT_FAB_SOB1`;
+- `IS_CON_VENT_OBRA`;
+- `IS_CON_VENT_EIX`;
+- `IS_NOM_CONDUCTE_VENTILACIO`.
+
+Esto cubre tanto los conductos como la capa de eje y la capa de etiqueta o nombre del conducto.
+
+`[[CAPTURA-VENTILACION-06: ejemplo de layer aplicado en Ventilación]]`
+![alt text](CAPTURA-VENTILACION-06.png)
+
+#### 27.7.2. Atributos detectados en scripts
+
+En los scripts de Ventilación se detectan, entre otros, estos atributos:
+
+- `pmp_pare`;
+- `6_CC_IS`;
+- `pmp_altura`;
+- `pmp_amplada`;
+- `pmp_area`;
+- `pmp_diametre`;
+- `pmp_longitud`;
+- `pmp_nom`;
+- `pmp_seccio`;
+- y otros atributos `pmp_*` de clasificación y propiedades físicas.
+
+#### 27.7.3. Casos concretos observados
+
+En la configuración actual se observan estos casos:
+
+- `conducto_normal` usa `6_CC_IS = IS08`;
+- `conducto_recuperador` usa `6_CC_IS = IS`;
+- varias piezas inicializan `pmp_pare` vacío.
+
+Esto conviene tenerlo presente si el proyecto organiza información por atributo padre o por atributos de clasificación.
+
+### 27.8. Elementos definidos en Ventilación
+
+Aquí hay una inconsistencia que conviene documentar con claridad.
+
+Por un lado, el registro de Ventilación declara como elementos 3D propios:
+
+- `Manguito`;
+- `Difusor`;
+- `Conducto recuperador`;
+- `Conexion`;
+- `Codo 90`.
+
+Pero, por otro lado, la página de `Elemento` del archivo `ventilacion_polyline.pyp` muestra actualmente solo:
+
+- `Caixa Connexions 200`.
+
+Esto indica una probable herencia o copia de configuración desde otra instalación.
+
+Por tanto:
+
+- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse qué elemento definido debe ver realmente el usuario en Ventilación;
+- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** conviene revisar si la paleta de Elemento en Ventilación debe corregirse antes de cerrar el manual.
+
+`[[CAPTURA-VENTILACION-10: página de Elemento mostrando el estado real en Ventilación]]`
+![alt text](CAPTURA-VENTILACION-10.png)
+
+### 27.9. Macros en Ventilación
+
+La instalación incluye la misma lógica general de macros que otras instalaciones:
+
+- selección de punto;
+- selección de macro SmartSymbol;
+- cota manual o relativa a local;
+- confirmación de inserción.
+
+En la paleta de Ventilación se ven estos campos relacionados:
+
+- selección de punto;
+- selección de local;
+- cota Z o altura sobre piso;
+- selección de macro.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** si en Ventilación existe un uso específico de macros distinto del comportamiento compartido.
+
+`[[CAPTURA-VENTILACION-09: página de macros de Ventilación]]`
+![alt text](CAPTURA-VENTILACION-09.png)
+
+### 27.10. Soportes en Ventilación
+
+Ventilación dispone de página específica de soportes.
+
+Los campos confirmados en paleta son:
+
+- `Tipo de soporte`;
+- `Subtipo instalación`;
+- `Superficie`;
+- `Cota A`;
+- `Cota B`;
+- `Ángulo de inclinación`;
+- modos de edición de soportes;
+- y `Atributo de soporte`.
+
+Según el ejemplo de configuración disponible:
+
+- existe al menos un caso de soporte `Omega`;
+- el subtipo asociado puede ser `Ventilacion`;
+- la superficie puede ser `Perforado`.
+
+Las reglas prácticas de uso son estas:
+
+- conviene definir tipo, superficie y cotas antes de insertar;
+- los soportes pueden acumularse y crearse después;
+- el modo `Edición Mover` permite recolocar soportes ya acumulados o seleccionados.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** el listado completo de tipos de soporte realmente habilitados en Ventilación.
+
+`[[CAPTURA-VENTILACION-07: bloque de soportes con subtipo Ventilacion]]`
+![alt text](CAPTURA-VENTILACION-07.png)
+
+### 27.11. Copias, duplicados y comportamiento especial en Ventilación
+
+Ventilación usa la misma lógica general de copias y agrupación que el resto de instalaciones basadas en `PolyLib`.
+
+Los comportamientos relevantes observados son estos:
+
+- los elementos pueden agruparse por tramos y por fronteras de manguito;
+- la numeración cambia cuando aparece un nuevo grupo;
+- la serialización del estado permite restaurar la instalación en edición.
+
+El usuario debe entender especialmente esto:
+
+- un manguito no es solo un accesorio visual;
+- también afecta a la agrupación lógica de la instalación.
+
+Si el proyecto usa atributo padre y copia a otros archivos, esa lógica sigue siendo la global del sistema.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** si Ventilación está usando en producción copias automáticas a otros archivos de dibujo y en qué casos.
+
+### 27.12. Mensajes y avisos propios de Ventilación
+
+A nivel de código se detectan mensajes técnicos y trazas de depuración, pero todavía no queda claro qué avisos funcionales ve el usuario final en Allplan.
+
+Por eso, en esta instalación conviene validar en entorno real:
+
+- el aviso por longitud mínima;
+- el aviso por selección o inserción inválida;
+- el aviso por combinación de geometría no soportada en recuperador;
+- y los mensajes de finalización si falta configuración de layers o atributos.
+
+### 27.13. Puntos a revisar con especial atención en Ventilación
+
+Antes de finalizar una instalación de Ventilación conviene revisar especialmente:
+
+- que el sistema activo sea realmente `Conducto Impulsion`, `Conducto Extraccion`, `Conducto Aislado` o `Conducto Recuperador`;
+- que el diámetro elegido sea compatible con ese sistema;
+- que en `Conducto Aislado` la transición entre `150 mm` y `160 mm` se haya resuelto correctamente;
+- que en `Conducto Recuperador` los giros respondan a la lógica de `90 grados`;
+- que los layers aplicados correspondan al criterio del plano;
+- que los atributos de clasificación se hayan aplicado como se espera;
+- que la página de `Elemento` esté mostrando el elemento correcto para esta instalación;
+- y que los soportes se hayan revisado con subtipo, superficie, cotas y tipo correctos.
+
+## 28. Instalación de Electricidad
+
+En esta unidad solo se recogen las particularidades de Electricidad. El uso general de la herramienta ya se ha explicado en los apartados anteriores, por lo que aquí se detallan únicamente las reglas, avisos y casos propios de esta instalación.
+
+### 28.1. Descripción general de Electricidad
+
+- Esta instalación sirve para dibujar y editar recorridos de electricidad dentro de Allplan.
+- Está pensada para trabajar tanto con `rejibands` como con conductos o corrugados asociados a distintos usos eléctricos.
+- Lo que la diferencia de otras instalaciones es la variedad de recorridos eléctricos específicos, la coexistencia de capas de corrugados y de telecomunicaciones, y la presencia de variantes `TD` en varios scripts.
+
+### 28.2. Sistemas disponibles en Electricidad
+
+En la configuración actual de Electricidad aparecen estos sistemas:
+
+- `Rejiband U 100mm`;
+- `Rejiband U 200mm`;
+- `Telecomunicaciones`;
+- `Luz retorno / Paralelas`;
+- `Alimentación horno`;
+- `Alimentación luces / Cajetines`;
+- `Cajetín a enchufe`;
+- `Interruptores / Domótica`.
+
+Las diferencias principales entre ellos son estas:
+
+- `Rejiband U 100mm` y `Rejiband U 200mm` trabajan como soporte lineal principal con ancho diferente.
+- El resto trabajan como conductos o corrugados asociados a usos concretos de la instalación eléctrica.
+- Cada tipo define color, diámetro base, solape y lógica geométrica propia.
+
+`[[CAPTURA-ELECTRICIDAD-01: paleta de Electricidad con los sistemas disponibles visibles]]`
+![alt text](CAPTURA-ELECTRICIDAD-01.png)
+
+### 28.3. Distribución y variantes en Electricidad
+
+En la paleta existe el campo `Tipo de Distribucion` y en los scripts aparecen variantes específicas con sufijo `TD`, por ejemplo:
+
+- `conducto_telecomunicaciones_td`;
+- `conducto_luz_retorno_paralelas_td`;
+- `conducto_alimentacion_horno_td`;
+- `conducto_alimentacion_luces_cajetines_td`;
+- `conducto_cajetin_a_enchufe_td`;
+- `conducto_interruptores_domotica_td`.
+
+Esto indica que Electricidad distingue al menos entre una lógica base y otra variante `TD`.
+
+Además, la paleta incluye también el campo `Cara (EN)`, lo que sugiere otra lógica adicional ligada a la cara de colocación.
+
+Por tanto:
+
+- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse cómo selecciona realmente el usuario la variante `TD` o `EN` en Electricidad;
+- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe comprobarse qué combinación práctica existe entre `Tipo de Distribucion` y `Cara (EN)`.
+
+### 28.4. Diámetros y cambios de diámetro en Electricidad
+
+#### 28.4.1. Diámetros por sistema
+
+Los diámetros confirmados en la configuración actual son:
+
+- `Rejiband U 100mm`: `100 mm`;
+- `Rejiband U 200mm`: `200 mm`;
+- `Telecomunicaciones`: `20 mm`;
+- `Luz retorno / Paralelas`: `20 mm`;
+- `Alimentación horno`: `25 mm`;
+- `Alimentación luces / Cajetines`: `20 mm`;
+- `Cajetín a enchufe`: `20 mm`;
+- `Interruptores / Domótica`: `20 mm`.
+
+Esto significa que cada recorrido eléctrico queda ligado al diámetro definido por su sistema.
+
+`[[CAPTURA-ELECTRICIDAD-02: selector de diámetro en Electricidad mostrando diferentes sistemas y diámetros]]`
+![alt text](CAPTURA-ELECTRICIDAD-02.png)
+
+#### 28.4.2. Qué ocurre al modificar el diámetro
+
+La paleta incluye el botón `Modificar diámetro`.
+
+En esta instalación, el cambio de diámetro debe revisarse con especial cuidado porque:
+
+- cada sistema ya parte de un diámetro base concreto;
+- en `Rejiband` el ancho es parte esencial del resultado;
+- y en los conductos eléctricos el diámetro afecta a la geometría, al área y a varios atributos `pmp_*`.
+
+#### 28.4.3. Solape y continuidad
+
+En Electricidad, varios sistemas usan solape adicional (`overlap_mm`) para mantener continuidad geométrica:
+
+- `Rejiband U`: `50 mm`;
+- la mayoría de conductos eléctricos: `10 mm`;
+- `Alimentación horno`: `12.5 mm`.
+
+Esto es importante porque el resultado final no depende solo de la longitud dibujada, sino también del solape definido por el sistema.
+
+### 28.5. Reglas geométricas y validaciones en Electricidad
+
+#### 28.5.1. Ángulos permitidos
+
+La configuración general de Electricidad indica:
+
+- `Libre (ángulo interior >= 45°)`.
+
+Esto la diferencia de instalaciones como Ventilación, donde el catálogo de ángulos está más restringido.
+
+Por tanto, en Electricidad la regla práctica es:
+
+- el recorrido puede ser libre;
+- pero el ángulo interior no debe bajar de `45 grados`.
+
+#### 28.5.2. Longitud mínima
+
+La longitud mínima registrada para todos los sistemas principales de Electricidad es:
+
+- `300 mm`.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
+
+#### 28.5.3. Orientación 3D y tramos inclinados
+
+Electricidad utiliza la misma lógica general de orientación 3D compartida por la base del sistema, pero aquí influye especialmente en:
+
+- rejibands;
+- conductos eléctricos;
+- y elementos definidos conectados al trazado.
+
+Por eso, además de la planta, conviene revisar cómo queda la orientación final de los recorridos en cambios de plano o en tramos inclinados.
+
+`[[CAPTURA-ELECTRICIDAD-03: ejemplo de orientación 3D o tramo inclinado en Electricidad]]`
+![alt text](CAPTURA-ELECTRICIDAD-03.png)
+
+### 28.6. Layers y atributos específicos de Electricidad
+
+#### 28.6.1. Layers base
+
+Los layers base confirmados en el registro de Electricidad son:
+
+- `IS_REJIBANDS`;
+- `IS_COR_TELECOS_FAB`;
+- `IS_COR_TELECOS_IN`;
+- `IS_COR_TELECOS_OUT`;
+- `IS_COR_ELECTRICITAT_FAB`;
+- `IS_COR_ELECTRICITAT_FAB_IN`;
+- `IS_COR_ELECTRICITAT_FAB_OUT`;
+- `KN_ELECTRICITAT`;
+- `KN_XPS_RECESS`;
+- `KN_X_ELECTRICITAT`;
+- `KN_Y_ELECTRICITAT`.
+
+Esto indica una separación clara entre:
+
+- rejibands;
+- corrugados eléctricos;
+- telecomunicaciones;
+- y variantes relacionadas con `TD` o con cara `X` y `Y`.
+
+`[[CAPTURA-ELECTRICIDAD-04: ejemplo de layers aplicados sobre recorridos de Electricidad]]`
+![alt text](CAPTURA-ELECTRICIDAD-04.png)
+
+#### 28.6.2. Atributos detectados en scripts
+
+En los scripts de Electricidad se detectan, entre otros, estos atributos:
+
+- `6_CC_IS`;
+- `pmp_altura`;
+- `pmp_amplada`;
+- `pmp_area`;
+- `pmp_CARTICULO`;
+- `pmp_color`;
+- `pmp_diametre`;
+- `pmp_longitud`;
+- `pmp_nom`;
+- `pmp_pare`;
+- `pmp_seccio`;
+- y otros atributos `pmp_*` de clasificación y propiedades físicas.
+
+#### 28.6.3. Qué conviene revisar en los atributos
+
+En Electricidad, varios scripts rellenan atributos a partir del diámetro y del color del sistema.
+
+Esto conviene revisarlo especialmente en:
+
+- `Alimentación horno`;
+- `Telecomunicaciones`;
+- `Rejiband U`;
+- y en las variantes `TD`.
+
+### 28.7. Accesorios y comportamiento geométrico en Electricidad
+
+Electricidad no registra un catálogo explícito de accesorios automáticos como sí ocurre en Agua o Ventilación.
+
+Lo que sí se observa es esto:
+
+- los recorridos eléctricos se generan como tramos continuos;
+- en varios casos se prioriza la continuidad geométrica por solape;
+- `Rejiband U` se comporta como geometría lineal propia;
+- la unión booleana o continuidad del recorrido es especialmente importante en esta instalación.
+
+De hecho, en la configuración se deja indicado explícitamente que:
+
+- trabajar en modo grupo es crítico para no romper la continuidad de ciertos recorridos de electricidad.
+
+Esto afecta sobre todo a:
+
+- `Telecomunicaciones`;
+- `Luz retorno / Paralelas`;
+- `Alimentación horno`;
+- `Alimentación luces / Cajetines`;
+- `Cajetín a enchufe`;
+- `Interruptores / Domótica`.
+
+### 28.8. Elementos definidos en Electricidad
+
+En la información actual, el elemento definido visible y coherente con la paleta es:
+
+- `Caixa Connexions 200`.
+
+Este elemento aparece tanto en el registro de Electricidad como en la página `Elemento` del archivo `electricidad_polyline.pyp`.
+
+Por eso, a diferencia de Ventilación, aquí no hay incoherencia entre el registro y la paleta en este punto.
+
+Su función práctica es insertar una caja de conexiones sobre un punto del recorrido.
+
+`[[CAPTURA-ELECTRICIDAD-05: uso de Caixa Connexions 200 en Electricidad]]`
+![alt text](CAPTURA-ELECTRICIDAD-05.png)
+
+#### 28.8.1. Tipos de punto admitidos
+
+En la paleta de Electricidad, `Caixa Connexions 200` admite:
+
+- `Punto inicial`;
+- `Punto final`;
+- `Intermedio o libre`.
+
+### 28.9. Macros en Electricidad
+
+Electricidad incluye la misma lógica general de macros compartida por la infraestructura base:
+
+- selección de punto;
+- selección de macro SmartSymbol;
+- cota manual o relativa a local;
+- confirmación de inserción.
+
+Los campos visibles en paleta son coherentes con ese flujo.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** si Electricidad usa macros con alguna regla específica adicional.
+
+`[[CAPTURA-ELECTRICIDAD-06: página de macros de Electricidad]]`
+![alt text](CAPTURA-ELECTRICIDAD-06.png)
+
+### 28.10. Soportes en Electricidad
+
+Electricidad dispone también de página específica de soportes.
+
+Los campos confirmados en paleta son:
+
+- `Tipo de soporte`;
+- `Subtipo instalación`;
+- `Superficie`;
+- `Cota A`;
+- `Cota B`;
+- `Ángulo de inclinación`;
+- modos de edición de soportes;
+- y `Atributo de soporte`.
+
+La estructura de esta página es equivalente a la de otras instalaciones.
+
+Por eso, en Electricidad conviene revisar especialmente:
+
+- si el subtipo visible se corresponde realmente con `Electricidad`;
+- qué tipos de soporte están habilitados en entorno real;
+- y cómo se clasifica el soporte una vez creado.
+
+`[[CAPTURA-ELECTRICIDAD-07: bloque de soportes con subtipo Electricidad]]`
+![alt text](CAPTURA-ELECTRICIDAD-07.png)
+
+### 28.11. Copias, duplicados y comportamiento especial en Electricidad
+
+Electricidad usa la misma lógica general de serialización, restauración, layers, atributos y posible copia relacionada que el resto de instalaciones basadas en `PolyLib`.
+
+Además, hay un comportamiento técnico especialmente importante en esta instalación:
+
+- en varios recorridos eléctricos la continuidad geométrica es crítica;
+- por eso el modo agrupado tiene más peso que en otros sistemas.
+
+Esto significa que el usuario debe revisar no solo que el recorrido exista, sino que también se esté resolviendo como un conjunto continuo y no como tramos aislados cuando eso no corresponde.
+
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** si Electricidad está usando en producción copias automáticas a otros archivos de dibujo y en qué casos.
+
+### 28.12. Inconsistencias o puntos a validar en Electricidad
+
+Aquí hay dos puntos que conviene dejar documentados:
+
+1. En el registro aparecen variantes `TD` que no se muestran directamente como tipo de instalación independiente en la lista principal.
+2. Algunas etiquetas de `elements3D` parecen heredadas o poco coherentes, por ejemplo:
+   - `conducto_cajetin_a_enchufe` aparece con la etiqueta `Conducto Aislado 150 mm`;
+   - `conducto_interruptores_domotica` aparece con la etiqueta `Conducto Aislado 160 mm`.
+
+Esto sugiere que parte de la definición visible puede venir de una reutilización de configuración y conviene validarla antes de cerrar el manual.
+
+### 28.13. Puntos a revisar con especial atención en Electricidad
+
+Antes de finalizar una instalación de Electricidad conviene revisar especialmente:
+
+- que el sistema activo sea realmente el que corresponde al uso eléctrico que se quiere modelar;
+- que el diámetro base sea el correcto para ese sistema;
+- que los recorridos sobre `Rejiband` mantengan la continuidad esperada;
+- que las variantes `TD` o `EN` se estén aplicando como realmente necesita el proyecto;
+- que los layers elegidos respondan al criterio de telecomunicaciones, corrugados o cara de colocación;
+- que `Caixa Connexions 200` esté colocada en el punto adecuado;
+- que los soportes se hayan revisado con subtipo, superficie, cotas y tipo correctos;
+- y que las etiquetas visibles en paleta coincidan con el comportamiento real del sistema.
+
+## 29. Próximas unidades por instalación
 
 Este mismo esquema puede repetirse dentro del manual para el resto de instalaciones, por ejemplo:
 
-- Ventilación;
-- Electricidad;
 - y otras instalaciones futuras.
 
 La idea es que cada una tenga su propia unidad específica dentro del mismo manual, manteniendo una estructura común para que la consulta sea sencilla.
