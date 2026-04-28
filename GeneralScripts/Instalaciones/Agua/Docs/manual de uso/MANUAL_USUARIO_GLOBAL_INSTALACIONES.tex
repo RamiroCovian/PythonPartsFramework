@@ -1115,6 +1115,7 @@ En Agua, la lógica es esta:
 Es decir, el usuario escribe un único valor, pero la instalación lo reutiliza según la distribución activa.
 
 \subsubsection{Cómo aplica el usuario el atributo padre}
+\label{sec:agua-aplicar-atributo-padre}
 
 El flujo práctico es:
 
@@ -1410,7 +1411,7 @@ Este comportamiento debe revisarse especialmente después de modificar el diáme
 
 Cuando en un mismo punto confluyen tres direcciones, la instalación intenta resolver el encuentro con la bifurcación compatible.
 
-En la información recibida para Saneamiento se indica el uso de bifurcaciones tipo \texttt{Y} y de algunas bifurcaciones de transición en casos concretos.
+En Saneamiento se trabaja con bifurcaciones tipo \texttt{Y} y con algunas bifurcaciones de transición en casos concretos.
 
 \manualimage{capturas/CAPTURA-SANEAMIENTO-06.png}{Ejemplo de bifurcación válida en Saneamiento}
 
@@ -1454,19 +1455,19 @@ Esto es importante porque existe la acción \texttt{Invertir caval}, que permite
 
 \manualimage{capturas/CAPTURA-SANEAMIENTO-13.png}{Botón Invertir caval con mensaje de confirmación en Saneamiento}
 
-\subsection{Layers, atributos y comportamiento visual en Saneamiento}
+\subsection{Layers y atributos en Saneamiento}
 
 En Saneamiento conviene revisar tres cosas:
 
 \begin{itemize}
 \item los layers aplicados;
 \item los atributos aplicados sobre la selección;
-\item y ciertos casos de superposición visual que no deben confundirse con una copia errónea.
+\item y que el resultado final quede clasificado según el criterio del plano.
 \end{itemize}
 
 \subsubsection{Layers que conviene revisar}
 
-En la información recibida aparecen como layers importantes:
+En Saneamiento conviene revisar especialmente estos layers:
 
 \begin{itemize}
 \item \texttt{IS CON SANE FAB};
@@ -1479,20 +1480,17 @@ En la información recibida aparecen como layers importantes:
 
 \subsubsection{Atributos que conviene revisar}
 
-Los atributos más relevantes en la información recibida son:
+El funcionamiento para aplicar atributos sobre elementos seleccionados es el mismo que en Agua.
 
-\begin{itemize}
-\item el valor de atributo aplicado sobre elementos seleccionados;
-\item y los atributos de soporte aplicados desde la página específica de soportes.
-\end{itemize}
+Para ver el flujo paso a paso y la captura de ejemplo, consultar el apartado~\ref{sec:agua-aplicar-atributo-padre}.
+
+En Saneamiento conviene revisar además los atributos de soporte aplicados desde la página específica de soportes.
 
 \pendingtag\ Los atributos padre o campos críticos de Saneamiento todavía deben confirmarse.
 
-\manualimage{capturas/CAPTURA-SANEAMIENTO-12.png}{Aplicación de atributo sobre elementos seleccionados en Saneamiento}
-
 \subsection{Elementos definidos propios de Saneamiento}
 
-En la información recibida para Saneamiento aparece, como elemento definido principal:
+En la paleta de Saneamiento aparece, como elemento definido principal:
 
 \begin{itemize}
 \item \texttt{Caixa Connexions 200}.
@@ -1512,7 +1510,7 @@ Suele ser útil:
 
 \subsubsection{Tipos de punto admitidos}
 
-Según la información recibida, \texttt{Caixa Connexions 200} admite:
+En la paleta, \texttt{Caixa Connexions 200} admite:
 
 \begin{itemize}
 \item \texttt{Inicio};
@@ -1529,7 +1527,7 @@ En paleta, la opción intermedia puede aparecer como \texttt{Intermedio o libre}
 
 Saneamiento dispone también de una página específica de soportes.
 
-Según la información recibida:
+En la paleta de soportes:
 
 \begin{itemize}
 \item el tipo \texttt{Zeta} aparece como valor visible por defecto;
@@ -1551,7 +1549,7 @@ También conviene revisar:
 
 \subsection{Mensajes y avisos propios de Saneamiento}
 
-En la información recibida aparecen como mensajes relevantes:
+En Saneamiento pueden aparecer estos avisos relevantes:
 
 \begin{itemize}
 \item \texttt{No hay instalación guardada para invertir.}
@@ -1600,11 +1598,11 @@ En esta unidad solo se recogen las particularidades de Ventilación. El uso gene
 
 \subsection{Descripción general de Ventilación}
 
-\begin{itemize}
-\item Esta instalación sirve para dibujar y editar redes de ventilación dentro de Allplan.
-\item Está pensada para trabajar con conductos y accesorios automáticos a partir de un recorrido polilineal.
-\item Lo que la diferencia de otras instalaciones es la combinación de tipos de conducto, diámetros, ángulos permitidos y accesorios específicos de ventilación.
-\end{itemize}
+Ventilación sirve para dibujar y editar redes de conductos dentro de Allplan.
+
+El usuario define un recorrido y la herramienta genera los tramos y accesorios correspondientes según el sistema elegido.
+
+Lo que diferencia a Ventilación de otras instalaciones es la combinación de tipos de conducto, diámetros, ángulos permitidos y accesorios específicos como manguitos, difusores, reducciones, conexiones y codos.
 
 \subsection{Sistemas disponibles en Ventilación}
 
@@ -1631,7 +1629,7 @@ Cuando el usuario cambia de sistema, la herramienta adapta automáticamente el c
 
 \subsection{Distribución en Ventilación}
 
-En la paleta existe el campo \texttt{Tipo de Distribucion}, pero en la configuración registrada de Ventilación no aparece una distribución funcional específica como sí ocurre en Agua.
+En la paleta existe el campo \texttt{Tipo de Distribucion}, pero en la paleta actual de Ventilación no aparece una distribución funcional específica como sí ocurre en Agua.
 
 Por eso, para esta instalación:
 
@@ -1670,7 +1668,7 @@ En los sistemas donde existen accesorios automáticos, conviene revisar en panta
 
 \subsubsection{Caso particular de Conducto Aislado}
 
-En \texttt{Conducto Aislado}, la conexión característica registrada es la \texttt{reducción}.
+En \texttt{Conducto Aislado}, la conexión característica es la \texttt{reducción}.
 
 Por eso, cuando el usuario trabaja con \texttt{150 mm} y \texttt{160 mm}, conviene revisar explícitamente la transición resultante.
 
@@ -1678,7 +1676,7 @@ Por eso, cuando el usuario trabaja con \texttt{150 mm} y \texttt{160 mm}, convie
 
 Los accesorios automáticos dependen del sistema seleccionado.
 
-En la configuración actual se confirma este comportamiento:
+En el uso actual, el comportamiento previsto es:
 
 \begin{itemize}
 \item \texttt{Conducto Impulsion} y \texttt{Conducto Extraccion}: \texttt{manguito} y \texttt{difusor};
@@ -1686,7 +1684,7 @@ En la configuración actual se confirma este comportamiento:
 \item \texttt{Conducto Recuperador}: \texttt{conexion} y \texttt{codo 90}.
 \end{itemize}
 
-Los accesorios registrados para esta instalación son:
+Los accesorios principales que conviene reconocer en Ventilación son:
 
 \begin{itemize}
 \item \texttt{Manguito};
@@ -1699,7 +1697,7 @@ Los accesorios registrados para esta instalación son:
 
 En los sistemas normales, el manguito no actúa solo como accesorio visual.
 
-También actúa como frontera de grupo para numeración y agrupación interna de la instalación.
+También ayuda a separar o resolver tramos del recorrido cuando la instalación necesita ordenar la continuidad del conducto.
 
 \manualimage{capturas/CAPTURA-VENTILACION-03.png}{Ejemplo de Conducto Impulsion con manguito automático}
 
@@ -1762,13 +1760,34 @@ La longitud mínima por sistema es:
 \item \texttt{Conducto Recuperador}: \texttt{350 mm}.
 \end{itemize}
 
-\pendingtag\ El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
+Si el usuario dibuja un segmento más corto que la longitud mínima permitida, la herramienta muestra un aviso con:
+
+\begin{itemize}
+\item el tipo de instalación;
+\item la longitud mínima requerida;
+\item la longitud real del segmento trazado;
+\item y la pregunta para decidir si se ignora la restricción o se cancela para recolocar el punto.
+\end{itemize}
+
+\manualdoubleimagelabeled
+{capturas/CAPTURA-VENTILACION-06A.png}
+{\texttt{Conducto Impulsion}}
+{capturas/CAPTURA-VENTILACION-06B.png}
+{\texttt{Conducto Extraccion}}
+{Avisos de longitud mínima no cumplida en Conducto Impulsion y Conducto Extraccion}
+
+\manualdoubleimagelabeled
+{capturas/CAPTURA-VENTILACION-06C.png}
+{\texttt{Conducto Aislado}}
+{capturas/CAPTURA-VENTILACION-06D.png}
+{\texttt{Conducto Recuperador}}
+{Avisos de longitud mínima no cumplida en Conducto Aislado y Conducto Recuperador}
 
 \subsection{Layers y atributos específicos de Ventilación}
 
 \subsubsection{Layers base}
 
-Los layers base confirmados en el registro de Ventilación son:
+Los layers base que conviene revisar en Ventilación son:
 
 \begin{itemize}
 \item \texttt{IS\_CON\_VENT\_FAB};
@@ -1782,40 +1801,30 @@ Esto cubre tanto los conductos como la capa de eje y la capa de etiqueta o nombr
 
 \manualimage{capturas/CAPTURA-VENTILACION-06.png}{Ejemplo de layer aplicado en Ventilación}
 
-\subsubsection{Atributos detectados en scripts}
+\subsubsection{Atributos que conviene revisar}
 
-En los scripts de Ventilación se detectan, entre otros, estos atributos:
+En Ventilación, los atributos sirven para clasificar el conducto y completar información como referencia, dimensiones, longitud, sección o tipo de sistema.
 
-\begin{itemize}
-\item \texttt{pmp\_pare};
-\item \texttt{6\_CC\_IS};
-\item \texttt{pmp\_altura};
-\item \texttt{pmp\_amplada};
-\item \texttt{pmp\_area};
-\item \texttt{pmp\_diametre};
-\item \texttt{pmp\_longitud};
-\item \texttt{pmp\_nom};
-\item \texttt{pmp\_seccio};
-\item y otros atributos \texttt{pmp\_*} de clasificación y propiedades físicas.
-\end{itemize}
+Para el usuario, lo importante es comprobar que los atributos necesarios del proyecto se han aplicado antes de finalizar la instalación.
 
-\subsubsection{Casos concretos observados}
-
-En la configuración actual se observan estos casos:
+Conviene revisar especialmente:
 
 \begin{itemize}
-\item \texttt{conducto\_normal} usa \texttt{6\_CC\_IS = IS08};
-\item \texttt{conducto\_recuperador} usa \texttt{6\_CC\_IS = IS};
-\item varias piezas inicializan \texttt{pmp\_pare} vacío.
+\item que el atributo de referencia o clasificación esté informado cuando el proyecto lo requiera;
+\item que el sistema elegido se corresponda con el uso real del conducto;
+\item y que los elementos especiales, como recuperadores o difusores, no queden sin información necesaria.
 \end{itemize}
-
-Esto conviene tenerlo presente si el proyecto organiza información por atributo padre o por atributos de clasificación.
 
 \subsection{Elementos definidos en Ventilación}
 
-Aquí hay una inconsistencia que conviene documentar con claridad.
+En Ventilación hay que distinguir entre dos tipos de elementos:
 
-Por un lado, el registro de Ventilación declara como elementos 3D propios:
+\begin{itemize}
+\item accesorios que la herramienta coloca automáticamente al generar el recorrido;
+\item elementos que el usuario puede insertar manualmente desde la página \texttt{Elemento}.
+\end{itemize}
+
+Los accesorios propios de Ventilación que deben revisarse en el modelo son:
 
 \begin{itemize}
 \item \texttt{Manguito};
@@ -1825,20 +1834,15 @@ Por un lado, el registro de Ventilación declara como elementos 3D propios:
 \item \texttt{Codo 90}.
 \end{itemize}
 
-Pero, por otro lado, la página de \texttt{Elemento} del archivo \texttt{ventilacion\_polyline.pyp} muestra actualmente solo:
+En la página \texttt{Elemento} puede aparecer actualmente:
 
 \begin{itemize}
 \item \texttt{Caixa Connexions 200}.
 \end{itemize}
 
-Esto indica una probable herencia o copia de configuración desde otra instalación.
+Por tanto, antes de cerrar esta unidad del manual, conviene validar en Allplan si \texttt{Caixa Connexions 200} es realmente el elemento que debe insertar el usuario en Ventilación o si la paleta debe mostrar otro elemento propio de esta instalación.
 
-Por tanto:
-
-\begin{itemize}
-\item \pendingtag\ debe validarse qué elemento definido debe ver realmente el usuario en Ventilación;
-\item \pendingtag\ conviene revisar si la paleta de Elemento en Ventilación debe corregirse antes de cerrar el manual.
-\end{itemize}
+\pendingtag\ Validar qué elementos definidos ve el usuario en la paleta de Ventilación y cuáles se generan solo de forma automática.
 
 \manualimage{capturas/CAPTURA-VENTILACION-10.png}{Página de Elemento mostrando el estado real en Ventilación}
 
@@ -1846,7 +1850,7 @@ Por tanto:
 
 Ventilación dispone de página específica de soportes.
 
-Los campos confirmados en paleta son:
+Los campos visibles en paleta son:
 
 \begin{itemize}
 \item \texttt{Tipo de soporte};
@@ -1859,13 +1863,7 @@ Los campos confirmados en paleta son:
 \item y \texttt{Atributo de soporte}.
 \end{itemize}
 
-Según el ejemplo de configuración disponible:
-
-\begin{itemize}
-\item existe al menos un caso de soporte \texttt{Omega};
-\item el subtipo asociado puede ser \texttt{Ventilacion};
-\item la superficie puede ser \texttt{Perforado}.
-\end{itemize}
+En la paleta puede aparecer al menos un soporte \texttt{Omega}, con subtipo \texttt{Ventilacion} y superficie \texttt{Perforado}.
 
 Las reglas prácticas de uso son estas:
 
@@ -1875,15 +1873,15 @@ Las reglas prácticas de uso son estas:
 \item el modo \texttt{Edición Mover} permite recolocar soportes ya acumulados o seleccionados.
 \end{itemize}
 
-\pendingtag\ el listado completo de tipos de soporte realmente habilitados en Ventilación.
+\pendingtag\ Debe confirmarse el listado completo de tipos de soporte realmente habilitados en Ventilación.
 
 \manualimage{capturas/CAPTURA-VENTILACION-07.png}{Bloque de soportes con subtipo Ventilacion}
 
 \subsection{Mensajes y avisos propios de Ventilación}
 
-A nivel de código se detectan mensajes técnicos y trazas de depuración, pero todavía no queda claro qué avisos funcionales ve el usuario final en Allplan.
+En esta instalación todavía deben confirmarse los avisos que verá realmente el usuario en Allplan.
 
-Por eso, en esta instalación conviene validar en entorno real:
+Conviene validar en entorno real:
 
 \begin{itemize}
 \item el aviso por longitud mínima;
@@ -1913,11 +1911,11 @@ En esta unidad solo se recogen las particularidades de Electricidad. El uso gene
 
 \subsection{Descripción general de Electricidad}
 
-\begin{itemize}
-\item Esta instalación sirve para dibujar y editar recorridos de electricidad dentro de Allplan.
-\item Está pensada para trabajar tanto con \texttt{rejibands} como con conductos o corrugados asociados a distintos usos eléctricos.
-\item Lo que la diferencia de otras instalaciones es la variedad de recorridos eléctricos específicos, la coexistencia de capas de corrugados y de telecomunicaciones, y la presencia de variantes \texttt{TD} en varios scripts.
-\end{itemize}
+Electricidad sirve para dibujar y editar recorridos eléctricos dentro de Allplan.
+
+Está pensada para trabajar tanto con \texttt{Rejibands} como con conductos o corrugados asociados a distintos usos eléctricos.
+
+Lo que diferencia a Electricidad de otras instalaciones es la variedad de recorridos disponibles, la separación entre corrugados eléctricos y telecomunicaciones, y la posibilidad de trabajar con variantes de distribución según el proyecto.
 
 \subsection{Sistemas disponibles en Electricidad}
 
@@ -1946,27 +1944,13 @@ Las diferencias principales entre ellos son estas:
 
 \subsection{Distribución y variantes en Electricidad}
 
-En la paleta existe el campo \texttt{Tipo de Distribucion} y en los scripts aparecen variantes específicas con sufijo \texttt{TD}, por ejemplo:
+En la paleta puede aparecer el campo \texttt{Tipo de Distribucion}.
 
-\begin{itemize}
-\item \texttt{conducto\_telecomunicaciones\_td};
-\item \texttt{conducto\_luz\_retorno\_paralelas\_td};
-\item \texttt{conducto\_alimentacion\_horno\_td};
-\item \texttt{conducto\_alimentacion\_luces\_cajetines\_td};
-\item \texttt{conducto\_cajetin\_a\_enchufe\_td};
-\item \texttt{conducto\_interruptores\_domotica\_td}.
-\end{itemize}
+Electricidad puede trabajar con una lógica base y con variantes de distribución como \texttt{TD}. Además, la paleta incluye el campo \texttt{Cara (EN)}, que puede usarse para definir la cara o criterio de colocación en determinados recorridos.
 
-Esto indica que Electricidad distingue al menos entre una lógica base y otra variante \texttt{TD}.
+Para el usuario, la regla práctica es revisar estos campos antes de dibujar, especialmente si el proyecto diferencia entre recorridos base, recorridos \texttt{TD} o recorridos asociados a una cara concreta.
 
-Además, la paleta incluye también el campo \texttt{Cara (EN)}, lo que sugiere otra lógica adicional ligada a la cara de colocación.
-
-Por tanto:
-
-\begin{itemize}
-\item \pendingtag\ debe validarse cómo selecciona realmente el usuario la variante \texttt{TD} o \texttt{EN} en Electricidad;
-\item \pendingtag\ debe comprobarse qué combinación práctica existe entre \texttt{Tipo de Distribucion} y \texttt{Cara (EN)}.
-\end{itemize}
+\pendingtag\ Debe validarse cómo selecciona realmente el usuario la variante \texttt{TD} o \texttt{EN} en Electricidad y qué efecto visible tiene en el recorrido.
 
 \subsection{Diámetros y cambios de diámetro en Electricidad}
 
@@ -1998,12 +1982,12 @@ En esta instalación, el cambio de diámetro debe revisarse con especial cuidado
 \begin{itemize}
 \item cada sistema ya parte de un diámetro base concreto;
 \item en \texttt{Rejiband} el ancho es parte esencial del resultado;
-\item y en los conductos eléctricos el diámetro afecta a la geometría, al área y a varios atributos \texttt{pmp\_*}.
+\item y en los conductos eléctricos el diámetro afecta al tamaño del recorrido y a la información asociada al elemento.
 \end{itemize}
 
 \subsubsection{Solape y continuidad}
 
-En Electricidad, varios sistemas usan solape adicional (\texttt{overlap\_mm}) para mantener continuidad geométrica:
+En Electricidad, varios sistemas usan un pequeño solape entre tramos para mantener la continuidad del recorrido:
 
 \begin{itemize}
 \item \texttt{Rejiband U}: \texttt{50 mm};
@@ -2011,7 +1995,7 @@ En Electricidad, varios sistemas usan solape adicional (\texttt{overlap\_mm}) pa
 \item \texttt{Alimentación horno}: \texttt{12.5 mm}.
 \end{itemize}
 
-Esto es importante porque el resultado final no depende solo de la longitud dibujada, sino también del solape definido por el sistema.
+Esto es importante porque el resultado final no depende solo de la longitud dibujada. La herramienta también tiene en cuenta ese solape para que los tramos queden correctamente unidos.
 
 \subsection{Reglas geométricas y validaciones en Electricidad}
 
@@ -2034,7 +2018,7 @@ Por tanto, en Electricidad la regla práctica es:
 
 \subsubsection{Longitud mínima}
 
-La longitud mínima registrada para todos los sistemas principales de Electricidad es:
+La longitud mínima indicada para todos los sistemas principales de Electricidad es:
 
 \begin{itemize}
 \item \texttt{300 mm}.
@@ -2046,7 +2030,7 @@ La longitud mínima registrada para todos los sistemas principales de Electricid
 
 \subsubsection{Layers base}
 
-Los layers base confirmados en el registro de Electricidad son:
+Los layers base que conviene revisar en Electricidad son:
 
 \begin{itemize}
 \item \texttt{IS\_REJIBANDS};
@@ -2073,30 +2057,13 @@ Esto indica una separación clara entre:
 
 \manualimage{capturas/CAPTURA-ELECTRICIDAD-04.png}{Ejemplo de layers aplicados sobre recorridos de Electricidad}
 
-\subsubsection{Atributos detectados en scripts}
+\subsubsection{Atributos que conviene revisar}
 
-En los scripts de Electricidad se detectan, entre otros, estos atributos:
+En Electricidad, los atributos ayudan a clasificar cada recorrido por uso, diámetro, color, longitud, referencia de proyecto y tipo de sistema.
 
-\begin{itemize}
-\item \texttt{6\_CC\_IS};
-\item \texttt{pmp\_altura};
-\item \texttt{pmp\_amplada};
-\item \texttt{pmp\_area};
-\item \texttt{pmp\_CARTICULO};
-\item \texttt{pmp\_color};
-\item \texttt{pmp\_diametre};
-\item \texttt{pmp\_longitud};
-\item \texttt{pmp\_nom};
-\item \texttt{pmp\_pare};
-\item \texttt{pmp\_seccio};
-\item y otros atributos \texttt{pmp\_*} de clasificación y propiedades físicas.
-\end{itemize}
+Para el usuario, lo importante es comprobar que el recorrido queda correctamente identificado antes de finalizar.
 
-\subsubsection{Qué conviene revisar en los atributos}
-
-En Electricidad, varios scripts rellenan atributos a partir del diámetro y del color del sistema.
-
-Esto conviene revisarlo especialmente en:
+Conviene revisarlo especialmente en:
 
 \begin{itemize}
 \item \texttt{Alimentación horno};
@@ -2107,24 +2074,20 @@ Esto conviene revisarlo especialmente en:
 
 \subsection{Accesorios y comportamiento geométrico en Electricidad}
 
-Electricidad no registra un catálogo explícito de accesorios automáticos como sí ocurre en Agua o Ventilación.
+Electricidad no trabaja con un catálogo de accesorios automáticos tan visible como Agua o Ventilación.
 
-Lo que sí se observa es esto:
+El comportamiento principal es este:
 
 \begin{itemize}
 \item los recorridos eléctricos se generan como tramos continuos;
 \item en varios casos se prioriza la continuidad geométrica por solape;
 \item \texttt{Rejiband U} se comporta como geometría lineal propia;
-\item la unión booleana o continuidad del recorrido es especialmente importante en esta instalación.
+\item y la continuidad del recorrido es especialmente importante en esta instalación.
 \end{itemize}
 
-De hecho, en la configuración se deja indicado explícitamente que:
+Por eso, cuando se trabaja con recorridos eléctricos conviene no romper la continuidad del trazado si se espera que el resultado final se comporte como un único recorrido.
 
-\begin{itemize}
-\item trabajar en modo grupo es crítico para no romper la continuidad de ciertos recorridos de electricidad.
-\end{itemize}
-
-Esto afecta sobre todo a:
+Esto afecta especialmente a:
 
 \begin{itemize}
 \item \texttt{Telecomunicaciones};
@@ -2137,29 +2100,31 @@ Esto afecta sobre todo a:
 
 \subsection{Elementos definidos en Electricidad}
 
-En la información actual, el elemento definido visible y coherente con la paleta es:
+Además del recorrido principal, Electricidad permite insertar elementos definidos propios de apoyo al trazado.
+
+En la paleta, el elemento definido disponible actualmente es:
 
 \begin{itemize}
 \item \texttt{Caixa Connexions 200}.
 \end{itemize}
 
-Este elemento aparece tanto en el registro de Electricidad como en la página \texttt{Elemento} del archivo \texttt{electricidad\_polyline.pyp}.
-
-Por eso, a diferencia de Ventilación, aquí no hay incoherencia entre el registro y la paleta en este punto.
-
-Su función práctica es insertar una caja de conexiones sobre un punto del recorrido.
+Este elemento sirve para colocar una caja de conexiones en un punto concreto del recorrido eléctrico. Conviene usarlo cuando el trazado necesita representar un punto de conexión, registro o encuentro asociado a la instalación.
 
 \manualimage{capturas/CAPTURA-ELECTRICIDAD-05.png}{Uso de Caixa Connexions 200 en Electricidad}
 
-\subsubsection{Tipos de punto admitidos}
+\subsubsection{Tipo de punto en Electricidad}
 
-En la paleta de Electricidad, \texttt{Caixa Connexions 200} admite:
+Antes de insertar la caja, el usuario debe elegir el tipo de punto adecuado en la paleta.
+
+En Electricidad, las opciones visibles son:
 
 \begin{itemize}
-\item \texttt{Punto inicial};
-\item \texttt{Punto final};
-\item \texttt{Intermedio o libre}.
+\item \texttt{Punto inicial}: coloca la caja al inicio del recorrido.
+\item \texttt{Punto final}: coloca la caja al final del recorrido.
+\item \texttt{Intermedio o libre}: permite colocarla en un punto intermedio o en una posición elegida por el usuario.
 \end{itemize}
+
+\noindent La regla práctica es revisar primero qué papel cumple la caja dentro del recorrido y después elegir el tipo de punto correspondiente. Si se coloca como punto libre, conviene comprobar en la previsualización que queda asociada al trazado esperado.
 
 \subsection{Soportes en Electricidad}
 
@@ -2190,20 +2155,16 @@ Por eso, en Electricidad conviene revisar especialmente:
 
 \manualimage{capturas/CAPTURA-ELECTRICIDAD-07.png}{Bloque de soportes con subtipo Electricidad}
 
-\subsection{Inconsistencias o puntos a validar en Electricidad}
+\subsection{Puntos pendientes de confirmar en Electricidad}
 
-Aquí hay dos puntos que conviene dejar documentados:
+Antes de cerrar esta unidad del manual, conviene confirmar dos puntos directamente en Allplan:
 
 \begin{enumerate}
-\item En el registro aparecen variantes \texttt{TD} que no se muestran directamente como tipo de instalación independiente en la lista principal.
-\item Algunas etiquetas de \texttt{elements3D} parecen heredadas o poco coherentes, por ejemplo:
-\begin{itemize}
-\item \texttt{conducto\_cajetin\_a\_enchufe} aparece con la etiqueta \texttt{Conducto Aislado 150 mm};
-\item \texttt{conducto\_interruptores\_domotica} aparece con la etiqueta \texttt{Conducto Aislado 160 mm}.
-\end{itemize}
+\item Cómo se muestran y se seleccionan realmente las variantes \texttt{TD} y \texttt{EN} en la paleta.
+\item Si todos los nombres visibles en la paleta coinciden con el resultado que se genera en el modelo.
 \end{enumerate}
 
-Esto sugiere que parte de la definición visible puede venir de una reutilización de configuración y conviene validarla antes de cerrar el manual.
+Estos puntos no cambian el uso general de la instalación, pero sí deben confirmarse para que el manual final refleje exactamente lo que verá el usuario.
 
 \subsection{Puntos a revisar con especial atención en Electricidad}
 

@@ -533,7 +533,7 @@
                 <Name>DefinedElementType</Name>
                 <Text>Elemento</Text>
                 <Value>Caixa Connexions 200</Value>
-                <ValueList>Caixa Connexions 200</ValueList>
+                <ValueList>Caixa Connexions 200|Caixa Connexions|Caixetí 1|Caixete 1 UT|Caixetí 2|Caixetí 2 UT|Caixetí 3|Caixetí 3 UT|Caixetí 4|Caixetí 4 UT|Caixetí Doble Vertical|Porter i Aplics|Endoll Ext amb Corrugat|Vehicle Elèctric|Llum Ext. XPS 70|Llum Ext. XPS 80|Llum Ext. XPS 120</ValueList>
                 <ValueType>StringComboBox</ValueType>
             </Parameter>
             <Parameter>

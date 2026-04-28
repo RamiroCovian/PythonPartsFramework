@@ -911,6 +911,7 @@ En Agua, la lógica es esta:
 
 Es decir, el usuario escribe un único valor, pero la instalación lo reutiliza según la distribución activa.
 
+<a id="agua-aplicar-atributo-padre"></a>
 #### 25.6.5. Cómo aplica el usuario el atributo padre
 
 El flujo práctico es:
@@ -1152,6 +1153,7 @@ Si el cambio de diámetro afecta a una bifurcación, la herramienta intenta colo
 
 Si no existe una combinación válida, aparece un aviso como este:
 
+#TODO: Hay mensajes de que no existe una Te como bifurcacion? otras conbinaciones de bifurcaciones?
 `No existe una TE para la combinación de diámetros seleccionada.`
 
 `Combinación detectada: ...`
@@ -1192,14 +1194,16 @@ Este comportamiento debe revisarse especialmente después de modificar el diáme
 
 Cuando en un mismo punto confluyen tres direcciones, la instalación intenta resolver el encuentro con la bifurcación compatible.
 
-En la información recibida para Saneamiento se indica el uso de bifurcaciones tipo `Y` y de algunas bifurcaciones de transición en casos concretos.
-
+En Saneamiento se trabaja con bifurcaciones tipo `Y` y con algunas bifurcaciones de transición en casos concretos.
+#TODO: No se muestra bien el segmento que bifurca de la Y
 `[[CAPTURA-SANEAMIENTO-06: ejemplo de bifurcación válida en Saneamiento]]`
 ![alt text](capturas/CAPTURA-SANEAMIENTO-06.png)
 
 #### 26.4.4. Qué ocurre si no existe una bifurcación compatible
 
 No todas las combinaciones de diámetro están disponibles en bifurcación.
+
+#TODO: realmente muestra estos mensajes?
 
 Cuando no existe una pieza compatible, la herramienta muestra el aviso correspondiente y el usuario debe corregir los diámetros hasta adaptarlos a una combinación admitida.
 
@@ -1213,11 +1217,12 @@ La longitud mínima de tramo indicada para Saneamiento es `350 mm`.
 
 Si el usuario dibuja un tramo por debajo de ese valor, el resultado puede no resolverse correctamente.
 
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El mensaje exacto de esa validación debe confirmarse en Allplan antes del cierre definitivo del manual.
+`[[CAPTURA-SANEAMIENTO-07: Captura del mensaje exacto de la validacion de longitud minima.]]`
+![alt text](capturas/CAPTURA-SANEAMIENTO-07.png)
 
 #### 26.5.2. Longitud máxima
 
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** La longitud máxima de tramo en Saneamiento debe confirmarse en Allplan.
+#TODO: **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** La longitud máxima de tramo en Saneamiento debe confirmarse en Allplan.
 
 Por eso, antes de cerrar la versión final de esta unidad conviene validar en entorno real:
 
@@ -1232,45 +1237,40 @@ En Saneamiento, la herramienta recorta automáticamente algunos extremos de tram
 Además, el sentido del trazado influye en el resultado de determinadas piezas. Por eso, el usuario no debe fijarse solo en la geometría, sino también en la dirección en la que se ha construido el recorrido.
 
 Esto es importante porque existe la acción `Invertir caval`, que permite cambiar el sentido de la instalación cuando el resultado geométrico no es el esperado.
+#TODO: No funciona el boton de Invertir caval
 
 `[[CAPTURA-SANEAMIENTO-13: botón Invertir caval con mensaje de confirmación en Saneamiento]]`
 ![alt text](capturas/CAPTURA-SANEAMIENTO-13.png)
 
-### 26.6. Layers, atributos y comportamiento visual en Saneamiento
+### 26.6. Layers y atributos en Saneamiento
 
 En Saneamiento conviene revisar tres cosas:
 
 - los layers aplicados;
 - los atributos aplicados sobre la selección;
-- y ciertos casos de superposición visual que no deben confundirse con una copia errónea.
+- y que el resultado final quede clasificado según el criterio del plano.
 
 #### 26.6.1. Layers que conviene revisar
 
-En la información recibida aparecen como layers importantes:
+En Saneamiento conviene revisar especialmente estos layers:
 
 - `IS CON SANE FAB`;
 - `IS CON SANE OBR`.
 
 **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** También se mencionan otros layers de proyecto que conviene validar en Allplan antes de cerrar definitivamente esta unidad del manual.
 
-`[[CAPTURA-SANEAMIENTO-11: aplicación de layer sobre tramos o accesorios de Saneamiento]]`
+`[[CAPTURA-SANEAMIENTO-11: Lista de layers de Saneamiento]]`
 ![alt text](capturas/CAPTURA-SANEAMIENTO-11.png)
 
-#### 26.6.2. Atributos que conviene revisar
+#### 26.6.2. Cómo aplicar el atributo padre
 
-Los atributos más relevantes en la información recibida son:
+El funcionamiento para aplicar atributos sobre elementos seleccionados es el mismo que en Agua.
 
-- el valor de atributo aplicado sobre elementos seleccionados;
-- y los atributos de soporte aplicados desde la página específica de soportes.
-
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Los atributos padre o campos críticos de Saneamiento todavía deben confirmarse.
-
-`[[CAPTURA-SANEAMIENTO-12: aplicación de atributo sobre elementos seleccionados en Saneamiento]]`
-![alt text](capturas/CAPTURA-SANEAMIENTO-12.png)
+Para ver el flujo paso a paso y la captura de ejemplo, consultar el apartado [25.6.5. Cómo aplica el usuario el atributo padre](#agua-aplicar-atributo-padre).
 
 ### 26.7. Elementos definidos propios de Saneamiento
 
-En la información recibida para Saneamiento aparece, como elemento definido principal:
+En la paleta de Saneamiento aparece, como elemento definido principal:
 
 - `Caixa Connexions 200`.
 
@@ -1287,7 +1287,7 @@ Suele ser útil:
 
 #### 26.7.1. Tipos de punto admitidos
 
-Según la información recibida, `Caixa Connexions 200` admite:
+En la paleta, `Caixa Connexions 200` admite:
 
 - `Inicio`;
 - `Final`;
@@ -1302,7 +1302,7 @@ En paleta, la opción intermedia puede aparecer como `Intermedio o libre`.
 
 Saneamiento dispone también de una página específica de soportes.
 
-Según la información recibida:
+En la paleta de soportes:
 
 - el tipo `Zeta` aparece como valor visible por defecto;
 - las superficies habituales son `Liso` y `Perforado`;
@@ -1321,7 +1321,7 @@ También conviene revisar:
 
 ### 26.9. Mensajes y avisos propios de Saneamiento
 
-En la información recibida aparecen como mensajes relevantes:
+En Saneamiento pueden aparecer estos avisos relevantes:
 
 - `No hay instalación guardada para invertir.`
   Aparece al intentar invertir una instalación sin trazado guardado.
@@ -1358,9 +1358,11 @@ En esta unidad solo se recogen las particularidades de Ventilación. El uso gene
 
 ### 27.1. Descripción general de Ventilación
 
-- Esta instalación sirve para dibujar y editar redes de ventilación dentro de Allplan.
-- Está pensada para trabajar con conductos y accesorios automáticos a partir de un recorrido polilineal.
-- Lo que la diferencia de otras instalaciones es la combinación de tipos de conducto, diámetros, ángulos permitidos y accesorios específicos de ventilación.
+Ventilación sirve para dibujar y editar redes de conductos dentro de Allplan.
+
+El usuario define un recorrido y la herramienta genera los tramos y accesorios correspondientes según el sistema elegido.
+
+Lo que diferencia a Ventilación de otras instalaciones es la combinación de tipos de conducto, diámetros, ángulos permitidos y accesorios específicos como manguitos, difusores, reducciones, conexiones y codos.
 
 ### 27.2. Sistemas disponibles en Ventilación
 
@@ -1384,11 +1386,7 @@ Cuando el usuario cambia de sistema, la herramienta adapta automáticamente el c
 
 ### 27.3. Distribución en Ventilación
 
-En la paleta existe el campo `Tipo de Distribucion`, pero en la configuración registrada de Ventilación no aparece una distribución funcional específica como sí ocurre en Agua.
-
-Por eso, para esta instalación:
-
-- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse si este campo se usa realmente o si permanece sin aplicación práctica para el usuario.
+En la paleta de Ventilación no existe una distribución funcional específica como sí ocurre en Agua.
 
 ### 27.4. Diámetros y cambios de diámetro en Ventilación
 
@@ -1410,6 +1408,8 @@ Esto significa que el diámetro disponible depende del sistema seleccionado.
 
 El botón `Modificar diámetro` recalcula el tramo y las uniones afectadas.
 
+#TODO: Puede ser que el boton este deshabilitado?
+
 Cuando el cambio de diámetro se produce entre dos tramos consecutivos en línea recta:
 
 - en conductos compatibles, la herramienta genera automáticamente la transición o la unión correspondiente.
@@ -1418,7 +1418,7 @@ En los sistemas donde existen accesorios automáticos, conviene revisar en panta
 
 #### 27.4.3. Caso particular de Conducto Aislado
 
-En `Conducto Aislado`, la conexión característica registrada es la `reducción`.
+En `Conducto Aislado`, la conexión característica es la `reducción`.
 
 Por eso, cuando el usuario trabaja con `150 mm` y `160 mm`, conviene revisar explícitamente la transición resultante.
 
@@ -1426,13 +1426,13 @@ Por eso, cuando el usuario trabaja con `150 mm` y `160 mm`, conviene revisar exp
 
 Los accesorios automáticos dependen del sistema seleccionado.
 
-En la configuración actual se confirma este comportamiento:
+En el uso actual, el comportamiento previsto es:
 
 - `Conducto Impulsion` y `Conducto Extraccion`: `manguito` y `difusor`;
 - `Conducto Aislado`: `reducción`;
 - `Conducto Recuperador`: `conexion` y `codo 90`.
 
-Los accesorios registrados para esta instalación son:
+Los accesorios principales que conviene reconocer en Ventilación son:
 
 - `Manguito`;
 - `Difusor`;
@@ -1443,7 +1443,7 @@ Los accesorios registrados para esta instalación son:
 
 En los sistemas normales, el manguito no actúa solo como accesorio visual.
 
-También actúa como frontera de grupo para numeración y agrupación interna de la instalación.
+También ayuda a separar o resolver tramos del recorrido cuando la instalación necesita ordenar la continuidad del conducto.
 
 `[[CAPTURA-VENTILACION-03: ejemplo de Conducto Impulsion con manguito automático]]`
 ![alt text](capturas/CAPTURA-VENTILACION-03.png)
@@ -1456,6 +1456,8 @@ Conviene revisar su colocación final cuando el trazado cambia de dirección o d
 
 `[[CAPTURA-VENTILACION-04: ejemplo de Conducto Extraccion con difusor]]`
 ![alt text](capturas/CAPTURA-VENTILACION-04.png)
+
+#TODO: Preguntar como se hace el Conducto Extraccion con difusor
 
 #### 27.5.3. Recuperador con conexión y codo
 
@@ -1474,7 +1476,7 @@ Esto lo diferencia claramente del resto de sistemas de Ventilación.
 
 `Conducto Recuperador` no sigue la misma lógica de ángulos que el resto.
 
-- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse si aparecen avisos específicos cuando el usuario intenta forzar una combinación no compatible.
+#TODO: Poner restriccion al realizar un codo de 45 grados en conducto recuperador
 
 ### 27.6. Reglas geométricas y validaciones en Ventilación
 
@@ -1491,6 +1493,7 @@ Por sistema, la regla actual es esta:
 - `Conducto Aislado`: `45` y `90 grados`;
 - `Conducto Recuperador`: solo `90 grados`.
 
+
 #### 27.6.2. Longitud mínima
 
 La longitud mínima por sistema es:
@@ -1499,13 +1502,27 @@ La longitud mínima por sistema es:
 - `Conducto Aislado`: `300 mm`;
 - `Conducto Recuperador`: `350 mm`.
 
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
+Si el usuario dibuja un segmento más corto que la longitud mínima permitida, la herramienta muestra un aviso con:
+
+- el tipo de instalación;
+- la longitud mínima requerida;
+- la longitud real del segmento trazado;
+- y la pregunta para decidir si se ignora la restricción o se cancela para recolocar el punto.
+
+`[[CAPTURA-VENTILACION-06: avisos de longitud mínima no cumplida en Ventilación]]`
+| ![Aviso de longitud mínima en Conducto Impulsion](capturas/CAPTURA-VENTILACION-06A.png) | ![Aviso de longitud mínima en Conducto Extraccion](capturas/CAPTURA-VENTILACION-06B.png) |
+| --- | --- |
+| `Conducto Impulsion` | `Conducto Extraccion` |
+
+| ![Aviso de longitud mínima en Conducto Aislado](capturas/CAPTURA-VENTILACION-06C.png) | ![Aviso de longitud mínima en Conducto Recuperador](capturas/CAPTURA-VENTILACION-06D.png) |
+| --- | --- |
+| `Conducto Aislado` | `Conducto Recuperador` |
 
 ### 27.7. Layers y atributos específicos de Ventilación
 
 #### 27.7.1. Layers base
 
-Los layers base confirmados en el registro de Ventilación son:
+Los layers base que conviene revisar en Ventilación son:
 
 - `IS_CON_VENT_FAB`;
 - `IS_CON_VENT_FAB_SOB1`;
@@ -1518,36 +1535,26 @@ Esto cubre tanto los conductos como la capa de eje y la capa de etiqueta o nombr
 `[[CAPTURA-VENTILACION-06: ejemplo de layer en Ventilación]]`
 ![alt text](capturas/CAPTURA-VENTILACION-06.png)
 
-#### 27.7.2. Atributos detectados en scripts
+#### 27.7.2. Atributos que conviene revisar
 
-En los scripts de Ventilación se detectan, entre otros, estos atributos:
+En Ventilación, los atributos sirven para clasificar el conducto y completar información como referencia, dimensiones, longitud, sección o tipo de sistema.
 
-- `pmp_pare`;
-- `6_CC_IS`;
-- `pmp_altura`;
-- `pmp_amplada`;
-- `pmp_area`;
-- `pmp_diametre`;
-- `pmp_longitud`;
-- `pmp_nom`;
-- `pmp_seccio`;
-- y otros atributos `pmp_*` de clasificación y propiedades físicas.
+Para el usuario, lo importante es comprobar que los atributos necesarios del proyecto se han aplicado antes de finalizar la instalación.
 
-#### 27.7.3. Casos concretos observados
+Conviene revisar especialmente:
 
-En la configuración actual se observan estos casos:
-
-- `conducto_normal` usa `6_CC_IS = IS08`;
-- `conducto_recuperador` usa `6_CC_IS = IS`;
-- varias piezas inicializan `pmp_pare` vacío.
-
-Esto conviene tenerlo presente si el proyecto organiza información por atributo padre o por atributos de clasificación.
+- que el atributo de referencia o clasificación esté informado cuando el proyecto lo requiera;
+- que el sistema elegido se corresponda con el uso real del conducto;
+- y que los elementos especiales, como recuperadores o difusores, no queden sin información necesaria.
 
 ### 27.8. Elementos definidos en Ventilación
 
-Aquí hay una inconsistencia que conviene documentar con claridad.
+En Ventilación hay que distinguir entre dos tipos de elementos:
 
-Por un lado, el registro de Ventilación declara como elementos 3D propios:
+- accesorios que la herramienta coloca automáticamente al generar el recorrido;
+- elementos que el usuario puede insertar manualmente desde la página `Elemento`.
+
+Los accesorios propios de Ventilación que deben revisarse en el modelo son:
 
 - `Manguito`;
 - `Difusor`;
@@ -1555,16 +1562,13 @@ Por un lado, el registro de Ventilación declara como elementos 3D propios:
 - `Conexion`;
 - `Codo 90`.
 
-Pero, por otro lado, la página de `Elemento` del archivo `ventilacion_polyline.pyp` muestra actualmente solo:
+En la página `Elemento` puede aparecer actualmente:
 
 - `Caixa Connexions 200`.
 
-Esto indica una probable herencia o copia de configuración desde otra instalación.
+Por tanto, antes de cerrar esta unidad del manual, conviene validar en Allplan si `Caixa Connexions 200` es realmente el elemento que debe insertar el usuario en Ventilación o si la paleta debe mostrar otro elemento propio de esta instalación.
 
-Por tanto:
-
-- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse qué elemento definido debe ver realmente el usuario en Ventilación;
-- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** conviene revisar si la paleta de Elemento en Ventilación debe corregirse antes de cerrar el manual.
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Validar qué elementos definidos ve el usuario en la paleta de Ventilación y cuáles se generan solo de forma automática.
 
 `[[CAPTURA-VENTILACION-10: página de Elemento mostrando el estado real en Ventilación]]`
 ![alt text](capturas/CAPTURA-VENTILACION-10.png)
@@ -1573,7 +1577,7 @@ Por tanto:
 
 Ventilación dispone de página específica de soportes.
 
-Los campos confirmados en paleta son:
+Los campos visibles en paleta son:
 
 - `Tipo de soporte`;
 - `Subtipo instalación`;
@@ -1584,11 +1588,7 @@ Los campos confirmados en paleta son:
 - modos de edición de soportes;
 - y `Atributo de soporte`.
 
-Según el ejemplo de configuración disponible:
-
-- existe al menos un caso de soporte `Omega`;
-- el subtipo asociado puede ser `Ventilacion`;
-- la superficie puede ser `Perforado`.
+En la paleta puede aparecer al menos un soporte `Omega`, con subtipo `Ventilacion` y superficie `Perforado`.
 
 Las reglas prácticas de uso son estas:
 
@@ -1596,16 +1596,16 @@ Las reglas prácticas de uso son estas:
 - los soportes pueden acumularse y crearse después;
 - el modo `Edición Mover` permite recolocar soportes ya acumulados o seleccionados.
 
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** el listado completo de tipos de soporte realmente habilitados en Ventilación.
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Debe confirmarse el listado completo de tipos de soporte realmente habilitados en Ventilación.
 
 `[[CAPTURA-VENTILACION-07: bloque de soportes con subtipo Ventilacion]]`
 ![alt text](capturas/CAPTURA-VENTILACION-07.png)
 
 ### 27.10. Mensajes y avisos propios de Ventilación
 
-A nivel de código se detectan mensajes técnicos y trazas de depuración, pero todavía no queda claro qué avisos funcionales ve el usuario final en Allplan.
+En esta instalación todavía deben confirmarse los avisos que verá realmente el usuario en Allplan.
 
-Por eso, en esta instalación conviene validar en entorno real:
+Conviene validar en entorno real:
 
 - el aviso por longitud mínima;
 - el aviso por selección o inserción inválida;
@@ -1632,9 +1632,11 @@ En esta unidad solo se recogen las particularidades de Electricidad. El uso gene
 
 ### 28.1. Descripción general de Electricidad
 
-- Esta instalación sirve para dibujar y editar recorridos de electricidad dentro de Allplan.
-- Está pensada para trabajar tanto con `rejibands` como con conductos o corrugados asociados a distintos usos eléctricos.
-- Lo que la diferencia de otras instalaciones es la variedad de recorridos eléctricos específicos, la coexistencia de capas de corrugados y de telecomunicaciones, y la presencia de variantes `TD` en varios scripts.
+Electricidad sirve para dibujar y editar recorridos eléctricos dentro de Allplan.
+
+Está pensada para trabajar tanto con `Rejibands` como con conductos o corrugados asociados a distintos usos eléctricos.
+
+Lo que diferencia a Electricidad de otras instalaciones es la variedad de recorridos disponibles, la separación entre corrugados eléctricos y telecomunicaciones, y la posibilidad de trabajar con variantes de distribución según el proyecto.
 
 ### 28.2. Sistemas disponibles en Electricidad
 
@@ -1660,23 +1662,13 @@ Las diferencias principales entre ellos son estas:
 
 ### 28.3. Distribución y variantes en Electricidad
 
-En la paleta existe el campo `Tipo de Distribucion` y en los scripts aparecen variantes específicas con sufijo `TD`, por ejemplo:
+En la paleta puede aparecer el campo `Tipo de Distribucion`.
 
-- `conducto_telecomunicaciones_td`;
-- `conducto_luz_retorno_paralelas_td`;
-- `conducto_alimentacion_horno_td`;
-- `conducto_alimentacion_luces_cajetines_td`;
-- `conducto_cajetin_a_enchufe_td`;
-- `conducto_interruptores_domotica_td`.
+Electricidad puede trabajar con una lógica base y con variantes de distribución como `TD`. Además, la paleta incluye el campo `Cara (EN)`, que puede usarse para definir la cara o criterio de colocación en determinados recorridos.
 
-Esto indica que Electricidad distingue al menos entre una lógica base y otra variante `TD`.
+Para el usuario, la regla práctica es revisar estos campos antes de dibujar, especialmente si el proyecto diferencia entre recorridos base, recorridos `TD` o recorridos asociados a una cara concreta.
 
-Además, la paleta incluye también el campo `Cara (EN)`, lo que sugiere otra lógica adicional ligada a la cara de colocación.
-
-Por tanto:
-
-- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe validarse cómo selecciona realmente el usuario la variante `TD` o `EN` en Electricidad;
-- **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** debe comprobarse qué combinación práctica existe entre `Tipo de Distribucion` y `Cara (EN)`.
+**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Debe validarse cómo selecciona realmente el usuario la variante `TD` o `EN` en Electricidad y qué efecto visible tiene en el recorrido.
 
 ### 28.4. Diámetros y cambios de diámetro en Electricidad
 
@@ -1695,28 +1687,25 @@ Los diámetros confirmados en la configuración actual son:
 
 Esto significa que cada recorrido eléctrico queda ligado al diámetro definido por su sistema.
 
-`[[CAPTURA-ELECTRICIDAD-02: selector de diámetro en Electricidad mostrando diferentes sistemas y diámetros]]`
-![alt text](capturas/CAPTURA-ELECTRICIDAD-02.png)
 
 #### 28.4.2. Qué ocurre al modificar el diámetro
 
-La paleta incluye el botón `Modificar diámetro`.
 
 En esta instalación, el cambio de diámetro debe revisarse con especial cuidado porque:
 
 - cada sistema ya parte de un diámetro base concreto;
 - en `Rejiband` el ancho es parte esencial del resultado;
-- y en los conductos eléctricos el diámetro afecta a la geometría, al área y a varios atributos `pmp_*`.
+- y en los conductos eléctricos el diámetro afecta al tamaño del recorrido y a la información asociada al elemento.
 
 #### 28.4.3. Solape y continuidad
 
-En Electricidad, varios sistemas usan solape adicional (`overlap_mm`) para mantener continuidad geométrica:
+En Electricidad, varios sistemas usan un pequeño solape entre tramos para mantener la continuidad del recorrido:
 
 - `Rejiband U`: `50 mm`;
 - la mayoría de conductos eléctricos: `10 mm`;
 - `Alimentación horno`: `12.5 mm`.
 
-Esto es importante porque el resultado final no depende solo de la longitud dibujada, sino también del solape definido por el sistema.
+Esto es importante porque el resultado final no depende solo de la longitud dibujada. La herramienta también tiene en cuenta ese solape para que los tramos queden correctamente unidos.
 
 ### 28.5. Reglas geométricas y validaciones en Electricidad
 
@@ -1735,7 +1724,7 @@ Por tanto, en Electricidad la regla práctica es:
 
 #### 28.5.2. Longitud mínima
 
-La longitud mínima registrada para todos los sistemas principales de Electricidad es:
+La longitud mínima indicada para todos los sistemas principales de Electricidad es:
 
 - `300 mm`.
 
@@ -1746,7 +1735,7 @@ La longitud mínima registrada para todos los sistemas principales de Electricid
 
 #### 28.6.1. Layers base
 
-Los layers base confirmados en el registro de Electricidad son:
+Los layers base que conviene revisar en Electricidad son:
 
 - `IS_REJIBANDS`;
 - `IS_COR_TELECOS_FAB`;
@@ -1770,28 +1759,13 @@ Esto indica una separación clara entre:
 `[[CAPTURA-ELECTRICIDAD-04: Lista de layers de Electricidad]]`
 ![alt text](capturas/CAPTURA-ELECTRICIDAD-04.png)
 
-#### 28.6.2. Atributos detectados en scripts
+#### 28.6.2. Atributos que conviene revisar
 
-En los scripts de Electricidad se detectan, entre otros, estos atributos:
+En Electricidad, los atributos ayudan a clasificar cada recorrido por uso, diámetro, color, longitud, referencia de proyecto y tipo de sistema.
 
-- `6_CC_IS`;
-- `pmp_altura`;
-- `pmp_amplada`;
-- `pmp_area`;
-- `pmp_CARTICULO`;
-- `pmp_color`;
-- `pmp_diametre`;
-- `pmp_longitud`;
-- `pmp_nom`;
-- `pmp_pare`;
-- `pmp_seccio`;
-- y otros atributos `pmp_*` de clasificación y propiedades físicas.
+Para el usuario, lo importante es comprobar que el recorrido queda correctamente identificado antes de finalizar.
 
-#### 28.6.3. Qué conviene revisar en los atributos
-
-En Electricidad, varios scripts rellenan atributos a partir del diámetro y del color del sistema.
-
-Esto conviene revisarlo especialmente en:
+Conviene revisarlo especialmente en:
 
 - `Alimentación horno`;
 - `Telecomunicaciones`;
@@ -1800,20 +1774,18 @@ Esto conviene revisarlo especialmente en:
 
 ### 28.7. Accesorios y comportamiento geométrico en Electricidad
 
-Electricidad no registra un catálogo explícito de accesorios automáticos como sí ocurre en Agua o Ventilación.
+Electricidad no trabaja con un catálogo de accesorios automáticos tan visible como Agua o Ventilación.
 
-Lo que sí se observa es esto:
+El comportamiento principal es este:
 
 - los recorridos eléctricos se generan como tramos continuos;
 - en varios casos se prioriza la continuidad geométrica por solape;
 - `Rejiband U` se comporta como geometría lineal propia;
-- la unión booleana o continuidad del recorrido es especialmente importante en esta instalación.
+- y la continuidad del recorrido es especialmente importante en esta instalación.
 
-De hecho, en la configuración se deja indicado explícitamente que:
+Por eso, cuando se trabaja con recorridos eléctricos conviene no romper la continuidad del trazado si se espera que el resultado final se comporte como un único recorrido.
 
-- trabajar en modo grupo es crítico para no romper la continuidad de ciertos recorridos de electricidad.
-
-Esto afecta sobre todo a:
+Esto afecta especialmente a:
 
 - `Telecomunicaciones`;
 - `Luz retorno / Paralelas`;
@@ -1824,26 +1796,44 @@ Esto afecta sobre todo a:
 
 ### 28.8. Elementos definidos en Electricidad
 
-En la información actual, el elemento definido visible y coherente con la paleta es:
+Además del recorrido principal, Electricidad permite insertar elementos definidos propios de apoyo al trazado.
+
+En la paleta, los elementos definidos disponibles actualmente son:
 
 - `Caixa Connexions 200`.
+- `Caixa Connexions`.
+- `Caixetí 1`.
+- `Caixete 1 UT`.
+- `Caixetí 2`.
+- `Caixetí 2 UT`.
+- `Caixetí 3`.
+- `Caixetí 3 UT`.
+- `Caixetí 4`.
+- `Caixetí 4 UT`.
+- `Caixetí Doble Vertical`.
+- `Porter i Aplics`.
+- `Endoll Ext amb Corrugat`.
+- `Vehicle Elèctric`.
+- `Llum Ext. XPS 70`.
+- `Llum Ext. XPS 80`.
+- `Llum Ext. XPS 120`.
 
-Este elemento aparece tanto en el registro de Electricidad como en la página `Elemento` del archivo `electricidad_polyline.pyp`.
-
-Por eso, a diferencia de Ventilación, aquí no hay incoherencia entre el registro y la paleta en este punto.
-
-Su función práctica es insertar una caja de conexiones sobre un punto del recorrido.
+Este elemento sirve para colocar una caja de conexiones en un punto concreto del recorrido eléctrico. Conviene usarlo cuando el trazado necesita representar un punto de conexión, registro o encuentro asociado a la instalación.
 
 `[[CAPTURA-ELECTRICIDAD-05: uso de Caixa Connexions 200 en Electricidad]]`
 ![alt text](capturas/CAPTURA-ELECTRICIDAD-05.png)
 
-#### 28.8.1. Tipos de punto admitidos
+#### 28.8.1. Tipo de punto en Electricidad
 
-En la paleta de Electricidad, `Caixa Connexions 200` admite:
+Antes de insertar la caja, el usuario debe elegir el tipo de punto adecuado en la paleta.
 
-- `Punto inicial`;
-- `Punto final`;
-- `Intermedio o libre`.
+En Electricidad, las opciones visibles son:
+
+- `Punto inicial`: coloca la caja al inicio del recorrido.
+- `Punto final`: coloca la caja al final del recorrido.
+- `Intermedio o libre`: permite colocarla en un punto intermedio o en una posición elegida por el usuario.
+
+La regla práctica es revisar primero qué papel cumple la caja dentro del recorrido y después elegir el tipo de punto correspondiente. Si se coloca como punto libre, conviene comprobar en la previsualización que queda asociada al trazado esperado.
 
 ### 28.9. Soportes en Electricidad
 
@@ -1871,16 +1861,14 @@ Por eso, en Electricidad conviene revisar especialmente:
 `[[CAPTURA-ELECTRICIDAD-07: bloque de soportes con subtipo Electricidad]]`
 ![alt text](capturas/CAPTURA-ELECTRICIDAD-07.png)
 
-### 28.10. Inconsistencias o puntos a validar en Electricidad
+### 28.10. Puntos pendientes de confirmar en Electricidad
 
-Aquí hay dos puntos que conviene dejar documentados:
+Antes de cerrar esta unidad del manual, conviene confirmar dos puntos directamente en Allplan:
 
-1. En el registro aparecen variantes `TD` que no se muestran directamente como tipo de instalación independiente en la lista principal.
-2. Algunas etiquetas de `elements3D` parecen heredadas o poco coherentes, por ejemplo:
-   - `conducto_cajetin_a_enchufe` aparece con la etiqueta `Conducto Aislado 150 mm`;
-   - `conducto_interruptores_domotica` aparece con la etiqueta `Conducto Aislado 160 mm`.
+1. Cómo se muestran y se seleccionan realmente las variantes `TD` y `EN` en la paleta.
+2. Si todos los nombres visibles en la paleta coinciden con el resultado que se genera en el modelo.
 
-Esto sugiere que parte de la definición visible puede venir de una reutilización de configuración y conviene validarla antes de cerrar el manual.
+Estos puntos no cambian el uso general de la instalación, pero sí deben confirmarse para que el manual final refleje exactamente lo que verá el usuario.
 
 ### 28.11. Puntos a revisar con especial atención en Electricidad
 
