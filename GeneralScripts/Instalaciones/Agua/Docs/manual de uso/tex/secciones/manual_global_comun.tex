@@ -1,0 +1,626 @@
+﻿\section{Finalidad del manual}
+
+Este manual explica cómo funciona una instalación dentro de Allplan desde el punto de vista del usuario.
+
+Se ha tomado la instalación de Agua como ejemplo, pero el funcionamiento general es común al resto de instalaciones. Lo que cambia entre unas y otras son algunos elementos concretos, ciertos nombres de layer y algunos atributos, pero la forma de trabajar es prácticamente la misma.
+
+El objetivo de este documento es que cualquier usuario pueda entender:
+
+\begin{itemize}
+\item cómo empezar una instalación;
+\item cómo dibujarla;
+\item cómo editarla;
+\item cómo aplicar layers y atributos;
+\item cómo insertar elementos definidos, macros y soportes;
+\item cómo funcionan las copias o duplicados;
+\item y qué comprobaciones conviene hacer antes de finalizar.
+\end{itemize}
+
+\section{A quién va dirigido}
+
+Este manual está pensado para usuarios que necesiten modelar instalaciones en Allplan y entender el comportamiento general de la herramienta, sin entrar en detalles de programación ni en nombres internos del sistema.
+
+\section{Cómo se complementa este manual}
+
+Este documento se organiza en dos grandes bloques:
+
+\begin{enumerate}
+\item El funcionamiento global de las instalaciones.
+\item Las particularidades de cada instalación.
+\end{enumerate}
+
+En la primera parte se explica la lógica de uso común a todos los sistemas.
+
+En la segunda parte se recogen las diferencias específicas de cada instalación, por ejemplo:
+
+\begin{itemize}
+\item los tipos de instalación disponibles;
+\item las distribuciones admitidas;
+\item los diámetros disponibles;
+\item los accesorios automáticos;
+\item los elementos definidos propios;
+\item las limitaciones o avisos especiales;
+\item y cualquier diferencia importante respecto a otras instalaciones.
+\end{itemize}
+
+De este modo, el usuario puede entender primero el funcionamiento general y después consultar, dentro del mismo manual, la unidad concreta de la instalación con la que vaya a trabajar.
+
+Cuando aparezca el marcador \pendingtag, significa que ese dato todavía debe validarse en Allplan antes de cerrar la versión definitiva del manual.
+
+\section{Qué partes son comunes en todas las instalaciones}
+
+Todas las instalaciones comparten la misma lógica de trabajo:
+
+\begin{enumerate}
+\item Se selecciona el tipo de instalación.
+\item Se configuran los parámetros principales en la paleta.
+\item Se dibuja o edita el recorrido.
+\item Se revisa la previsualización.
+\item Se añaden, si hace falta, elementos definidos, macros o soportes.
+\item Se aplican layers y atributos.
+\item Se finaliza la creación.
+\end{enumerate}
+
+Lo que cambia entre instalaciones suele ser:
+
+\begin{itemize}
+\item el tipo de elementos disponibles;
+\item los diámetros;
+\item las conexiones;
+\item algunos layers;
+\item y algunos atributos asociados a cada sistema.
+\end{itemize}
+
+\section{Vista general del trabajo con una instalación}
+
+El trabajo habitual con una instalación se basa en tres ideas:
+
+\begin{itemize}
+\item dibujar un recorrido;
+\item enriquecer ese recorrido con información;
+\item y generar el resultado final.
+\end{itemize}
+
+En la práctica, esto significa que primero se crea el trazado principal y después se añaden o ajustan el resto de elementos necesarios.
+
+\manualimagesized{CAPTURA-01.png}{Paleta principal completa de la instalación con sus apartados visibles}{0.52\textwidth}{0.62\textheight}
+
+\section{Flujo de trabajo recomendado}
+
+El orden más recomendable para trabajar es este:
+
+\begin{enumerate}
+\item Elegir el tipo de instalación.
+\item Elegir el tipo de tubo o sistema.
+\item Definir diámetro, distribución y resto de parámetros básicos.
+\item Dibujar el recorrido principal.
+\item Revisar uniones, codos y bifurcaciones.
+\item Aplicar layers y atributos si es necesario.
+\item Insertar elementos definidos, macros o soportes.
+\item Comprobar que la información esté completa.
+\item Pulsar el botón de finalizar.
+\end{enumerate}
+
+Seguir este orden ayuda a evitar correcciones posteriores innecesarias.
+
+\section{Modos principales de trabajo}
+
+La herramienta suele trabajar con tres modos principales.
+
+\subsection{Modo creación}
+
+Es el modo que se utiliza para dibujar un recorrido nuevo.
+
+En este modo el usuario va definiendo puntos y la instalación crea el trazado entre ellos.
+
+\subsection{Modo edición}
+
+Es el modo que se utiliza para corregir o modificar un recorrido ya dibujado.
+
+En este modo se pueden seleccionar tramos, borrar partes, cambiar diámetros o ajustar la geometría.
+
+\subsection{Modo extender}
+
+Es el modo que se utiliza para continuar un recorrido ya existente sin empezar desde cero.
+
+\section{Qué debe configurar el usuario antes de dibujar}
+
+Antes de empezar a dibujar conviene revisar los campos principales de la paleta.
+
+\subsection{Tipo de instalación}
+
+Es el campo donde el usuario elige el sistema con el que va a trabajar.
+
+En Agua, por ejemplo, puede elegir entre varias opciones como:
+
+\begin{itemize}
+\item Polietilè;
+\item Multicapa;
+\item Armaflex.
+\end{itemize}
+
+Este campo define qué geometría y qué comportamiento tendrá la instalación.
+
+\manualimage{CAPTURA-02.png}{Desplegable del tipo de instalación abierto con las opciones visibles}
+
+\subsection{Diámetro}
+
+El diámetro condiciona:
+
+\begin{itemize}
+\item el tamaño del elemento principal;
+\item las piezas de conexión compatibles;
+\item y parte de los atributos asociados.
+\end{itemize}
+
+Antes de dibujar, conviene comprobar que el diámetro seleccionado es el correcto.
+
+\subsection{Distribución}
+
+La distribución define cómo debe comportarse la instalación dentro del sistema.
+
+En Agua es habitual trabajar con modos como:
+
+\begin{itemize}
+\item TD;
+\item IS.
+\end{itemize}
+
+La distribución puede afectar a:
+
+\begin{itemize}
+\item la forma de los elementos;
+\item los atributos aplicados;
+\item y el comportamiento de ciertos accesorios.
+\end{itemize}
+
+\subsection{Tipo de agua u otras variantes}
+
+Algunas instalaciones incluyen campos adicionales para distinguir variantes internas del sistema. Si la paleta muestra este dato, conviene definirlo antes de empezar.
+
+\subsection{Ángulos y orientación}
+
+Si la instalación trabaja con limitación angular o con orientación definida, estos parámetros deben comprobarse al inicio para evitar tener que rehacer el recorrido más adelante.
+
+\section{Cómo dibujar una instalación}
+
+El dibujo de la instalación se basa en una secuencia de clics que definen el recorrido.
+
+\subsection{Inicio del recorrido}
+
+El usuario hace clic en el primer punto del trazado.
+
+\subsection{Continuación del recorrido}
+
+Cada clic adicional añade un nuevo tramo.
+
+La herramienta va construyendo la instalación entre esos puntos y mostrando una previsualización del resultado.
+
+\subsection{Qué ve el usuario mientras dibuja}
+
+Mientras se dibuja, la herramienta no solo muestra la línea del recorrido, sino también el comportamiento previsto de la instalación:
+
+\begin{itemize}
+\item tramos principales;
+\item cambios de dirección;
+\item uniones;
+\item bifurcaciones.
+\end{itemize}
+
+\manualimage{CAPTURA-03.png}{Ejemplo de instalación en fase de dibujo con previsualización activa}
+
+\section{Cómo se generan automáticamente los accesorios}
+
+Una vez definido el recorrido, la herramienta interpreta la geometría y coloca automáticamente los accesorios necesarios.
+
+\subsection{Codos}
+
+Cuando el recorrido cambia de dirección, la herramienta genera el codo correspondiente.
+
+\subsection{Manguitos o uniones}
+
+Cuando dos tramos deben unirse de forma alineada, la herramienta genera la unión correspondiente.
+
+\subsection{Bifurcaciones o tes}
+
+Cuando un punto conecta tres direcciones, la herramienta genera la bifurcación adecuada.
+
+\subsection{Regla general de prioridad}
+
+Si un punto funciona como bifurcación, prevalece la bifurcación sobre otras soluciones.
+
+Esto significa que el sistema no coloca varias piezas incompatibles en el mismo punto.
+
+\manualtripleimage{CAPTURA-04A.png}{CAPTURA-04B.png}{CAPTURA-04C.png}{Ejemplo comparativo de un codo, una unión y una bifurcación}
+
+\section{Cómo editar una instalación ya dibujada}
+
+Una vez creado el recorrido, el usuario puede modificarlo.
+
+\subsection{Seleccionar tramos}
+
+Se pueden seleccionar:
+
+\begin{itemize}
+\item tramos individuales;
+\item varios tramos a la vez;
+\item o zonas concretas del recorrido.
+\end{itemize}
+
+\subsection{Borrar una sección}
+
+El botón de borrar elimina el tramo o la parte seleccionada.
+
+Después del borrado, la herramienta vuelve a analizar la conexión entre los tramos que quedan y reajusta automáticamente las piezas necesarias.
+
+\subsection{Cambiar el diámetro}
+
+El botón de modificar diámetro actualiza el diámetro del tramo o de la selección activa.
+
+Después del cambio, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
+
+\section{Layers}
+
+El usuario puede trabajar con los layers definidos por defecto o aplicar otros manualmente.
+
+\subsection{Layers por defecto}
+
+Cada instalación ya trae una configuración base de layers.
+
+\subsection{Aplicar layers manualmente}
+
+Desde la paleta, el usuario puede seleccionar un layer y aplicar ese layer a los elementos seleccionados.
+
+Esto es útil cuando se necesita clasificar el modelo de una forma concreta antes de finalizar.
+
+\manualimage{CAPTURA-05.png}{Ejemplo del apartado de layers en la paleta y su aplicación sobre la instalación}
+
+\section{Atributos}
+
+Además de la geometría, la instalación puede llevar información adicional en forma de atributos.
+
+\subsection{Atributos automáticos}
+
+Parte de los atributos se asignan automáticamente según el tipo de instalación, el elemento y la configuración elegida.
+
+\subsection{Atributos aplicados por el usuario}
+
+La paleta también permite aplicar atributos manualmente a una selección.
+
+Esto es útil cuando el usuario necesita completar o corregir información antes de crear el resultado final.
+
+\subsection{Atributo padre}
+
+En determinadas instalaciones existe un atributo principal que sirve para organizar y relacionar elementos. Este dato es importante porque también puede influir en las copias o duplicados automáticos.
+
+\section{Qué revisar antes de finalizar}
+
+Antes de pulsar el botón de finalizar, se recomienda comprobar:
+
+\begin{itemize}
+\item que el recorrido es correcto;
+\item que los diámetros son los adecuados;
+\item que los layers necesarios están aplicados;
+\item que los atributos importantes están informados;
+\item y que los elementos definidos están bien colocados.
+\end{itemize}
+
+Si falta información, la herramienta puede mostrar un aviso antes de continuar.
+
+\manualimage{CAPTURA-06.png}{Mensaje de aviso previo a finalizar cuando falta información}
+
+\section{Rotación y orientación}
+
+Algunos elementos admiten rotación y orientación.
+
+Esto se aplica especialmente a:
+
+\begin{itemize}
+\item elementos definidos;
+\item macros;
+\item ciertos accesorios que requieren una posición concreta.
+\end{itemize}
+
+Cuando la paleta muestra campos de rotación u orientación, el usuario puede utilizarlos para ajustar la posición final del elemento.
+
+\manualimage{CAPTURA-07.png}{Ejemplo de orientación o rotación aplicada a un elemento}
+
+\section{Macros}
+
+La herramienta permite colocar macros de librería dentro de la instalación.
+
+\subsection{Para qué sirven}
+
+Las macros permiten insertar objetos ya preparados, por ejemplo elementos de librería que deben colocarse en puntos concretos del recorrido.
+
+\subsection{Qué debe hacer el usuario}
+
+El flujo habitual es:
+
+\begin{enumerate}
+\item Elegir el tipo de macro.
+\item Elegir el archivo correspondiente.
+\item Elegir dónde se colocará.
+\item Ajustar altura y rotación si es necesario.
+\item Insertar la macro.
+\end{enumerate}
+
+\subsection{Dónde puede colocarse}
+
+La macro puede situarse:
+
+\begin{itemize}
+\item al inicio del recorrido;
+\item al final;
+\item o en un punto libre.
+\end{itemize}
+
+\subsection{Altura de la macro}
+
+La altura puede definirse directamente o en relación con un local seleccionado, según el caso.
+
+\manualimagesized{CAPTURA-08.png}{Bloque de la paleta para insertar macros}{0.52\textwidth}{0.62\textheight}
+
+\manualimagesized{CAPTURA-09.png}{Ejemplo de macro previsualizada dentro de la instalación}{0.62\textwidth}{0.55\textheight}
+
+\section{Elementos definidos}
+
+Además del recorrido principal, la herramienta permite añadir elementos definidos propios de la instalación.
+
+En Agua, por ejemplo, pueden existir elementos como válvulas, salidas o piezas concretas del sistema.
+
+\subsection{Cómo se insertan}
+
+Hay dos formas habituales:
+
+\begin{itemize}
+\item insertarlos sobre un punto del recorrido;
+\item o insertarlos como punto libre.
+\end{itemize}
+
+\subsection{Qué debe hacer el usuario}
+
+El usuario debe:
+
+\begin{enumerate}
+\item elegir el tipo de elemento;
+\item seleccionar el punto de inserción;
+\item ajustar rotación o altura si hace falta;
+\item confirmar la colocación.
+\end{enumerate}
+
+\manualimagesized{CAPTURA-10.png}{Bloque de la paleta para insertar Elementos Definidos}{0.52\textwidth}{0.62\textheight}
+
+\manualimage{CAPTURA-11.png}{Inserción de un elemento definido como punto libre}
+
+\section{Puntos no definidos}
+
+Los puntos no definidos sirven para marcar la lógica del recorrido sin colocar todavía un elemento final.
+
+Son útiles para describir:
+
+\begin{itemize}
+\item inicios;
+\item finales;
+\item intermedios;
+\item bifurcaciones;
+\item conexiones entre caminos.
+\end{itemize}
+
+\subsection{Para qué sirven}
+
+Ayudan a organizar recorridos complejos y a definir la intención del trazado antes de convertirlo en una solución completa.
+
+\subsection{Puntos comunes}
+
+Si varios caminos coinciden en un punto o pasan muy cerca, la herramienta puede interpretar que existe una relación entre ellos.
+
+Esto ayuda a construir una topología coherente.
+
+\manualimage{CAPTURA-12.png}{Ejemplo de puntos no definidos en distintos colores}
+
+\manualimage{CAPTURA-13.png}{Ejemplo de punto común entre dos caminos}
+
+\section{Soportes}
+
+La herramienta también permite trabajar con soportes.
+
+\subsection{Qué hace el usuario}
+
+El flujo habitual es:
+
+\begin{enumerate}
+\item configurar el soporte en la paleta;
+\item elegir el tipo de soporte y revisar sus parámetros;
+\item pulsar el botón para insertarlo;
+\item definir su posición con los puntos necesarios;
+\item revisar la previsualización;
+\item acumularlo o crearlo.
+\end{enumerate}
+
+Para que el soporte quede bien definido, conviene completar antes de insertarlo los campos de tipo, superficie, cotas y ángulo.
+
+\subsection{Tipos de soporte}
+
+De forma general, la herramienta permite trabajar con familias de soporte como:
+
+\begin{itemize}
+\item \texttt{Zeta}
+\item \texttt{Omega}
+\item \texttt{Cinta}
+\end{itemize}
+
+Cada una responde a una solución física distinta. Por eso, antes de colocarlo, el usuario debe elegir el tipo que corresponda al sistema y al montaje que quiere representar.
+
+En función de la instalación, pueden aparecer variantes o subtipos asociados a cada familia.
+
+\subsection{Subtipo de instalación}
+
+Además del tipo de soporte, la paleta puede mostrar el campo \texttt{Subtipo instalación}.
+
+Este campo ayuda a identificar con qué familia de instalación se relaciona el soporte. Es útil para mantener coherencia entre el soporte que se inserta y la instalación sobre la que se está trabajando.
+
+\manualimagesized{CAPTURA-14B.png}{Tipo de soporte, subtipo instalación y superficie en la paleta de soportes}{0.60\textwidth}{0.55\textheight}
+
+\subsection{Superficie}
+
+El campo \texttt{Superficie} permite definir cómo debe considerarse el soporte:
+
+\begin{itemize}
+\item \texttt{Liso}
+\item \texttt{Perforado}
+\end{itemize}
+
+Esta elección forma parte de la definición final del soporte y de la información que queda asociada a él. Por eso conviene revisarla antes de insertarlo.
+
+No todos los tipos de soporte utilizan esta distinción exactamente de la misma manera, pero para el usuario la regla práctica es sencilla: debe escoger la superficie que corresponda al soporte real que quiere representar.
+
+\subsection{Cota A y Cota B}
+
+Estas dos medidas son básicas para definir la geometría del soporte:
+
+\begin{itemize}
+\item \texttt{Cota A}: indica la altura del soporte o su desarrollo vertical.
+\item \texttt{Cota B}: indica el largo del soporte o su desarrollo horizontal.
+\end{itemize}
+
+En soportes con parte vertical, \texttt{Cota A} tiene un papel especialmente importante. En otros tipos, como ciertas cintas, no siempre interviene de la misma forma.
+
+\subsection{Ángulo de inclinación}
+
+El campo \texttt{Ángulo de inclinación} permite girar o inclinar el soporte respecto a su posición base.
+
+Es útil cuando el soporte no debe quedar en una orientación neutra y necesita un ajuste adicional para adaptarse al montaje real.
+
+Lo recomendable es definir primero la posición del soporte y usar después el ángulo como ajuste fino.
+
+\manualimage{CAPTURA-14C.png}{Ejemplo de Cota A, Cota B y ángulo de inclinación en la paleta}
+
+\subsection{Modos de edición}
+
+Una vez que hay soportes acumulados, la herramienta permite trabajar con distintos modos de edición:
+
+\begin{itemize}
+\item \texttt{Desactivado}: la herramienta no entra en edición de soportes y los clics siguen el flujo normal de trabajo.
+\item \texttt{Edición}: permite seleccionar soportes para revisarlos, borrarlos o aplicarles atributos.
+\item \texttt{Edición Mover}: permite recolocar un soporte ya insertado o acumulado.
+\end{itemize}
+
+Estos modos son útiles cuando el recorrido principal ya está dibujado y solo falta ajustar la posición o la información de los soportes.
+
+\manualimage{CAPTURA-14D.png}{Modos de edición de soportes en la paleta}
+
+\subsection{Atributos de soporte}
+
+La paleta también incluye un campo para aplicar el \texttt{Atributo de soporte}.
+
+Este atributo sirve para identificar, clasificar o completar la información de los soportes antes de la creación final.
+
+Si el usuario tiene soportes seleccionados, el atributo se aplica a esa selección. Si no hay una selección activa, la aplicación afecta a los soportes acumulados dentro de la operación en curso.
+
+Esto resulta especialmente útil cuando se quiere dejar todos los soportes correctamente preparados antes de finalizar la instalación.
+
+\manualimage{CAPTURA-14E.png}{Campo de atributo de soporte y aplicación sobre soportes seleccionados o acumulados}
+
+\subsection{Cuándo conviene colocarlos}
+
+Normalmente es más cómodo colocar los soportes cuando el recorrido principal ya está bastante definido.
+
+También conviene tener en cuenta que, antes de acumular o crear un soporte, primero debe haberse posicionado correctamente. Si todavía no se ha definido su colocación, la herramienta avisa y no lo añade.
+
+\manualimage{CAPTURA-14.png}{Bloque de soportes en la paleta y preview de un soporte}
+
+\section{Cómo funcionan los duplicados o copias}
+
+Este punto es importante porque puede generar dudas.
+
+\subsection{Duplicados no deseados}
+
+La herramienta evita repetir elementos iguales cuando no corresponde.
+
+Esto ayuda a que no aparezcan piezas duplicadas por error en el resultado final.
+
+\subsection{Copias intencionadas}
+
+En algunos casos, la instalación puede generar copias en otros archivos de dibujo según la información asociada al elemento.
+
+Estas copias no son un error. Forman parte del funcionamiento previsto de la herramienta.
+
+De forma general, el comportamiento es este:
+
+\begin{enumerate}
+\item el elemento se crea en el archivo principal en el que el usuario está trabajando;
+\item si ese elemento tiene informado un atributo padre, la herramienta puede buscar un archivo de dibujo relacionado con esa referencia;
+\item si el archivo de destino está cargado y coincide con esa referencia, la herramienta crea allí una copia relacionada;
+\item esa copia queda vinculada a la actualización posterior de la instalación.
+\end{enumerate}
+
+\subsection{Qué debe entender el usuario}
+
+El usuario debe saber que:
+
+\begin{itemize}
+\item puede existir un elemento en el archivo principal;
+\item y puede existir una copia relacionada en otro archivo de dibujo.
+\end{itemize}
+
+Para que esa copia pueda producirse, normalmente deben cumplirse estas condiciones:
+
+\begin{itemize}
+\item el atributo padre debe estar informado;
+\item el archivo de dibujo de destino debe estar cargado;
+\item y el nombre del archivo de destino debe coincidir con la referencia que utiliza la instalación.
+\end{itemize}
+
+Si el archivo de destino no está cargado o no coincide con esa referencia, la copia no se genera.
+
+\subsection{Qué pasa cuando la instalación se vuelve a editar}
+
+Cuando la instalación se actualiza, esas copias también se actualizan para que no queden versiones antiguas.
+
+Antes de crear las nuevas copias, la herramienta localiza las anteriores, las elimina de los archivos correspondientes y vuelve a generar las copias actualizadas.
+
+\manualtripleimagelabeled{CAPTURA-15A.png}{Archivo original en \texttt{TEST}}{CAPTURA-15B.png}{Copias relacionadas visibles en \texttt{TD01}}{CAPTURA-15C.png}{Copias relacionadas visibles en \texttt{IS01}}{Ejemplo del archivo original TEST y de las copias relacionadas generadas en TD01 e IS01}
+
+\section{Qué ocurre al pulsar el botón de finalizar}
+
+Cuando el usuario pulsa el botón de finalizar, la herramienta:
+
+\begin{enumerate}
+\item revisa la información disponible;
+\item reconstruye los elementos necesarios;
+\item aplica atributos y layers;
+\item incorpora elementos definidos, macros o soportes;
+\item crea el resultado definitivo;
+\item y actualiza las copias relacionadas si las hubiera.
+\end{enumerate}
+
+En ese momento la instalación pasa de estar en fase de preparación a quedar creada como resultado final en el documento.
+
+\section{Recomendaciones prácticas de uso}
+
+\begin{itemize}
+\item Configurar primero el sistema antes de empezar a dibujar.
+\item No cambiar de criterio de diámetro continuamente durante el dibujo si no es necesario.
+\item Revisar la distribución antes de finalizar.
+\item Aplicar layers y atributos cuando el recorrido ya esté claro.
+\item Insertar macros y elementos definidos cuando la base principal esté estable.
+\item Revisar los avisos antes de aceptar la creación final.
+\end{itemize}
+
+\section{Resumen final}
+
+La herramienta de instalaciones está pensada para que el usuario dibuje un recorrido, lo complete con la información necesaria y genere un resultado final coherente dentro de Allplan.
+
+Aunque cada instalación tenga sus particularidades, el funcionamiento general es siempre el mismo:
+
+\begin{itemize}
+\item configurar;
+\item dibujar;
+\item revisar;
+\item completar;
+\item y finalizar.
+\end{itemize}
+
+Por eso, entendiendo bien el ejemplo de Agua, se entiende también el comportamiento general del resto de instalaciones.
+

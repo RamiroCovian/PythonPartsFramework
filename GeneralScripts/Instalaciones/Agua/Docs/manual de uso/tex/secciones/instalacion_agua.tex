@@ -1,0 +1,488 @@
+﻿\section{Instalación de Agua}
+
+\noindent En esta unidad solo se recogen las particularidades de Agua. El uso general de la herramienta ya se ha explicado en los apartados anteriores, por lo que aquí se detallan únicamente las reglas, avisos y casos propios de esta instalación.
+
+\subsection{Sistemas disponibles en Agua}
+
+En la instalación de Agua, el usuario puede trabajar con estos sistemas:
+
+\begin{itemize}
+\item Polietilè;
+\item Multicapa;
+\item Armaflex.
+\end{itemize}
+
+Cada uno de ellos pertenece a la instalación de Agua, pero representa una solución distinta dentro del modelo.
+
+\manualimage{CAPTURA-AGUA-01.png}{Desplegable con los sistemas disponibles en Agua}
+
+\subsection{Distribuciones en Agua}
+
+En Agua el usuario puede trabajar con estas distribuciones:
+
+\begin{itemize}
+\item EN;
+\item TD;
+\item IS.
+\end{itemize}
+
+La distribución condiciona el comportamiento del sistema, los layers aplicados y el catálogo de piezas que puede resolverse automáticamente.
+
+Cuando se selecciona la distribución \texttt{EN}, la paleta muestra además el campo \texttt{Cara (EN)}, que permite indicar si el caso corresponde a \texttt{Cara X} o \texttt{Cara Y}.
+
+\subsubsection{Combinaciones que requieren atención}
+
+\begin{itemize}
+\item Conviene elegir la distribución antes de empezar a dibujar.
+\item Si la distribución se cambia después, es necesario revisar de nuevo codos, uniones, bifurcaciones y layers.
+\item No todos los sistemas de Agua están disponibles en todas las distribuciones.
+\end{itemize}
+
+En la configuración actual:
+
+\begin{itemize}
+\item \texttt{Multicapa} no está disponible en \texttt{IS}.
+\item \texttt{Armaflex} no está disponible en \texttt{IS}.
+\end{itemize}
+
+Si el usuario intenta trabajar con alguna de esas combinaciones, la herramienta muestra un aviso indicando que ese tipo de tubo no existe o no está disponible para la distribución \texttt{IS}, y pide volver a \texttt{Modo creación}, cambiar la distribución a \texttt{TD} y regresar a \texttt{Modo configuración}.
+
+\manualimage{CAPTURA-AGUA-02.png}{Campo de distribución en Agua con la opción EN y el campo Cara (EN) visible}
+
+\manualimage{CAPTURA-AGUA-03.png}{Aviso mostrado al intentar usar Multicapa o Armaflex en distribución IS}
+
+\subsection{Diámetros y cambios de diámetro en Agua}
+
+En la instalación de Agua, los diámetros más habituales en la configuración actual son:
+
+\begin{itemize}
+\item 20;
+\item 25.
+\end{itemize}
+
+El diámetro afecta a:
+
+\begin{itemize}
+\item el tamaño del tubo;
+\item los accesorios compatibles;
+\item la geometría final;
+\item y parte de la información asociada al elemento.
+\end{itemize}
+
+\subsubsection{Qué ocurre al cambiar el diámetro de un tramo}
+
+Cuando se modifica el diámetro de un único tramo, la herramienta muestra una ventana de confirmación con:
+
+\begin{itemize}
+\item la ruta;
+\item el segmento;
+\item el diámetro anterior;
+\item y el nuevo diámetro.
+\end{itemize}
+
+El usuario debe confirmar el cambio antes de que la geometría se regenere.
+
+\manualimage{CAPTURA-AGUA-04.png}{Confirmación de cambio de diámetro sobre un único tramo}
+
+\subsubsection{Qué ocurre al cambiar el diámetro de varios tramos}
+
+Si hay varios tramos seleccionados, la ventana de confirmación informa de:
+
+\begin{itemize}
+\item cuántos segmentos se van a modificar;
+\item qué diámetro o diámetros tenían antes;
+\item y qué nuevo diámetro se va a aplicar.
+\end{itemize}
+
+Después de aceptar, la instalación reconstruye el resultado con el nuevo valor.
+
+\manualimage{CAPTURA-AGUA-05.png}{Confirmación de cambio de diámetro sobre varios tramos seleccionados}
+
+\subsubsection{Qué ocurre si el cambio afecta a un codo}
+
+Si el cambio de diámetro afecta a un giro resuelto con codo, no aparece un mensaje especial para el codo.
+
+Lo que se muestra es el mensaje general de cambio de diámetro y, al aceptarlo, la herramienta recalcula el encuentro para regenerar el codo con la nueva condición.
+
+\manualimage{CAPTURA-AGUA-06.png}{Ejemplo de codo recalculado después de modificar el diámetro del tramo}
+
+\subsubsection{Qué ocurre si hay dos tramos consecutivos en la misma dirección con distinto diámetro}
+
+Si dos segmentos consecutivos siguen en la misma dirección pero cambian de diámetro, la instalación no coloca un manguito normal, sino un \texttt{manguito reductor}.
+
+Este caso es importante porque es la forma habitual de resolver una transición recta entre dos diámetros distintos.
+
+Conviene revisarlo siempre en pantalla para comprobar que la reducción se ha generado justo en el punto esperado.
+
+\manualimage{CAPTURA-AGUA-07.png}{Ejemplo de manguito reductor entre dos tramos consecutivos en la misma dirección}
+
+\subsection{Accesorios automáticos en Agua}
+
+En Agua los accesorios automáticos dependen de la geometría del recorrido y de los diámetros de los tramos que se encuentran.
+
+\subsubsection{Codos}
+
+En Agua la resolución automática de giros se hace con \texttt{codos de 90 grados}.
+
+Esto significa que no debe esperarse un codo automático de \texttt{45 grados} dentro de esta instalación.
+
+\manualimagesized{CAPTURA-04A.png}{Ejemplo de codo de 90 grados generado automáticamente en Agua}{0.42\textwidth}{0.34\textheight}
+
+\subsubsection{Manguitos}
+
+Cuando dos tramos consecutivos están alineados y mantienen el mismo diámetro, la herramienta coloca un manguito o unión recta.
+
+\subsubsection{Manguitos reductores}
+
+Cuando esos dos tramos alineados tienen distinto diámetro, la unión se resuelve mediante un manguito reductor.
+
+Cuando el cambio de diámetro se produce en un tramo recto, esta es la solución habitual. En cambio, si el cambio aparece justo a la salida de un codo, conviene revisar el resultado porque en ese caso manda la lógica del propio giro.
+
+\subsubsection{Tes o bifurcaciones}
+
+Cuando en un mismo punto confluyen tres direcciones, la instalación intenta resolver el encuentro mediante una \texttt{Te}.
+
+En Agua conviene distinguir dos grandes familias:
+
+\begin{itemize}
+\item \texttt{Te iguales}, cuando las tres bocas trabajan con el mismo diámetro.
+\item \texttt{Te reducidas}, cuando una de las bocas trabaja con un diámetro distinto.
+\end{itemize}
+
+En la configuración actual, los casos más representativos son:
+
+\begin{itemize}
+\item \texttt{Te Ø20};
+\item \texttt{Te Ø25};
+\item \texttt{Te Ø25-20-25};
+\item \texttt{Te Ø25-20-20};
+\item \texttt{Te Ø25-25-20}.
+\end{itemize}
+
+Si el nodo se resuelve como \texttt{Te}, en ese mismo punto no se coloca además un codo ni un manguito.
+
+\IfFileExists{CAPTURA-AGUA-09-TE20.png}{
+    \begin{figure}[H]
+        \centering
+        \begin{minipage}[t]{0.31\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE20.png}\\[0.15cm]
+            \footnotesize \texttt{Te Ø20}
+        \end{minipage}\hfill
+        \begin{minipage}[t]{0.31\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE25.png}\\[0.15cm]
+            \footnotesize \texttt{Te Ø25}
+        \end{minipage}\hfill
+        \begin{minipage}[t]{0.31\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE252025.png}\\[0.15cm]
+            \footnotesize \texttt{Te Ø25-20-25}
+        \end{minipage}\\[0.25cm]
+        \hfill
+        \begin{minipage}[t]{0.31\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE252020.png}\\[0.15cm]
+            \footnotesize \texttt{Te Ø25-20-20}
+        \end{minipage}\hfill
+        \begin{minipage}[t]{0.31\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE252520.png}\\[0.15cm]
+            \footnotesize \texttt{Te Ø25-25-20}
+        \end{minipage}
+        \hfill
+        \caption{Ejemplo comparativo de los distintos tipos de \texttt{Te} utilizados en Agua}
+    \end{figure}
+}{
+    \placeholderimage{CAPTURA-AGUA-09-TE20.png / CAPTURA-AGUA-09-TE25.png / CAPTURA-AGUA-09-TE252025.png / CAPTURA-AGUA-09-TE252020.png / CAPTURA-AGUA-09-TE252520.png}{Ejemplo comparativo de los distintos tipos de \texttt{Te} utilizados en Agua}
+}
+
+\subsubsection{Qué ocurre si no existe una Te compatible}
+
+Si la combinación de diámetros de entrada, salida y rama no tiene una \texttt{Te} disponible, la herramienta muestra un aviso indicando que no existe una \texttt{TE} para la combinación de diámetros seleccionada y pide modificar los diámetros de los segmentos para que coincidan con un tipo disponible.
+
+\manualimage{CAPTURA-AGUA-10.png}{Aviso mostrado cuando no existe una Te para la combinación de diámetros seleccionada}
+
+\subsection{Longitudes mínimas y máximas de tubo en Agua}
+
+Además del sistema, la distribución y el diámetro, en Agua también hay condiciones de longitud que el usuario debe conocer.
+
+\subsubsection{Longitud mínima}
+
+La longitud mínima de tramo en la configuración actual es \texttt{350 mm}.
+
+Si el usuario dibuja un segmento más corto:
+
+\begin{itemize}
+\item la herramienta muestra el tipo de instalación;
+\item indica la longitud mínima requerida;
+\item indica la longitud real del tramo dibujado;
+\item y pregunta si se desea ignorar la restricción o cancelar para recolocar el punto.
+\end{itemize}
+
+Esto permite decidir en el momento si se mantiene ese tramo corto o si se corrige antes de seguir dibujando.
+
+\manualimage{CAPTURA-AGUA-11.png}{Aviso de longitud mínima no cumplida al dibujar un tramo demasiado corto}
+
+\subsubsection{Longitud máxima}
+
+La longitud máxima de referencia en Agua es \texttt{5,00 m}.
+
+Si un tramo supera esa longitud, la herramienta no muestra un aviso bloqueante, sino que divide automáticamente ese tramo en subtramos más cortos para poder resolver la instalación dentro del límite permitido.
+
+Por eso, cuando se trabaja con recorridos largos, conviene revisar el resultado para comprobar dónde se han producido los cortes y cómo han quedado las uniones generadas.
+
+\manualimage{CAPTURA-AGUA-12.png}{Ejemplo de tramo largo dividido automáticamente al superar la longitud máxima}
+
+\subsection{Layers y atributo padre en Agua}
+
+En Agua hay dos temas que conviene entender juntos:
+
+\begin{itemize}
+\item los \texttt{layers} de la instalación;
+\item el valor que se aplica como \texttt{atributo padre};
+\end{itemize}
+
+\subsubsection{Layers propios de Agua}
+
+En la configuración actual, Agua trabaja con una base de layers como:
+
+\begin{itemize}
+\item \texttt{AIGUA}
+\item \texttt{AIGUA CARA X}
+\item \texttt{AIGUA CARA Y}
+\item \texttt{IS CON AIGUA FAB}
+\item \texttt{IS CON AIGUA OBR}
+\end{itemize}
+
+Además, la instalación parte de un layer por defecto para la geometría principal y de un layer específico para la polilínea de eje cuando esta se genera como apoyo.
+
+Por eso, aunque el usuario vea solo un desplegable de layers en la paleta, detrás hay una lógica propia de Agua que conviene respetar.
+
+\manualimage{CAPTURA-AGUA-17.png}{Desplegable de layers de Agua mostrando las opciones disponibles en paleta}
+
+\subsubsection{Qué debe entender el usuario sobre los layers en Agua}
+
+Si el usuario no aplica un layer manualmente, la instalación utiliza su configuración por defecto.
+
+Si el usuario selecciona elementos y usa \texttt{Aplicar layer}, esa asignación queda guardada para esos elementos y se utiliza al crear el resultado final.
+
+Esto es especialmente importante en Agua cuando:
+
+\begin{itemize}
+\item se quiere distinguir fabricación y obra;
+\item se necesita separar \texttt{Cara X} y \texttt{Cara Y};
+\item o se quiere corregir la clasificación de un tramo o accesorio antes de finalizar.
+\end{itemize}
+
+En general, después de cambiar distribución, geometría o selección de elementos, conviene revisar también los layers.
+
+\subsubsection{Casos en los que conviene revisar el layer final}
+
+En Agua hay piezas, sobre todo en algunos casos \texttt{TD}, en las que la geometría puede resolverse con varias partes y no siempre interesa forzar todas ellas con el mismo criterio visual.
+
+Por eso, si después de aplicar un layer el usuario ve una pieza que no responde exactamente como esperaba, conviene revisar el resultado final en pantalla en lugar de asumir que se trata de un error.
+
+La regla práctica para el manual es esta:
+
+\begin{itemize}
+\item el layer aplicado desde paleta manda en el flujo habitual;
+\item pero algunas piezas técnicas pueden conservar parte de su lógica propia de modelo.
+\end{itemize}
+
+\manualimage{CAPTURA-05.png}{Ejemplo de layer aplicado en Agua sobre tramos o accesorios seleccionados}
+
+\subsubsection{Qué es el atributo padre en Agua}
+
+En Agua, el \texttt{Valor atributo} que el usuario aplica desde la paleta no es solo una etiqueta descriptiva.
+
+Ese valor se utiliza como \texttt{atributo padre}, que sirve para:
+
+\begin{itemize}
+\item identificar elementos que pertenecen a una misma referencia;
+\item organizar la instalación;
+\item y validar que la información esté completa antes de finalizar.
+\end{itemize}
+
+En Agua, la lógica es esta:
+
+\begin{itemize}
+\item en \texttt{TD}, el valor aplicado se utiliza como \texttt{pmp\_pare};
+\item en \texttt{IS}, ese mismo valor se utiliza como \texttt{pmp\_pare} y también como \texttt{6\_CC\_IS}.
+\end{itemize}
+
+Es decir, el usuario escribe un único valor, pero la instalación lo reutiliza según la distribución activa.
+
+\subsubsection{Cómo aplica el usuario el atributo padre}
+
+El flujo práctico es:
+
+\begin{enumerate}
+\item seleccionar el tramo o los elementos que deban compartir referencia;
+\item escribir el valor en el campo \texttt{Valor atributo};
+\item pulsar \texttt{Aplicar atributo}.
+\end{enumerate}
+
+Cuando se hace esto, la herramienta confirma que los atributos han sido aplicados y guarda esa información para la creación final.
+
+Si el usuario no asigna layer o atributo padre a ciertos elementos, antes de finalizar puede aparecer un aviso indicando que hay elementos sin configuración completa.
+
+\manualimage{CAPTURA-AGUA-19.png}{Aplicación de Valor atributo en Agua y aviso de elementos sin layer o sin atributo padre}
+
+La mecánica de copia a otros archivos es común al sistema y se explica en el apartado global \texttt{Cómo funcionan los duplicados o copias}.
+
+\subsection{Elementos definidos propios de Agua}
+
+Además del trazado automático, Agua permite insertar elementos definidos propios del sistema.
+
+En la configuración actual, Agua trabaja con elementos definidos como:
+
+\begin{itemize}
+\item Colze Base;
+\item Clau de Pas;
+\item Taps;
+\item T sortida.
+\end{itemize}
+
+Estos elementos se utilizan para completar la instalación con piezas concretas del sistema una vez que el recorrido principal ya está claro.
+
+Además, algunos de estos elementos pueden mostrar un aviso si se intentan colocar en una distribución no admitida, especialmente en \texttt{IS}.
+
+\manualimage{CAPTURA-AGUA-13.png}{Paleta de Elementos Definidos en Agua con los tipos disponibles}
+
+\subsubsection{Tipo de punto en Elementos Definidos}
+
+Además de elegir el elemento, en Agua es importante revisar el campo \texttt{Tipo de punto}, porque no todos los elementos pueden colocarse en cualquier posición de la instalación.
+
+En la configuración actual, la relación es esta:
+
+\begin{itemize}
+\item \texttt{Colze base}: \texttt{Inicio} o \texttt{Final}.
+\item \texttt{Taps}: \texttt{Inicio} o \texttt{Final}.
+\item \texttt{T sortida}: \texttt{Intermedio ordenado} o \texttt{Intermedio libre}.
+\item \texttt{Clau de Pas}: \texttt{Intermedio ordenado} o \texttt{Intermedio libre}.
+\end{itemize}
+
+\manualdoubleimagelabeled{CAPTURA-AGUA-13B1.png}{\texttt{T sortida}: \texttt{Intermedio ordenado} o \texttt{Intermedio libre}}{CAPTURA-AGUA-13B2.png}{\texttt{Colze base}: \texttt{Inicio} o \texttt{Final}}{Campo Tipo de punto en Elementos Definidos mostrando las opciones según el elemento seleccionado}
+
+\subsubsection{Qué significa cada tipo de punto}
+
+\begin{itemize}
+\item \texttt{Inicio}: el elemento se coloca en el arranque de la polilínea o del recorrido correspondiente.
+\item \texttt{Final}: el elemento se coloca en el extremo final del recorrido.
+\item \texttt{Intermedio ordenado}: el elemento se coloca en una posición intermedia asociada al orden del recorrido.
+\item \texttt{Intermedio libre}: el elemento se coloca en un punto intermedio elegido libremente por el usuario.
+\end{itemize}
+
+En otras palabras, \texttt{Inicio} y \texttt{Final} se usan para piezas que deben rematar o arrancar el recorrido, mientras que los tipos \texttt{Intermedio} se usan para piezas que deben quedar dentro del desarrollo de la instalación.
+
+\subsubsection{Qué debe tener en cuenta el usuario}
+
+\begin{itemize}
+\item Si el elemento es de \texttt{Inicio/Final}, no debe intentarse como punto intermedio.
+\item Si el elemento es intermedio, no debe intentarse como arranque o remate del recorrido.
+\item Cuando la combinación no es válida, la herramienta avisa y no permite continuar con esa colocación.
+\end{itemize}
+
+Esto es especialmente importante en Agua porque el tipo de punto forma parte de la lógica de colocación del elemento, no es solo una etiqueta descriptiva.
+
+\subsection{Soportes en Agua}
+
+Además de las reglas comunes de soportes, en Agua hay particularidades de clasificación y de geometría que conviene revisar.
+
+\subsubsection{Qué hace especial a los soportes de Agua}
+
+En Agua no basta con fijarse en la forma del soporte. También hay que comprobar cómo queda asociado dentro de la instalación.
+
+Esto es importante porque algunos soportes comparten familia geométrica con otras instalaciones. El caso más claro es \texttt{Omega}, ya que Agua y Saneamiento pueden trabajar con la misma base de soporte tipo \texttt{Varifix}.
+
+Por eso, antes de insertar, conviene revisar que el campo \texttt{Subtipo instalación} quede realmente asociado a \texttt{Agua}. Si aparece otro subtipo, el soporte puede quedar clasificado como perteneciente a otra instalación aunque visualmente se parezca.
+
+La confirmación previa a la inserción es un buen momento para comprobar \texttt{Tipo}, \texttt{Subtipo instalación}, \texttt{Superficie}, \texttt{Cota A}, \texttt{Cota B} y \texttt{Ángulo de inclinación} antes de continuar.
+
+\manualimagesized{CAPTURA-14B.png}{Soporte de Agua con Subtipo instalación Agua visible en la paleta y en la confirmación previa a insertar}{0.60\textwidth}{0.55\textheight}
+
+\subsubsection{Tipos de soporte más representativos en Agua}
+
+En la configuración actual, los casos más representativos en Agua son:
+
+\begin{itemize}
+\item \texttt{Omega}, cuando se trabaja con la lógica de soporte \texttt{Varifix}.
+\item \texttt{Zeta}, cuando se necesita un soporte lineal o un soporte con desarrollo vertical.
+\item \texttt{Cinta}, cuando se resuelve el soporte mediante cinta.
+\end{itemize}
+
+La diferencia en Agua no depende solo de la forma. También depende de cómo quede clasificado el soporte dentro de la instalación.
+
+\subsubsection{Cotas que cambian el resultado en Agua}
+
+En Agua, las cotas no son un detalle menor, porque cambian directamente el tipo de resultado que se obtiene:
+
+\begin{itemize}
+\item en \texttt{Omega} asociado a Agua, \texttt{Cota A} y \texttt{Cota B} deben ser mayores que \texttt{0};
+\item en \texttt{Zeta}, \texttt{Cota B} debe ser mayor que \texttt{0};
+\item en \texttt{Zeta}, si \texttt{Cota A = 0 mm}, el soporte se resuelve como variante lineal \texttt{0 mm};
+\item en \texttt{Zeta}, si \texttt{Cota A} es mayor que \texttt{0 mm}, el soporte pasa a una variante con desarrollo vertical;
+\item en \texttt{Cinta}, la medida decisiva es \texttt{Cota B}, que también debe estar informada.
+\end{itemize}
+
+Esto conviene revisarlo siempre en previsualización, porque un mismo tipo de soporte puede dar un resultado muy distinto solo por cambiar las cotas.
+
+\manualimage{CAPTURA-AGUA-15.png}{Comparación en Agua entre un soporte Zeta con Cota A igual a 0 mm y otro con Cota A mayor que 0 mm}
+
+\subsubsection{Layers e identificación de soporte en Agua}
+
+Cuando el soporte queda correctamente asociado a Agua, la clasificación habitual de salida es:
+
+\begin{itemize}
+\item layer \texttt{IS\_SUPORTS\_AIGUA};
+\item o \texttt{IS\_SUPORTS\_AGUA}, si el proyecto usa esa nomenclatura;
+\item denominación de soporte \texttt{SUPORT AIGUA}.
+\end{itemize}
+
+En cambio, el \texttt{Zeta 0 mm} mantiene su condición de soporte lineal y conserva la lógica de layer lineal general, en lugar de pasar al layer específico de Agua.
+
+Esto es importante porque permite distinguir entre:
+
+\begin{itemize}
+\item soportes de Agua ya clasificados como parte de esa instalación;
+\item y soportes lineales genéricos que no deben interpretarse igual.
+\end{itemize}
+
+\manualimagesized{CAPTURA-AGUA-16.png}{Propiedades finales de un soporte de Agua mostrando su layer e identificación}{0.50\textwidth}{0.60\textheight}
+
+\subsubsection{Atributos de soporte en Agua}
+
+En Agua, el \texttt{Atributo de soporte} no solo sirve para etiquetar visualmente el soporte. También ayuda a dejarlo correctamente identificado dentro de la instalación.
+
+Si el flujo del proyecto utiliza organización por atributo padre, conviene revisar este valor antes de finalizar, porque puede influir en cómo se organiza el soporte dentro de la instalación.
+
+Por eso, cuando los soportes formen parte de una misma sectorización o deban seguir la misma lógica que la instalación principal, es recomendable aplicar ese atributo antes de cerrar el trabajo.
+
+\subsubsection{Qué conviene revisar antes de acumular o finalizar soportes en Agua}
+
+\begin{itemize}
+\item que \texttt{Subtipo instalación} sea realmente \texttt{Agua};
+\item que un \texttt{Omega} no se haya quedado clasificado como otra instalación que use la misma familia de soporte;
+\item que \texttt{Cota A} y \texttt{Cota B} correspondan al tipo de soporte elegido;
+\item que un \texttt{Zeta 0 mm} no se haya usado por error cuando se necesitaba un soporte con desarrollo vertical;
+\item que el layer y la identificación final del soporte sean los esperados;
+\item y que el \texttt{Atributo de soporte} esté informado si el proyecto necesita clasificación por atributo.
+\end{itemize}
+
+\subsection{Puntos a revisar con especial atención en Agua}
+
+Antes de finalizar una instalación de Agua conviene revisar especialmente:
+
+\begin{itemize}
+\item que el sistema seleccionado sea realmente \texttt{Polietilè}, \texttt{Multicapa} o \texttt{Armaflex}, según el caso;
+\item que la distribución sea la correcta y, si procede, que \texttt{Cara (EN)} también esté bien definida;
+\item que después de un cambio de diámetro se hayan regenerado correctamente codos, manguitos reductores y Tes, especialmente si la reducción aparece justo después de un codo;
+\item que los giros del recorrido respondan a la lógica de \texttt{90 grados};
+\item que los avisos de longitud mínima se hayan resuelto conscientemente;
+\item que los layers de Agua se correspondan con el criterio de trabajo que se necesita en ese plano;
+\item que el atributo padre se haya aplicado realmente a los elementos que deben compartir referencia;
+\item que los soportes de Agua hayan quedado asociados al subtipo correcto, con sus cotas y layers bien resueltos;
+\item y que los recorridos largos no hayan generado divisiones automáticas en puntos no deseados.
+\end{itemize}
+

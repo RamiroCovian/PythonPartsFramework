@@ -219,7 +219,7 @@ El trabajo habitual con una instalación se basa en tres ideas:
 
 En la práctica, esto significa que primero se crea el trazado principal y después se añaden o ajustan el resto de elementos necesarios.
 
-\manualimagesized{CAPTURA-01.png}{Paleta principal completa de la instalación con sus apartados visibles}{0.52\textwidth}{0.62\textheight}
+\manualimagesized{capturas/CAPTURA-01.png}{Paleta principal completa de la instalación con sus apartados visibles}{0.52\textwidth}{0.62\textheight}
 
 \section{Flujo de trabajo recomendado}
 
@@ -277,7 +277,7 @@ En Agua, por ejemplo, puede elegir entre varias opciones como:
 
 Este campo define qué geometría y qué comportamiento tendrá la instalación.
 
-\manualimage{CAPTURA-02.png}{Desplegable del tipo de instalación abierto con las opciones visibles}
+\manualimage{capturas/CAPTURA-02.png}{Desplegable del tipo de instalación abierto con las opciones visibles}
 
 \subsection{Diámetro}
 
@@ -343,7 +343,7 @@ Mientras se dibuja, la herramienta no solo muestra la línea del recorrido, sino
 \item bifurcaciones.
 \end{itemize}
 
-\manualimage{CAPTURA-03.png}{Ejemplo de instalación en fase de dibujo con previsualización activa}
+\manualimage{capturas/CAPTURA-03.png}{Ejemplo de instalación en fase de dibujo con previsualización activa}
 
 \section{Cómo se generan automáticamente los accesorios}
 
@@ -367,7 +367,7 @@ Si un punto funciona como bifurcación, prevalece la bifurcación sobre otras so
 
 Esto significa que el sistema no coloca varias piezas incompatibles en el mismo punto.
 
-\manualtripleimage{CAPTURA-04A.png}{CAPTURA-04B.png}{CAPTURA-04C.png}{Ejemplo comparativo de un codo, una unión y una bifurcación}
+\manualtripleimage{capturas/CAPTURA-04A.png}{capturas/CAPTURA-04B.png}{capturas/CAPTURA-04C.png}{Ejemplo comparativo de un codo, una unión y una bifurcación}
 
 \section{Cómo editar una instalación ya dibujada}
 
@@ -409,7 +409,7 @@ Desde la paleta, el usuario puede seleccionar un layer y aplicar ese layer a los
 
 Esto es útil cuando se necesita clasificar el modelo de una forma concreta antes de finalizar.
 
-\manualimage{CAPTURA-05.png}{Ejemplo del apartado de layers en la paleta y su aplicación sobre la instalación}
+\manualimage{capturas/CAPTURA-05.png}{Ejemplo del apartado de layers en la paleta y su aplicación sobre la instalación}
 
 \section{Atributos}
 
@@ -443,27 +443,38 @@ Antes de pulsar el botón de finalizar, se recomienda comprobar:
 
 Si falta información, la herramienta puede mostrar un aviso antes de continuar.
 
-\manualimage{CAPTURA-06.png}{Mensaje de aviso previo a finalizar cuando falta información}
+\manualimage{capturas/CAPTURA-06.png}{Mensaje de aviso previo a finalizar cuando falta información}
 
-\section{Rotación y orientación}
+\section{Rotación, orientación 3D y cambios de plano}
 
-Algunos elementos admiten rotación y orientación.
+La orientación 3D y los cambios de plano forman parte del funcionamiento común de las instalaciones.
 
 Esto se aplica especialmente a:
 
 \begin{itemize}
 \item elementos definidos;
 \item macros;
+\item soportes;
+\item tramos inclinados o verticales;
+\item cambios entre plano horizontal, plano vertical y recorridos inclinados;
 \item ciertos accesorios que requieren una posición concreta.
 \end{itemize}
 
 Cuando la paleta muestra campos de rotación u orientación, el usuario puede utilizarlos para ajustar la posición final del elemento.
 
-\manualimage{CAPTURA-07.png}{Ejemplo de orientación o rotación aplicada a un elemento}
+La regla práctica es revisar siempre el resultado en vista 3D cuando el recorrido no se mantiene en un único plano. Aunque cada instalación pueda tener accesorios distintos, la forma de orientar, previsualizar y comprobar el resultado es común.
+
+Las capturas de este apartado están tomadas de Agua como ejemplo, pero el funcionamiento se aplica al resto de instalaciones.
+
+\manualimage{capturas/CAPTURA-07.png}{Ejemplo de orientación 3D o rotación aplicada a un elemento, capturado en Agua}
 
 \section{Macros}
 
 La herramienta permite colocar macros de librería dentro de la instalación.
+
+El funcionamiento de macros es común a todas las instalaciones. Por eso, las unidades específicas no repiten este flujo salvo que exista una regla propia de una instalación concreta.
+
+Las capturas de este apartado están tomadas de Agua como ejemplo, pero la forma de seleccionar, posicionar y previsualizar macros es la misma en el resto de instalaciones.
 
 \subsection{Para qué sirven}
 
@@ -495,9 +506,9 @@ La macro puede situarse:
 
 La altura puede definirse directamente o en relación con un local seleccionado, según el caso.
 
-\manualimagesized{CAPTURA-08.png}{Bloque de la paleta para insertar macros}{0.52\textwidth}{0.62\textheight}
+\manualimagesized{capturas/CAPTURA-08.png}{Bloque de la paleta para insertar macros, capturado en Agua}{0.52\textwidth}{0.62\textheight}
 
-\manualimagesized{CAPTURA-09.png}{Ejemplo de macro previsualizada dentro de la instalación}{0.62\textwidth}{0.55\textheight}
+\manualimagesized{capturas/CAPTURA-09.png}{Ejemplo de macro previsualizada dentro de la instalación, capturado en Agua}{0.62\textwidth}{0.55\textheight}
 
 \section{Elementos definidos}
 
@@ -525,9 +536,9 @@ El usuario debe:
 \item confirmar la colocación.
 \end{enumerate}
 
-\manualimagesized{CAPTURA-10.png}{Bloque de la paleta para insertar Elementos Definidos}{0.52\textwidth}{0.62\textheight}
+\manualimagesized{capturas/CAPTURA-10.png}{Bloque de la paleta para insertar Elementos Definidos}{0.52\textwidth}{0.62\textheight}
 
-\manualimage{CAPTURA-11.png}{Inserción de un elemento definido como punto libre}
+\manualimage{capturas/CAPTURA-11.png}{Inserción de un elemento definido como punto libre}
 
 \section{Puntos no definidos}
 
@@ -553,9 +564,9 @@ Si varios caminos coinciden en un punto o pasan muy cerca, la herramienta puede 
 
 Esto ayuda a construir una topología coherente.
 
-\manualimage{CAPTURA-12.png}{Ejemplo de puntos no definidos en distintos colores}
+\manualimage{capturas/CAPTURA-12.png}{Ejemplo de puntos no definidos en distintos colores}
 
-\manualimage{CAPTURA-13.png}{Ejemplo de punto común entre dos caminos}
+\manualimage{capturas/CAPTURA-13.png}{Ejemplo de punto común entre dos caminos}
 
 \section{Soportes}
 
@@ -596,7 +607,7 @@ Además del tipo de soporte, la paleta puede mostrar el campo \texttt{Subtipo in
 
 Este campo ayuda a identificar con qué familia de instalación se relaciona el soporte. Es útil para mantener coherencia entre el soporte que se inserta y la instalación sobre la que se está trabajando.
 
-\manualimagesized{CAPTURA-14B.png}{Tipo de soporte, subtipo instalación y superficie en la paleta de soportes}{0.60\textwidth}{0.55\textheight}
+\manualimagesized{capturas/CAPTURA-14B.png}{Tipo de soporte, subtipo instalación y superficie en la paleta de soportes}{0.60\textwidth}{0.55\textheight}
 
 \subsection{Superficie}
 
@@ -630,7 +641,7 @@ Es útil cuando el soporte no debe quedar en una orientación neutra y necesita 
 
 Lo recomendable es definir primero la posición del soporte y usar después el ángulo como ajuste fino.
 
-\manualimage{CAPTURA-14C.png}{Ejemplo de Cota A, Cota B y ángulo de inclinación en la paleta}
+\manualimage{capturas/CAPTURA-14C.png}{Ejemplo de Cota A, Cota B y ángulo de inclinación en la paleta}
 
 \subsection{Modos de edición}
 
@@ -644,7 +655,7 @@ Una vez que hay soportes acumulados, la herramienta permite trabajar con distint
 
 Estos modos son útiles cuando el recorrido principal ya está dibujado y solo falta ajustar la posición o la información de los soportes.
 
-\manualimage{CAPTURA-14D.png}{Modos de edición de soportes en la paleta}
+\manualimage{capturas/CAPTURA-14D.png}{Modos de edición de soportes en la paleta}
 
 \subsection{Atributos de soporte}
 
@@ -656,7 +667,7 @@ Si el usuario tiene soportes seleccionados, el atributo se aplica a esa selecci�
 
 Esto resulta especialmente útil cuando se quiere dejar todos los soportes correctamente preparados antes de finalizar la instalación.
 
-\manualimage{CAPTURA-14E.png}{Campo de atributo de soporte y aplicación sobre soportes seleccionados o acumulados}
+\manualimage{capturas/CAPTURA-14E.png}{Campo de atributo de soporte y aplicación sobre soportes seleccionados o acumulados}
 
 \subsection{Cuándo conviene colocarlos}
 
@@ -664,17 +675,31 @@ Normalmente es más cómodo colocar los soportes cuando el recorrido principal y
 
 También conviene tener en cuenta que, antes de acumular o crear un soporte, primero debe haberse posicionado correctamente. Si todavía no se ha definido su colocación, la herramienta avisa y no lo añade.
 
-\manualimage{CAPTURA-14.png}{Bloque de soportes en la paleta y preview de un soporte}
+\manualimage{capturas/CAPTURA-14.png}{Bloque de soportes en la paleta y preview de un soporte}
 
 \section{Cómo funcionan los duplicados o copias}
 
 Este punto es importante porque puede generar dudas.
+
+El comportamiento de duplicados, copias relacionadas y limpieza de copias previas es común a todas las instalaciones. Por eso se documenta aquí una sola vez y no dentro de cada instalación.
+
+Las imágenes de este apartado están tomadas de Agua como ejemplo, pero el criterio de uso es el mismo para el resto de instalaciones.
 
 \subsection{Duplicados no deseados}
 
 La herramienta evita repetir elementos iguales cuando no corresponde.
 
 Esto ayuda a que no aparezcan piezas duplicadas por error en el resultado final.
+
+También puede haber casos en los que el usuario vea elementos superpuestos o muy próximos entre sí. Antes de interpretarlo como un error, conviene distinguir si se trata de:
+
+\begin{itemize}
+\item una repetición no deseada;
+\item una copia relacionada en otro archivo de dibujo;
+\item o una representación prevista por el propio elemento, por ejemplo por materiales, capas, piezas internas o agrupación.
+\end{itemize}
+
+La comprobación debe hacerse revisando el archivo activo, el atributo padre y el archivo de destino si existe una copia relacionada.
 
 \subsection{Copias intencionadas}
 
@@ -716,7 +741,7 @@ Cuando la instalación se actualiza, esas copias también se actualizan para que
 
 Antes de crear las nuevas copias, la herramienta localiza las anteriores, las elimina de los archivos correspondientes y vuelve a generar las copias actualizadas.
 
-\manualtripleimagelabeled{CAPTURA-15A.png}{Archivo original en \texttt{TEST}}{CAPTURA-15B.png}{Copias relacionadas visibles en \texttt{TD01}}{CAPTURA-15C.png}{Copias relacionadas visibles en \texttt{IS01}}{Ejemplo del archivo original TEST y de las copias relacionadas generadas en TD01 e IS01}
+\manualtripleimagelabeled{capturas/CAPTURA-15A.png}{Archivo original en \texttt{TEST}}{capturas/CAPTURA-15B.png}{Copias relacionadas visibles en \texttt{TD01}}{capturas/CAPTURA-15C.png}{Copias relacionadas visibles en \texttt{IS01}}{Ejemplo del archivo original TEST y de las copias relacionadas generadas en TD01 e IS01}
 
 \section{Qué ocurre al pulsar el botón de finalizar}
 
@@ -790,7 +815,7 @@ En la instalación de Agua, el usuario puede trabajar con estos sistemas:
 
 Cada uno de ellos pertenece a la instalación de Agua, pero representa una solución distinta dentro del modelo.
 
-\manualimage{CAPTURA-AGUA-01.png}{Desplegable con los sistemas disponibles en Agua}
+\manualimage{capturas/CAPTURA-AGUA-01.png}{Desplegable con los sistemas disponibles en Agua}
 
 \subsection{Distribuciones en Agua}
 
@@ -823,9 +848,9 @@ En la configuración actual:
 
 Si el usuario intenta trabajar con alguna de esas combinaciones, la herramienta muestra un aviso indicando que ese tipo de tubo no existe o no está disponible para la distribución \texttt{IS}, y pide volver a \texttt{Modo creación}, cambiar la distribución a \texttt{TD} y regresar a \texttt{Modo configuración}.
 
-\manualimage{CAPTURA-AGUA-02.png}{Campo de distribución en Agua con la opción EN y el campo Cara (EN) visible}
+\manualimage{capturas/CAPTURA-AGUA-02.png}{Campo de distribución en Agua con la opción EN y el campo Cara (EN) visible}
 
-\manualimage{CAPTURA-AGUA-03.png}{Aviso mostrado al intentar usar Multicapa o Armaflex en distribución IS}
+\manualimage{capturas/CAPTURA-AGUA-03.png}{Aviso mostrado al intentar usar Multicapa o Armaflex en distribución IS}
 
 \subsection{Diámetros y cambios de diámetro en Agua}
 
@@ -858,7 +883,7 @@ Cuando se modifica el diámetro de un único tramo, la herramienta muestra una v
 
 El usuario debe confirmar el cambio antes de que la geometría se regenere.
 
-\manualimage{CAPTURA-AGUA-04.png}{Confirmación de cambio de diámetro sobre un único tramo}
+\manualimage{capturas/CAPTURA-AGUA-04.png}{Confirmación de cambio de diámetro sobre un único tramo}
 
 \subsubsection{Qué ocurre al cambiar el diámetro de varios tramos}
 
@@ -872,7 +897,7 @@ Si hay varios tramos seleccionados, la ventana de confirmación informa de:
 
 Después de aceptar, la instalación reconstruye el resultado con el nuevo valor.
 
-\manualimage{CAPTURA-AGUA-05.png}{Confirmación de cambio de diámetro sobre varios tramos seleccionados}
+\manualimage{capturas/CAPTURA-AGUA-05.png}{Confirmación de cambio de diámetro sobre varios tramos seleccionados}
 
 \subsubsection{Qué ocurre si el cambio afecta a un codo}
 
@@ -880,7 +905,7 @@ Si el cambio de diámetro afecta a un giro resuelto con codo, no aparece un mens
 
 Lo que se muestra es el mensaje general de cambio de diámetro y, al aceptarlo, la herramienta recalcula el encuentro para regenerar el codo con la nueva condición.
 
-\manualimage{CAPTURA-AGUA-06.png}{Ejemplo de codo recalculado después de modificar el diámetro del tramo}
+\manualimage{capturas/CAPTURA-AGUA-06.png}{Ejemplo de codo recalculado después de modificar el diámetro del tramo}
 
 \subsubsection{Qué ocurre si hay dos tramos consecutivos en la misma dirección con distinto diámetro}
 
@@ -890,7 +915,7 @@ Este caso es importante porque es la forma habitual de resolver una transición 
 
 Conviene revisarlo siempre en pantalla para comprobar que la reducción se ha generado justo en el punto esperado.
 
-\manualimage{CAPTURA-AGUA-07.png}{Ejemplo de manguito reductor entre dos tramos consecutivos en la misma dirección}
+\manualimage{capturas/CAPTURA-AGUA-07.png}{Ejemplo de manguito reductor entre dos tramos consecutivos en la misma dirección}
 
 \subsection{Accesorios automáticos en Agua}
 
@@ -902,7 +927,7 @@ En Agua la resolución automática de giros se hace con \texttt{codos de 90 grad
 
 Esto significa que no debe esperarse un codo automático de \texttt{45 grados} dentro de esta instalación.
 
-\manualimagesized{CAPTURA-04A.png}{Ejemplo de codo de 90 grados generado automáticamente en Agua}{0.42\textwidth}{0.34\textheight}
+\manualimagesized{capturas/CAPTURA-04A.png}{Ejemplo de codo de 90 grados generado automáticamente en Agua}{0.42\textwidth}{0.34\textheight}
 
 \subsubsection{Manguitos}
 
@@ -937,47 +962,47 @@ En la configuración actual, los casos más representativos son:
 
 Si el nodo se resuelve como \texttt{Te}, en ese mismo punto no se coloca además un codo ni un manguito.
 
-\IfFileExists{CAPTURA-AGUA-09-TE20.png}{
+\IfFileExists{capturas/CAPTURA-AGUA-09-TE20.png}{
     \begin{figure}[H]
         \centering
         \begin{minipage}[t]{0.31\textwidth}
             \centering
-            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE20.png}\\[0.15cm]
+            \includegraphics[width=\textwidth]{capturas/CAPTURA-AGUA-09-TE20.png}\\[0.15cm]
             \footnotesize \texttt{Te Ø20}
         \end{minipage}\hfill
         \begin{minipage}[t]{0.31\textwidth}
             \centering
-            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE25.png}\\[0.15cm]
+            \includegraphics[width=\textwidth]{capturas/CAPTURA-AGUA-09-TE25.png}\\[0.15cm]
             \footnotesize \texttt{Te Ø25}
         \end{minipage}\hfill
         \begin{minipage}[t]{0.31\textwidth}
             \centering
-            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE252025.png}\\[0.15cm]
+            \includegraphics[width=\textwidth]{capturas/CAPTURA-AGUA-09-TE252025.png}\\[0.15cm]
             \footnotesize \texttt{Te Ø25-20-25}
         \end{minipage}\\[0.25cm]
         \hfill
         \begin{minipage}[t]{0.31\textwidth}
             \centering
-            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE252020.png}\\[0.15cm]
+            \includegraphics[width=\textwidth]{capturas/CAPTURA-AGUA-09-TE252020.png}\\[0.15cm]
             \footnotesize \texttt{Te Ø25-20-20}
         \end{minipage}\hfill
         \begin{minipage}[t]{0.31\textwidth}
             \centering
-            \includegraphics[width=\textwidth]{CAPTURA-AGUA-09-TE252520.png}\\[0.15cm]
+            \includegraphics[width=\textwidth]{capturas/CAPTURA-AGUA-09-TE252520.png}\\[0.15cm]
             \footnotesize \texttt{Te Ø25-25-20}
         \end{minipage}
         \hfill
         \caption{Ejemplo comparativo de los distintos tipos de \texttt{Te} utilizados en Agua}
     \end{figure}
 }{
-    \placeholderimage{CAPTURA-AGUA-09-TE20.png / CAPTURA-AGUA-09-TE25.png / CAPTURA-AGUA-09-TE252025.png / CAPTURA-AGUA-09-TE252020.png / CAPTURA-AGUA-09-TE252520.png}{Ejemplo comparativo de los distintos tipos de \texttt{Te} utilizados en Agua}
+    \placeholderimage{capturas/CAPTURA-AGUA-09-TE20.png / capturas/CAPTURA-AGUA-09-TE25.png / capturas/CAPTURA-AGUA-09-TE252025.png / capturas/CAPTURA-AGUA-09-TE252020.png / capturas/CAPTURA-AGUA-09-TE252520.png}{Ejemplo comparativo de los distintos tipos de \texttt{Te} utilizados en Agua}
 }
 
 \subsubsection{Qué ocurre si no existe una Te compatible}
 
 Si la combinación de diámetros de entrada, salida y rama no tiene una \texttt{Te} disponible, la herramienta muestra un aviso indicando que no existe una \texttt{TE} para la combinación de diámetros seleccionada y pide modificar los diámetros de los segmentos para que coincidan con un tipo disponible.
 
-\manualimage{CAPTURA-AGUA-10.png}{Aviso mostrado cuando no existe una Te para la combinación de diámetros seleccionada}
+\manualimage{capturas/CAPTURA-AGUA-10.png}{Aviso mostrado cuando no existe una Te para la combinación de diámetros seleccionada}
 
 \subsection{Longitudes mínimas y máximas de tubo en Agua}
 
@@ -998,7 +1023,7 @@ Si el usuario dibuja un segmento más corto:
 
 Esto permite decidir en el momento si se mantiene ese tramo corto o si se corrige antes de seguir dibujando.
 
-\manualimage{CAPTURA-AGUA-11.png}{Aviso de longitud mínima no cumplida al dibujar un tramo demasiado corto}
+\manualimage{capturas/CAPTURA-AGUA-11.png}{Aviso de longitud mínima no cumplida al dibujar un tramo demasiado corto}
 
 \subsubsection{Longitud máxima}
 
@@ -1008,7 +1033,7 @@ Si un tramo supera esa longitud, la herramienta no muestra un aviso bloqueante, 
 
 Por eso, cuando se trabaja con recorridos largos, conviene revisar el resultado para comprobar dónde se han producido los cortes y cómo han quedado las uniones generadas.
 
-\manualimage{CAPTURA-AGUA-12.png}{Ejemplo de tramo largo dividido automáticamente al superar la longitud máxima}
+\manualimage{capturas/CAPTURA-AGUA-12.png}{Ejemplo de tramo largo dividido automáticamente al superar la longitud máxima}
 
 \subsection{Layers y atributo padre en Agua}
 
@@ -1035,7 +1060,7 @@ Además, la instalación parte de un layer por defecto para la geometría princi
 
 Por eso, aunque el usuario vea solo un desplegable de layers en la paleta, detrás hay una lógica propia de Agua que conviene respetar.
 
-\manualimage{CAPTURA-AGUA-17.png}{Desplegable de layers de Agua mostrando las opciones disponibles en paleta}
+\manualimage{capturas/CAPTURA-AGUA-17.png}{Desplegable de layers de Agua mostrando las opciones disponibles en paleta}
 
 \subsubsection{Qué debe entender el usuario sobre los layers en Agua}
 
@@ -1066,7 +1091,7 @@ La regla práctica para el manual es esta:
 \item pero algunas piezas técnicas pueden conservar parte de su lógica propia de modelo.
 \end{itemize}
 
-\manualimage{CAPTURA-05.png}{Ejemplo de layer aplicado en Agua sobre tramos o accesorios seleccionados}
+\manualimage{capturas/CAPTURA-05.png}{Ejemplo de layer aplicado en Agua sobre tramos o accesorios seleccionados}
 
 \subsubsection{Qué es el atributo padre en Agua}
 
@@ -1103,9 +1128,7 @@ Cuando se hace esto, la herramienta confirma que los atributos han sido aplicado
 
 Si el usuario no asigna layer o atributo padre a ciertos elementos, antes de finalizar puede aparecer un aviso indicando que hay elementos sin configuración completa.
 
-\manualimage{CAPTURA-AGUA-19.png}{Aplicación de Valor atributo en Agua y aviso de elementos sin layer o sin atributo padre}
-
-La mecánica de copia a otros archivos es común al sistema y se explica en el apartado global \texttt{Cómo funcionan los duplicados o copias}.
+\manualimage{capturas/CAPTURA-AGUA-19.png}{Aplicación de Valor atributo en Agua y aviso de elementos sin layer o sin atributo padre}
 
 \subsection{Elementos definidos propios de Agua}
 
@@ -1124,7 +1147,7 @@ Estos elementos se utilizan para completar la instalación con piezas concretas 
 
 Además, algunos de estos elementos pueden mostrar un aviso si se intentan colocar en una distribución no admitida, especialmente en \texttt{IS}.
 
-\manualimage{CAPTURA-AGUA-13.png}{Paleta de Elementos Definidos en Agua con los tipos disponibles}
+\manualimage{capturas/CAPTURA-AGUA-13.png}{Paleta de Elementos Definidos en Agua con los tipos disponibles}
 
 \subsubsection{Tipo de punto en Elementos Definidos}
 
@@ -1139,7 +1162,7 @@ En la configuración actual, la relación es esta:
 \item \texttt{Clau de Pas}: \texttt{Intermedio ordenado} o \texttt{Intermedio libre}.
 \end{itemize}
 
-\manualdoubleimagelabeled{CAPTURA-AGUA-13B1.png}{\texttt{T sortida}: \texttt{Intermedio ordenado} o \texttt{Intermedio libre}}{CAPTURA-AGUA-13B2.png}{\texttt{Colze base}: \texttt{Inicio} o \texttt{Final}}{Campo Tipo de punto en Elementos Definidos mostrando las opciones según el elemento seleccionado}
+\manualdoubleimagelabeled{capturas/CAPTURA-AGUA-13B1.png}{\texttt{T sortida}: \texttt{Intermedio ordenado} o \texttt{Intermedio libre}}{capturas/CAPTURA-AGUA-13B2.png}{\texttt{Colze base}: \texttt{Inicio} o \texttt{Final}}{Campo Tipo de punto en Elementos Definidos mostrando las opciones según el elemento seleccionado}
 
 \subsubsection{Qué significa cada tipo de punto}
 
@@ -1176,7 +1199,7 @@ Por eso, antes de insertar, conviene revisar que el campo \texttt{Subtipo instal
 
 La confirmación previa a la inserción es un buen momento para comprobar \texttt{Tipo}, \texttt{Subtipo instalación}, \texttt{Superficie}, \texttt{Cota A}, \texttt{Cota B} y \texttt{Ángulo de inclinación} antes de continuar.
 
-\manualimagesized{CAPTURA-14B.png}{Soporte de Agua con Subtipo instalación Agua visible en la paleta y en la confirmación previa a insertar}{0.60\textwidth}{0.55\textheight}
+\manualimagesized{capturas/CAPTURA-14B.png}{Soporte de Agua con Subtipo instalación Agua visible en la paleta y en la confirmación previa a insertar}{0.60\textwidth}{0.55\textheight}
 
 \subsubsection{Tipos de soporte más representativos en Agua}
 
@@ -1204,7 +1227,7 @@ En Agua, las cotas no son un detalle menor, porque cambian directamente el tipo 
 
 Esto conviene revisarlo siempre en previsualización, porque un mismo tipo de soporte puede dar un resultado muy distinto solo por cambiar las cotas.
 
-\manualimage{CAPTURA-AGUA-15.png}{Comparación en Agua entre un soporte Zeta con Cota A igual a 0 mm y otro con Cota A mayor que 0 mm}
+\manualimage{capturas/CAPTURA-AGUA-15.png}{Comparación en Agua entre un soporte Zeta con Cota A igual a 0 mm y otro con Cota A mayor que 0 mm}
 
 \subsubsection{Layers e identificación de soporte en Agua}
 
@@ -1225,7 +1248,7 @@ Esto es importante porque permite distinguir entre:
 \item y soportes lineales genéricos que no deben interpretarse igual.
 \end{itemize}
 
-\manualimagesized{CAPTURA-AGUA-16.png}{Propiedades finales de un soporte de Agua mostrando su layer e identificación}{0.50\textwidth}{0.60\textheight}
+\manualimagesized{capturas/CAPTURA-AGUA-16.png}{Propiedades finales de un soporte de Agua mostrando su layer e identificación}{0.50\textwidth}{0.60\textheight}
 
 \subsubsection{Atributos de soporte en Agua}
 
@@ -1286,7 +1309,7 @@ En la configuración actual:
 
 Cuando el usuario cambia de sistema, la herramienta adapta automáticamente el comportamiento del trazado y los elementos que se colocan sobre él.
 
-\manualimage{CAPTURA-SANEAMIENTO-01.png}{Paleta de Saneamiento con los sistemas Pluvial y Fecal visibles}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-01.png}{Paleta de Saneamiento con los sistemas Pluvial y Fecal visibles}
 
 \subsection{Distribuciones en Saneamiento}
 
@@ -1309,7 +1332,7 @@ En la configuración actual:
 
 Esto significa que, antes de dibujar o de modificar un tramo, conviene comprobar primero qué sistema está activo.
 
-\manualimage{CAPTURA-SANEAMIENTO-02.png}{Selector de diámetro en Saneamiento con las opciones visibles para Fecal}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-02.png}{Selector de diámetro en Saneamiento con las opciones visibles para Fecal}
 
 \subsubsection{Qué ocurre al cambiar el diámetro de un tramo}
 
@@ -1323,7 +1346,7 @@ Cuando el usuario modifica el diámetro de un tramo:
 
 Por eso, después de un cambio de diámetro conviene revisar el resultado local, no solo el tramo modificado.
 
-\manualimage{CAPTURA-SANEAMIENTO-03.png}{Acción Modificar diámetro aplicada sobre un tramo de Saneamiento}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-03.png}{Acción Modificar diámetro aplicada sobre un tramo de Saneamiento}
 
 \subsubsection{Qué ocurre si hay dos tramos consecutivos en línea recta con distinto diámetro}
 
@@ -1331,7 +1354,7 @@ Si dos tramos consecutivos siguen en línea recta pero cambian de diámetro, la 
 
 Este es el caso habitual para resolver una transición recta entre dos diámetros distintos.
 
-\manualimage{CAPTURA-SANEAMIENTO-04.png}{Transición automática de diámetro entre dos tramos rectos consecutivos}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-04.png}{Transición automática de diámetro entre dos tramos rectos consecutivos}
 
 \subsubsection{Qué ocurre si el cambio de diámetro afecta a un codo}
 
@@ -1353,7 +1376,7 @@ Si no existe una combinación válida, aparece un aviso como este:
 
 En ese caso, el usuario debe revisar los diámetros de la entrada, la salida y la rama hasta encajar con una combinación disponible.
 
-\manualimage{CAPTURA-SANEAMIENTO-07.png}{Aviso mostrado cuando no existe una bifurcación compatible en Saneamiento}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-07.png}{Aviso mostrado cuando no existe una bifurcación compatible en Saneamiento}
 
 \subsection{Accesorios automáticos en Saneamiento}
 
@@ -1370,7 +1393,7 @@ En Saneamiento la resolución automática de giros puede hacerse con:
 
 Esto la diferencia claramente de Agua, donde el comportamiento habitual documentado es el codo de \texttt{90 grados}.
 
-\manualimage{CAPTURA-SANEAMIENTO-05.png}{Ejemplo comparativo de un codo de 45 grados y un codo de 90 grados en Saneamiento}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-05.png}{Ejemplo comparativo de un codo de 45 grados y un codo de 90 grados en Saneamiento}
 
 \subsubsection{Uniones y reducciones}
 
@@ -1389,7 +1412,7 @@ Cuando en un mismo punto confluyen tres direcciones, la instalación intenta res
 
 En la información recibida para Saneamiento se indica el uso de bifurcaciones tipo \texttt{Y} y de algunas bifurcaciones de transición en casos concretos.
 
-\manualimage{CAPTURA-SANEAMIENTO-06.png}{Ejemplo de bifurcación válida en Saneamiento}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-06.png}{Ejemplo de bifurcación válida en Saneamiento}
 
 \subsubsection{Qué ocurre si no existe una bifurcación compatible}
 
@@ -1429,7 +1452,7 @@ Además, el sentido del trazado influye en el resultado de determinadas piezas. 
 
 Esto es importante porque existe la acción \texttt{Invertir caval}, que permite cambiar el sentido de la instalación cuando el resultado geométrico no es el esperado.
 
-\manualimage{CAPTURA-SANEAMIENTO-13.png}{Botón Invertir caval con mensaje de confirmación en Saneamiento}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-13.png}{Botón Invertir caval con mensaje de confirmación en Saneamiento}
 
 \subsection{Layers, atributos y comportamiento visual en Saneamiento}
 
@@ -1452,7 +1475,7 @@ En la información recibida aparecen como layers importantes:
 
 \pendingtag\ También se mencionan otros layers de proyecto que conviene validar en Allplan antes de cerrar definitivamente esta unidad del manual.
 
-\manualimage{CAPTURA-SANEAMIENTO-11.png}{Aplicación de layer sobre tramos o accesorios de Saneamiento}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-11.png}{Aplicación de layer sobre tramos o accesorios de Saneamiento}
 
 \subsubsection{Atributos que conviene revisar}
 
@@ -1465,15 +1488,7 @@ Los atributos más relevantes en la información recibida son:
 
 \pendingtag\ Los atributos padre o campos críticos de Saneamiento todavía deben confirmarse.
 
-\manualimage{CAPTURA-SANEAMIENTO-12.png}{Aplicación de atributo sobre elementos seleccionados en Saneamiento}
-
-\subsubsection{Superposiciones que no deben confundirse con duplicados}
-
-En algunos casos, Saneamiento puede generar elementos superpuestos como parte del propio resultado gráfico o constructivo.
-
-Esto puede parecer un duplicado, pero no debe interpretarse automáticamente como una copia entre archivos. Según la información recibida, en esta instalación puede formar parte de la definición prevista de ciertos elementos.
-
-La mecánica de copia a otros archivos, cuando exista, sigue siendo un comportamiento global del sistema y se explica en el apartado \texttt{Cómo funcionan los duplicados o copias}.
+\manualimage{capturas/CAPTURA-SANEAMIENTO-12.png}{Aplicación de atributo sobre elementos seleccionados en Saneamiento}
 
 \subsection{Elementos definidos propios de Saneamiento}
 
@@ -1493,7 +1508,7 @@ Suele ser útil:
 \item y en puntos intermedios donde se necesite resolver una conexión o un registro.
 \end{itemize}
 
-\manualimage{CAPTURA-SANEAMIENTO-08.png}{Uso de Caixa Connexions 200 en Saneamiento}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-08.png}{Uso de Caixa Connexions 200 en Saneamiento}
 
 \subsubsection{Tipos de punto admitidos}
 
@@ -1509,22 +1524,6 @@ Según la información recibida, \texttt{Caixa Connexions 200} admite:
 En paleta, la opción intermedia puede aparecer como \texttt{Intermedio o libre}.
 
 \pendingtag\ El mensaje exacto mostrado cuando se intenta usar un tipo de punto no válido todavía debe confirmarse.
-
-\subsection{Macros en Saneamiento}
-
-Saneamiento incluye una página propia para el uso de macros.
-
-En la información recibida, el flujo específico se apoya en:
-
-\begin{itemize}
-\item selección del punto de inserción;
-\item definición de la cota;
-\item y ajuste de altura respecto al piso cuando procede.
-\end{itemize}
-
-\pendingtag\ Los detalles exactos de orientación todavía deben confirmarse en Allplan.
-
-\manualimage{CAPTURA-SANEAMIENTO-09.png}{Página de macros de Saneamiento con selección de punto de inserción}
 
 \subsection{Soportes en Saneamiento}
 
@@ -1548,7 +1547,7 @@ También conviene revisar:
 
 \pendingtag\ El listado completo de tipos de soporte de Saneamiento todavía debe confirmarse.
 
-\manualimage{CAPTURA-SANEAMIENTO-10.png}{Página de soportes de Saneamiento con inserción y edición}
+\manualimage{capturas/CAPTURA-SANEAMIENTO-10.png}{Página de soportes de Saneamiento con inserción y edición}
 
 \subsection{Mensajes y avisos propios de Saneamiento}
 
@@ -1628,7 +1627,7 @@ Las diferencias principales entre ellos son estas:
 
 Cuando el usuario cambia de sistema, la herramienta adapta automáticamente el comportamiento del trazado, el diámetro base y los accesorios disponibles.
 
-\manualimage{CAPTURA-VENTILACION-01.png}{Paleta de Ventilación con los cuatro sistemas visibles}
+\manualimage{capturas/CAPTURA-VENTILACION-01.png}{Paleta de Ventilación con los cuatro sistemas visibles}
 
 \subsection{Distribución en Ventilación}
 
@@ -1655,7 +1654,7 @@ Los diámetros confirmados en la configuración actual son:
 
 Esto significa que el diámetro disponible depende del sistema seleccionado.
 
-\manualimage{CAPTURA-VENTILACION-02.png}{Selector de diámetro en Conducto Aislado mostrando 150 mm y 160 mm}
+\manualimage{capturas/CAPTURA-VENTILACION-02.png}{Selector de diámetro en Conducto Aislado mostrando 150 mm y 160 mm}
 
 \subsubsection{Qué ocurre al modificar el diámetro}
 
@@ -1702,7 +1701,7 @@ En los sistemas normales, el manguito no actúa solo como accesorio visual.
 
 También actúa como frontera de grupo para numeración y agrupación interna de la instalación.
 
-\manualimage{CAPTURA-VENTILACION-03.png}{Ejemplo de Conducto Impulsion con manguito automático}
+\manualimage{capturas/CAPTURA-VENTILACION-03.png}{Ejemplo de Conducto Impulsion con manguito automático}
 
 \subsubsection{Difusores}
 
@@ -1710,7 +1709,7 @@ En los sistemas que los usan, los difusores forman parte del comportamiento auto
 
 Conviene revisar su colocación final cuando el trazado cambia de dirección o de plano.
 
-\manualimage{CAPTURA-VENTILACION-04.png}{Ejemplo de Conducto Extraccion con difusor}
+\manualimage{capturas/CAPTURA-VENTILACION-04.png}{Ejemplo de Conducto Extraccion con difusor}
 
 \subsubsection{Recuperador con conexión y codo}
 
@@ -1724,7 +1723,7 @@ En \texttt{Conducto Recuperador}, el flujo de creación trabaja con un conjunto 
 
 Esto lo diferencia claramente del resto de sistemas de Ventilación.
 
-\manualimage{CAPTURA-VENTILACION-05.png}{Recuperador con conexión y codo 90}
+\manualimage{capturas/CAPTURA-VENTILACION-05.png}{Recuperador con conexión y codo 90}
 
 \subsubsection{Limitaciones o incompatibilidades}
 
@@ -1765,28 +1764,6 @@ La longitud mínima por sistema es:
 
 \pendingtag\ El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
 
-\subsubsection{Orientación 3D y cambios de plano}
-
-En Ventilación, la orientación 3D del tramo afecta al resultado de:
-
-\begin{itemize}
-\item conductos;
-\item codos;
-\item conexiones;
-\item difusores.
-\end{itemize}
-
-Además, existen casos específicos para:
-
-\begin{itemize}
-\item segmentos verticales;
-\item y cambios de plano.
-\end{itemize}
-
-Por eso, no basta con revisar la planta. En esta instalación conviene comprobar también cómo se resuelve la orientación final del elemento.
-
-\manualimage{CAPTURA-VENTILACION-08.png}{Orientación 3D o tramo vertical/inclinado}
-
 \subsection{Layers y atributos específicos de Ventilación}
 
 \subsubsection{Layers base}
@@ -1803,7 +1780,7 @@ Los layers base confirmados en el registro de Ventilación son:
 
 Esto cubre tanto los conductos como la capa de eje y la capa de etiqueta o nombre del conducto.
 
-\manualimage{CAPTURA-VENTILACION-06.png}{Ejemplo de layer aplicado en Ventilación}
+\manualimage{capturas/CAPTURA-VENTILACION-06.png}{Ejemplo de layer aplicado en Ventilación}
 
 \subsubsection{Atributos detectados en scripts}
 
@@ -1863,31 +1840,7 @@ Por tanto:
 \item \pendingtag\ conviene revisar si la paleta de Elemento en Ventilación debe corregirse antes de cerrar el manual.
 \end{itemize}
 
-\manualimage{CAPTURA-VENTILACION-10.png}{Página de Elemento mostrando el estado real en Ventilación}
-
-\subsection{Macros en Ventilación}
-
-La instalación incluye la misma lógica general de macros que otras instalaciones:
-
-\begin{itemize}
-\item selección de punto;
-\item selección de macro SmartSymbol;
-\item cota manual o relativa a local;
-\item confirmación de inserción.
-\end{itemize}
-
-En la paleta de Ventilación se ven estos campos relacionados:
-
-\begin{itemize}
-\item selección de punto;
-\item selección de local;
-\item cota Z o altura sobre piso;
-\item selección de macro.
-\end{itemize}
-
-\pendingtag\ si en Ventilación existe un uso específico de macros distinto del comportamiento compartido.
-
-\manualimage{CAPTURA-VENTILACION-09.png}{Página de macros de Ventilación}
+\manualimage{capturas/CAPTURA-VENTILACION-10.png}{Página de Elemento mostrando el estado real en Ventilación}
 
 \subsection{Soportes en Ventilación}
 
@@ -1924,30 +1877,7 @@ Las reglas prácticas de uso son estas:
 
 \pendingtag\ el listado completo de tipos de soporte realmente habilitados en Ventilación.
 
-\manualimage{CAPTURA-VENTILACION-07.png}{Bloque de soportes con subtipo Ventilacion}
-
-\subsection{Copias, duplicados y comportamiento especial en Ventilación}
-
-Ventilación usa la misma lógica general de copias y agrupación que el resto de instalaciones basadas en \texttt{PolyLib}.
-
-Los comportamientos relevantes observados son estos:
-
-\begin{itemize}
-\item los elementos pueden agruparse por tramos y por fronteras de manguito;
-\item la numeración cambia cuando aparece un nuevo grupo;
-\item la serialización del estado permite restaurar la instalación en edición.
-\end{itemize}
-
-El usuario debe entender especialmente esto:
-
-\begin{itemize}
-\item un manguito no es solo un accesorio visual;
-\item también afecta a la agrupación lógica de la instalación.
-\end{itemize}
-
-Si el proyecto usa atributo padre y copia a otros archivos, esa lógica sigue siendo la global del sistema.
-
-\pendingtag\ si Ventilación está usando en producción copias automáticas a otros archivos de dibujo y en qué casos.
+\manualimage{capturas/CAPTURA-VENTILACION-07.png}{Bloque de soportes con subtipo Ventilacion}
 
 \subsection{Mensajes y avisos propios de Ventilación}
 
@@ -2012,7 +1942,7 @@ Las diferencias principales entre ellos son estas:
 \item Cada tipo define color, diámetro base, solape y lógica geométrica propia.
 \end{itemize}
 
-\manualimage{CAPTURA-ELECTRICIDAD-01.png}{Paleta de Electricidad con los sistemas disponibles visibles}
+\manualimage{capturas/CAPTURA-ELECTRICIDAD-01.png}{Paleta de Electricidad con los sistemas disponibles visibles}
 
 \subsection{Distribución y variantes en Electricidad}
 
@@ -2057,7 +1987,7 @@ Los diámetros confirmados en la configuración actual son:
 
 Esto significa que cada recorrido eléctrico queda ligado al diámetro definido por su sistema.
 
-\manualimage{CAPTURA-ELECTRICIDAD-02.png}{Selector de diámetro en Electricidad mostrando diferentes sistemas y diámetros}
+\manualimage{capturas/CAPTURA-ELECTRICIDAD-02.png}{Selector de diámetro en Electricidad mostrando diferentes sistemas y diámetros}
 
 \subsubsection{Qué ocurre al modificar el diámetro}
 
@@ -2112,20 +2042,6 @@ La longitud mínima registrada para todos los sistemas principales de Electricid
 
 \pendingtag\ El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
 
-\subsubsection{Orientación 3D y tramos inclinados}
-
-Electricidad utiliza la misma lógica general de orientación 3D compartida por la base del sistema, pero aquí influye especialmente en:
-
-\begin{itemize}
-\item rejibands;
-\item conductos eléctricos;
-\item y elementos definidos conectados al trazado.
-\end{itemize}
-
-Por eso, además de la planta, conviene revisar cómo queda la orientación final de los recorridos en cambios de plano o en tramos inclinados.
-
-\manualimage{CAPTURA-ELECTRICIDAD-03.png}{Ejemplo de orientación 3D o tramo inclinado en Electricidad}
-
 \subsection{Layers y atributos específicos de Electricidad}
 
 \subsubsection{Layers base}
@@ -2155,7 +2071,7 @@ Esto indica una separación clara entre:
 \item y variantes relacionadas con \texttt{TD} o con cara \texttt{X} y \texttt{Y}.
 \end{itemize}
 
-\manualimage{CAPTURA-ELECTRICIDAD-04.png}{Ejemplo de layers aplicados sobre recorridos de Electricidad}
+\manualimage{capturas/CAPTURA-ELECTRICIDAD-04.png}{Ejemplo de layers aplicados sobre recorridos de Electricidad}
 
 \subsubsection{Atributos detectados en scripts}
 
@@ -2233,7 +2149,7 @@ Por eso, a diferencia de Ventilación, aquí no hay incoherencia entre el regist
 
 Su función práctica es insertar una caja de conexiones sobre un punto del recorrido.
 
-\manualimage{CAPTURA-ELECTRICIDAD-05.png}{Uso de Caixa Connexions 200 en Electricidad}
+\manualimage{capturas/CAPTURA-ELECTRICIDAD-05.png}{Uso de Caixa Connexions 200 en Electricidad}
 
 \subsubsection{Tipos de punto admitidos}
 
@@ -2244,23 +2160,6 @@ En la paleta de Electricidad, \texttt{Caixa Connexions 200} admite:
 \item \texttt{Punto final};
 \item \texttt{Intermedio o libre}.
 \end{itemize}
-
-\subsection{Macros en Electricidad}
-
-Electricidad incluye la misma lógica general de macros compartida por la infraestructura base:
-
-\begin{itemize}
-\item selección de punto;
-\item selección de macro SmartSymbol;
-\item cota manual o relativa a local;
-\item confirmación de inserción.
-\end{itemize}
-
-Los campos visibles en paleta son coherentes con ese flujo.
-
-\pendingtag\ si Electricidad usa macros con alguna regla específica adicional.
-
-\manualimage{CAPTURA-ELECTRICIDAD-06.png}{Página de macros de Electricidad}
 
 \subsection{Soportes en Electricidad}
 
@@ -2289,22 +2188,7 @@ Por eso, en Electricidad conviene revisar especialmente:
 \item y cómo se clasifica el soporte una vez creado.
 \end{itemize}
 
-\manualimage{CAPTURA-ELECTRICIDAD-07.png}{Bloque de soportes con subtipo Electricidad}
-
-\subsection{Copias, duplicados y comportamiento especial en Electricidad}
-
-Electricidad usa la misma lógica general de serialización, restauración, layers, atributos y posible copia relacionada que el resto de instalaciones basadas en \texttt{PolyLib}.
-
-Además, hay un comportamiento técnico especialmente importante en esta instalación:
-
-\begin{itemize}
-\item en varios recorridos eléctricos la continuidad geométrica es crítica;
-\item por eso el modo agrupado tiene más peso que en otros sistemas.
-\end{itemize}
-
-Esto significa que el usuario debe revisar no solo que el recorrido exista, sino que también se esté resolviendo como un conjunto continuo y no como tramos aislados cuando eso no corresponde.
-
-\pendingtag\ si Electricidad está usando en producción copias automáticas a otros archivos de dibujo y en qué casos.
+\manualimage{capturas/CAPTURA-ELECTRICIDAD-07.png}{Bloque de soportes con subtipo Electricidad}
 
 \subsection{Inconsistencias o puntos a validar en Electricidad}
 
