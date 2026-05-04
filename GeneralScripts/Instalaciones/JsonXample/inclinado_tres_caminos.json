@@ -1,0 +1,131 @@
+{
+    "id": "inclinado_tres_caminos",
+    "nombre": "Inclinado 3 Caminos",
+    "descripcion": "2 techos inclinados con pendientes opuestas formando cresta, obstaculos paralelos a cada techo, 3 caminos cruzando ambos techos",
+    "techo": [
+        {
+            "id": "techo_izq",
+            "descripcion": "Techo izquierdo - sube de X=0 a X=7000",
+            "vertices": [
+                { "x": 0.0,    "y": 0.0,    "z": 2800.0 },
+                { "x": 7000.0, "y": 0.0,    "z": 3300.0 },
+                { "x": 7000.0, "y": 5000.0, "z": 3300.0 },
+                { "x": 0.0,    "y": 5000.0, "z": 2800.0 }
+            ]
+        },
+        {
+            "id": "techo_der",
+            "descripcion": "Techo derecho - baja de X=7000 a X=14000",
+            "vertices": [
+                { "x": 7000.0,  "y": 0.0,    "z": 3300.0 },
+                { "x": 14000.0, "y": 0.0,    "z": 2800.0 },
+                { "x": 14000.0, "y": 5000.0, "z": 2800.0 },
+                { "x": 7000.0,  "y": 5000.0, "z": 3300.0 }
+            ]
+        }
+    ],
+    "caminos": [
+        {
+            "id": "camino_1",
+            "nombre": "Camino 1 (Y=1000)",
+            "nodos": [
+                {
+                    "id": "A1",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 1000 },
+                    "anteriores": [],
+                    "siguientes": ["B1"]
+                },
+                {
+                    "id": "B1",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 1000 },
+                    "anteriores": ["A1"],
+                    "siguientes": []
+                }
+            ],
+            "estrategia_colision": ["saltar"],
+            "radio_tubo": 80.0
+        },
+        {
+            "id": "camino_2",
+            "nombre": "Camino 2 (Y=2500)",
+            "nodos": [
+                {
+                    "id": "A2",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 2500 },
+                    "anteriores": [],
+                    "siguientes": ["B2"]
+                },
+                {
+                    "id": "B2",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 2500 },
+                    "anteriores": ["A2"],
+                    "siguientes": []
+                }
+            ],
+            "estrategia_colision": ["saltar"],
+            "radio_tubo": 80.0
+        },
+        {
+            "id": "camino_3",
+            "nombre": "Camino 3 (Y=4000)",
+            "nodos": [
+                {
+                    "id": "A3",
+                    "tipo": "inicio",
+                    "coordenadas": { "x": 500, "y": 4000 },
+                    "anteriores": [],
+                    "siguientes": ["B3"]
+                },
+                {
+                    "id": "B3",
+                    "tipo": "fin",
+                    "coordenadas": { "x": 13500, "y": 4000 },
+                    "anteriores": ["A3"],
+                    "siguientes": []
+                }
+            ],
+            "estrategia_colision": ["saltar"],
+            "radio_tubo": 80.0
+        }
+    ],
+    "obstaculos": [
+        {
+            "id": "Viga_izq",
+            "descripcion": "Viga en techo izquierdo (X=3000-4500) inclinada como el techo",
+            "vertices": [
+                { "x": 3000.0, "y": 1800.0, "z": 3014.3 },
+                { "x": 4500.0, "y": 1800.0, "z": 3121.4 },
+                { "x": 4500.0, "y": 3200.0, "z": 3121.4 },
+                { "x": 3000.0, "y": 3200.0, "z": 3014.3 },
+                { "x": 3000.0, "y": 1800.0, "z": 3214.3 },
+                { "x": 4500.0, "y": 1800.0, "z": 3321.4 },
+                { "x": 4500.0, "y": 3200.0, "z": 3321.4 },
+                { "x": 3000.0, "y": 3200.0, "z": 3214.3 }
+            ],
+            "modo": ["saltar"]
+        },
+        {
+            "id": "Viga_der",
+            "descripcion": "Viga en techo derecho (X=9500-11000) inclinada como el techo",
+            "vertices": [
+                { "x": 9500.0,  "y": 1800.0, "z": 3121.4 },
+                { "x": 11000.0, "y": 1800.0, "z": 3014.3 },
+                { "x": 11000.0, "y": 3200.0, "z": 3014.3 },
+                { "x": 9500.0,  "y": 3200.0, "z": 3121.4 },
+                { "x": 9500.0,  "y": 1800.0, "z": 3321.4 },
+                { "x": 11000.0, "y": 1800.0, "z": 3214.3 },
+                { "x": 11000.0, "y": 3200.0, "z": 3214.3 },
+                { "x": 9500.0,  "y": 3200.0, "z": 3321.4 }
+            ],
+            "modo": ["saltar"]
+        }
+    ],
+    "configuracion": {
+        "subtipo_tuberia": "aislado",
+        "estrategia_colision": ["saltar"]
+    }
+}

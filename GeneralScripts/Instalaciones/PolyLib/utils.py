@@ -436,10 +436,8 @@ def load_supports_from_json(path: str | Path | None = None) -> List[SupportJson]
     """
     json_path = Path(path) if path is not None else get_default_json_path()
 
-    # Crear mock si no existe
     if not json_path.exists():
-        json_path = ensure_mock_json(json_path)
-
+        return []
     try:
         raw = json.loads(json_path.read_text(encoding="utf-8"))
     except OSError as exc:

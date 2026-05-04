@@ -14,7 +14,6 @@ try:
     import NemAll_Python_AllplanSettings as AllplanSettings
     import NemAll_Python_IFW_Input as AllplanIFW
     import NemAll_Python_IFW_ElementAdapter as AllplanEleAdapter
-
     ALLPLAN_AVAILABLE = True
 except Exception:
     ALLPLAN_AVAILABLE = False
@@ -29,30 +28,22 @@ from DocumentManager import DocumentManager
 from TypeCollections.ModificationElementList import ModificationElementList
 
 from .models import (
-    PolylineBaseConfig,
-    InstallationElement,
-    DistributionTypes,
-    FacesEN,
-    GeneratedElement,
-    SegmentInfo,
-    WaterTypes,
-    TypeSupportTypes,
-    SoporteEntry,
-    SoporteEditModeValues,
+    PolylineBaseConfig, InstallationElement, DistributionTypes,
+    FacesEN, GeneratedElement, SegmentInfo, WaterTypes,
+    TypeSupportTypes, SoporteEntry, SoporteEditModeValues
 )
-from .parameters import ParamNames, EventIds
+from .parameters import ParamNames, EventIds, PolyModeValues
 from .utils import ElementSerializer
 from .installation_registry import (
     auto_load_installations,
     get_installation as registry_get_installation,
-    get_pythonpart,
+    get_pythonpart
 )
 
 # SupportModel se importa opcionalmente: soportes.py tiene dependencias de
 # Allplan que no están disponibles en todos los contextos (tests, etc.)
 try:
     from .soportes import SupportModel
-
     _SUPPORT_MODEL_AVAILABLE = True
 except Exception as _soportes_exc:
     _SUPPORT_MODEL_AVAILABLE = False
@@ -65,24 +56,24 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
     """ScriptObject for polyline creation and editing. (It functions as database)
     Maintains state between interactions and handles element creation.
     """
-
     def __init__(self, build_ele, script_object_data):
         # if ALLPLAN_AVAILABLE:
         super().__init__(script_object_data)
         self.build_ele = build_ele
-        self.doc: Any = None
+        self.doc: Any  = None
         self.script_object_interactor: Optional[PolylineInteractor] = None
         self.ctrl_prop_util = getattr(script_object_data, "control_props_util")
         self.init_storage: Any = None
 
         # Cargar lista de tipos de soporte desde el enum (fuente única de verdad)
         self.ctrl_prop_util.set_value_list(
-            ParamNames.Soportes.TYPE_SUPPORT,
+            ParamNames.Supports.TYPE_SUPPORT,
             TypeSupportTypes.to_value_list(),
         )
 
         # Store polyline paths and segments
         self.saved_paths: List[List[AllplanGeo.Point3D]] = []
+        self.saved_optimized_paths: List[List[AllplanGeo.Point3D]] = []
         self.polilyne: List[AllplanGeo.Point3D] = []
         self.generated_elements: List[List[InstallationElement]] = []
         self.installation_types: list = []
@@ -108,41 +99,37 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         self.data_restore = []
         self.segment_groups = []
         self.saved_segments = []
+        self.undefined_points_list: List[Any] = []      # UndefinedPoint — puntos del modo punto_input
+        self.nodo_list: List[Any] = []                  # OptimizerNode — input del optimizador
         self.bifurcation_nodes: Dict = {}
         self.persistent_metadata: dict[str, SegmentInfo] = {}
-        self.saved_cut_points: List[AllplanGeo.Point3D] = []  # Puntos de corte activos
-        self.saved_vertex_cut_points: List[AllplanGeo.Point3D] = (
-            []
-        )  # Subconjunto: cortes hechos en vértice existente
+        self.saved_cut_points: List[AllplanGeo.Point3D] = []         # Puntos de corte activos
+        self.saved_vertex_cut_points: List[AllplanGeo.Point3D] = []  # Subconjunto: cortes hechos en vértice existente
 
         # Store configuration self._config = config
         self._config: Optional[PolylineBaseConfig | None] = None
         self._polyline_attrs: Any | None = None
 
         # Element assembly hooks (callbacks for installations to customize element creation)
-        self.element_creation_preview_hook: Optional[Callable] = (
-            None  # Called for each segment: hook(segment_data, properties)
-        )
-        self.element_creation_layer_attrs_hook: Optional[Callable] = (
-            None  # Called for each segment: hook(segment_data, idx, properties)
-        )
+        self.element_creation_preview_hook: Optional[Callable] = None  # Called for each segment: hook(segment_data, properties)
+        self.element_creation_layer_attrs_hook: Optional[Callable] = None  # Called for each segment: hook(segment_data, idx, properties)
 
-        self.global_group_numbers: Dict = (
-            {}
-        )  # Aquí se guardará la consistencia entre paths
+        self.global_group_numbers: Dict = {} # Aquí se guardará la consistencia entre paths
 
         # ----------------------- NEW VARIABLES -----------------------
         self.allowed_connections = []
         self.allowed_angles = []
+
         self.is_individual_mode: bool = True
         self.current_inst_config: Dict = {}
         self.pythonparts_modules: list = []
         self.element_type_core = ""
         self.inst_color = 1
+        self.path_inst_types: Dict[int, str] = {}       # path_idx → label (saved_paths)
+        self.path_inst_types_auto: Dict[int, str] = {}  # path_idx → label (saved_optimized_paths)
+        self.auto_path_color_ids: List[int] = []        # color_id por índice de saved_optimized_paths
 
-        self.selected_element_id: Tuple | None = (
-            None  # ID del elemento actualmente seleccionado
-        )
+        self.selected_element_id: Tuple | None = None  # ID del elemento actualmente seleccionado
         self.selected_segments = set()
 
         self.layer_types: list = []
@@ -164,13 +151,34 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         self._soporte_preview_elems: List[Any] = []
 
         # --- Soportes: lista acumulada (pendiente de insertar en plano) ---
-        self.soportes_list: List[SoporteEntry] = []  # List[SoporteEntry]
+        self.soportes_list: List[SoporteEntry] = []          # List[SoporteEntry]
         self._soporte_key_counter: int = 0
         self._soporte_geom_cache: Dict[int, List[Any]] = {}  # key → ModelElement3D list
 
         # Instrumentation/debugging
         self._debug = False  # Enable debug logging
         self._diagnostics: List[str] = []  # Store diagnostic messages
+
+    @property
+    def active_paths(self) -> List[List[AllplanGeo.Point3D]]:
+        """
+        Actúa como un selector dinámico.
+        Cualquier cambio hecho a la lista retornada afectará
+        directamente a la lista original (por referencia).
+        """
+        interactor = self.script_object_interactor
+        if interactor and interactor._current_poly_mode() == PolyModeValues.Automatico:
+            return self.saved_optimized_paths
+        return self.saved_paths
+
+    @active_paths.setter
+    def active_paths(self, value: List[List[AllplanGeo.Point3D]]):
+        """Asigna la lista completa al atributo correcto según el modo."""
+        interactor = self.script_object_interactor
+        if interactor and interactor._current_poly_mode() == PolyModeValues.Automatico:
+            self.saved_optimized_paths = value
+        else:
+            self.saved_paths = value
 
     def set_config(self, config: PolylineBaseConfig) -> None:
         """Set the configuration for this script object."""
@@ -187,7 +195,6 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
     def start_input(self):
         from .interactor import PolylineInteractor
-
         """Initialize the interactor and start input.
 
         Returns the interactor so Allplan can call its methods (on_cancel_function, etc.)
@@ -204,15 +211,9 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             #     self.script_object_interactor.apply_layer_default(layer=self._config.default_layer)
 
         # --- Marker manager initialization (opt-in) ---
-        if (
-            self._config
-            and self._config.marker_manager_factory
-            and self.marker_manager is None
-        ):
+        if self._config and self._config.marker_manager_factory and self.marker_manager is None:
             try:
-                self.marker_manager = self._config.marker_manager_factory(
-                    self, self.build_ele
-                )
+                self.marker_manager = self._config.marker_manager_factory(self, self.build_ele)
                 # Restore markers from SavedState when editing
                 saved = getattr(self.build_ele, "SavedState", None)
                 if saved and hasattr(saved, "value") and saved.value:
@@ -220,9 +221,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                         raw = saved.value
                         # Unwrap repr() wrapping if present
                         _s = raw.strip() if isinstance(raw, str) else ""
-                        if (_s.startswith("'") and _s.endswith("'")) or (
-                            _s.startswith('"') and _s.endswith('"')
-                        ):
+                        if (_s.startswith("'") and _s.endswith("'")) or (_s.startswith('"') and _s.endswith('"')):
                             try:
                                 _s = ast.literal_eval(_s)
                                 if isinstance(_s, str):
@@ -244,24 +243,16 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
     def _initialize_parameter_states(self):
         if self._config:
             if self._config.parameters_show:
-                for (
-                    parameter_name,
-                    visible,
-                ) in self._config.parameters_show.to_param_map().items():
+                for parameter_name, visible in self._config.parameters_show.to_param_map().items():
                     self.show_parameter(parameter_name, visible)
 
             if self._config.parameters_enabled:
-                for (
-                    parameter_name,
-                    enabled,
-                ) in self._config.parameters_enabled.to_param_map().items():
+                for parameter_name, enabled in self._config.parameters_enabled.to_param_map().items():
                     self.enable_parameter(parameter_name, enabled)
 
     def _load_default_inst_params(self, installation_name=None):
 
-        inst_name = (
-            installation_name or self._config and self._config.default_installation
-        )
+        inst_name = installation_name or self._config and self._config.default_installation
         if not inst_name:
             return
 
@@ -280,28 +271,24 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self.installation_types = inst.installation_types
             self.ctrl_prop_util.set_value_list(
                 ParamNames.Installation.INSTALLATION_TYPE,
-                "|".join(el["label"] for el in self.installation_types),
+                "|".join(el['label'] for el in self.installation_types)
             )
 
             # Asignar el valor del combo para que resolve_installation_config
             # pueda encontrar el model_base al llamarse justo después
             _first_label = self.installation_types[0]["label"]
-            getattr(self.build_ele, ParamNames.Installation.INSTALLATION_TYPE).value = (
-                _first_label
-            )
+            getattr(self.build_ele, ParamNames.Installation.INSTALLATION_TYPE).value = _first_label
 
             if self._config and self._config.parameters_enabled.functional_name:
                 _value = self.installation_types[0]["label"]
                 param = getattr(self.build_ele, ParamNames.General.FUNCTIONAL_NAME)
-                param.value = _value
+                param.value =_value
 
                 self.selected_inst_type = _value
 
             if self._config and self._config.parameters_enabled.limit_angles:
                 _value = self.installation_types[0]["allowed_angles"]
-                param = getattr(
-                    self.build_ele, ParamNames.Installation.SUPPORTED_ANGLES
-                )
+                param = getattr(self.build_ele, ParamNames.Installation.SUPPORTED_ANGLES)
                 param.value = _value
 
                 self.support_angles = _value
@@ -309,21 +296,22 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         if hasattr(inst, "layers"):
             self.layer_types = inst.layers
             self.ctrl_prop_util.set_value_list(
-                "LayerTypes", "|".join(el["label"] for el in self.layer_types)
+                "LayerTypes",
+                "|".join(el['label'] for el in self.layer_types)
             )
 
         if hasattr(inst, "elements3D"):
             self.pythonparts_modules = inst.elements3D
 
         if hasattr(inst, "default_layers"):
-            self.default_layers = inst.default_layers
-            if self.script_object_interactor:
+            self.default_layers =  inst.default_layers
+            if  self.script_object_interactor:
                 self.script_object_interactor.apply_layer_default()
 
         if self._config and self._config.parameters_enabled.distribution_type:
             self.ctrl_prop_util.set_value_list(
                 ParamNames.Installation.DISTRIBUTION_TYPE,
-                DistributionTypes.to_value_list(),
+                DistributionTypes.to_value_list()
             )
             self.distribution_type = DistributionTypes.IS.value
 
@@ -358,16 +346,10 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self.ctrl_prop_util.set_enable_condition(parameter_name, condition)
 
     def resolve_installation_config(self):
-        selected_type = getattr(
-            self.build_ele, ParamNames.Installation.INSTALLATION_TYPE
-        ).value
+        selected_type = getattr(self.build_ele, ParamNames.Installation.INSTALLATION_TYPE).value
         model_base = next(
-            (
-                item
-                for item in self.installation_types
-                if item["label"] == selected_type
-            ),
-            None,
+            (item for item in self.installation_types if item["label"] == selected_type),
+            None
         )
         if not model_base:
             return None
@@ -376,7 +358,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         self.element_type_core = model_base["key"]
         self.allowed_connections = model_base["connections"]
         self.allowed_angles = model_base["angles"]
-        self.is_individual_mode = model_base["is_individual"]
+        self.is_individual_mode =  model_base["is_individual"]
         self.inst_color = model_base["color"]
         self.support_angles = model_base["allowed_angles"]
         self.min_segment_length = model_base["min_segment_length"]
@@ -392,34 +374,21 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self.show_parameter(ParamNames.Installation.DIAMETER_TYPE_STR, is_list)
         if self._config:
             has_diameter_combo = (
-                self._config.parameters_enabled.diameter_type
-                or self._config.parameters_enabled.diameter_type_str
+                self._config.parameters_enabled.diameter_type or
+                self._config.parameters_enabled.diameter_type_str
             )
-            self.show_parameter(
-                ParamNames.Installation.DIAMETER_MODIFY,
-                bool(is_list and has_diameter_combo),
-            )
-            # self.enable_parameter(ParamNames.Installation.DIAMETER_MODIFY, bool(is_list and has_diameter_combo))
+            self.show_parameter(ParamNames.Installation.DIAMETER_MODIFY, bool(is_list and has_diameter_combo))
+            #self.enable_parameter(ParamNames.Installation.DIAMETER_MODIFY, bool(is_list and has_diameter_combo))
 
         if is_list:
-            if (
-                self._config
-                and self._config.parameters_enabled.diameter_type
-                and self.diameter_list
-            ):
-                self.ctrl_prop_util.set_value_list(
-                    ParamNames.Installation.DIAMETER_TYPE,
-                    "|".join(str(el) for el in self.diameter_list),
+            if self._config and self._config.parameters_enabled.diameter_type and self.diameter_list:
+                self.ctrl_prop_util.set_value_list(ParamNames.Installation.DIAMETER_TYPE,
+                    "|".join(str(el) for el in self.diameter_list)
                 )
 
-            if (
-                self._config
-                and self._config.parameters_enabled.diameter_type_str
-                and self.diameter_list
-            ):
-                self.ctrl_prop_util.set_value_list(
-                    ParamNames.Installation.DIAMETER_TYPE_STR,
-                    "|".join(str(el) for el in self.diameter_list),
+            if self._config and self._config.parameters_enabled.diameter_type_str and self.diameter_list:
+                self.ctrl_prop_util.set_value_list(ParamNames.Installation.DIAMETER_TYPE_STR,
+                    "|".join(str(el) for el in self.diameter_list)
                 )
 
             self.diameter_type = raw_diameter[0]
@@ -427,63 +396,199 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self.diameter_type = raw_diameter
 
         param = getattr(self.build_ele, ParamNames.Installation.SUPPORTED_ANGLES)
-        param.value = self.support_angles
+        param.value =  self.support_angles
 
         return model_base
 
-    def _create_elements(self):
+    # =========================================================================
+    # HELPERS: doble pasada manual + automática
+    # =========================================================================
+    def _build_segment_groups_for_paths(self, paths: list) -> list:
+        """Construye segment_groups a partir de una lista de paths concreta.
+
+        Usa build_segments_for_paths del interactor, que calcula SegmentItems
+        directamente desde los puntos sin depender de self.data. Esto permite
+        procesar correctamente los paths del "otro modo" (saved_paths cuando
+        estamos en auto, o saved_optimized_paths cuando estamos en manual).
         """
-        Crea los elementos finales de Allplan a partir de los segmentos almacenados.
+        if not paths or not self.script_object_interactor:
+            return []
+        try:
+            return self.script_object_interactor.build_segments_for_paths(paths)
+        except Exception as ex:
+            print(f"[SO] _build_segment_groups_for_paths: {ex}")
+            return []
 
-        - Recorre cada grupo de segmentos (paths)
-        - Aplica el hook de creación de elementos y capas si está definido
-        - Almacena los elementos resultantes en `element_list_final`
+    def _resolve_inst_label_for_path(self, path_idx: int, path_inst_types_dict: dict) -> str:
+        """Devuelve el label de instalación para ``path_idx``.
+
+        Orden de prioridad:
+        1. Entrada explícita en ``path_inst_types_dict``.
+        2. Campo ``system`` del primer SegmentInfo en ``persistent_metadata``.
+        3. Label del ``current_inst_config`` global (último recurso).
+
+        Al inferir por (2) la entrada se registra en ``path_inst_types_dict``
+        para que llamadas posteriores sean consistentes y no vuelvan al global.
         """
-        # Si no existen grupos de segmentos, no hay nada para crear
-        if not self.segment_groups:
-            print("[SO] No hay segmentos guardados para crear")
-            return
+        label = path_inst_types_dict.get(path_idx)
+        if label:
+            return label
 
-        # Reinicia el mapeo de números de grupo globales
-        # (usado para mantener coherencia entre paths / elementos)
-        # self.global_group_numbers = {}
+        meta = self.persistent_metadata.get(f"{path_idx}_0")
+        if meta and meta.system:
+            path_inst_types_dict[path_idx] = meta.system
+            return meta.system
 
-        # Limpia la lista final de elementos antes de generar nuevos
-        self.element_list_final = []
+        if self.current_inst_config:
+            return self.current_inst_config.get("label", "")
+        return ""
 
-        # Recorre cada path (trayectoria) junto con su índice
-        for path_idx, segments in enumerate(self.element_list):
-            # segments = List[GeneratedElement]
-            # Si existe un hook para crear elementos con atributos y capas, se delega la creación a esa función
-            if self.element_creation_layer_attrs_hook:
-                elements = self.element_creation_layer_attrs_hook(
-                    segments,  # segmentos del path actual
-                    path_idx,  # índice del path
-                    self,  # referencia al script object
+    def _run_preview_pass(self, groups: list, path_inst_types_dict: dict) -> None:
+        """Itera sobre groups, llama al hook de preview y acumula en element_list.
+
+        Factoriza la lógica de inyección/restauración de config por path para
+        que _create_elements_preview pueda reutilizarla en las dos pasadas.
+
+        El tipo de cada camino se resuelve con ``_resolve_inst_label_for_path``,
+        que usa persistent_metadata como fallback antes del global para garantizar
+        separación estricta entre caminos con distintos tipos de instalación.
+
+        Se salvan y restauran también ``diameter_list`` y ``diameter_type`` para
+        evitar que el diámetro de un tipo de paleta (ej. Aislado con lista [150,160])
+        contamine la visualización de caminos con otro tipo (ej. Impulsión, 75mm).
+        """
+        for i, segments in enumerate(groups):
+            _saved_inst_config   = self.current_inst_config
+            _saved_element_type  = self.element_type_core
+            _saved_is_individual = self.is_individual_mode
+            _saved_diameter_list = self.diameter_list
+            _saved_diameter_type = self.diameter_type
+
+            _inst_label = self._resolve_inst_label_for_path(i, path_inst_types_dict)
+            if _inst_label:
+                _model = next(
+                    (t for t in self.installation_types if t["label"] == _inst_label),
+                    None,
                 )
-                # Se almacenan los elementos generados para su posterior uso
-                self.element_list_final.append(elements)
+                if _model:
+                    self.current_inst_config = _model
+                    self.element_type_core   = _model["key"]
+                    self.is_individual_mode  = _model["is_individual"]
+                    raw_diam = _model["diameter"]
+                    if isinstance(raw_diam, list):
+                        self.diameter_list = raw_diam
+                        # Respetar la selección actual del usuario si es válida para este modelo;
+                        # de lo contrario usar el primer valor de la lista.
+                        if self.diameter_type not in raw_diam:
+                            self.diameter_type = raw_diam[0]
+                    else:
+                        # Tipo de diámetro fijo: forzar el del modelo para aislar el camino.
+                        self.diameter_list = None
+                        self.diameter_type = raw_diam
 
-    def _create_elements_preview(self):
-        """
-        Genera la representación visual (Preview) basada en los grupos de segmentos actuales.
-        """
-        # [PASO 1] LIMPIEZA VISUAL
-        # Borramos la lista de objetos 3D anteriores antes de crear los nuevos.
-        self.element_list = []
-
-        # [PASO 2] VALIDACIÓN DE DATOS
-        # Si no hay grupos de segmentos, no hacemos nada (evita errores)
-        if not self.segment_groups:
-            return
-
-        # [PASO CRITICO 3] ITERACIÓN ESTRUCTURADA
-        for i, segments in enumerate(self.segment_groups):
             if self.element_creation_preview_hook:
                 raw_elements = self.element_creation_preview_hook(segments, self)
                 if raw_elements:
                     typed_elements = [GeneratedElement(**data) for data in raw_elements]
                     self.element_list.append(typed_elements)
+
+            self.current_inst_config = _saved_inst_config
+            self.element_type_core   = _saved_element_type
+            self.is_individual_mode  = _saved_is_individual
+            self.diameter_list       = _saved_diameter_list
+            self.diameter_type       = _saved_diameter_type
+
+    # =========================================================================
+    # CREACIÓN DE ELEMENTOS (preview y final) — doble pasada manual + auto
+    # =========================================================================
+    def _create_elements(self):
+        """Crea los elementos finales a partir de element_list.
+
+        element_list está organizado en dos bloques consecutivos:
+          · Bloque manual  → índices 0 … len(saved_paths)-1
+          · Bloque auto    → índices len(saved_paths) … N-1
+
+        Para el bloque manual se usa path_inst_types (índice relativo al bloque).
+        Para el bloque auto se usa current_inst_config como fallback.
+        """
+        if not self.element_list:
+            print("[SO] No hay segmentos guardados para crear")
+            return
+
+        self.element_list_final = []
+        n_manual = len(self.saved_paths)
+
+        for list_idx, segments in enumerate(self.element_list):
+            _saved_inst_config   = self.current_inst_config
+            _saved_element_type  = self.element_type_core
+            _saved_is_individual = self.is_individual_mode
+            _saved_diameter_list = self.diameter_list
+            _saved_diameter_type = self.diameter_type
+
+            # Resolver tipo del camino: dict explícito → persistent_metadata → global
+            if list_idx < n_manual:
+                _inst_label = self._resolve_inst_label_for_path(list_idx, self.path_inst_types)
+            else:
+                _inst_label = self._resolve_inst_label_for_path(list_idx - n_manual, self.path_inst_types_auto)
+
+            if _inst_label:
+                _model = next(
+                    (t for t in self.installation_types if t["label"] == _inst_label),
+                    None,
+                )
+                if _model:
+                    self.current_inst_config = _model
+                    self.element_type_core   = _model["key"]
+                    self.is_individual_mode  = _model["is_individual"]
+                    raw_diam = _model["diameter"]
+                    if isinstance(raw_diam, list):
+                        self.diameter_list = raw_diam
+                        if self.diameter_type not in raw_diam:
+                            self.diameter_type = raw_diam[0]
+                    else:
+                        self.diameter_list = None
+                        self.diameter_type = raw_diam
+
+            if self.element_creation_layer_attrs_hook:
+                elements = self.element_creation_layer_attrs_hook(
+                    segments,
+                    list_idx,
+                    self,
+                )
+                self.element_list_final.append(elements)
+
+            self.current_inst_config = _saved_inst_config
+            self.element_type_core   = _saved_element_type
+            self.is_individual_mode  = _saved_is_individual
+            self.diameter_list       = _saved_diameter_list
+            self.diameter_type       = _saved_diameter_type
+
+    def _create_elements_preview(self):
+        """Genera la preview 3D siempre para ambos caminos.
+
+        Construye element_list en dos bloques bien definidos e independientes
+        del modo activo:
+
+          · Bloque manual  — saved_paths       → path_inst_types aplica por índice
+          · Bloque auto    — saved_optimized_paths → fallback a current_inst_config
+
+        No depende de segment_groups ni del modo activo; usa
+        _build_segment_groups_for_paths (build_segments_for_paths internamente)
+        para calcular SegmentItems directamente desde los puntos del camino.
+        """
+        self.element_list = []
+
+        # ── Bloque manual: saved_paths ─────────────────────────────────────────
+        if self.saved_paths:
+            manual_groups = self._build_segment_groups_for_paths(self.saved_paths)
+            if manual_groups:
+                self._run_preview_pass(manual_groups, self.path_inst_types)
+
+        # ── Bloque auto: saved_optimized_paths ────────────────────────────────
+        if self.saved_optimized_paths:
+            auto_groups = self._build_segment_groups_for_paths(self.saved_optimized_paths)
+            if auto_groups:
+                self._run_preview_pass(auto_groups, self.path_inst_types_auto)
 
     def _get_pythonpart_installed(
         self,
@@ -491,7 +596,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         exec_args: tuple = (),
         exec_kwargs: dict | None = None,
         attr_args: tuple = (),
-        attr_kwargs: dict | None = None,
+        attr_kwargs: dict | None = None
     ):
         """
         Instancia un PythonPart, ejecuta su lógica y registra atributos por defecto.
@@ -503,9 +608,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         # 1. Obtención de la clase
         cls = get_pythonpart(element_key)
         if not cls:
-            print(
-                f"[PolylineInteractor] No hay PythonPart registrado para '{element_key}'"
-            )
+            print(f"[PolylineInteractor] No hay PythonPart registrado para '{element_key}'")
             return None
 
         try:
@@ -519,9 +622,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             print(f"[PolylineInteractor] Execute result: {type(result)}")
 
             # 4. Captura de Default Attributes (Solo si no existen para esta key)
-            if element_key not in self.default_attributes and hasattr(
-                inst, "get_attributes"
-            ):
+            if element_key not in self.default_attributes and hasattr(inst, "get_attributes"):
                 try:
                     attrs_list = inst.get_attributes(*attr_args, **attr_kwargs)
                     self.default_attributes[element_key] = attrs_list
@@ -533,14 +634,10 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             if hasattr(result, "elements"):
                 model_elems = result.elements
             else:
-                print(
-                    f"[PolylineInteractor] Warning: El resultado de execute no contiene '.elements'"
-                )
+                print(f"[PolylineInteractor] Warning: El resultado de execute no contiene '.elements'")
 
         except Exception as ex:
-            print(
-                f"[PolylineInteractor] Error creating PythonPart '{element_key}': {ex}"
-            )
+            print(f"[PolylineInteractor] Error creating PythonPart '{element_key}': {ex}")
 
         return model_elems
 
@@ -628,11 +725,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 param_name = ParamNames.Installation.WATER_TYPE
                 self.show_parameter(param_name)
 
-                if value in [
-                    DistributionTypes.IS.value,
-                    DistributionTypes.TD.value,
-                    DistributionTypes.EN.value,
-                ]:
+                if value in [DistributionTypes.IS.value, DistributionTypes.TD.value]:
                     water_types = WaterTypes.to_value_list(value)
                     self.ctrl_prop_util.set_value_list(param_name, water_types)
                 else:
@@ -645,9 +738,8 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             param.value = value
 
             self.water_type = value
-
-            for seg_info in self.persistent_metadata.values():
-                seg_info.water_type = value
+            # NO propagar a persistent_metadata: cada segmento guardado conserva
+            # el water_type con el que fue creado (independencia entre caminos).
 
             update_necessary = True
 
@@ -658,9 +750,20 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self.face_en = value
             update_necessary = True
 
+        elif name == ParamNames.PolyMode.MODE:
+            if self.script_object_interactor:
+                self.script_object_interactor._change_poly_mode()
+            update_necessary = True
+
         elif name == ParamNames.DrawMode.MODE:
             if self.script_object_interactor:
                 self.script_object_interactor._change_draw_mode()
+            update_necessary = True
+
+        elif name == ParamNames.DrawMode.INSERT_UNDEFINED_POINTS:  # 1031 — RadioButtonGroup
+            # value: 0=Desactivado, 1=Insertar, 2=Editar/Borrar
+            if self.script_object_interactor:
+                self.script_object_interactor._change_undefined_point_mode(value)
             update_necessary = True
 
         elif name == ParamNames.DrawMode.INSERT:
@@ -693,43 +796,31 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             param.value = value
             update_necessary = True
 
-        elif name in (
-            # ── Puntos definidos / libres — persistir valores de la paleta ──────
-            ParamNames.DefinedPointInput.ELEMENT_TYPE,
-            ParamNames.DefinedPointInput.POINT_TYPE,
-            ParamNames.DefinedPointInput.ROT_X,
-            ParamNames.DefinedPointInput.ROT_Y,
-            ParamNames.DefinedPointInput.ROT_Z,
-        ):
-            param = getattr(self.build_ele, name)
-            param.value = value
-            update_necessary = True
-
         # ── Soportes — todos los campos de la página PageSoportes ────────────
         # Los parámetros de soportes no tienen visibilidad dinámica:
         # todos son siempre visibles y habilitados en el .pyp.
         # Este bloque solo persiste el valor en build_ele.
         elif name in (
-            ParamNames.Soportes.TYPE_SUPPORT,
-            ParamNames.Soportes.SUPERFICIE,
-            ParamNames.Soportes.COTA_A,
-            ParamNames.Soportes.COTA_B,
-            ParamNames.Soportes.ANGULO_INCLINACION,
+            ParamNames.Supports.TYPE_SUPPORT,
+            ParamNames.Supports.SUPERFICIE,
+            ParamNames.Supports.COTA_A,
+            ParamNames.Supports.COTA_B,
+            ParamNames.Supports.ANGULO_INCLINACION,
         ):
             param = getattr(self.build_ele, name)
             param.value = value
             update_necessary = True
 
         # ── Modo edición soportes: RadioButtonGroup 0/1/2 ──
-        elif name == ParamNames.Soportes.EDIT_MODE:
+        elif name == ParamNames.Supports.EDIT_MODE:
             mode = int(value) if value is not None else 0
             # Al volver a Desactivado (0): limpiar estado de edición
             if mode == SoporteEditModeValues.DISABLED:
                 interactor = self.script_object_interactor
                 if interactor is not None:
-                    interactor._soporte_selected_keys = set()
-                    interactor._soporte_hover_key = None
-                    interactor._soporte_moving_key = None
+                    interactor._soporte_selected_keys  = set()
+                    interactor._soporte_hover_key      = None
+                    interactor._soporte_moving_key     = None
                     interactor._soporte_move_p1_origin = None
                     interactor._soporte_move_p2_origin = None
                     interactor._update_manage_buttons()
@@ -737,15 +828,10 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             elif mode == SoporteEditModeValues.EDIT:
                 interactor = self.script_object_interactor
                 if interactor is not None:
-                    interactor._soporte_moving_key = None
+                    interactor._soporte_moving_key     = None
                     interactor._soporte_move_p1_origin = None
                     interactor._soporte_move_p2_origin = None
             update_necessary = True
-
-        # elif name == ParamNames.Soportes.ATTR_VALUE:
-        #     if self.script_object_interactor:
-        #         self.script_object_interactor.apply_attributes_input()
-        #     update_necessary = True
 
         return update_necessary
 
@@ -783,7 +869,6 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         Lee Pos<index>X/Y/Z de la paleta y devuelve (x, y, z).
         index debe ser 1 ó 2.
         """
-
         def _v(name: str) -> float:
             raw = getattr(self.build_ele, name, None)
             return float(getattr(raw, "value", raw) or 0.0)
@@ -809,9 +894,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         Devuelve True siempre para que Allplan entienda que el evento fue manejado.
         """
         if not _SUPPORT_MODEL_AVAILABLE or SupportModel is None or self.doc is None:
-            print(
-                "[Soportes] _insert_support_now: SupportModel no disponible o doc=None."
-            )
+            print("[Soportes] _insert_support_now: SupportModel no disponible o doc=None.")
             return True
 
         # ── 1. Leer campos de paleta ────────────────────────────────────────────
@@ -828,7 +911,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         # ── 3-4. Ajustar dimensiones desde los campos de paleta ─────────────────
         cota_b = entry.get("cota_b", 0.0)
         if cota_b and cota_b > 0.0:
-            length_mm = float(cota_b) - 6.0  # descuento estructural = 6 mm
+            length_mm = float(cota_b) - 6.0   # descuento estructural = 6 mm
             if length_mm > 0.0:
                 support.set_length(length_mm)
 
@@ -898,7 +981,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         try:
             AllplanBaseElements.CreateElements(
                 self.doc,
-                AllplanGeo.Matrix3D(),  # identidad: sin transform adicional
+                AllplanGeo.Matrix3D(),   # identidad: sin transform adicional
                 local_models,
                 [],
                 None,
@@ -1012,9 +1095,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     mat_tra = AllplanGeo.Matrix3D()
                     mat_tra.SetTranslation(AllplanGeo.Vector3D(x1, y1, z1))
                     for elem in local_models:
-                        elem.GeometryObject = AllplanGeo.Transform(
-                            elem.GeometryObject, mat_tra
-                        )
+                        elem.GeometryObject = AllplanGeo.Transform(elem.GeometryObject, mat_tra)
                 except Exception:
                     pass
             return local_models
@@ -1035,9 +1116,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     AllplanGeo.Point3D(dx, dy, dz),
                 )
                 mat_roll = AllplanGeo.Matrix3D()
-                mat_roll.SetRotation(
-                    axis_line, AllplanGeo.Angle.FromDeg(float(inclination_deg))
-                )
+                mat_roll.SetRotation(axis_line, AllplanGeo.Angle.FromDeg(float(inclination_deg)))
                 # Post-multiplicar: aplica el giro de inclinación después de la rotación de dirección
                 placement_mat = placement_mat * mat_roll
 
@@ -1060,7 +1139,6 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
         Este dict puede pasarse directamente a SupportModel.apply_json_definition().
         """
-
         def _str(name: str) -> str:
             raw = getattr(self.build_ele, name, None)
             return str(getattr(raw, "value", raw) or "")
@@ -1076,31 +1154,27 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         x2, y2, z2 = self._read_support_position(2)
 
         entry: dict = {
-            "tipo": _str(ParamNames.Soportes.TYPE_SUPPORT),
-            "subtipo": _str(ParamNames.Soportes.SUBTIPO_SOPORTE),
-            "superficie": _str(ParamNames.Soportes.SUPERFICIE),
-            "posicion1": [x1, y1, z1],
-            "posicion2": [x2, y2, z2],
-            "angulo_inclinacion": _float(ParamNames.Soportes.ANGULO_INCLINACION),
-            "cota_a": _float(ParamNames.Soportes.COTA_A),
-            "cota_b": _float(ParamNames.Soportes.COTA_B),
+            "tipo":               _str(ParamNames.Supports.TYPE_SUPPORT),
+            "subtipo":            _str(ParamNames.Supports.SUBTIPO_SOPORTE),
+            "superficie":         _str(ParamNames.Supports.SUPERFICIE),
+            "posicion1":          [x1, y1, z1],
+            "posicion2":          [x2, y2, z2],
+            "angulo_inclinacion": _float(ParamNames.Supports.ANGULO_INCLINACION),
+            "cota_a":             _float(ParamNames.Supports.COTA_A),
+            "cota_b":             _float(ParamNames.Supports.COTA_B),
         }
 
         # Campos específicos de variante Omega
         tipo = entry["tipo"].capitalize()
         if tipo == "Omega":
-            omega_key = _str(ParamNames.Soportes.TYPE_SUPPORT_OMEGA)
+            omega_key = _str(ParamNames.Supports.TYPE_SUPPORT_OMEGA)
             entry["omega_variante"] = omega_key
             if omega_key == "Electr./Clima(SEP)":
-                entry["tipo_instalacion"] = _str(
-                    ParamNames.Soportes.TYPE_INSTALLATION_SEP
-                )
+                entry["tipo_instalacion"] = _str(ParamNames.Supports.TYPE_INSTALLATION_SEP)
             elif omega_key == "Varifix":
-                entry["tipo_instalacion"] = _str(
-                    ParamNames.Soportes.TYPE_INSTALLATION_VARIFIX
-                )
+                entry["tipo_instalacion"] = _str(ParamNames.Supports.TYPE_INSTALLATION_VARIFIX)
         elif tipo == "Zeta":
-            entry["zeta_variante"] = _str(ParamNames.Soportes.TYPE_SUPPORT_ZETA)
+            entry["zeta_variante"] = _str(ParamNames.Supports.TYPE_SUPPORT_ZETA)
 
         return entry
 
@@ -1154,9 +1228,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self._soporte_geom_cache.pop(k, None)
         removed = before - len(self.soportes_list)
         self._update_soporte_ui_state()
-        print(
-            f"[Soportes] Eliminados {removed} soporte(s). Restantes={len(self.soportes_list)}"
-        )
+        print(f"[Soportes] Eliminados {removed} soporte(s). Restantes={len(self.soportes_list)}")
         return removed
 
     def _apply_attributes_to_soportes(self, keys: set, attr_value: str) -> None:
@@ -1178,17 +1250,13 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         for se in self.soportes_list:
             # Siempre reconstruir geometría limpia — la cache puede estar contaminada
             # con colores del overlay (selected/hover).
-            geom = self.build_support_preview_elems(
-                se.pos1, se.pos2, entry=se.as_dict()
-            )
+            geom = self.build_support_preview_elems(se.pos1, se.pos2, entry=se.as_dict())
             if not geom:
                 continue
             # Los atributos (por defecto y personalizados) ya están incorporados
             # en los elementos por build_support_preview_elems via support.param.
             try:
-                AllplanBaseElements.CreateElements(
-                    doc, AllplanGeo.Matrix3D(), geom, [], None
-                )
+                AllplanBaseElements.CreateElements(doc, AllplanGeo.Matrix3D(), geom, [], None)
                 count += 1
             except Exception as ex:
                 print(f"[Soportes] CreateElements key={se.key}: {ex}")
@@ -1206,7 +1274,6 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         Los seleccionados se colorean en amarillo.
         """
         import copy
-
         result = []
         for se in self.soportes_list:
             elems = self._soporte_geom_cache.get(se.key, [])
@@ -1216,7 +1283,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                         ec = copy.deepcopy(e)
                         prop = AllplanBaseElements.CommonProperties()
                         prop.GetGlobalProperties()
-                        prop.Color = 6  # amarillo = seleccionado
+                        prop.Color = 6   # amarillo = seleccionado
                         prop.ColorByLayer = False
                         ec.CommonProperties = prop
                         result.append(ec)
@@ -1238,20 +1305,20 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         """
         n = len(self.soportes_list)
         # Contador
-        raw = getattr(self.build_ele, ParamNames.Soportes.COUNT, None)
+        raw = getattr(self.build_ele, ParamNames.Supports.COUNT, None)
         if raw is not None:
             try:
                 raw.value = f"Acumulados: {n}"
             except Exception:
                 pass
         # CREAR_SOPORTES: solo habilitado mientras hay preview activo
-        self.enable_parameter(ParamNames.Soportes.CREAR_SOPORTES, preview_active)
+        self.enable_parameter(ParamNames.Supports.CREAR_SOPORTES, preview_active)
         # Modo edición soportes: deshabilitado mientras se inserta
-        self.enable_parameter(ParamNames.Soportes.EDIT_MODE, not preview_active)
+        self.enable_parameter(ParamNames.Supports.EDIT_MODE, not preview_active)
         # Borrar/Aplicar: habilitados cuando hay soportes acumulados
         has = n > 0
-        self.enable_parameter(ParamNames.Soportes.BORRAR_SOPORTES, has)
-        self.enable_parameter(ParamNames.Soportes.APLICAR_ATTR, has)
+        self.enable_parameter(ParamNames.Supports.BORRAR_SOPORTES, has)
+        self.enable_parameter(ParamNames.Supports.APLICAR_ATTR, has)
 
     def _serialize_soportes_to_state(self) -> list:
         """
@@ -1261,7 +1328,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         """
         entries = [se.as_dict() for se in self.soportes_list]
         # Respaldo en param separado (no se usa para restauración principal)
-        raw = getattr(self.build_ele, ParamNames.Soportes.SAVED_STATE, None)
+        raw = getattr(self.build_ele, ParamNames.Supports.SAVED_STATE, None)
         if raw is not None:
             try:
                 raw.value = json.dumps(entries, ensure_ascii=False)
@@ -1282,7 +1349,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             entries = state_dict.get("soportes", [])
         else:
             # Fallback: param separado (útil en start_input antes de deserializar)
-            raw = getattr(self.build_ele, ParamNames.Soportes.SAVED_STATE, None)
+            raw = getattr(self.build_ele, ParamNames.Supports.SAVED_STATE, None)
             if raw is not None:
                 state_str = str(getattr(raw, "value", "[]") or "[]").strip()
                 if state_str and state_str not in ("[]", ""):
@@ -1300,14 +1367,10 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self._soporte_key_counter += 1
             se = SoporteEntry.from_dict(entry, key=self._soporte_key_counter)
             self.soportes_list.append(se)
-            geom = self.build_support_preview_elems(
-                se.pos1, se.pos2, entry=se.as_dict()
-            )
+            geom = self.build_support_preview_elems(se.pos1, se.pos2, entry=se.as_dict())
             self._soporte_geom_cache[se.key] = geom or []
         self._update_soporte_ui_state()
-        print(
-            f"[Soportes] Restaurados {len(self.soportes_list)} soporte(s) desde estado guardado."
-        )
+        print(f"[Soportes] Restaurados {len(self.soportes_list)} soporte(s) desde estado guardado.")
 
     def _append_soportes_to_pythonpart_group(self) -> None:
         """
@@ -1321,9 +1384,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         for se in self.soportes_list:
             # Siempre reconstruir geometría limpia para el PythonPart final —
             # la cache puede tener colores de overlay (selected/hover) aplicados.
-            geom = self.build_support_preview_elems(
-                se.pos1, se.pos2, entry=se.as_dict()
-            )
+            geom = self.build_support_preview_elems(se.pos1, se.pos2, entry=se.as_dict())
             if not geom:
                 continue
             # Los atributos (por defecto y personalizados) ya están incorporados
@@ -1370,9 +1431,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             pmp_pare_val = self._get_soporte_pmp_pare(se)
             if not pmp_pare_val:
                 continue
-            geom = self.build_support_preview_elems(
-                se.pos1, se.pos2, entry=se.as_dict()
-            )
+            geom = self.build_support_preview_elems(se.pos1, se.pos2, entry=se.as_dict())
             if not geom:
                 continue
             if pmp_pare_val not in group_dict:
@@ -1383,9 +1442,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             self._copy_elements_to_drawing_files(elems, pmp_pare_val)
 
         if group_dict:
-            print(
-                f"[Soportes] Copiados a {len(group_dict)} archivo(s) por pmp_pare: {list(group_dict.keys())}"
-            )
+            print(f"[Soportes] Copiados a {len(group_dict)} archivo(s) por pmp_pare: {list(group_dict.keys())}")
 
     def _handle_soportes_event(self, event_id: int) -> bool:
         """
@@ -1433,34 +1490,30 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         x2, y2, z2 = self._read_support_position(2)
 
         entry = {
-            "tipo": _str(ParamNames.Soportes.TYPE_SUPPORT),
-            "subtipo": _str(ParamNames.Soportes.SUBTIPO_SOPORTE),
-            "superficie": _str(ParamNames.Soportes.SUPERFICIE),
-            "posicion1": [x1, y1, z1],
-            "posicion2": [x2, y2, z2],
-            "angulo_inclinacion": _float(ParamNames.Soportes.ANGULO_INCLINACION),
-            "cota_a": _float(ParamNames.Soportes.COTA_A),
-            "cota_b": _float(ParamNames.Soportes.COTA_B),
+            "tipo":               _str(ParamNames.Supports.TYPE_SUPPORT),
+            "subtipo":            _str(ParamNames.Supports.SUBTIPO_SOPORTE),
+            "superficie":         _str(ParamNames.Supports.SUPERFICIE),
+            "posicion1":          [x1, y1, z1],
+            "posicion2":          [x2, y2, z2],
+            "angulo_inclinacion": _float(ParamNames.Supports.ANGULO_INCLINACION),
+            "cota_a":             _float(ParamNames.Supports.COTA_A),
+            "cota_b":             _float(ParamNames.Supports.COTA_B),
         }
 
         # Añadir campos específicos de Omega si aplican
         tipo = entry["tipo"].capitalize()
         if tipo == "Omega":
-            omega_key = _str(ParamNames.Soportes.TYPE_SUPPORT_OMEGA)
+            omega_key = _str(ParamNames.Supports.TYPE_SUPPORT_OMEGA)
             entry["omega_variante"] = omega_key
             if omega_key == "Electr./Clima(SEP)":
-                entry["tipo_instalacion"] = _str(
-                    ParamNames.Soportes.TYPE_INSTALLATION_SEP
-                )
+                entry["tipo_instalacion"] = _str(ParamNames.Supports.TYPE_INSTALLATION_SEP)
             elif omega_key == "Varifix":
-                entry["tipo_instalacion"] = _str(
-                    ParamNames.Soportes.TYPE_INSTALLATION_VARIFIX
-                )
+                entry["tipo_instalacion"] = _str(ParamNames.Supports.TYPE_INSTALLATION_VARIFIX)
         elif tipo == "Zeta":
-            entry["zeta_variante"] = _str(ParamNames.Soportes.TYPE_SUPPORT_ZETA)
+            entry["zeta_variante"] = _str(ParamNames.Supports.TYPE_SUPPORT_ZETA)
 
         # Leer lista acumulada actual
-        raw_state = getattr(self.build_ele, ParamNames.Soportes.SAVED_STATE, None)
+        raw_state = getattr(self.build_ele, ParamNames.Supports.SAVED_STATE, None)
         state_str = str(getattr(raw_state, "value", raw_state) or "[]")
         try:
             accumulated: List[Any] = json.loads(state_str)
@@ -1486,7 +1539,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             print("[Soportes] SupportModel no disponible o documento no listo.")
             return
 
-        raw_state = getattr(self.build_ele, ParamNames.Soportes.SAVED_STATE, None)
+        raw_state = getattr(self.build_ele, ParamNames.Supports.SAVED_STATE, None)
         state_str = str(getattr(raw_state, "value", raw_state) or "[]")
         try:
             entries: List[Any] = json.loads(state_str)
@@ -1509,9 +1562,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 length = (dx**2 + dy**2 + dz**2) ** 0.5
                 if length > 0:
                     support.set_length(length)
-                print(
-                    f"[Soportes] Creando soporte {i + 1}/{len(entries)} — {entry.get('tipo')} longitud={length:.1f}mm"
-                )
+                print(f"[Soportes] Creando soporte {i + 1}/{len(entries)} — {entry.get('tipo')} longitud={length:.1f}mm")
             except Exception as exc:
                 print(f"[Soportes] Error creando soporte {i + 1}: {exc}")
 
@@ -1529,62 +1580,54 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         Maneja la creación de grupos, elementos individuales y el container final.
         """
         self.element_list_final = []
-        self.pythonpart_group_list = []  # Limpiar grupos previos
+        self.pythonpart_group_list = [] # Limpiar grupos previos
         self._polyline_attrs = None
         self._delete_previous_copies()
+
+        # Asegurar que element_list refleja el estado actual antes de crear (Bug 2 fix).
+        # Sincroniza self.data y segment_groups, luego regenera element_list desde
+        # ambas pasadas (manual + automático) para que _create_elements use todo.
+        _interactor = self.script_object_interactor
+        if _interactor:
+            try:
+                _interactor.get_segments()
+                _interactor._update_segment_groups()
+            except Exception as ex:
+                print(f"[SO] _generate_pythonparts sync: {ex}")
+        self._create_elements_preview()
 
         self._create_elements()
         if not self.element_list_final:
             # Sin polilínea: crear soportes y/o markers si existen
             has_markers = bool(
-                self.marker_manager
-                and (
-                    self.marker_manager.macro_markers
-                    or self.marker_manager.element_markers
+                self.marker_manager and (
+                    self.marker_manager.macro_markers or self.marker_manager.element_markers
                 )
             )
             has_soportes = bool(self.soportes_list)
 
             if has_markers or has_soportes:
-                self._fn_name = getattr(
-                    self.build_ele, ParamNames.General.FUNCTIONAL_NAME
-                ).value
+                self._fn_name = getattr(self.build_ele, ParamNames.General.FUNCTIONAL_NAME).value
                 self.pythonpart_group_list = []
                 if has_markers:
-                    print(
-                        f"[SO] Markers-only mode: macros={len(self.marker_manager.macro_markers)}, elements={len(self.marker_manager.element_markers)}"
-                    )
-                    self.marker_manager.append_macro_pythonparts(
-                        self.pythonpart_group_list, self.doc
-                    )
-                    self.marker_manager.append_element_pythonparts(
-                        self.pythonpart_group_list, self.build_ele
-                    )
+                    print(f"[SO] Markers-only mode: macros={len(self.marker_manager.macro_markers)}, elements={len(self.marker_manager.element_markers)}")
+                    self.marker_manager.append_macro_pythonparts(self.pythonpart_group_list, self.doc)
+                    self.marker_manager.append_element_pythonparts(self.pythonpart_group_list, self.build_ele)
                 if has_soportes:
-                    print(
-                        f"[SO] Soportes-only mode: {len(self.soportes_list)} soporte(s)."
-                    )
+                    print(f"[SO] Soportes-only mode: {len(self.soportes_list)} soporte(s).")
                     self._append_soportes_to_pythonpart_group()
                     self._copy_soportes_by_pmp_pare()
-                print(
-                    f"[SO] After standalone append: {len(self.pythonpart_group_list)} PythonParts in list"
-                )
+                print(f"[SO] After standalone append: {len(self.pythonpart_group_list)} PythonParts in list")
                 if self.pythonpart_group_list:
                     self._create_pythonpart_container()
                 else:
-                    print(
-                        "[SO] WARNING: pythonpart_group_list is empty after standalone append!"
-                    )
+                    print("[SO] WARNING: pythonpart_group_list is empty after standalone append!")
                 return
             print("[PolylineInteractor] No se generaron elementos.")
             return
 
-        self.crear_pythonpart = getattr(
-            self.build_ele, ParamNames.General.CREATE_PYTHON_PART
-        ).value
-        self._fn_name = getattr(
-            self.build_ele, ParamNames.General.FUNCTIONAL_NAME
-        ).value
+        self.crear_pythonpart =  getattr(self.build_ele, ParamNames.General.CREATE_PYTHON_PART).value
+        self._fn_name = getattr(self.build_ele, ParamNames.General.FUNCTIONAL_NAME).value
 
         # Agregar polilíneas antes de copiar para que sean incluidas en _copy_elements_grouped_by_attribute
         if self._config and self._config.parameters_show.add_polilyne:
@@ -1592,29 +1635,19 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 # Si no hay atributos definidos, construir un fallback vacío por path
                 poly_attrs = self._polyline_attrs
                 if not poly_attrs:
-                    poly_attrs = {i: {0: []} for i in range(len(self.saved_paths))}
+                    poly_attrs = {i: {0: []} for i in range(len(self.active_paths))}
                 polyline_dict = self._create_polyline(attr_list=poly_attrs)
                 for poly_elem in polyline_dict.values():
-                    pp_poly = self.create_individual_pythonpart(
-                        elements_list=[poly_elem], build_ele=self.build_ele
-                    )
+                    pp_poly = self.create_individual_pythonpart(elements_list=[poly_elem], build_ele=self.build_ele)
                     self.pythonpart_group_list.extend(pp_poly)
 
         # --- Inserción de Elementos y Creación de PythonParts ---
         if self.crear_pythonpart:
-            pythonpart_type_selected = (
-                "Individual" if self.is_individual_mode else "Group"
-            )
             print(f"[SO] ========== MODO PYTHONPARTGROUP ACTIVADO ==========")
-            print(
-                f"[SO] Iniciando creación de PythonPartGroup - '{pythonpart_type_selected} type' - {len(self.element_list_final)} elementos."
-            )
+            print(f"[SO] Iniciando creación de PythonPartGroup - {len(self.element_list_final)} path(s).")
 
             try:
-                if not self.is_individual_mode:
-                    self._create_grouped_pythonparts()
-                else:
-                    self._create_individual_pythonparts()
+                self._create_pythonparts_per_path()
 
                 if not self.pythonpart_group_list:
                     raise Exception("No se pudieron crear lista de PythonParts")
@@ -1631,12 +1664,8 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             # Inject macro/element PythonParts before building the PPG container
             if self.marker_manager:
                 try:
-                    self.marker_manager.append_macro_pythonparts(
-                        self.pythonpart_group_list, self.doc
-                    )
-                    self.marker_manager.append_element_pythonparts(
-                        self.pythonpart_group_list, self.build_ele
-                    )
+                    self.marker_manager.append_macro_pythonparts(self.pythonpart_group_list, self.doc)
+                    self.marker_manager.append_element_pythonparts(self.pythonpart_group_list, self.build_ele)
                 except Exception as ex:
                     print(f"[SO] Error appending marker PythonParts: {ex}")
 
@@ -1663,14 +1692,14 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         element_dict: dict[str, list] = {}
 
         for element_model in elements:
-            result_list = element_model.create()
+            result_list =  element_model.create()
             model = element_model.views[0].elements[0]
 
             for element in result_list:
                 if isinstance(element, AllplanBasisElements.MacroPlacementElement):
                     # Intenta obtener el set de atributos directamente del Placement
                     attrs = element.GetAttributes()
-                    for attr_set in attrs.GetAttributeSets():  # type: ignore
+                    for attr_set in attrs.GetAttributeSets(): # type: ignore
                         for attr in attr_set.GetAttributes():
                             if attr.Id == attr_pmp_pare_id and attr.Value:
                                 group_key = str(attr.Value).strip()
@@ -1686,83 +1715,143 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     continue
                 self._copy_elements_to_drawing_files(group_elements, group_key)
 
-    def _create_grouped_pythonparts(self):
+    def _create_pythonparts_per_path(self):
+        """Itera element_list_final path a path, determina el modo (individual/group)
+        por camino a partir de path_inst_types y llama al helper correspondiente.
+
+        Esto permite que un modelo con tipo 'recuperador' (is_individual=True) coexista
+        con caminos de tipo 'impulsion'/'extraccion'/'aislado' (is_individual=False) sin
+        que el flag global is_individual_mode contamine el procesamiento de otros paths.
         """
-        Crea PythonParts agrupados (modo 'group').
+        n_manual = len(self.saved_paths)
+
+        for path_idx, element_list_data in enumerate(self.element_list_final):
+            # ── Resolver modelo para este path ────────────────────────────────
+            if path_idx < n_manual:
+                inst_label = self.path_inst_types.get(path_idx)
+            else:
+                inst_label = self.path_inst_types_auto.get(path_idx - n_manual)
+
+            path_model = None
+            if inst_label:
+                path_model = next(
+                    (t for t in self.installation_types if t["label"] == inst_label),
+                    None,
+                )
+            if not path_model:
+                path_model = self.current_inst_config  # fallback al tipo global
+
+            path_is_individual = path_model.get("is_individual", self.is_individual_mode) if path_model else self.is_individual_mode
+            path_element_type  = path_model["key"] if path_model else self.element_type_core
+            mode_str = "Individual" if path_is_individual else "Group"
+            print(f"[SO] Path {path_idx}: mode={mode_str}, inst={inst_label or 'global'}, element_type={path_element_type}")
+
+            if path_is_individual:
+                self._create_individual_pythonparts_for_path(path_idx, element_list_data)
+            else:
+                self._create_grouped_pythonparts_for_path(path_idx, element_list_data, path_element_type)
+
+    def _create_grouped_pythonparts_for_path(self, path_index: int, element_list_data: list, element_type_core_for_path: str):
+        """
+        Crea PythonParts agrupados (modo 'group') para un único camino.
         Los resultados se agregan a self.pythonpart_group_list.
         """
-        # all_elements: list = []  # acumula todos los element_models de todas las rutas
-        for path_index, element_list_data in enumerate(self.element_list_final):
-            current_segment_group = []
-            connections_to_create = []
+        current_segment_group = []
+        connections_to_create = []
 
-            # Acumular elementos para el agrupado por atributo
-            # all_elements.extend(element_list_data)
-
-            def flush_segment_group(group):
-                """Genera el PythonPart para el grupo de tuberías/cables acumulado."""
-                if not group:
-                    return
-
-                pp_segments = self.create_group_pythonpart(
-                    elements_list=group,
-                    build_ele=self.build_ele,
-                    base_c=self.inst_color,
-                )
-                self.pythonpart_group_list.extend(pp_segments)
-
-            for index, item in enumerate(element_list_data):
-                element_type = item.element_type
-                element_model = item.element
-
-                if element_type == self.element_type_core:
-                    # Es tubería/cable: se acumula para crear un solo PythonPart grupal
-                    current_segment_group.append(element_model)
-
-                elif element_type == "CUBOID_LABEL":
-                    # Es el cuboide: lo creamos como PythonPart individual inmediatamente
-                    # para que no se mezcle con la geometría de las tuberías
-                    pp_cuboid = self.create_individual_pythonpart(
-                        elements_list=[element_model], build_ele=self.build_ele
-                    )
-                    self.pythonpart_group_list.extend(pp_cuboid)
-
-                else:
-                    # Es un manguito/conexión: cerramos el grupo actual y guardamos la conexión
-                    flush_segment_group(current_segment_group)
-                    current_segment_group = []
-                    connections_to_create.append(element_model)
-
-            # Al finalizar el camino, procesamos el último grupo pendiente
-            flush_segment_group(current_segment_group)
-
-            # Creamos las conexiones (manguitos) de este camino
-            if connections_to_create:
-                pp_connections = self.create_individual_pythonpart(
-                    elements_list=connections_to_create, build_ele=self.build_ele
-                )
-                self.pythonpart_group_list.extend(pp_connections)
-
-    def _create_individual_pythonparts(self):
-        """
-        Crea PythonParts individuales (modo 'individual').
-        Los resultados se agregan a self.pythonpart_group_list
-        """
-        for element_list_data in self.element_list_final:
-            new_list: List[Any] = [
-                e.element if hasattr(e, "element") else e.get("element")
-                for e in element_list_data
-            ]
-
-            # 2. Quitar duplicados manteniendo el orden (si los elementos son hashables)
-            # Si son objetos 3D complejos, dict.fromkeys es una forma rápida de limpiar
-            new_list = list(dict.fromkeys(new_list))
-
-            pythonparts_list = self.create_individual_pythonpart(
-                elements_list=new_list,
+        def flush_segment_group(group):
+            """Genera el PythonPart para el grupo de tuberías/cables acumulado."""
+            if not group:
+                return
+            pp_segments = self.create_group_pythonpart(
+                elements_list=group,
                 build_ele=self.build_ele,
             )
-            self.pythonpart_group_list.extend(pythonparts_list)
+            self.pythonpart_group_list.extend(pp_segments)
+
+        for index, item in enumerate(element_list_data):
+            element_type = item.element_type
+            element_model = item.element
+
+            if element_model is None:
+                print(f"[SO] _create_grouped: path {path_index} item {index} element=None, omitido")
+                continue
+
+            if element_type == element_type_core_for_path:
+                # Es tubería/cable: se acumula para crear un solo PythonPart grupal
+                current_segment_group.append(element_model)
+
+            elif element_type == "CUBOID_LABEL":
+                # Es el cuboide: lo creamos como PythonPart individual inmediatamente
+                # para que no se mezcle con la geometría de las tuberías
+                pp_cuboid = self.create_individual_pythonpart(
+                    elements_list=[element_model],
+                    build_ele=self.build_ele
+                )
+                self.pythonpart_group_list.extend(pp_cuboid)
+
+            else:
+                # Es un manguito/conexión: cerramos el grupo actual y guardamos la conexión
+                flush_segment_group(current_segment_group)
+                current_segment_group = []
+                connections_to_create.append(element_model)
+
+        # Al finalizar el camino, procesamos el último grupo pendiente
+        flush_segment_group(current_segment_group)
+
+        # Creamos las conexiones (manguitos) de este camino
+        if connections_to_create:
+            pp_connections = self.create_individual_pythonpart(
+                elements_list=connections_to_create,
+                build_ele=self.build_ele
+            )
+            self.pythonpart_group_list.extend(pp_connections)
+
+    def _create_individual_pythonparts_for_path(self, path_idx: int, element_list_data: list):
+        """
+        Crea PythonParts individuales (modo 'individual') para un único camino.
+        Los resultados se agregan a self.pythonpart_group_list.
+        """
+        if not element_list_data:
+            print(f"[SO] _create_individual_pythonparts: path {path_idx} sin elementos, omitido")
+            return
+
+        new_list: List[Any] = [
+            e.element if hasattr(e, 'element') else e.get('element')
+            for e in element_list_data
+        ]
+
+        # Filtrar None y duplicados (dict.fromkeys conserva None si no se filtra antes)
+        new_list = [e for e in dict.fromkeys(new_list) if e is not None]
+
+        if not new_list:
+            print(f"[SO] _create_individual_pythonparts: path {path_idx} sin geometría válida, omitido")
+            return
+
+        pythonparts_list = self.create_individual_pythonpart(
+            elements_list=new_list,
+            build_ele=self.build_ele,
+        )
+        self.pythonpart_group_list.extend(pythonparts_list)
+
+    def _create_grouped_pythonparts(self):
+        """Wrapper de compatibilidad: procesa todos los paths en modo group usando el tipo global."""
+        n_manual = len(self.saved_paths)
+        for path_idx, element_list_data in enumerate(self.element_list_final):
+            if path_idx < n_manual:
+                inst_label = self.path_inst_types.get(path_idx)
+            else:
+                inst_label = self.path_inst_types_auto.get(path_idx - n_manual)
+            path_model = None
+            if inst_label:
+                path_model = next((t for t in self.installation_types if t["label"] == inst_label), None)
+            element_type = path_model["key"] if path_model else self.element_type_core
+            self._create_grouped_pythonparts_for_path(path_idx, element_list_data, element_type)
+
+    def _create_individual_pythonparts(self):
+        """Wrapper de compatibilidad: procesa todos los paths en modo individual."""
+        for path_idx, element_list_data in enumerate(self.element_list_final):
+            self._create_individual_pythonparts_for_path(path_idx, element_list_data)
 
     def _insert_elements_without_pythonpart(self):
         """
@@ -1773,7 +1862,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             for element_list_data in self.element_list_final:
                 # Extraer elementos del dict si es necesario
                 new_list: List[Any] = [
-                    e.element if hasattr(e, "element") else e.get("element")
+                    e.element if hasattr(e, 'element') else e.get('element')
                     for e in element_list_data
                 ]
 
@@ -1788,9 +1877,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     modelUuidList=[],
                     assoRefObj=None,
                 )
-            print(
-                f"[PolylineInteractor] {len(self.element_list_final)} elementos insertados exitosamente."
-            )
+            print(f"[PolylineInteractor] {len(self.element_list_final)} elementos insertados exitosamente.")
         except Exception as e:
             print(f"[PolylineInteractor] Error CreateElements: {e}")
 
@@ -1804,26 +1891,8 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         global_params: Dict = {
             "TotalElements": len(self.pythonpart_group_list),
             "PolylineID": id(self.pythonpart_group_list),
-            "CopiedElementsUUIDs": repr(
-                str(
-                    getattr(
-                        getattr(self.build_ele, "CopiedElementsUUIDs", None),
-                        "value",
-                        "",
-                    )
-                    or ""
-                )
-            ),
-            "CopiedElementsFiles": repr(
-                str(
-                    getattr(
-                        getattr(self.build_ele, "CopiedElementsFiles", None),
-                        "value",
-                        "",
-                    )
-                    or ""
-                )
-            ),
+            "CopiedElementsUUIDs": repr(str(getattr(getattr(self.build_ele, "CopiedElementsUUIDs", None), "value", "") or "")),
+            "CopiedElementsFiles": repr(str(getattr(getattr(self.build_ele, "CopiedElementsFiles", None), "value", "") or "")),
         }
 
         # Serialización del Estado
@@ -1836,24 +1905,18 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             print(f"[SO] Estado guardado ({len(state_json)} chars)")
 
         try:
-            installation_hash = self.create_element_hash(
-                "polyline_installation", **global_params
-            )
+            installation_hash = self.create_element_hash("polyline_installation", **global_params)
             param_list = self.create_params_list_from_dict(global_params)
 
             python_file_name = ""
-            if hasattr(self, "build_ele") and hasattr(self.build_ele, "pyp_file_name"):
+            if hasattr(self, 'build_ele') and hasattr(self.build_ele, "pyp_file_name"):
                 python_file_name = self.build_ele.pyp_file_name
 
                 inst_name = ""
                 if self._config:
                     inst_name = self._config.default_installation
 
-                ppg_name = (
-                    f"{self._fn_name}_{id(self.pythonpart_group_list)}"
-                    if self._fn_name
-                    else f"Polyline_Installation_{inst_name}"
-                )
+                ppg_name = f"{self._fn_name}_{id(self.pythonpart_group_list)}" if self._fn_name else f"Polyline_Installation_{inst_name}"
                 pythonpart_group = PythonPartGroup(
                     name=ppg_name,
                     parameter_list=param_list,
@@ -1875,17 +1938,15 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         except Exception as e:
             print(f"[SO] ERROR al crear PythonPartGroup. {str(e)}")
 
-    def _create_polyline(
-        self, attr_list: dict | None = None
-    ) -> Dict[int, AllplanBasisElements.ModelElement3D]:
+    def _create_polyline(self, attr_list: dict | None = None) -> Dict[int, AllplanBasisElements.ModelElement3D]:
         """Crea una polilínea por sub-grupo de conductos (separados por manguitos).
         attr_list = {path_idx: {start_i: attrs_list}}
         Retorna dict {result_key: ModelElement3D}."""
-        if not self.saved_paths or attr_list is None:
+        if not self.active_paths or attr_list is None:
             return {}
 
         if self.default_layers:
-            default_id = LayerService.GetIDByShortName(self.default_layers["layer_polyline"], self.doc)  # type: ignore
+            default_id = LayerService.GetIDByShortName(self.default_layers["layer_polyline"], self.doc) # type: ignore
 
         com_prop = AllplanBaseElements.CommonProperties()
         com_prop.GetGlobalProperties()
@@ -1895,9 +1956,9 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         result_key = 0
 
         for path_idx, group_dict in attr_list.items():
-            if path_idx >= len(self.saved_paths):
+            if path_idx >= len(self.active_paths):
                 continue
-            pts = self.saved_paths[path_idx]
+            pts = self.active_paths[path_idx]
             if len(pts) < 2:
                 continue
 
@@ -1909,7 +1970,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     next_start = sorted_keys[k + 1]
                     end_pt_idx = next_start  # punto de unión compartido: cierra grupo actual y abre el siguiente
                 else:
-                    end_pt_idx = len(pts) - 1  # fin del path
+                    end_pt_idx = len(pts) - 1   # fin del path
 
                 if end_pt_idx <= start_i:
                     continue
@@ -1948,27 +2009,19 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         if not pmp_value:
             return None
         try:
-            loaded_docs = (
-                AllplanEleAdapter.DocumentNameService.GetLoadedDocumentsNameData()
-            )
+            loaded_docs = AllplanEleAdapter.DocumentNameService.GetLoadedDocumentsNameData()
             print(f"[PMP_PARE] Archivos cargados ({len(loaded_docs)}): {loaded_docs}")
             pmp_upper = pmp_value.strip().upper()
             for doc_name, file_number in loaded_docs:
                 if pmp_upper in str(doc_name).upper():
-                    print(
-                        f"[PMP_PARE] Archivo encontrado: '{doc_name}' (file={file_number}) para pmp_pare='{pmp_value}'"
-                    )
+                    print(f"[PMP_PARE] Archivo encontrado: '{doc_name}' (file={file_number}) para pmp_pare='{pmp_value}'")
                     return file_number
-            print(
-                f"[PMP_PARE] No se encontró archivo cargado que contenga '{pmp_value}'"
-            )
+            print(f"[PMP_PARE] No se encontró archivo cargado que contenga '{pmp_value}'")
         except Exception as e:
             print(f"[PMP_PARE] Error buscando archivo de dibujo: {e}")
         return None
 
-    def _copy_elements_to_drawing_files(
-        self, model_elem_list: list, section_value: str | None
-    ):
+    def _copy_elements_to_drawing_files(self, model_elem_list: list, section_value: str | None):
         """Copia los elementos 3D generados a un archivo de dibujo cuyo nombre
         contenga el valor de pmp_pare (section_value).
 
@@ -1997,26 +2050,17 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
             target_file_index = self._find_drawing_file_by_name(section_value)
             if target_file_index is None:
-                print(
-                    f"[PMP_PARE] Archivo destino para '{section_value}' no encontrado. "
-                    "Asegúrese de que el archivo esté cargado/activo."
-                )
+                print(f"[PMP_PARE] Archivo destino para '{section_value}' no encontrado. "
+                      "Asegúrese de que el archivo esté cargado/activo.")
                 return
 
             if target_file_index == original_file:
-                print(
-                    f"[PMP_PARE] Archivo destino es el mismo que el activo, no se requiere copia separada"
-                )
+                print(f"[PMP_PARE] Archivo destino es el mismo que el activo, no se requiere copia separada")
                 return
 
-            print(
-                f"[PMP_PARE] Activando archivo destino {target_file_index} para copiar elementos..."
-            )
-            drawing_service.LoadFile(
-                doc,
-                target_file_index,
-                AllplanBaseElements.DrawingFileLoadState.ActiveForeground,
-            )
+            print(f"[PMP_PARE] Activando archivo destino {target_file_index} para copiar elementos...")
+            drawing_service.LoadFile(doc, target_file_index,
+                                     AllplanBaseElements.DrawingFileLoadState.ActiveForeground)
             target_doc = DocumentManager.get_instance().document
 
             pyp_transaction = PythonPartTransaction(target_doc)
@@ -2035,37 +2079,24 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 except Exception:
                     pass
 
-            print(
-                f"[PMP_PARE] {len(copied_uuids)} elementos copiados al archivo {target_file_index}"
-            )
+            print(f"[PMP_PARE] {len(copied_uuids)} elementos copiados al archivo {target_file_index}")
 
             print(f"[PMP_PARE] Reactivando archivo original {original_file}...")
-            drawing_service.LoadFile(
-                doc,
-                original_file,
-                AllplanBaseElements.DrawingFileLoadState.ActiveForeground,
-            )
+            drawing_service.LoadFile(doc, original_file,
+                                     AllplanBaseElements.DrawingFileLoadState.ActiveForeground)
 
             self._persist_copied_elements_data(copied_uuids, target_file_index)
 
         except Exception as e:
             print(f"[PMP_PARE] Error en _copy_elements_to_drawing_files: {e}")
             import traceback
-
             traceback.print_exc()
             try:
                 drawing_service = AllplanBaseElements.DrawingFileService()
-                doc = (
-                    self.coord_input.GetInputViewDocument()
-                    if self.coord_input
-                    else None
-                )
+                doc = self.coord_input.GetInputViewDocument() if self.coord_input else None
                 if doc and original_file:
-                    drawing_service.LoadFile(
-                        doc,
-                        original_file,
-                        AllplanBaseElements.DrawingFileLoadState.ActiveForeground,
-                    )
+                    drawing_service.LoadFile(doc, original_file,
+                                             AllplanBaseElements.DrawingFileLoadState.ActiveForeground)
             except Exception:
                 pass
 
@@ -2074,18 +2105,8 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         poder eliminarlas al re-entrar a la PythonPart.
         """
         try:
-            prev_uuids_raw = str(
-                getattr(
-                    getattr(self.build_ele, "CopiedElementsUUIDs", None), "value", ""
-                )
-                or ""
-            )
-            prev_files_raw = str(
-                getattr(
-                    getattr(self.build_ele, "CopiedElementsFiles", None), "value", ""
-                )
-                or ""
-            )
+            prev_uuids_raw = str(getattr(getattr(self.build_ele, "CopiedElementsUUIDs", None), "value", "") or "")
+            prev_files_raw = str(getattr(getattr(self.build_ele, "CopiedElementsFiles", None), "value", "") or "")
 
             prev_uuids = self._safe_parse_list(prev_uuids_raw)
             prev_files = self._safe_parse_list(prev_files_raw)
@@ -2099,9 +2120,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
             self.build_ele.CopiedElementsUUIDs.value = repr(prev_uuids)
             self.build_ele.CopiedElementsFiles.value = repr(prev_files)
-            print(
-                f"[PMP_PARE] Datos de copias persistidos: {len(prev_uuids)} UUIDs, {len(prev_files)} archivos"
-            )
+            print(f"[PMP_PARE] Datos de copias persistidos: {len(prev_uuids)} UUIDs, {len(prev_files)} archivos")
         except Exception as e:
             print(f"[PMP_PARE] Error persistiendo datos de copias: {e}")
 
@@ -2153,18 +2172,8 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         Los archivos deben estar activos/cargados por el usuario.
         """
         try:
-            uuids_raw = str(
-                getattr(
-                    getattr(self.build_ele, "CopiedElementsUUIDs", None), "value", ""
-                )
-                or ""
-            )
-            files_raw = str(
-                getattr(
-                    getattr(self.build_ele, "CopiedElementsFiles", None), "value", ""
-                )
-                or ""
-            )
+            uuids_raw = str(getattr(getattr(self.build_ele, "CopiedElementsUUIDs", None), "value", "") or "")
+            files_raw = str(getattr(getattr(self.build_ele, "CopiedElementsFiles", None), "value", "") or "")
 
             if not uuids_raw or not files_raw:
                 return
@@ -2183,15 +2192,11 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             if not target_files or not isinstance(target_files, list):
                 return
 
-            print(
-                f"[PMP_PARE] Eliminando {len(target_uuids)} copias previas en {len(target_files)} archivos..."
-            )
+            print(f"[PMP_PARE] Eliminando {len(target_uuids)} copias previas en {len(target_files)} archivos...")
 
             drawing_service = AllplanBaseElements.DrawingFileService()
             original_file = AllplanBaseElements.DrawingFileService.GetActiveFileNumber()
-            doc_adapter = (
-                self.coord_input.GetInputViewDocument() if self.coord_input else None
-            )
+            doc_adapter = self.coord_input.GetInputViewDocument() if self.coord_input else None
             if doc_adapter is None:
                 print("[PMP_PARE] No se pudo obtener documento para limpieza de copias")
                 return
@@ -2201,19 +2206,12 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
             for file_index in target_files:
                 try:
-                    drawing_service.LoadFile(
-                        doc_adapter,
-                        file_index,
-                        AllplanBaseElements.DrawingFileLoadState.ActiveForeground,
-                    )
+                    drawing_service.LoadFile(doc_adapter, file_index,
+                                             AllplanBaseElements.DrawingFileLoadState.ActiveForeground)
                     active_doc = DocumentManager.get_instance().document
 
                     elems_to_delete = AllplanEleAdapter.BaseElementAdapterList()
-                    for (
-                        element
-                    ) in AllplanBaseElements.ElementsSelectService.SelectAllElements(
-                        active_doc
-                    ):
+                    for element in AllplanBaseElements.ElementsSelectService.SelectAllElements(active_doc):
                         try:
                             elem_uuid = str(element.GetElementUUID())
                             if elem_uuid in uuid_set:
@@ -2222,37 +2220,25 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                             continue
 
                     if len(elems_to_delete) > 0:
-                        AllplanBaseElements.DeleteElements(
-                            doc=active_doc, elements=elems_to_delete
-                        )
+                        AllplanBaseElements.DeleteElements(doc=active_doc, elements=elems_to_delete)
                         total_deleted += len(elems_to_delete)
-                        print(
-                            f"[PMP_PARE] Eliminados {len(elems_to_delete)} elementos del archivo {file_index}"
-                        )
+                        print(f"[PMP_PARE] Eliminados {len(elems_to_delete)} elementos del archivo {file_index}")
                     else:
-                        print(
-                            f"[PMP_PARE] No se encontraron elementos para eliminar en archivo {file_index}"
-                        )
+                        print(f"[PMP_PARE] No se encontraron elementos para eliminar en archivo {file_index}")
 
                 except Exception as e:
                     print(f"[PMP_PARE] Error eliminando en archivo {file_index}: {e}")
 
-            drawing_service.LoadFile(
-                doc_adapter,
-                original_file,
-                AllplanBaseElements.DrawingFileLoadState.ActiveForeground,
-            )
+            drawing_service.LoadFile(doc_adapter, original_file,
+                                     AllplanBaseElements.DrawingFileLoadState.ActiveForeground)
 
             self.build_ele.CopiedElementsUUIDs.value = ""
             self.build_ele.CopiedElementsFiles.value = ""
-            print(
-                f"[PMP_PARE] Limpieza completada: {total_deleted} elementos eliminados en total"
-            )
+            print(f"[PMP_PARE] Limpieza completada: {total_deleted} elementos eliminados en total")
 
         except Exception as e:
             print(f"[PMP_PARE] Error en _delete_previous_copies: {e}")
             import traceback
-
             traceback.print_exc()
 
     # ========================================
@@ -2270,10 +2256,14 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
             def point_to_dict(pt):
                 return {"X": pt.X, "Y": pt.Y, "Z": pt.Z}
 
-            # Serializar paths
+            # Serializar paths (manual y automático)
             paths_data = []
             for path in self.saved_paths:
                 paths_data.append([point_to_dict(pt) for pt in path])
+
+            optimized_paths_data = []
+            for path in self.saved_optimized_paths:
+                optimized_paths_data.append([point_to_dict(pt) for pt in path])
 
             data = []
             if self.script_object_interactor:
@@ -2281,17 +2271,11 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                     seg = item.segment_item_to_dict(item)
                     data.append(seg)
 
-            ref_angle = (
-                f"{self.reference_orientation_angle:.15f}"
-                if self.reference_orientation_angle
-                else ""
-            )
+            ref_angle =  f"{self.reference_orientation_angle:.15f}" if self.reference_orientation_angle else ""
 
             _water_type = ""
             if self._config and self._config.parameters_enabled.water_type:
-                _water_type = getattr(
-                    self.build_ele, ParamNames.Installation.WATER_TYPE
-                ).value
+                _water_type = getattr(self.build_ele, ParamNames.Installation.WATER_TYPE).value
                 self.water_type = _water_type
 
             cut_points_data = [
@@ -2303,40 +2287,30 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
 
             state = {
                 "saved_paths": paths_data,
+                "saved_optimized_paths": optimized_paths_data,
                 "saved_cut_points": cut_points_data,
                 "saved_vertex_cut_points": vertex_cut_points_data,
                 "data": data,
-                "metadata": ElementSerializer.serialize_persistent_metadata(
-                    self.persistent_metadata
-                ),
+                "metadata": ElementSerializer.serialize_persistent_metadata(self.persistent_metadata),
                 "layer_default": self.default_layers,
-                "selected_inst_type": (
-                    self.selected_inst_type if self.selected_inst_type else ""
-                ),
-                "functional_name": getattr(
-                    self.build_ele, ParamNames.General.FUNCTIONAL_NAME
-                ).value,
-                "distribution_type": getattr(
-                    self.build_ele, ParamNames.Installation.DISTRIBUTION_TYPE
-                ).value,
+                "selected_inst_type": self.selected_inst_type if  self.selected_inst_type else "",
+                "functional_name": getattr(self.build_ele, ParamNames.General.FUNCTIONAL_NAME).value,
+                "distribution_type": getattr(self.build_ele, ParamNames.Installation.DISTRIBUTION_TYPE).value,
                 "water_type": _water_type,
                 "diameter_type": f"{getattr(self.build_ele, ParamNames.Installation.DIAMETER_TYPE).value}",
-                "face_en": getattr(
-                    self.build_ele, ParamNames.Installation.FACE_EN
-                ).value,
+                "face_en": getattr(self.build_ele, ParamNames.Installation.FACE_EN).value,
                 "reference_orientation_angle": ref_angle,
-                "applied_layers": ElementSerializer.serialize_layers(
-                    self.applied_layers
-                ),
-                "applied_default_attrs": ElementSerializer.serialize_attributes(
-                    self.applied_default_attributes
-                ),
-                "applied_custom_attrs": ElementSerializer.serialize_attributes(
-                    self.applied_attributes
-                ),
-                "global_group_numbers": ElementSerializer.serialize_global_numbers(
-                    self.global_group_numbers
-                ),
+                "applied_layers": ElementSerializer.serialize_layers(self.applied_layers),
+                "applied_default_attrs": ElementSerializer.serialize_attributes(self.applied_default_attributes),
+                "applied_custom_attrs": ElementSerializer.serialize_attributes(self.applied_attributes),
+                "global_group_numbers": ElementSerializer.serialize_global_numbers(self.global_group_numbers),
+                "path_inst_types": {str(k): v for k, v in self.path_inst_types.items()},
+                "path_inst_types_auto": {str(k): v for k, v in self.path_inst_types_auto.items()},
+                "undefined_points_list": [
+                    up.to_dict() for up in (self.undefined_points_list or [])
+                ],
+                "auto_path_color_ids": list(getattr(self, "auto_path_color_ids", [])),
+                "camino_inst_types": list(getattr(self, "camino_inst_types", [])),
             }
             # Merge marker data if marker_manager is active
             if self.marker_manager:
@@ -2369,7 +2343,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         # Usar un rango muy grande (10^15 a 10^16-1) para minimizar colisiones
         random_number = random.randint(10**15, 10**16 - 1)
         # Generar hash
-        hash_val = hashlib.sha224(str(random_number).encode("utf-8")).hexdigest()
+        hash_val = hashlib.sha224(str(random_number).encode('utf-8')).hexdigest()
         return hash_val
 
     def create_params_list_from_dict(self, params: dict) -> List[str]:
@@ -2382,9 +2356,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         """
         return [f"{key} = {value}\n" for key, value in sorted(params.items())]
 
-    def create_individual_pythonpart(
-        self, elements_list: List, build_ele
-    ) -> List[PythonPart]:
+    def create_individual_pythonpart(self, elements_list: List, build_ele) -> List[PythonPart]:
         """
         Convierte una lista de ModelElement3D en PythonParts individuales.
         Cada elemento 3D se envuelve en su propia PythonPart para que GSI pueda leerlos individualmente.
@@ -2397,18 +2369,20 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
         """
         pythonparts_list = []
 
+        # Filtrar None antes de iterar para evitar CNOI_BasisMacroSlide has no objects
+        elements_list = [e for e in elements_list if e is not None]
+        if not elements_list:
+            print("[SO] create_individual_pythonpart: lista de elementos vacía/None, omitido")
+            return pythonparts_list
+
         # Obtener el nombre del archivo .pyp desde build_ele
-        python_file_name = (
-            build_ele.pyp_file_name if hasattr(build_ele, "pyp_file_name") else ""
-        )
+        python_file_name = build_ele.pyp_file_name if hasattr(build_ele, 'pyp_file_name') else ""
         common_props = None
 
         for idx, element in enumerate(elements_list):
             try:
                 # 1. EXTRAER CommonProperties del elemento
-                common_props = (
-                    AllplanSettings.AllplanGlobalSettings.GetCurrentCommonProperties()
-                )
+                common_props = AllplanSettings.AllplanGlobalSettings.GetCurrentCommonProperties()
                 try:
                     common_props = element.GetCommonProperties()
                 except:
@@ -2418,7 +2392,7 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 #    Leemos TODOS los AttributeSet para no perder atributos default.
                 attribute_list = []
                 try:
-                    if hasattr(element, "GetAttributes"):
+                    if hasattr(element, 'GetAttributes'):
                         attrs = element.GetAttributes()
                         if attrs:
                             attrs_by_id = {}
@@ -2430,25 +2404,23 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                                     attrs_by_id[attr_id] = attr
                             attribute_list = list(attrs_by_id.values())
                 except Exception as e:
-                    print(
-                        f"[SO] Advertencia: No se pudieron extraer atributos del elemento {idx}: {e}"
-                    )
+                    print(f"[SO] Advertencia: No se pudieron extraer atributos del elemento {idx}: {e}")
 
                 # 3. CREAR VIEWS con el ModelElement3D
                 views = [View2D3D([element])]
 
                 # 4. CREAR parámetros únicos para este elemento
                 params = {
-                    "ElementIndex": idx,
-                    "ElementType": type(element).__name__,
-                    "Layer": common_props.Layer,
-                    "Color": common_props.Color,
-                    "Pen": common_props.Pen,
-                    "Stroke": common_props.Stroke,
+                    'ElementIndex': idx,
+                    'ElementType': type(element).__name__,
+                    'Layer': common_props.Layer,
+                    'Color': common_props.Color,
+                    'Pen': common_props.Pen,
+                    'Stroke': common_props.Stroke
                 }
 
                 # 5. GENERAR hash único (SHA224)
-                hash_value = self.create_element_hash("element", **params)
+                hash_value = self.create_element_hash('element', **params)
 
                 # 6. CREAR lista de parámetros (formato: "key = value\n")
                 param_list = self.create_params_list_from_dict(params)
@@ -2460,188 +2432,115 @@ class PolylineScriptObject(BaseScriptObject if ALLPLAN_AVAILABLE else object):  
                 # 8. CREAR PythonPart individual con la firma completa
                 # Patrón del ejemplo: PythonPart(name, parameter_list, hash_value, python_file, views, matrix, common_props, attribute_list)
                 pythonpart = PythonPart(
-                    pp_name,  # name
-                    parameter_list=param_list,  # parameter_list
-                    hash_value=hash_value,  # hash_value
-                    python_file=python_file_name,  # python_file (nombre del .pyp)
-                    views=views,  # views (View2D3D con ModelElement3D) # type: ignore
-                    common_props=common_props,  # common_props
-                    attribute_list=attribute_list,  # attribute_list
+                    pp_name,                            # name
+                    parameter_list=param_list,               # parameter_list
+                    hash_value=hash_value,                   # hash_value
+                    python_file=python_file_name,            # python_file (nombre del .pyp)
+                    views=views,                             # views (View2D3D con ModelElement3D) # type: ignore
+                    common_props=common_props,               # common_props
+                    attribute_list=attribute_list  # attribute_list
                 )
                 pythonparts_list.append(pythonpart)
 
             except Exception as e:
-                print(
-                    f"[SO] Error creando PythonPart individual para elemento {idx}: {e}"
-                )
+                print(f"[SO] Error creando PythonPart individual para elemento {idx}: {e}")
                 import traceback
-
                 traceback.print_exc()
                 continue
 
-        print(
-            f"[SO] Creadas {len(pythonparts_list)} PythonParts individuales de {len(elements_list)} elementos"
-        )
+        print(f"[SO] Creadas {len(pythonparts_list)} PythonParts individuales de {len(elements_list)} elementos")
         return pythonparts_list
 
-    def create_group_pythonpart(
-        self, elements_list: List, build_ele, base_c: int = 0
-    ) -> List[PythonPart]:
+    def create_group_pythonpart(self,
+                                elements_list: List,
+                                build_ele) -> List[PythonPart]:
         """
-        Unifica SOLO los elementos del mismo color del PRIMER elemento.
-        El resto se dejan como elementos individuales sin aplicar MakeUnion.
+        Unifica todos los segmentos del grupo en un único sólido mediante MakeUnion.
+
+        Todos los elementos recibidos se asumen del mismo tipo (segmentos de conducto
+        del camino); el llamador (``_create_grouped_pythonparts_for_path``) ya separó
+        manguitos y cuboides antes de llamar aquí.
         """
         try:
-            print(f"[SO] Element LIST: {len(elements_list)}")
-            pythonparts_list = []
-            element_data_list = []
-            all_attributes = []
+            if not elements_list:
+                return []
+
+            print(f"[SO] create_group_pythonpart: uniendo {len(elements_list)} segmento(s)")
+
+            all_attributes: list = []
             first_common_props = None
-            base_color = 0
+            unified_geometry = None
 
-            # ------------------------------------------------------------
-            # 1. EXTRAER GEOMETRÍA + PROPIEDADES + ATRIBUTOS
-            # ------------------------------------------------------------
-            geo = None
             for idx, element in enumerate(elements_list):
-                print(f"[SO] Procesando elemento {idx}/{len(elements_list)-1}")
+                if element is None:
+                    continue
+
+                # --- extraer geometría y propiedades ---
                 try:
-                    geo = element.GetGeometryObject()
+                    geo   = element.GetGeometryObject()
                     props = element.GetCommonProperties()
-                except:
-                    props = (
-                        AllplanSettings.AllplanGlobalSettings.GetCurrentCommonProperties()
-                    )
+                except Exception as ex:
+                    print(f"[SO] Elemento {idx}: error extrayendo geometría: {ex}")
+                    continue
 
-                if base_c == props.Color:
+                # propiedades y atributos del primer elemento válido (representan al grupo)
+                if first_common_props is None:
                     first_common_props = props
-                    base_color = props.Color  # <-- COLOR BASE
-                    print(f"[SO] Color base = {base_color}")
-
-                # Atributos
-                elem_attrs = []
-                try:
-                    if idx == 0:
-                        if hasattr(element, "GetAttributes"):
+                    try:
+                        if hasattr(element, 'GetAttributes'):
                             attrs = element.GetAttributes()
                             if attrs:
-                                attrs_by_id = {}
+                                attrs_by_id: dict = {}
                                 for attr_set in attrs.GetAttributeSets() or []:
                                     for attr in attr_set.GetAttributes() or []:
                                         attr_id = getattr(attr, "Id", None)
-                                        if attr_id is None:
-                                            continue
-                                        attrs_by_id[attr_id] = attr
-                                elem_attrs = list(attrs_by_id.values())
-                                all_attributes.extend(elem_attrs)
-                except:
-                    pass
+                                        if attr_id is not None:
+                                            attrs_by_id[attr_id] = attr
+                                all_attributes = list(attrs_by_id.values())
+                    except Exception:
+                        pass
 
-                element_data_list.append(
-                    {
-                        "geometry": geo,
-                        "common_props": props,
-                        "attributes": elem_attrs,
-                    }
-                )
+                # --- MakeUnion acumulativo ---
+                if unified_geometry is None:
+                    unified_geometry = geo
+                else:
+                    err, result = AllplanGeo.MakeUnion(unified_geometry, geo)  # type: ignore
+                    if err == 0:
+                        unified_geometry = result
+                    else:
+                        print(f"[SO] MakeUnion elemento {idx} error={err} — segmento omitido en unión")
 
-            if not element_data_list:
+            if unified_geometry is None or first_common_props is None:
+                print("[SO] create_group_pythonpart: sin geometría válida, retornando vacío")
                 return []
 
-            # ------------------------------------------------------------
-            # 2. UNION SOLO DE ELEMENTOS DEL MISMO COLOR
-            # ------------------------------------------------------------
-            print("[SO] Iniciando unión solo entre elementos del color base...")
+            # --- construir ModelElement3D y PythonPart ---
+            solid_elem = AllplanBasisElements.ModelElement3D(first_common_props, unified_geometry)
+            views      = [View2D3D([solid_elem])]
 
-            list_new = []
-            unified_geometry = None
-            first_geometry_taken = False
-            list_manguito = []
-
-            for i, elem in enumerate(element_data_list):
-                elem_color = elem["common_props"].Color
-                # elem_layer = elem["common_props"].Layer # Extraído previamente con tu lógica de layers_list
-
-                if elem_color == base_color:  # type: ignore
-                    # SOLO se unen si coinciden en COLOR y LAYER
-                    if not first_geometry_taken:
-                        unified_geometry = elem["geometry"]
-                        first_geometry_taken = True
-                    else:
-                        err, unified_geometry = AllplanGeo.MakeUnion(unified_geometry, elem["geometry"])  # type: ignore
-                        if err != 0:
-                            print(f"[SO] ERROR en MakeUnion {i}: {err}")
-                            return []
-                else:
-                    # === NO SE UNE ===
-                    props = elem["common_props"]
-                    # props.Layer = layer_default
-                    new_elem = AllplanBasisElements.ModelElement3D(
-                        props, elem["geometry"]
-                    )
-
-                    if elem["attributes"]:
-                        attr_set_list = [
-                            AllplanBaseElements.AttributeSet(elem["attributes"])
-                        ]
-                        attributes = AllplanBaseElements.Attributes(attr_set_list)
-                        new_elem.SetAttributes(attributes)
-
-                    print(
-                        f"[SO] Elemento {i} color={elem_color} diferente → NO se une - Layer: {props.Layer} - {i}"
-                    )
-                    list_manguito.append(new_elem)
-
-            # ------------------------------------------------------------
-            # 3. AGREGAR EL SÓLIDO UNIFICADO FINAL
-            # ------------------------------------------------------------
-            if unified_geometry:
-                print(
-                    "[SO] Unión de color base completada. Agregando sólido unificado final..."
-                )
-                solid_elem = AllplanBasisElements.ModelElement3D(first_common_props, unified_geometry)  # type: ignore
-                list_new.append(solid_elem)
-
-            # ------------------------------------------------------------
-            # 4. CREAR VIEW
-            # ------------------------------------------------------------
-            views = [View2D3D(list_new)]
-
-            # ------------------------------------------------------------
-            # 5. PARÁMETROS DEL PYTHONPART
-            # ------------------------------------------------------------
-            params = {
-                # 'ElementIndex': num_td,
-                "ElementType": type(element).__name__,
-                "ElementCount": len(elements_list),
-                "BaseColor": base_color,
-                "AttributeCount": len(all_attributes),
-            }
-
-            hash_value = self.create_element_hash("solid_by_color_group", **params)
+            params     = {'ElementCount': len(elements_list), 'AttributeCount': len(all_attributes)}
+            hash_value = self.create_element_hash('solid_group', **params)
             param_list = self.create_params_list_from_dict(params)
+            pp_name    = self._fn_name if self._fn_name else "SolidGroup"
 
-            pp_name = self._fn_name if self._fn_name else "SolidByColorGroup"
             pythonpart = PythonPart(
                 pp_name,
                 parameter_list=param_list,
                 hash_value=hash_value,
-                python_file=getattr(build_ele, "pyp_file_name", ""),
-                views=views,  # type: ignore
+                python_file=getattr(build_ele, 'pyp_file_name', ""),
+                views=views,                  # type: ignore
                 common_props=first_common_props,
                 attribute_list=all_attributes,
             )
-            pythonparts_list.append(pythonpart)
 
-            print("[SO] PythonPart creado correctamente")
+            print(f"[SO] PythonPart grupo creado ({len(elements_list)} segmentos unidos)")
+            return [pythonpart]
 
         except Exception as e:
-            print(f"[SO] Error creando PythonPart Group para elemento {idx}: {e}")
+            print(f"[SO] Error en create_group_pythonpart: {e}")
             import traceback
-
             traceback.print_exc()
-
-        return pythonparts_list
+            return []
 
 
 # ==================================================================================================================================
@@ -2654,7 +2553,7 @@ def apply_config_to_script_object(script_object, config: PolylineBaseConfig) -> 
     """
     # Guarda la configuración dentro del script object
     # (solo si el script object implementa el método set_config)
-    if hasattr(script_object, "set_config"):
+    if hasattr(script_object, 'set_config'):
         script_object.set_config(config)
 
     # Intenta obtener el interactor asociado al script object
@@ -2665,10 +2564,7 @@ def apply_config_to_script_object(script_object, config: PolylineBaseConfig) -> 
     if interactor is not None:
         interactor.config = config
 
-
-def initialize_script_object(
-    build_ele, script_object_data, config: Optional[PolylineBaseConfig] = None
-):
+def initialize_script_object(build_ele, script_object_data, config: Optional[PolylineBaseConfig] = None):
     """
     Crea e inicializa el ScriptObject y le aplica la configuración opcional.
 

@@ -1,6 +1,8 @@
 import unicodedata
 import importlib
+import os
 import sys
+import NemAll_Python_Utility as PythonUtility
 import NemAll_Python_Geometry as AllplanGeometry
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_BaseElements as AllplanBaseElements
@@ -626,7 +628,7 @@ class SupportModel:
     # Configuración opcional a partir de JSON externo
     # ------------------------------------------------------------
 
-    def apply_json_definition(self, support_json):
+    def apply_json_definition(self, support_json, caller_installation: str | None = None):
         """
         Ajusta el tipo de soporte y el índice a partir de un objeto SupportJson.
 
@@ -701,6 +703,10 @@ class SupportModel:
         self.param = dict(PARAMS[self.type_support][idx])
 
         inferred_installation_type = _infer_installation_type_from_subtype(subtype_norm)
+
+        # Si el subtipo no resolvió, usar la instalación del caller como fallback.
+        if not inferred_installation_type and caller_installation:
+            inferred_installation_type = caller_installation.strip()
 
         # En Electr./Clima(SEP) el tipo de instalación se deduce del subtipo semántico.
         if self.type_support == "Omega" and self.support_key == "Electr./Clima(SEP)":
@@ -1281,7 +1287,7 @@ class SupportModel:
         return model_list
 
 
-def create_element(build_ele, doc: AllplanElementAdapter.DocumentAdapter):
+def create_element(build_ele, doc: AllplanElementAdapter.DocumentAdapter, caller_installation: str | None = None):
     """
     Crea el/los elementos finales.
 
@@ -1309,11 +1315,16 @@ def create_element(build_ele, doc: AllplanElementAdapter.DocumentAdapter):
     # 1) Intentar leer soportes desde JSON externo
     json_supports = []
     try:
-        try:
-            print(f"[Soportes] JSON path por defecto: {get_default_json_path()}")
-        except Exception as exc:
-            print(f"[Soportes] Aviso: no se pudo resolver path JSON por defecto: {exc}")
-        json_supports = load_supports_from_json()
+        json_path = get_default_json_path()
+        print(f"[Soportes] JSON path por defecto: {json_path}")
+        json_path_str = str(json_path) if json_path else ""
+        if json_path_str and json_path_str != "N/A" and not os.path.exists(json_path_str):
+            PythonUtility.ShowMessageBox(
+                f"No se encontró el archivo JSON de soportes:\n{json_path_str}",
+                PythonUtility.MB_OK,
+            )
+        else:
+            json_supports = load_supports_from_json()
     except Exception as exc:
         print(f"[Soportes] Aviso: error leyendo JSON externo de soportes: {exc}")
 
@@ -1348,7 +1359,7 @@ def create_element(build_ele, doc: AllplanElementAdapter.DocumentAdapter):
 
             # Configurar tipo/subtipo según JSON (si es posible)
             try:
-                support.apply_json_definition(js)
+                support.apply_json_definition(js, caller_installation=caller_installation)
             except Exception as exc:
                 print(
                     f"[Soportes] Aviso: error aplicando configuración JSON al soporte: {exc}"

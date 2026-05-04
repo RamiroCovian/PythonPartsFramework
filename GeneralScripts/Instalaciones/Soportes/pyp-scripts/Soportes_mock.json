@@ -1,0 +1,22 @@
+{
+    "soportes": [
+        {
+            "tipo": "Zeta",
+            "subtipo": "Agua",
+            "superficie": "Liso",
+            "posicion1": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "posicion2": [
+                1000.0,
+                0.0,
+                0.0
+            ],
+            "angulo_inclinacion": 180.0,
+            "cota_a": 0.0,
+            "cota_b": 205.0
+        }
+    ]
+}

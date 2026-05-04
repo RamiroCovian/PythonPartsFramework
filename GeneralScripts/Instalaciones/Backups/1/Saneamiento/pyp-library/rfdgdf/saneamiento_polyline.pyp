@@ -1,0 +1,707 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Element>
+    <Script>
+        <Name>Instalaciones\Saneamiento\pyp-scripts\saneamiento_polyline.py</Name>
+        <Title>Polyline MVP</Title>
+        <Version>1.0.0</Version>
+        <Interactor>False</Interactor>
+    </Script>
+    <Page>
+        <Name>CrearPolilinea</Name>
+        <Text>Definir polilínea para una instalación y generar elementos.</Text>
+        <TextId>2000</TextId>
+        <Parameter>
+            <Name>InstallationName</Name>
+            <Text>Instalacion</Text>
+            <TextId>2001</TextId>
+            <Value />
+            <ValueType>Text</ValueType>
+            <FontSize>16</FontSize>
+            <FontStyle>2</FontStyle>
+        </Parameter>
+        <Parameter>
+            <Name>InstallationTypeTitle</Name>
+            <Text>Tipos de instalacion</Text>
+            <TextId>2002</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>SupportedAngles</Name>
+                <Text>Angulos Soportados</Text>
+                <TextId>2003</TextId>
+                <Value />
+                <ValueType>Text</ValueType>
+                <FontSize>16</FontSize>
+                <FontStyle>2</FontStyle>
+            </Parameter>
+            <Parameter>
+                <Name>InstallationType</Name>
+                <Text>Elegir instalacion</Text>
+                <TextId>2004</TextId>
+                <Value />
+                <ValueList />
+                <EventId>1002</EventId>
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>DiameterType</Name>
+                <Text>Diámetro a aplicar</Text>
+                <TextId>2005</TextId>
+                <Value />
+                <ValueList />
+                <ValueType>IntegerComboBox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>DiameterTypeStr</Name>
+                <Text>Diámetro a aplicar</Text>
+                <TextId>2006</TextId>
+                <Value />
+                <ValueList />
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowDiameterModify</Name>
+                <Text>Modificar</Text>
+                <TextId>2007</TextId>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>DiameterModify</Name>
+                    <Text>Modificar diámetro</Text>
+                    <TextId>2008</TextId>
+                    <EventId>1007</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>FunctionalName</Name>
+                <Text>Nombre PythonPartGroup</Text>
+                <TextId>2009</TextId>
+                <Value />
+                <ValueType>String</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>DistributionType</Name>
+                <Text>Tipo de Distribucion</Text>
+                <TextId>2010</TextId>
+                <Value />
+                <ValueList />
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>WaterType</Name>
+                <Text>Tipo de Agua</Text>
+                <TextId>2011</TextId>
+                <Value />
+                <ValueList />
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>FaceEN</Name>
+                <Text>Cara (EN)</Text>
+                <TextId>2012</TextId>
+                <Value />
+                <ValueList />
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>PointModeTitle</Name>
+            <Text>Modos de dibujo</Text>
+            <TextId>2013</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>PointModeInfoRow</Name>
+                <Text>Información</Text>
+                <TextId>2014</TextId>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>InfoPicture</Name>
+                    <Text>
+    Modos de dibujo (Ayuda):
+
+    • EDICION
+        Permite estirar la polilinea desde sus vértices
+        y agregar puntos o cortes en los segmentos.
+        El CheckBox “Insertar punto” solo se habilita en este modo.
+
+    • CONFIGURACION
+        Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
+        para aplicar layers y atributos personalizados.
+        También permite eliminar uno o más segmentos mediante selección múltiple.
+
+    • CREACION - EXTENDER
+        Permite dibujar y extender la polilinea.
+                    </Text>
+                    <TextId>2015</TextId>
+                    <Value>AllplanSettings.PictResPalette.eHotinfo</Value>
+                    <ValueType>Picture</ValueType>
+                    <EventId>0</EventId>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>PointMode</Name>
+                <Text>Elegir modo</Text>
+                <TextId>2016</TextId>
+                <Value>2</Value>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Parameter>
+                    <Name>ExtendPolyline</Name>
+                    <Text>Modo Edicion</Text>
+                    <TextId>2017</TextId>
+                    <Value>0</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>EditPolyline</Name>
+                    <Text>Modo Configuracion</Text>
+                    <TextId>2018</TextId>
+                    <Value>1</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>CreatePolyline</Name>
+                    <Text>Modo Creacion - Ext</Text>
+                    <TextId>2019</TextId>
+                    <Value>2</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowLimitAngles</Name>
+            <ValueType>Row</ValueType>
+            <Value>OVERALL:1</Value>
+            <Parameter>
+                <Name>CheckBoxLimitarAngulos</Name>
+                <Text>Limitar ángulos</Text>
+                <TextId>2020</TextId>
+                <Value>True</Value>
+                <ValueType>CheckBox</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowInsertPoint</Name>
+            <ValueType>Row</ValueType>
+            <Value>OVERALL:1</Value>
+            <Parameter>
+                <Name>CheckBoxInsertPoint</Name>
+                <Text>Insertar punto</Text>
+                <TextId>2021</TextId>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowAddCut</Name>
+            <ValueType>Row</ValueType>
+            <Value>OVERALL:1</Value>
+            <Parameter>
+                <Name>CheckBoxAddCut</Name>
+                <Text>Añadir cortes</Text>
+                <TextId>2022</TextId>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowBorrar</Name>
+            <Text>Borrar</Text>
+            <TextId>2023</TextId>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>borrarSeccion</Name>
+                <Text>Borrar Seccion o Corte</Text>
+                <TextId>2024</TextId>
+                <EventId>1004</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>ElementSeleted</Name>
+            <Text>Elemento seleccionado</Text>
+            <TextId>2025</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>ElementDescription</Name>
+                <Text>Info</Text>
+                <TextId>2026</TextId>
+                <Value />
+                <ValueType>Text</ValueType>
+                <FontSize>16</FontSize>
+                <FontStyle>2</FontStyle>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>ViewInfo</Name>
+                <Text>Ver Info</Text>
+                <TextId>2027</TextId>
+                <EventId>1010</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>Orientacion3DExpander</Name>
+            <Text>Orientación 3D (segmento unico)</Text>
+            <TextId>2028</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>RotationAngle</Name>
+                <Text>Angulo rotacion</Text>
+                <TextId>2029</TextId>
+                <Value />
+                <ValueType>Text</ValueType>
+                <FontSize>16</FontSize>
+                <FontStyle>2</FontStyle>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>DefineOrientation</Name>
+                <Text>Definir orientación</Text>
+                <TextId>2030</TextId>
+                <EventId>1012</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>LayersCustom</Name>
+            <Text>Layers</Text>
+            <TextId>2031</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>LayerTypes</Name>
+                <Text>Tipos de layer</Text>
+                <TextId>2032</TextId>
+                <Value />
+                <ValueList />
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>aplicarLayers</Name>
+                <Text>Aplicar layer</Text>
+                <TextId>2033</TextId>
+                <EventId>1009</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowAttribute</Name>
+            <Text>Atributos</Text>
+            <TextId>2034</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>AttributeValue</Name>
+                <Text>Valor atributo</Text>
+                <TextId>2035</TextId>
+                <Value />
+                <ValueType>String</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>AttributeApply</Name>
+                <Text>Aplicar atributo</Text>
+                <TextId>2036</TextId>
+                <EventId>1011</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>General</Name>
+            <Text>General options</Text>
+            <TextId>2037</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>CommonProp</Name>
+                <Text />
+                <TextId>2038</TextId>
+                <Value />
+                <Visible>False</Visible>
+                <Enable>False</Enable>
+                <ValueType>CommonProperties</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowPythonPart</Name>
+                <Text>PythonPartGroup</Text>
+                <TextId>2039</TextId>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>CreatePythonPart</Name>
+                    <Text>Crear como PythonPartGroup</Text>
+                    <TextId>2040</TextId>
+                    <Value>True</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowPolilyne</Name>
+                <Text>Agregar Polilinea</Text>
+                <TextId>2041</TextId>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>AddPolilyne</Name>
+                    <Text>Polilinea</Text>
+                    <TextId>2042</TextId>
+                    <Value>True</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>AddCube</Name>
+                    <Text>Polilinea</Text>
+                    <TextId>2043</TextId>
+                    <Value>True</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>Separator</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowFinalizar</Name>
+            <Text>Finalizar</Text>
+            <TextId>2044</TextId>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>finalizarCreacion</Name>
+                <Text>Finalizar - Crear</Text>
+                <TextId>2045</TextId>
+                <EventId>1003</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>zUnique</Name>
+            <Text>Unic</Text>
+            <TextId>2046</TextId>
+            <Value>0.0</Value>
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>Double</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>SavedState</Name>
+            <Text>SavedState</Text>
+            <TextId>2047</TextId>
+            <Value />
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>String</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>CopiedElementsUUIDs</Name>
+            <Text>CopiedElementsUUIDs</Text>
+            <TextId>2048</TextId>
+            <Value />
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>String</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>CopiedElementsFiles</Name>
+            <Text>CopiedElementsFiles</Text>
+            <TextId>2049</TextId>
+            <Value />
+            <Visible>False</Visible>
+            <Enable>False</Enable>
+            <ValueType>String</ValueType>
+        </Parameter>
+    </Page>
+    <Page>
+        <Name>PuntosLibresYMacros</Name>
+        <Text>Puntos Libres y Macros</Text>
+        <TextId>2050</TextId>
+        <Parameter>
+            <Name>MacroExpander</Name>
+            <Text>Macro</Text>
+            <TextId>2051</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>MarkerPointMode</Name>
+                <Text>Elegir punto</Text>
+                <TextId>2052</TextId>
+                <Value>2</Value>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Visible>False</Visible>
+                <Parameter>
+                    <Name>MarkerStart</Name>
+                    <Text>Punto inicial</Text>
+                    <TextId>2053</TextId>
+                    <Value>0</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>MarkerEnd</Name>
+                    <Text>Punto final</Text>
+                    <TextId>2054</TextId>
+                    <Value>1</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>MarkerFree</Name>
+                    <Text>Libre</Text>
+                    <TextId>2055</TextId>
+                    <Value>2</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <ValueType>Row</ValueType>
+                <Visible>True</Visible>
+                <Parameter>
+                    <Name>BtnSelectMacroPoint</Name>
+                    <Text>Seleccionar punto</Text>
+                    <TextId>2056</TextId>
+                    <EventId>1013</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>IsMacroCaptureMode == False</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>BtnAcceptMacro</Name>
+                    <Text>Aceptar (Terminar selección)</Text>
+                    <TextId>2057</TextId>
+                    <EventId>1020</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>IsMacroCaptureMode == True</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>IsMacroCaptureMode</Name>
+                    <Text>IsMacroCaptureMode</Text>
+                    <TextId>2058</TextId>
+                    <Value>False</Value>
+                    <ValueType>CheckBox</ValueType>
+                    <Visible>False</Visible>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>MacroSelectedLocalZ</Name>
+                <Text>Z local seleccionado</Text>
+                <TextId>2059</TextId>
+                <Value>-999999</Value>
+                <ValueType>Double</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+            <Parameter>
+                <ValueType>Row</ValueType>
+                <Visible>True</Visible>
+                <Parameter>
+                    <Name>BtnSelectLocal</Name>
+                    <Text>Seleccionar Local</Text>
+                    <TextId>2060</TextId>
+                    <EventId>1026</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>BtnQuitarLocal</Name>
+                    <Text>Quitar local</Text>
+                    <TextId>2061</TextId>
+                    <EventId>1027</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>MacroSelectedLocalZ &gt; -100000</Visible>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>MacroZAbs</Name>
+                <Text>Cota Z (mm)</Text>
+                <TextId>2062</TextId>
+                <Value>0</Value>
+                <MinValue>-100000</MinValue>
+                <MaxValue>100000</MaxValue>
+                <ValueType>Integer</ValueType>
+                <Visible>MacroSelectedLocalZ &lt;= -100000</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>MacroZRelative</Name>
+                <Text>Altura sobre el piso (mm)</Text>
+                <TextId>2063</TextId>
+                <Value>1000</Value>
+                <MinValue>0</MinValue>
+                <MaxValue>100000</MaxValue>
+                <ValueType>Integer</ValueType>
+                <Visible>MacroSelectedLocalZ &gt; -100000</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>MacroLibraryElementType</Name>
+                <Text>Tipo de macro</Text>
+                <TextId>2064</TextId>
+                <Value>SmartSymbol</Value>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Visible>False</Visible>
+                <Parameter>
+                    <Name>MacroSmartSymbolRadioButton</Name>
+                    <Text>Macro (SmartSymbol .nmk)</Text>
+                    <TextId>2065</TextId>
+                    <Value>SmartSymbol</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>MacroFixtureRadioButton</Name>
+                    <Text>Fixture (.lfx/.pxf)</Text>
+                    <TextId>2066</TextId>
+                    <Value>Fixture</Value>
+                    <ValueType>RadioButton</ValueType>
+                    <Visible>False</Visible>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>MacroSmartSymbolPath</Name>
+                <Text>Seleccionar macro (SmartSymbol)</Text>
+                <TextId>2067</TextId>
+                <Value />
+                <ValueType>String</ValueType>
+                <ValueDialog>SmartSymbolDialog</ValueDialog>
+                <Visible>MacroLibraryElementType == "SmartSymbol"</Visible>
+            </Parameter>
+            <Parameter>
+                <Name>MacroFixturePath</Name>
+                <Text>Seleccionar fixture</Text>
+                <TextId>2068</TextId>
+                <Value />
+                <ValueType>String</ValueType>
+                <ValueDialog>FixtureDialog</ValueDialog>
+                <Visible>False</Visible>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>ElementExpander</Name>
+            <Text>Elemento</Text>
+            <TextId>2069</TextId>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>DefinedElementType</Name>
+                <Text>Elemento</Text>
+                <TextId>2070</TextId>
+                <Value>Caixa Connexions 200</Value>
+                <ValueList>Caixa Connexions 200</ValueList>
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>ElementPointMode</Name>
+                <Text>Tipo de punto</Text>
+                <TextId>2071</TextId>
+                <Value>2</Value>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Visible>False</Visible>
+                <Parameter>
+                    <Name>ElementStart</Name>
+                    <Text>Punto inicial</Text>
+                    <TextId>2072</TextId>
+                    <Value>0</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ElementEnd</Name>
+                    <Text>Punto final</Text>
+                    <TextId>2073</TextId>
+                    <Value>1</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ElementFree</Name>
+                    <Text>Intermedio o libre</Text>
+                    <TextId>2074</TextId>
+                    <Value>2</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>BtnSelectElementPoint</Name>
+                    <Text>Seleccionar punto</Text>
+                    <TextId>2075</TextId>
+                    <EventId>1015</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>IsElementCaptureMode == False</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>BtnAcceptElement</Name>
+                    <Text>Aceptar (Terminar selección)</Text>
+                    <TextId>2076</TextId>
+                    <EventId>1021</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>IsElementCaptureMode == True</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>IsElementCaptureMode</Name>
+                    <Text>IsElementCaptureMode</Text>
+                    <TextId>2077</TextId>
+                    <Value>False</Value>
+                    <ValueType>CheckBox</ValueType>
+                    <Visible>False</Visible>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>ElementRotX</Name>
+                <Text>Rot X (grados)</Text>
+                <TextId>2078</TextId>
+                <Value>0</Value>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+                <ValueType>Integer</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>ElementRotY</Name>
+                <Text>Rot Y (grados)</Text>
+                <TextId>2079</TextId>
+                <Value>0</Value>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+                <ValueType>Integer</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>ElementRotZ</Name>
+                <Text>Rot Z (grados)</Text>
+                <TextId>2080</TextId>
+                <Value>0</Value>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+                <ValueType>Integer</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>ElementActionRow</Name>
+                <Text>Acción</Text>
+                <TextId>2081</TextId>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>BtnAddElementPoint</Name>
+                    <Text>Añadir punto</Text>
+                    <TextId>2082</TextId>
+                    <EventId>1016</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>False</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>BtnFinalizarElementos</Name>
+                    <Text>Finalizar</Text>
+                    <TextId>2083</TextId>
+                    <EventId>1003</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+        </Parameter>
+    </Page>
+</Element>

@@ -48,6 +48,9 @@ PARAM_DISTRIBUTION_TYPE = "DistributionType"
 PARAM_WATER_TYPE = "WaterType"
 PARAM_FACE_EN ="FaceEN"
 
+# ─────────────────── Tipo polilinea
+PARAM_POLY_MODE = "PolyMode"                         # RadioButtonGroup (valor: 0, 1)
+
 # ─────────────────── Modos de Dibujo
 PARAM_INFO_BOX = "InfoPicture"
 PARAM_POINT_MODE = "PointMode"                         # RadioButtonGroup (valor: 0, 1, 2)
@@ -56,6 +59,14 @@ PARAM_EDIT_POLYLINE = "EditPolyline"                   # RadioButton modo edici�
 PARAM_CREATE_POLYLINE = "CreatePolyline"               # RadioButton modo creación (2)
 PARAM_CHECKBOX_INSERT_POINT = "CheckBoxInsertPoint"
 PARAM_CHECKBOX_ADD_CUT = "CheckBoxAddCut"
+PARAM_UNDEFINED_POINTS_MODE         = "ModoNodosOptimizador"   # RadioButtonGroup: 0=off 1=insertar 2=editar
+
+# ─────────────────── Puntos No Definidos (PointInput) ───────────────────
+PARAM_TIPO_PUNTO_ORDEN              = "TipoPuntoOrden"           # StringComboBox: tipo de punto
+PARAM_COLOR_PUNTOS_NO_DEFINIDOS     = "ColorPuntosNoDefinidos"   # StringComboBox: color del camino
+PARAM_DETECCION_PUNTOS_COMUNES      = "DeteccionPuntosComunesActiva"  # CheckBox
+PARAM_TOLERANCIA_PUNTOS_COMUNES_MM  = "ToleranciaPuntosComunesMm"    # Length (mm)
+PARAM_COLOR_RESALTADO_COMUNES       = "ColorResaltadoPuntosComunes"  # StringComboBox: color halo
 
 # ─────────────────── Limitación de Ángulos ───────────────────
 PARAM_ROW_LIMITAR_ANGULOS = "RowLimitarAngulos"        # Row contenedor
@@ -83,8 +94,11 @@ PARAM_FUNCTIONAL_NAME = "FunctionalName"      # String con valor para definir no
 # ─────────────────── Acciones/Botones ───────────────────
 PARAM_ROW_BORRAR = "RowBorrar"                        # Row de borrar
 PARAM_BORRAR_SECCION = "borrarSeccion"                # Button borrar segmento
+PARAM_INVERTIR_CAVAL = "invertirCaval"                # Button invertir caval
 PARAM_ROW_FINALIZAR = "RowFinalizar"                  # Row de finalizar
 PARAM_FINALIZAR_CREACION = "finalizarCreacion"        # Button finalizar y crear
+PARAM_ROW_CAMBIAR_TIPO = "RowCambiarTipo"             # Row cambiar tipo de instalación
+PARAM_CAMBIAR_TIPO_INSTALACION = "CambiarTipoInstalacion"  # Button cambiar tipo instalación del camino
 
 # ─────────────────── Parámetros Ocultos/Internos ───────────────────
 PARAM_Z_UNIQUE = "zUnique"                            # Double - Coordenada Z única (oculto)
@@ -114,13 +128,6 @@ PARAM_APLICAR_ATTR_SOPORTE = "AplicarAtributoSoporte" # Button - aplica atributo
 PARAM_SOPORTE_COUNT = "SoporteCount"                  # Text - cantidad acumulada (solo lectura)
 # Estado interno
 PARAM_SOPORTES_SAVED_STATE = "SoportesSavedState"    # String JSON - lista de soportes acumulados
-
-# ─────────────────── Puntos Definidos / Puntos Libres ───────────────────
-PARAM_DEFINED_ELEMENT_TYPE = "DefinedElementType"    # StringComboBox: tipo de elemento
-PARAM_DEFINED_POINT_TYPE = "PointType"               # StringComboBox: tipo de punto libre
-PARAM_DEFINED_ROT_X = "RotX"                         # Double - rotación en X
-PARAM_DEFINED_ROT_Y = "RotY"                         # Double - rotación en Y
-PARAM_DEFINED_ROT_Z = "RotZ"                         # Double - rotación en Z
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
@@ -172,6 +179,8 @@ class ParamNames:
         WATER_TYPE = PARAM_WATER_TYPE
         FACE_EN = PARAM_FACE_EN
 
+    class PolyMode:
+        MODE = PARAM_POLY_MODE
 
     class DrawMode:
         """
@@ -191,6 +200,23 @@ class ParamNames:
         CREATE = PARAM_CREATE_POLYLINE
         INSERT = PARAM_CHECKBOX_INSERT_POINT
         CUT = PARAM_CHECKBOX_ADD_CUT
+        INSERT_UNDEFINED_POINTS = PARAM_UNDEFINED_POINTS_MODE
+
+    class PointInput:
+        """Parámetros de la paleta leídos por ``PointInput`` (modo insertar puntos).
+
+        Atributos:
+            TIPO_PUNTO:     StringComboBox con el tipo de punto (Inicio, Final, etc.)
+            COLOR:          StringComboBox con el color del camino (Negro, Rojo, etc.)
+            COMMON_ENABLED: CheckBox para activar detección de puntos comunes
+            COMMON_TOL_MM:  Length — tolerancia XY de snap entre caminos (mm)
+            COMMON_COLOR:   StringComboBox con el color de resaltado del halo
+        """
+        TIPO_PUNTO    = PARAM_TIPO_PUNTO_ORDEN
+        COLOR         = PARAM_COLOR_PUNTOS_NO_DEFINIDOS
+        COMMON_ENABLED = PARAM_DETECCION_PUNTOS_COMUNES
+        COMMON_TOL_MM  = PARAM_TOLERANCIA_PUNTOS_COMUNES_MM
+        COMMON_COLOR   = PARAM_COLOR_RESALTADO_COMUNES
 
     class Angles:
         """
@@ -259,9 +285,14 @@ class ParamNames:
             BORRAR_SECCION: Button para borrar segmento actual
             ROW_FINALIZAR: Row contenedor de finalizar
             FINALIZAR_CREACION: Button para finalizar y crear elementos
+            ROW_CAMBIAR_TIPO: Row contenedor de cambiar tipo instalación
+            CAMBIAR_TIPO_INSTALACION: Button para cambiar tipo de instalación del camino seleccionado
         """
         BORRAR_SECCION = PARAM_BORRAR_SECCION
+        INVERTIR_CAVAL = PARAM_INVERTIR_CAVAL
         FINALIZAR_CREACION = PARAM_FINALIZAR_CREACION
+        ROW_CAMBIAR_TIPO = PARAM_ROW_CAMBIAR_TIPO
+        CAMBIAR_TIPO_INSTALACION = PARAM_CAMBIAR_TIPO_INSTALACION
 
     class Hidden:
         """
@@ -274,7 +305,7 @@ class ParamNames:
         Z_UNIQUE = PARAM_Z_UNIQUE
         SAVED_STATE = PARAM_SAVED_STATE
 
-    class Soportes:
+    class Supports:
         """
         Parámetros de la página "Soportes" (página separada en el .pyp de instalación).
 
@@ -315,30 +346,23 @@ class ParamNames:
         # Estado interno
         SAVED_STATE = PARAM_SOPORTES_SAVED_STATE
 
-    class DefinedPointInput:
-        """
-        Parámetros de la sección de puntos definidos / puntos libres.
+# ══════════════════════════════════════════════════════════════════════════════════
+# 4. CLASE POINTMODEVALUES - VALORES DE MODOS DE PUNTO
+# ══════════════════════════════════════════════════════════════════════════════════
 
-        Corresponden al bloque "Modo puntos libres" de `agua_polyline.pyp`
-        y permiten acceder desde `build_ele` a la configuración del elemento
-        definido que debe reflejarse en la paleta.
+class PolyModeValues:
+    """
+    Valores numéricos de los modos de polilinea (RadioButtonGroup).
 
-        Atributos:
-            ELEMENT_TYPE: Tipo de elemento seleccionado.
-            POINT_TYPE: Tipo de punto libre seleccionado.
-            ROT_X: Rotación en eje X.
-            ROT_Y: Rotación en eje Y.
-            ROT_Z: Rotación en eje Z.
-        """
-        ELEMENT_TYPE = PARAM_DEFINED_ELEMENT_TYPE
-        POINT_TYPE = PARAM_DEFINED_POINT_TYPE
-        ROT_X = PARAM_DEFINED_ROT_X
-        ROT_Y = PARAM_DEFINED_ROT_Y
-        ROT_Z = PARAM_DEFINED_ROT_Z
+    Estos valores corresponden a los RadioButtons definidos en el XML
+    para el parámetro PolyMode.
+    """
+    Manual = 0  # Modo extender - ExtendPolyline
+    Automatico = 1    # Modo edición - EditPolyline
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
-# 3. CLASE POINTMODEVALUES - VALORES DE MODOS DE PUNTO
+# 4. CLASE POINTMODEVALUES - VALORES DE MODOS DE PUNTO
 # ══════════════════════════════════════════════════════════════════════════════════
 
 class PointModeValues:
@@ -357,13 +381,13 @@ class PointModeValues:
         >>> elif mode == PointModeValues.EXTEND:
         >>>     print("Modo extender activado")
     """
-    EXTEND = 0  # Modo extender - ExtendPolyline
-    EDIT = 1    # Modo edición - EditPolyline
-    CREATE = 2  # Modo creación - CreatePolyline
+    EXTEND = 0    # Modo extender - ExtendPolyline
+    EDIT = 1      # Modo edición - EditPolyline
+    CREATE = 2    # Modo creación - CreatePolyline
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
-# 4. CLASE EVENTIDS - IDs DE EVENTOS DE CONTROLES
+# 5. CLASE EVENTIDS - IDs DE EVENTOS DE CONTROLES
 # ══════════════════════════════════════════════════════════════════════════════════
 
 class EventIds:
@@ -391,6 +415,7 @@ class EventIds:
     MOSTRAR_INFO = 1010             # Click en botón "Ver Info"
     ATTRIBUTE_APPLY = 1011            # Click en botón "Aplicar atributo"
     DEFINIR_ORIENTACION = 1012            # Click en botón "Definir orientación"
+    INVERTIR_CAVAL = 1017                 # Click en botón "Invertir caval"
 
     # --- Soportes page events ---
     TYPE_SUPPORT_CHANGED = 1030       # Cambio en ComboBox TypeSupport (Zeta/Omega)
@@ -402,6 +427,19 @@ class EventIds:
     BORRAR_SOPORTES = 1036            # Button "Borrar seleccionados" — elimina de lista
     APLICAR_ATTR_SOPORTE = 1037       # Button "Aplicar atributo" — aplica a seleccionados
     SOPORTE_EDIT_MODE_CHANGED = 1038  # RadioButtonGroup modo edición cambiado
+
+    CAMBIAR_TIPO_INSTALACION = 1045    # Button "Cambiar tipo instalación" del camino seleccionado
+
+    # --- Optimizer ---
+    INJECT_TEST_POINTS    = 1040      # Button "Inyectar Puntos Test" (muestra cruces)
+    GENERAR_CAMINO_OPTIMO = 1041      # Button "Generar Camino Óptimo" (corre optimizer)
+
+    # --- Puntos No Definidos ---
+    # TOGGLE_PUNTO_INPUT_MODE     = 1031  # CheckBox "Activar modo añadir punto"
+    LIMPIAR_PUNTOS_NO_DEFINIDOS = 1042  # Button "Limpiar puntos"
+    FINALIZAR_PUNTOS_NO_DEFINIDOS = 1043  # reservado
+    MODO_NODOS_OPTIMIZADOR = 1044       # RadioButtonGroup Desactivado/Insertar/Editar
+
 
     # --- Marker Manager events (Page 2: macros / defined elements) ---
     SELECT_MACRO_POINT = 1013         # Iniciar captura de punto para macro
@@ -415,7 +453,7 @@ class EventIds:
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
-# 5. VALORES POR DEFECTO
+# 6. VALORES POR DEFECTO
 # ══════════════════════════════════════════════════════════════════════════════════
 
 class DefaultValues:

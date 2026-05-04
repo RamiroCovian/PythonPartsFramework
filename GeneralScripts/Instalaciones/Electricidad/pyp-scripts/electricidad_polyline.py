@@ -86,7 +86,6 @@ _TD_ELEMENT_MAP: dict[str, tuple[str, int]] = {
 }
 _EN_ELEMENT_MAP = _TD_ELEMENT_MAP   # misma geometría, distinto layer
 
-_TD_COLOR_INNER = 15    # tubo interior (igual que IS telecom)
 _TD_COLOR_OUTER = 4     # recubrimiento exterior XPS
 _TD_OUTER_OFFSET = 2.5  # mm: desplazamiento del recubrimiento hacia -Y (abajo en plano XY)
 
@@ -115,19 +114,32 @@ def _patch_create_group_pythonpart_for_td(script_object) -> None:
     """
     Monkey-patch de create_group_pythonpart para TD y EN.
     En IS, delega al original sin cambios.
-    En TD/EN, llama al original dos veces: una por cada color (inner + outer=4),
-    de forma que ambos tubos superpuestos queden como PythonParts independientes.
+    En TD/EN, separa elements_list por color antes de llamar al original dos veces:
+    una para los tubos interiores y otra para el tubo exterior (color _TD_COLOR_OUTER=4),
+    de forma que ambos queden como PythonParts independientes.
     """
     _original = script_object.create_group_pythonpart
 
-    def _td_aware_create_group(elements_list, build_ele, base_c=0):
+    def _elem_color(e) -> int:
+        try:
+            return e.GetCommonProperties().Color
+        except Exception:
+            return -1
+
+    def _td_aware_create_group(elements_list, build_ele):
         dist = getattr(script_object, "distribution_type", None)
         if dist not in ("TD", "EN"):
-            return _original(elements_list, build_ele, base_c=base_c)
-        inner_color = getattr(script_object, "inst_color", _TD_COLOR_INNER)
-        pp_inner = _original(elements_list, build_ele, base_c=inner_color)
-        pp_outer = _original(elements_list, build_ele, base_c=_TD_COLOR_OUTER)
-        return pp_inner + pp_outer
+            return _original(elements_list, build_ele)
+
+        inner_elems = [e for e in elements_list if _elem_color(e) != _TD_COLOR_OUTER]
+        outer_elems = [e for e in elements_list if _elem_color(e) == _TD_COLOR_OUTER]
+
+        result = []
+        if inner_elems:
+            result += _original(inner_elems, build_ele)
+        if outer_elems:
+            result += _original(outer_elems, build_ele)
+        return result
 
     script_object.create_group_pythonpart = _td_aware_create_group
 
@@ -183,7 +195,7 @@ def create_script_object(build_ele, script_object_data):
             )
         elif name == "FaceEN":
             _update_default_layers_for_distribution(
-                script_object, script_object.distribution_type, face_en=value,
+                script_object, script_object.distribution_type, face_en=value, # type: ignore
             )
         return result
 
@@ -504,7 +516,7 @@ def _create_elements_for_segment_group(segments, so: PBL.script_object.PolylineS
     _dist = getattr(so, "distribution_type", None)
     if not is_rejiband and _dist in ("TD", "EN"):
         _elem_map = _TD_ELEMENT_MAP if _dist == "TD" else _EN_ELEMENT_MAP
-        td_key, td_inst_color = _elem_map.get(element_type_core, (None, None))
+        td_key, td_inst_color = _elem_map.get(element_type_core, (None, None)) # type: ignore
         if td_key:
             element_type_core = td_key
             base_color = None                   # preserva colores por elemento (inner/outer)

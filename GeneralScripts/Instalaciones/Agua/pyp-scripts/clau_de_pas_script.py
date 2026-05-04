@@ -10,13 +10,6 @@ def check_allplan_version(_build_ele, version) -> bool:
     return True
 
 
-def create_preview(build_ele, script_object_data):
-    """Vista previa simplificada para el file-based loader."""
-    from .clau_de_pas_006 import create_preview as _model_preview
-
-    return _model_preview(build_ele, None), []
-
-
 # --- Clase Principal del PythonPart ---
 class ClauDePasScript(BaseScriptObject):
     """Clase principal del PythonPart que modela un clau de pas."""

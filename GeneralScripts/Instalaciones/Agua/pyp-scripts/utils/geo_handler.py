@@ -6075,9 +6075,7 @@ class PipelineProcessor:
         prev_dx = p_mid.X - p_prev.X
         prev_dy = p_mid.Y - p_prev.Y
         prev_dz = p_mid.Z - p_prev.Z
-        prev_len = math.sqrt(
-            prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz
-        )
+        prev_len = math.sqrt(prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz)
 
         if prev_len > 1e-6 and abs(prev_dz) < 1e-6:
             return math.atan2(prev_dy, prev_dx)
@@ -6835,13 +6833,15 @@ class PipelineProcessor:
                                                 theta_source,
                                                 math.degrees(theta_branch_xy),
                                                 (
-                                                    "%.1f°"
-                                                    % math.degrees(
-                                                        float(ref_orientation)
+                                                    (
+                                                        "%.1f°"
+                                                        % math.degrees(
+                                                            float(ref_orientation)
+                                                        )
                                                     )
-                                                )
-                                                if ref_orientation is not None
-                                                else "None",
+                                                    if ref_orientation is not None
+                                                    else "None"
+                                                ),
                                             )
                                         )
                                     r_yaw = AllplanGeo.Matrix3D()
@@ -7309,7 +7309,9 @@ class PipelineProcessor:
                         else None
                     )
                     seg_system = (
-                        getattr(seg_info, "system", None) if seg_info is not None else None
+                        getattr(seg_info, "system", None)
+                        if seg_info is not None
+                        else None
                     )
                     seg_dist = "TD" if str(seg_dist).upper() == "TD" else "IS"
 
@@ -7796,7 +7798,10 @@ class PipelineProcessor:
                     other_pt = cp_info.get("other_point")
                     if not node_key_cp or not other_pt:
                         continue
-                    if node_key_cp in te_nodes or node_key_cp in inserted_cross_path_elbows:
+                    if (
+                        node_key_cp in te_nodes
+                        or node_key_cp in inserted_cross_path_elbows
+                    ):
                         continue
 
                     if at_start:
@@ -7884,7 +7889,11 @@ class PipelineProcessor:
                     def _get_seg_diam(_seg_item):
                         try:
                             info = getattr(_seg_item, "info", None)
-                            d = getattr(info, "diameter", None) if info is not None else None
+                            d = (
+                                getattr(info, "diameter", None)
+                                if info is not None
+                                else None
+                            )
                             if isinstance(d, (list, tuple)) and d:
                                 return float(d[0])
                             if d is None:
@@ -7929,7 +7938,9 @@ class PipelineProcessor:
                         {
                             "element": element_manguito,
                             "element_type": (
-                                "manguito_inner" if is_inner_only_reducer else "manguito"
+                                "manguito_inner"
+                                if is_inner_only_reducer
+                                else "manguito"
                             ),
                             "index": element_index,
                         }

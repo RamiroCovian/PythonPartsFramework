@@ -103,20 +103,20 @@
                 <Parameter>
                     <Name>InfoPicture</Name>
                     <Text>
-                        Modos de dibujo (Ayuda):
+    Modos de dibujo (Ayuda):
 
-                        • EDICION
-                        Permite estirar la polilinea desde sus vértices
-                        y agregar puntos o cortes en los segmentos.
-                        El CheckBox “Insertar punto” solo se habilita en este modo.
+    • EDICION
+        Permite estirar la polilinea desde sus vértices
+        y agregar puntos o cortes en los segmentos.
+        El CheckBox “Insertar punto” solo se habilita en este modo.
 
-                        • CONFIGURACION
-                        Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
-                        para aplicar layers y atributos personalizados.
-                        También permite eliminar uno o más segmentos mediante selección múltiple.
+    • CONFIGURACION
+        Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
+        para aplicar layers y atributos personalizados.
+        También permite eliminar uno o más segmentos mediante selección múltiple.
 
-                        • CREACION - EXTENDER
-                        Permite dibujar y extender la polilinea.
+    • CREACION - EXTENDER
+        Permite dibujar y extender la polilinea.
                     </Text>
                     <Value>AllplanSettings.PictResPalette.eHotinfo</Value>
                     <!-- ID del recurso de imagen de Allplan -->
@@ -353,8 +353,7 @@
             <Enable>False</Enable>
             <ValueType>Double</ValueType>
         </Parameter>
-        <!-- Parámetro oculto para guardar el estado de las polilíneas (para poder restaurar al
-        editar) -->
+        <!-- Parámetro oculto para guardar el estado de las polilíneas (para poder restaurar al editar) -->
         <Parameter>
             <Name>SavedState</Name>
             <Text>SavedState</Text>
@@ -524,111 +523,110 @@
                 <ValueDialog>FixtureDialog</ValueDialog>
                 <Visible>False</Visible>
             </Parameter>
-            <Parameter>
-                <Name>MacroRotX</Name>
-                <Text>Rot X macro (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>MacroRotY</Name>
-                <Text>Rot Y macro (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>MacroRotZ</Name>
-                <Text>Rot Z macro (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
         </Parameter>
-        <!-- Modo Puntos Libres -->
+        <!-- ELEMENTOS DEFINIDOS: UI para colocar elementos predefinidos -->
         <Parameter>
-            <Name>PuntosLibresExpander</Name>
-            <Text>Modo puntos libres</Text>
+            <Name>ElementExpander</Name>
+            <Text>Elemento</Text>
             <ValueType>Expander</ValueType>
             <Parameter>
-                <Name>SeparatorPuntosLibres</Name>
-                <ValueType>Separator</ValueType>
-            </Parameter>
-            <Parameter>
-                <Name>RowPuntosLibresElemento</Name>
+                <Name>DefinedElementType</Name>
                 <Text>Elemento</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>DefinedElementType</Name>
-                    <Text>Elemento</Text>
-                    <Value>T sortida</Value>
-                    <ValueType>StringComboBox</ValueType>
-                    <ValueList>T sortida|Colze base|Clau de Pas|Taps</ValueList>
-                </Parameter>
+                <Value>Caixa Connexions 200</Value>
+                <ValueList>Caixa Connexions 200</ValueList>
+                <ValueType>StringComboBox</ValueType>
             </Parameter>
             <Parameter>
-                <Name>RowPuntosLibresTipo</Name>
+                <Name>ElementPointMode</Name>
                 <Text>Tipo de punto</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
+                <Value>2</Value>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Visible>False</Visible>
                 <Parameter>
-                    <Name>PointType</Name>
-                    <Text>Tipo de punto</Text>
-                    <Value>Intermedio libre</Value>
-                    <ValueType>StringComboBox</ValueType>
-                    <ValueList>
-if DefinedElementType == 'T sortida' or DefinedElementType == 'Clau de Pas':
-    return 'Intermedio ordenado|Intermedio libre'
-else:
-    return 'Inicio|Final'
-                    </ValueList>
+                    <Name>ElementStart</Name>
+                    <Text>Punto inicial</Text>
+                    <Value>0</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ElementEnd</Name>
+                    <Text>Punto final</Text>
+                    <Value>1</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ElementFree</Name>
+                    <Text>Intermedio o libre</Text>
+                    <Value>2</Value>
+                    <ValueType>RadioButton</ValueType>
                 </Parameter>
             </Parameter>
             <Parameter>
-                <Name>RotX</Name>
-                <Text>Rot X (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>RotY</Name>
-                <Text>Rot Y (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>RotZ</Name>
-                <Text>Rot Z (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>RowPuntosLibresBotones</Name>
-                <Text>Acción</Text>
                 <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
                 <Parameter>
-                    <Name>AnadirPuntoLibre</Name>
-                    <Text>Añadir punto</Text>
-                    <EventId>1017</EventId>
+                    <Name>BtnSelectElementPoint</Name>
+                    <Text>Seleccionar punto</Text>
+                    <EventId>1015</EventId>
                     <Value>0</Value>
                     <ValueType>Button</ValueType>
+                    <Visible>IsElementCaptureMode == False</Visible>
                 </Parameter>
                 <Parameter>
-                    <Name>FinalizarPuntosLibres</Name>
+                    <Name>BtnAcceptElement</Name>
+                    <Text>Aceptar (Terminar selección)</Text>
+                    <EventId>1021</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>IsElementCaptureMode == True</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>IsElementCaptureMode</Name>
+                    <Text>IsElementCaptureMode</Text>
+                    <Value>False</Value>
+                    <ValueType>CheckBox</ValueType>
+                    <Visible>False</Visible>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>ElementRotX</Name>
+                <Text>Rot X (grados)</Text>
+                <Value>0</Value>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+                <ValueType>Integer</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>ElementRotY</Name>
+                <Text>Rot Y (grados)</Text>
+                <Value>0</Value>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+                <ValueType>Integer</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>ElementRotZ</Name>
+                <Text>Rot Z (grados)</Text>
+                <Value>0</Value>
+                <MinValue>-360</MinValue>
+                <MaxValue>360</MaxValue>
+                <ValueType>Integer</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>ElementActionRow</Name>
+                <Text>Acción</Text>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>BtnAddElementPoint</Name>
+                    <Text>Añadir punto</Text>
+                    <EventId>1016</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                    <Visible>False</Visible>
+                </Parameter>
+                <Parameter>
+                    <Name>BtnFinalizarElementos</Name>
                     <Text>Finalizar</Text>
-                    <EventId>1018</EventId>
+                    <EventId>1003</EventId>
                     <Value>0</Value>
                     <ValueType>Button</ValueType>
                 </Parameter>
@@ -773,7 +771,7 @@ else:
                 <ValueType>RadioButton</ValueType>
             </Parameter>
         </Parameter>
-        <Parameter>
+         <Parameter>
             <Name>SepAtributos</Name>
             <ValueType>Separator</ValueType>
         </Parameter>

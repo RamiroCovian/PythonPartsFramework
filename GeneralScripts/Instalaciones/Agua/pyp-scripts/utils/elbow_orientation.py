@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import NemAll_Python_Geometry as AllplanGeo
 
-ELBOW_ORIENTATION_REV = "2026-04-15-05"
+ELBOW_ORIENTATION_REV = "2026-04-15-02"
 
 
 def _normalize_angle_rad_pi(angle_rad: float) -> float:
@@ -29,7 +29,9 @@ def _normalize_angle_deg_180(angle_deg: float) -> float:
     return angle_deg
 
 
-def _is_close_angle_deg(angle_deg: float, target_deg: float, tol_deg: float = 10.0) -> bool:
+def _is_close_angle_deg(
+    angle_deg: float, target_deg: float, tol_deg: float = 10.0
+) -> bool:
     delta = (angle_deg - target_deg + 180.0) % 360.0 - 180.0
     return abs(delta) <= tol_deg
 
@@ -88,24 +90,32 @@ def _compute_reference_yaw_for_vertical_elbow(
         if h_dir == "W":
             ref_deg_cmp = _normalize_angle_deg_180(ref_deg_raw)
             # 225/-135 se comparan como 45 para usar la misma rama.
-            if _is_close_angle_deg(ref_deg_cmp, 225.0) or _is_close_angle_deg(ref_deg_cmp, -135.0):
+            if _is_close_angle_deg(ref_deg_cmp, 225.0) or _is_close_angle_deg(
+                ref_deg_cmp, -135.0
+            ):
                 ref_deg_cmp = 45.0
             h_deg_norm = _normalize_angle_deg_180(h_angle_deg)
-            if _is_close_angle_deg(ref_deg_cmp, 45.0) and _is_close_angle_deg(h_deg_norm, -135.0):
+            if _is_close_angle_deg(ref_deg_cmp, 45.0) and _is_close_angle_deg(
+                h_deg_norm, -135.0
+            ):
                 adjustment_angle = 0.0
             elif abs(h_angle_deg) > 135.0 and abs(h_angle_deg) <= 180.0:
                 adjustment_angle = math.pi
         elif h_dir == "N":
             ref_norm = _normalize_reference_angle_deg(ref_deg_raw)
             h_norm = _normalize_reference_angle_deg(h_angle_deg)
-            if _is_close_angle_deg(ref_norm, 135.0) or _is_close_angle_deg(h_norm, 135.0):
+            if _is_close_angle_deg(ref_norm, 135.0) or _is_close_angle_deg(
+                h_norm, 135.0
+            ):
                 adjustment_angle = -math.pi / 2.0
             else:
                 adjustment_angle = math.pi
         elif h_dir == "S":
             ref_norm = _normalize_reference_angle_deg(ref_deg_raw)
             h_norm = _normalize_reference_angle_deg(h_angle_deg)
-            if _is_close_angle_deg(ref_norm, 135.0) and _is_close_angle_deg(h_norm, 135.0):
+            if _is_close_angle_deg(ref_norm, 135.0) and _is_close_angle_deg(
+                h_norm, 135.0
+            ):
                 adjustment_angle = -math.pi / 2.0
             elif _is_close_angle_deg(h_norm, 135.0):
                 adjustment_angle = math.pi / 2.0
@@ -116,23 +126,33 @@ def _compute_reference_yaw_for_vertical_elbow(
             prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + adjustment_angle)
 
         # Ajuste adicional de +180° para referencias ~315/-45 y ~225/-135.
-        if _is_close_angle_deg(ref_deg_raw, 315.0) or _is_close_angle_deg(ref_deg_raw, -45.0):
+        if _is_close_angle_deg(ref_deg_raw, 315.0) or _is_close_angle_deg(
+            ref_deg_raw, -45.0
+        ):
             prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
-        elif _is_close_angle_deg(ref_deg_raw, 225.0) or _is_close_angle_deg(ref_deg_raw, -135.0):
+        elif _is_close_angle_deg(ref_deg_raw, 225.0) or _is_close_angle_deg(
+            ref_deg_raw, -135.0
+        ):
             prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
 
     elif seg2_vert and not seg1_vert:
         if h_dir == "N":
             ref_norm = _normalize_reference_angle_deg(ref_deg_raw)
             h_norm = _normalize_reference_angle_deg(h_angle_deg)
-            if _is_close_angle_deg(ref_norm, 135.0) or _is_close_angle_deg(h_norm, 135.0):
+            if _is_close_angle_deg(ref_norm, 135.0) or _is_close_angle_deg(
+                h_norm, 135.0
+            ):
                 prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy - (math.pi / 2.0))
         elif h_dir == "S":
             prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy - (math.pi / 2.0))
 
-        if _is_close_angle_deg(ref_deg_raw, 315.0) or _is_close_angle_deg(ref_deg_raw, -45.0):
+        if _is_close_angle_deg(ref_deg_raw, 315.0) or _is_close_angle_deg(
+            ref_deg_raw, -45.0
+        ):
             prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
-        elif _is_close_angle_deg(ref_deg_raw, 225.0) or _is_close_angle_deg(ref_deg_raw, -135.0):
+        elif _is_close_angle_deg(ref_deg_raw, 225.0) or _is_close_angle_deg(
+            ref_deg_raw, -135.0
+        ):
             prev_angle_xy = _normalize_angle_rad_pi(prev_angle_xy + math.pi)
 
     return prev_angle_xy
@@ -186,7 +206,6 @@ def apply_elbow_transform(
         hy /= h_len
 
         h_dir = _dir_from_delta(hx, hy, eps)
-
         # En diagonales exactas hacia el oeste, colapsar siempre a "W" no
         # alcanza para orientar bien la familia. En esos casos resolvemos el
         # cuadrante con el signo de Y:
@@ -199,16 +218,10 @@ def apply_elbow_transform(
             h_dir = "N" if hy >= 0.0 else "S"
         v_dir = "U" if v_dz > 0 else "D"
         needs_q2_extra_yaw = (
-            (seg1_vert or seg2_vert)
-            and is_diagonal_tie
-            and hx < 0.0
-            and hy > 0.0
+            (seg1_vert or seg2_vert) and is_diagonal_tie and hx < 0.0 and hy > 0.0
         )
         needs_q3_extra_yaw = (
-            (seg1_vert or seg2_vert)
-            and is_diagonal_tie
-            and hx < 0.0
-            and hy < 0.0
+            (seg1_vert or seg2_vert) and is_diagonal_tie and hx < 0.0 and hy < 0.0
         )
 
         # (axis_code, yaw_Z_rad, rot_vert_rad)
@@ -226,7 +239,11 @@ def apply_elbow_transform(
 
         axis_code, ang_h, ang_v = vertical_map.get(
             (h_dir, v_dir),
-            ("X", math.atan2(hy, hx) - math.pi / 2.0, math.pi / 2.0 if v_dz > 0 else -math.pi / 2.0),
+            (
+                "X",
+                math.atan2(hy, hx) - math.pi / 2.0,
+                math.pi / 2.0 if v_dz > 0 else -math.pi / 2.0,
+            ),
         )
 
         print(
@@ -377,12 +394,16 @@ def apply_elbow_transform(
         )
 
         # Preparación XY->XZ: rotación alrededor de X
-        axis_x = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0))
+        axis_x = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0)
+        )
         mat_prep = AllplanGeo.Matrix3D()
         mat_prep.SetRotation(axis_x, AllplanGeo.Angle(-math.pi / 2.0))
 
         # Orientación alrededor de Y
-        axis_y = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 1, 0))
+        axis_y = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 1, 0)
+        )
         mat_rot = AllplanGeo.Matrix3D()
         mat_rot.SetRotation(axis_y, AllplanGeo.Angle(angle))
 
@@ -424,12 +445,16 @@ def apply_elbow_transform(
         )
 
         # Preparación XY->YZ: rotación alrededor de Z
-        axis_z = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1))
+        axis_z = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
+        )
         mat_prep = AllplanGeo.Matrix3D()
         mat_prep.SetRotation(axis_z, AllplanGeo.Angle(math.pi / 2.0))
 
         # Orientación alrededor de X
-        axis_x = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0))
+        axis_x = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(1, 0, 0)
+        )
         mat_rot = AllplanGeo.Matrix3D()
         mat_rot.SetRotation(axis_x, AllplanGeo.Angle(angle))
 
@@ -470,7 +495,9 @@ def apply_elbow_transform(
             f"cross={cross:.6f} final={math.degrees(angle):.2f}° mirror={needs_mirror}"
         )
 
-        axis_z = AllplanGeo.Line3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1))
+        axis_z = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Point3D(0, 0, 1)
+        )
         mat.SetRotation(axis_z, AllplanGeo.Angle(angle))
 
         if needs_mirror:
@@ -480,4 +507,3 @@ def apply_elbow_transform(
 
     brep = AllplanGeo.Transform(brep, mat)
     return brep
-

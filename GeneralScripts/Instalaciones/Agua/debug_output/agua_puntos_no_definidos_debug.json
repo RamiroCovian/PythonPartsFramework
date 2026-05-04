@@ -5,12 +5,14 @@
       "id": "A1",
       "tipo": "inicio",
       "coordenadas": {
-        "X": -7243.309934462639,
-        "Y": -7546.601436482711,
+        "X": -16686.06459214162,
+        "Y": -70764.76228379132,
         "Z": 0.0
       },
       "anteriores": [],
-      "siguientes": [],
+      "siguientes": [
+        "U1-1"
+      ],
       "orden": 0,
       "tipo_camino": 0,
       "color_id": 1,
@@ -18,14 +20,161 @@
       "es_punto_comun": false,
       "common_node_id": null,
       "path_key_comun_con": null
+    },
+    {
+      "id": "U1-1",
+      "tipo": "intermedio_libre",
+      "coordenadas": {
+        "X": -16495.409598463346,
+        "Y": -70766.29982406292,
+        "Z": 0.0
+      },
+      "anteriores": [
+        "A1"
+      ],
+      "siguientes": [
+        "CP-1"
+      ],
+      "orden": 1,
+      "tipo_camino": 0,
+      "color_id": 1,
+      "path_key": "modo:0|color:1",
+      "es_punto_comun": false,
+      "common_node_id": null,
+      "path_key_comun_con": null
+    },
+    {
+      "id": "CP-1",
+      "tipo": "final",
+      "coordenadas": {
+        "X": -16295.016849731614,
+        "Y": -70764.24977036745,
+        "Z": 0.0
+      },
+      "anteriores": [
+        "U1-1"
+      ],
+      "siguientes": [],
+      "orden": 2,
+      "tipo_camino": 0,
+      "color_id": 1,
+      "path_key": "modo:0|color:1",
+      "es_punto_comun": true,
+      "common_node_id": "CP-1",
+      "path_key_comun_con": null
+    },
+    {
+      "id": "A1",
+      "tipo": "inicio",
+      "coordenadas": {
+        "X": -16696.314860618946,
+        "Y": -70900.06582769203,
+        "Z": 0.0
+      },
+      "anteriores": [],
+      "siguientes": [
+        "U2-1"
+      ],
+      "orden": 3,
+      "tipo_camino": 0,
+      "color_id": 3,
+      "path_key": "modo:0|color:3",
+      "es_punto_comun": false,
+      "common_node_id": null,
+      "path_key_comun_con": null
+    },
+    {
+      "id": "U2-1",
+      "tipo": "intermedio_libre",
+      "coordenadas": {
+        "X": -16502.584786397478,
+        "Y": -70896.47823372496,
+        "Z": 0.0
+      },
+      "anteriores": [
+        "A1"
+      ],
+      "siguientes": [
+        "CP-1"
+      ],
+      "orden": 4,
+      "tipo_camino": 0,
+      "color_id": 3,
+      "path_key": "modo:0|color:3",
+      "es_punto_comun": false,
+      "common_node_id": null,
+      "path_key_comun_con": null
+    },
+    {
+      "id": "CP-1",
+      "tipo": "final",
+      "coordenadas": {
+        "X": -16295.016849731614,
+        "Y": -70764.24977036745,
+        "Z": 0.0
+      },
+      "anteriores": [
+        "U2-1"
+      ],
+      "siguientes": [],
+      "orden": 5,
+      "tipo_camino": 0,
+      "color_id": 3,
+      "path_key": "modo:0|color:3",
+      "es_punto_comun": true,
+      "common_node_id": "CP-1",
+      "path_key_comun_con": "modo:0|color:1"
     }
   ],
   "common_points_topology": {
-    "node_count": 0,
-    "edge_count": 0,
-    "nodes": [],
-    "edges": [],
-    "adjacency": {}
+    "node_count": 1,
+    "edge_count": 1,
+    "nodes": [
+      {
+        "id": "CP-1",
+        "path_keys": [
+          "modo:0|color:1",
+          "modo:0|color:3"
+        ],
+        "point_count": 2,
+        "center": [
+          -16295.016849731614,
+          -70764.24977036745,
+          0.0
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "a": "modo:0|color:1",
+        "b": "modo:0|color:3",
+        "via_node": "CP-1"
+      }
+    ],
+    "adjacency": {
+      "modo:0|color:1": [
+        "modo:0|color:3"
+      ],
+      "modo:0|color:3": [
+        "modo:0|color:1"
+      ]
+    }
   },
-  "common_junctions": []
+  "common_junctions": [
+    {
+      "node_id": "CP-1",
+      "x": -16295.016849731614,
+      "y": -70764.24977036745,
+      "z": 0.0,
+      "path_keys": [
+        "modo:0|color:1",
+        "modo:0|color:3"
+      ],
+      "path_count": 2,
+      "tipos_punto": [
+        "final"
+      ],
+      "suggested_element": "colze"
+    }
+  ]
 }
