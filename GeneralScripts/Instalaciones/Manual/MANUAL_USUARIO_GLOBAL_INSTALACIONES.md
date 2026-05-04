@@ -2,7 +2,7 @@
 
 ## 1. Finalidad del manual
 
-Este manual explica cómo funciona una instalación dentro de Allplan desde el punto de vista del usuario.
+- en conductos compatibles, la herramienta genera automáticamente la transición o la unión correspondiente.
 
 Se ha tomado la instalación de Agua como ejemplo, pero el funcionamiento general es común al resto de instalaciones. Lo que cambia entre unas y otras son algunos elementos concretos, ciertos nombres de layer y algunos atributos, pero la forma de trabajar es prácticamente la misma.
 
@@ -239,7 +239,35 @@ Después del borrado, la herramienta vuelve a analizar la conexión entre los tr
 
 El botón de modificar diámetro actualiza el diámetro del tramo o de la selección activa.
 
-Después del cambio, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
+Cuando se modifica un único tramo, la herramienta muestra una ventana de confirmación con:
+
+- la ruta;
+- el segmento;
+- el diámetro anterior;
+- y el nuevo diámetro.
+
+El usuario debe confirmar el cambio antes de que la geometría se regenere.
+
+![Confirmación de cambio de diámetro sobre un único tramo](capturas/CAPTURA-AGUA-04.png)
+
+Cuando hay varios tramos seleccionados, la ventana de confirmación informa de:
+
+- cuántos segmentos se van a modificar;
+- qué diámetro o diámetros tenían antes;
+- y qué nuevo diámetro se va a aplicar.
+
+![Confirmación de cambio de diámetro sobre varios tramos seleccionados](capturas/CAPTURA-AGUA-05.png)
+
+Después de aceptar, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
+
+Este recálculo puede afectar no solo al tramo seleccionado, sino también a las uniones, codos, reducciones, conexiones o bifurcaciones relacionadas con ese tramo.
+
+Después de cambiar un diámetro, conviene revisar en pantalla la zona modificada, especialmente cuando el cambio afecta a:
+
+- dos tramos consecutivos con diámetros distintos;
+- un giro resuelto con codo;
+- una bifurcación;
+- o una conexión automática entre accesorios.
 
 ## 12. Layers
 
@@ -703,34 +731,11 @@ El diámetro afecta a:
 - la geometría final;
 - y parte de la información asociada al elemento.
 
-#### 25.3.1. Qué ocurre al cambiar el diámetro de un tramo
+El cambio de diámetro sigue el comportamiento general descrito en [10.3. Cambiar el diámetro](#103-cambiar-el-diámetro).
 
-Cuando se modifica el diámetro de un único tramo, la herramienta muestra una ventana de confirmación con:
+En Agua, después del cambio conviene revisar especialmente los codos, manguitos reductores y Tes que dependan del tramo modificado.
 
-- la ruta;
-- el segmento;
-- el diámetro anterior;
-- y el nuevo diámetro.
-
-El usuario debe confirmar el cambio antes de que la geometría se regenere.
-
-`[[CAPTURA-AGUA-04: confirmación de cambio de diámetro sobre un único tramo]]`
-![alt text](capturas/CAPTURA-AGUA-04.png)
-
-#### 25.3.2. Qué ocurre al cambiar el diámetro de varios tramos
-
-Si hay varios tramos seleccionados, la ventana de confirmación informa de:
-
-- cuántos segmentos se van a modificar;
-- qué diámetro o diámetros tenían antes;
-- y qué nuevo diámetro se va a aplicar.
-
-Después de aceptar, la instalación reconstruye el resultado con el nuevo valor.
-
-`[[CAPTURA-AGUA-05: confirmación de cambio de diámetro sobre varios tramos seleccionados]]`
-![alt text](capturas/CAPTURA-AGUA-05.png)
-
-#### 25.3.3. Qué ocurre si el cambio afecta a un codo
+#### 25.3.1. Qué ocurre si el cambio afecta a un codo
 
 Si el cambio de diámetro afecta a un giro resuelto con codo, no aparece un mensaje especial para el codo.
 
@@ -739,7 +744,7 @@ Lo que se muestra es el mensaje general de cambio de diámetro y, al aceptarlo, 
 `[[CAPTURA-AGUA-06: ejemplo de codo recalculado después de modificar el diámetro del tramo]]`
 ![alt text](capturas/CAPTURA-AGUA-06.png)
 
-#### 25.3.4. Qué ocurre si hay dos tramos consecutivos en la misma dirección con distinto diámetro
+#### 25.3.2. Qué ocurre si hay dos tramos consecutivos en la misma dirección con distinto diámetro
 
 Si dos segmentos consecutivos siguen en la misma dirección pero cambian de diámetro, la instalación no coloca un manguito normal, sino un `manguito reductor`.
 
@@ -1121,7 +1126,9 @@ Esto significa que, antes de dibujar o de modificar un tramo, conviene comprobar
 
 #### 26.3.2. Qué ocurre al cambiar el diámetro de un tramo
 
-Cuando el usuario modifica el diámetro de un tramo:
+El cambio de diámetro sigue el comportamiento general descrito en [10.3. Cambiar el diámetro](#103-cambiar-el-diámetro).
+
+En Saneamiento, después de aceptar el cambio:
 
 - se actualiza ese tramo;
 - se recalculan automáticamente las uniones cercanas;
@@ -1162,8 +1169,9 @@ Si no existe una combinación válida, aparece un aviso como este:
 
 En ese caso, el usuario debe revisar los diámetros de la entrada, la salida y la rama hasta encajar con una combinación disponible.
 
+#TODO: Restringir posibilidad de realizar una T como bifurcacion en Saneamiento
 `[[CAPTURA-SANEAMIENTO-07: aviso mostrado cuando no existe una bifurcación compatible en Saneamiento]]`
-![alt text](capturas/CAPTURA-SANEAMIENTO-07.png)
+![alt text](capturas/CAPTURA-SANEAMIENTO-04A.png)
 
 ### 26.4. Accesorios automáticos en Saneamiento
 
@@ -1203,7 +1211,8 @@ En Saneamiento se trabaja con bifurcaciones tipo `Y` y con algunas bifurcaciones
 
 No todas las combinaciones de diámetro están disponibles en bifurcación.
 
-#TODO: realmente muestra estos mensajes?
+`[[CAPTURA-SANEAMIENTO-06A: ejemplo de bifurcación no válida en Saneamiento]]`
+![alt text](capturas/CAPTURA-SANEAMIENTO-06A.png)
 
 Cuando no existe una pieza compatible, la herramienta muestra el aviso correspondiente y el usuario debe corregir los diámetros hasta adaptarlos a una combinación admitida.
 
@@ -1222,13 +1231,9 @@ Si el usuario dibuja un tramo por debajo de ese valor, el resultado puede no res
 
 #### 26.5.2. Longitud máxima
 
-#TODO: **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** La longitud máxima de tramo en Saneamiento debe confirmarse en Allplan.
+Saneamiento no tiene una longitud máxima de tramo definida.
 
-Por eso, antes de cerrar la versión final de esta unidad conviene validar en entorno real:
-
-- si existe un límite máximo;
-- qué ocurre cuando se supera;
-- y si aparece o no un aviso específico.
+A diferencia de Agua, la herramienta no divide automáticamente un tramo largo por superar un límite máximo. En esta instalación, la validación de longitud documentada es la longitud mínima.
 
 #### 26.5.3. Ajustes automáticos y sentido del trazado
 
@@ -1237,10 +1242,12 @@ En Saneamiento, la herramienta recorta automáticamente algunos extremos de tram
 Además, el sentido del trazado influye en el resultado de determinadas piezas. Por eso, el usuario no debe fijarse solo en la geometría, sino también en la dirección en la que se ha construido el recorrido.
 
 Esto es importante porque existe la acción `Invertir caval`, que permite cambiar el sentido de la instalación cuando el resultado geométrico no es el esperado.
-#TODO: No funciona el boton de Invertir caval
+
+`[[CAPTURA-SANEAMIENTO-13: Captura de como aplicar la acción Invertir caval en Saneamiento]]`
+![alt text](capturas/CAPTURA-SANEAMIENTO-13.png)
 
 `[[CAPTURA-SANEAMIENTO-13: botón Invertir caval con mensaje de confirmación en Saneamiento]]`
-![alt text](capturas/CAPTURA-SANEAMIENTO-13.png)
+![alt text](capturas/CAPTURA-SANEAMIENTO-13A.png)
 
 ### 26.6. Layers y atributos en Saneamiento
 
@@ -1256,8 +1263,6 @@ En Saneamiento conviene revisar especialmente estos layers:
 
 - `IS CON SANE FAB`;
 - `IS CON SANE OBR`.
-
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** También se mencionan otros layers de proyecto que conviene validar en Allplan antes de cerrar definitivamente esta unidad del manual.
 
 `[[CAPTURA-SANEAMIENTO-11: Lista de layers de Saneamiento]]`
 ![alt text](capturas/CAPTURA-SANEAMIENTO-11.png)
@@ -1282,6 +1287,7 @@ Suele ser útil:
 - en puntos finales;
 - y en puntos intermedios donde se necesite resolver una conexión o un registro.
 
+#TODO: Ver elementos definidos propios en Saneamiento
 `[[CAPTURA-SANEAMIENTO-08: uso de Caixa Connexions 200 en Saneamiento]]`
 ![alt text](capturas/CAPTURA-SANEAMIENTO-08.png)
 
@@ -1314,29 +1320,12 @@ También conviene revisar:
 - `Cota B`;
 - y `Ángulo de inclinación`.
 
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** El listado completo de tipos de soporte de Saneamiento todavía debe confirmarse.
+#TODO: Falta que se corrija el subtipo de instalacion de soportes en Saneamiento
 
 `[[CAPTURA-SANEAMIENTO-10: página de soportes de Saneamiento con inserción y edición]]`
 ![alt text](capturas/CAPTURA-SANEAMIENTO-10.png)
 
-### 26.9. Mensajes y avisos propios de Saneamiento
-
-En Saneamiento pueden aparecer estos avisos relevantes:
-
-- `No hay instalación guardada para invertir.`
-  Aparece al intentar invertir una instalación sin trazado guardado.
-- `Instalación invertida: ahora va de final a inicio.`
-  Aparece cuando la inversión se realiza correctamente.
-- `No se pudo invertir la instalación: ...`
-  Aparece cuando la inversión falla y conviene revisar el trazado.
-- `No existe una TE para la combinación de diámetros seleccionada...`
-  Aparece cuando no existe una bifurcación compatible con los diámetros detectados.
-- `caval sin sentido sera creado`
-  Aparece en casos concretos relacionados con la orientación de la bifurcación.
-
-**[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Conviene validar estos mensajes en Allplan antes del cierre definitivo del manual, especialmente si alguno de ellos se ha abreviado en la información inicial.
-
-### 26.10. Puntos a revisar con especial atención en Saneamiento
+### 26.9. Puntos a revisar con especial atención en Saneamiento
 
 Antes de finalizar una instalación de Saneamiento conviene revisar especialmente:
 
@@ -1406,9 +1395,9 @@ Esto significa que el diámetro disponible depende del sistema seleccionado.
 
 #### 27.4.2. Qué ocurre al modificar el diámetro
 
-El botón `Modificar diámetro` recalcula el tramo y las uniones afectadas.
+El cambio de diámetro sigue el comportamiento general descrito en [10.3. Cambiar el diámetro](#103-cambiar-el-diámetro).
 
-#TODO: Puede ser que el boton este deshabilitado?
+En Ventilación, después de aceptar el cambio, la herramienta recalcula el tramo y las uniones afectadas. Esto puede afectar no solo al tramo seleccionado, sino también a las reducciones, conexiones, manguitos o codos que dependan de ese diámetro.
 
 Cuando el cambio de diámetro se produce entre dos tramos consecutivos en línea recta:
 
@@ -1518,6 +1507,12 @@ Si el usuario dibuja un segmento más corto que la longitud mínima permitida, l
 | --- | --- |
 | `Conducto Aislado` | `Conducto Recuperador` |
 
+#### 27.6.3. Longitud máxima
+
+Ventilación no tiene una longitud máxima de tramo definida.
+
+A diferencia de Agua, la herramienta no divide automáticamente un conducto largo por superar un límite máximo. En esta instalación, la validación de longitud documentada es la longitud mínima de cada sistema.
+
 ### 27.7. Layers y atributos específicos de Ventilación
 
 #### 27.7.1. Layers base
@@ -1568,6 +1563,7 @@ En la página `Elemento` puede aparecer actualmente:
 
 Por tanto, antes de cerrar esta unidad del manual, conviene validar en Allplan si `Caixa Connexions 200` es realmente el elemento que debe insertar el usuario en Ventilación o si la paleta debe mostrar otro elemento propio de esta instalación.
 
+#TODO: Falta que se apliquen los elementos definidos en Ventilacion a la paleta de Elemento en Ventilacion.
 **[PENDIENTE DE CONFIRMAR EN ENTORNO REAL]** Validar qué elementos definidos ve el usuario en la paleta de Ventilación y cuáles se generan solo de forma automática.
 
 `[[CAPTURA-VENTILACION-10: página de Elemento mostrando el estado real en Ventilación]]`
@@ -1690,6 +1686,7 @@ Esto significa que cada recorrido eléctrico queda ligado al diámetro definido 
 
 #### 28.4.2. Qué ocurre al modificar el diámetro
 
+El cambio de diámetro sigue el comportamiento general descrito en [10.3. Cambiar el diámetro](#103-cambiar-el-diámetro).
 
 En esta instalación, el cambio de diámetro debe revisarse con especial cuidado porque:
 
@@ -1730,6 +1727,12 @@ La longitud mínima indicada para todos los sistemas principales de Electricidad
 
 `[[CAPTURA-ELECTRICIDAD-03: Mensaje exacto mostrado cuando no se cumple la longitud mínima]]`
 ![alt text](capturas/CAPTURA-ELECTRICIDAD-03.png)
+
+#### 28.5.3. Longitud máxima
+
+Electricidad no tiene una longitud máxima de tramo definida.
+
+A diferencia de Agua, la herramienta no divide automáticamente un recorrido eléctrico largo por superar un límite máximo. En esta instalación, la validación de longitud documentada es la longitud mínima.
 
 ### 28.6. Layers y atributos específicos de Electricidad
 
@@ -1858,6 +1861,7 @@ Por eso, en Electricidad conviene revisar especialmente:
 - qué tipos de soporte están habilitados en entorno real;
 - y cómo se clasifica el soporte una vez creado.
 
+#TODO: Hay que corregir subtipo de instalacion de soportes en Electricidad
 `[[CAPTURA-ELECTRICIDAD-07: bloque de soportes con subtipo Electricidad]]`
 ![alt text](capturas/CAPTURA-ELECTRICIDAD-07.png)
 
