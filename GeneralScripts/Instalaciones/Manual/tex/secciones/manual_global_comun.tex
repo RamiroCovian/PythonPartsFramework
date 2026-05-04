@@ -254,10 +254,45 @@ El botón de borrar elimina el tramo o la parte seleccionada.
 Después del borrado, la herramienta vuelve a analizar la conexión entre los tramos que quedan y reajusta automáticamente las piezas necesarias.
 
 \subsection{Cambiar el diámetro}
+\label{sec:cambiar-diametro}
 
 El botón de modificar diámetro actualiza el diámetro del tramo o de la selección activa.
 
-Después del cambio, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
+Cuando se modifica un único tramo, la herramienta muestra una ventana de confirmación con:
+
+\begin{itemize}
+\item la ruta;
+\item el segmento;
+\item el diámetro anterior;
+\item y el nuevo diámetro.
+\end{itemize}
+
+El usuario debe confirmar el cambio antes de que la geometría se regenere.
+
+\manualimage{CAPTURA-AGUA-04.png}{Confirmación de cambio de diámetro sobre un único tramo}
+
+Cuando hay varios tramos seleccionados, la ventana de confirmación informa de:
+
+\begin{itemize}
+\item cuántos segmentos se van a modificar;
+\item qué diámetro o diámetros tenían antes;
+\item y qué nuevo diámetro se va a aplicar.
+\end{itemize}
+
+\manualimage{CAPTURA-AGUA-05.png}{Confirmación de cambio de diámetro sobre varios tramos seleccionados}
+
+Después de aceptar, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
+
+Este recálculo puede afectar no solo al tramo seleccionado, sino también a las uniones, codos, reducciones, conexiones o bifurcaciones relacionadas con ese tramo.
+
+Después de cambiar un diámetro, conviene revisar en pantalla la zona modificada, especialmente cuando el cambio afecta a:
+
+\begin{itemize}
+\item dos tramos consecutivos con diámetros distintos;
+\item un giro resuelto con codo;
+\item una bifurcación;
+\item o una conexión automática entre accesorios.
+\end{itemize}
 
 \section{Layers}
 

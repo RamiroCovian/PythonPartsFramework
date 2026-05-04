@@ -62,7 +62,9 @@ Esto significa que el diámetro disponible depende del sistema seleccionado.
 
 \subsubsection{Qué ocurre al modificar el diámetro}
 
-El botón \texttt{Modificar diámetro} recalcula el tramo y las uniones afectadas.
+El cambio de diámetro sigue el comportamiento general descrito en \hyperref[sec:cambiar-diametro]{Cambiar el diámetro}.
+
+En Ventilación, después de aceptar el cambio, la herramienta recalcula el tramo y las uniones afectadas. Esto puede afectar no solo al tramo seleccionado, sino también a las reducciones, conexiones, manguitos o codos que dependan de ese diámetro.
 
 Cuando el cambio de diámetro se produce entre dos tramos consecutivos en línea recta:
 
@@ -167,6 +169,12 @@ La longitud mínima por sistema es:
 \end{itemize}
 
 \pendingtag\ El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
+
+\subsubsection{Longitud máxima}
+
+Ventilación no tiene una longitud máxima de tramo definida.
+
+A diferencia de Agua, la herramienta no divide automáticamente un conducto largo por superar un límite máximo. En esta instalación, la validación de longitud documentada es la longitud mínima de cada sistema.
 
 \subsubsection{Orientación 3D y cambios de plano}
 

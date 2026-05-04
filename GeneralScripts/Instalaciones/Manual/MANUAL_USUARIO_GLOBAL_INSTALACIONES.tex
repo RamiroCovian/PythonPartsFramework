@@ -390,10 +390,45 @@ El botón de borrar elimina el tramo o la parte seleccionada.
 Después del borrado, la herramienta vuelve a analizar la conexión entre los tramos que quedan y reajusta automáticamente las piezas necesarias.
 
 \subsection{Cambiar el diámetro}
+\label{sec:cambiar-diametro}
 
 El botón de modificar diámetro actualiza el diámetro del tramo o de la selección activa.
 
-Después del cambio, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
+Cuando se modifica un único tramo, la herramienta muestra una ventana de confirmación con:
+
+\begin{itemize}
+\item la ruta;
+\item el segmento;
+\item el diámetro anterior;
+\item y el nuevo diámetro.
+\end{itemize}
+
+El usuario debe confirmar el cambio antes de que la geometría se regenere.
+
+\manualimage{capturas/CAPTURA-AGUA-04.png}{Confirmación de cambio de diámetro sobre un único tramo}
+
+Cuando hay varios tramos seleccionados, la ventana de confirmación informa de:
+
+\begin{itemize}
+\item cuántos segmentos se van a modificar;
+\item qué diámetro o diámetros tenían antes;
+\item y qué nuevo diámetro se va a aplicar.
+\end{itemize}
+
+\manualimage{capturas/CAPTURA-AGUA-05.png}{Confirmación de cambio de diámetro sobre varios tramos seleccionados}
+
+Después de aceptar, la instalación vuelve a reconstruir el resultado para adaptarlo al nuevo valor.
+
+Este recálculo puede afectar no solo al tramo seleccionado, sino también a las uniones, codos, reducciones, conexiones o bifurcaciones relacionadas con ese tramo.
+
+Después de cambiar un diámetro, conviene revisar en pantalla la zona modificada, especialmente cuando el cambio afecta a:
+
+\begin{itemize}
+\item dos tramos consecutivos con diámetros distintos;
+\item un giro resuelto con codo;
+\item una bifurcación;
+\item o una conexión automática entre accesorios.
+\end{itemize}
 
 \section{Layers}
 
@@ -870,34 +905,9 @@ El diámetro afecta a:
 \item y parte de la información asociada al elemento.
 \end{itemize}
 
-\subsubsection{Qué ocurre al cambiar el diámetro de un tramo}
+El cambio de diámetro sigue el comportamiento general descrito en \hyperref[sec:cambiar-diametro]{Cambiar el diámetro}.
 
-Cuando se modifica el diámetro de un único tramo, la herramienta muestra una ventana de confirmación con:
-
-\begin{itemize}
-\item la ruta;
-\item el segmento;
-\item el diámetro anterior;
-\item y el nuevo diámetro.
-\end{itemize}
-
-El usuario debe confirmar el cambio antes de que la geometría se regenere.
-
-\manualimage{capturas/CAPTURA-AGUA-04.png}{Confirmación de cambio de diámetro sobre un único tramo}
-
-\subsubsection{Qué ocurre al cambiar el diámetro de varios tramos}
-
-Si hay varios tramos seleccionados, la ventana de confirmación informa de:
-
-\begin{itemize}
-\item cuántos segmentos se van a modificar;
-\item qué diámetro o diámetros tenían antes;
-\item y qué nuevo diámetro se va a aplicar.
-\end{itemize}
-
-Después de aceptar, la instalación reconstruye el resultado con el nuevo valor.
-
-\manualimage{capturas/CAPTURA-AGUA-05.png}{Confirmación de cambio de diámetro sobre varios tramos seleccionados}
+En Agua, después del cambio conviene revisar especialmente los codos, manguitos reductores y Tes que dependan del tramo modificado.
 
 \subsubsection{Qué ocurre si el cambio afecta a un codo}
 
@@ -1337,7 +1347,9 @@ Esto significa que, antes de dibujar o de modificar un tramo, conviene comprobar
 
 \subsubsection{Qué ocurre al cambiar el diámetro de un tramo}
 
-Cuando el usuario modifica el diámetro de un tramo:
+El cambio de diámetro sigue el comportamiento general descrito en \hyperref[sec:cambiar-diametro]{Cambiar el diámetro}.
+
+En Saneamiento, después de aceptar el cambio:
 
 \begin{itemize}
 \item se actualiza ese tramo;
@@ -1435,15 +1447,9 @@ Si el usuario dibuja un tramo por debajo de ese valor, el resultado puede no res
 
 \subsubsection{Longitud máxima}
 
-\pendingtag\ La longitud máxima de tramo en Saneamiento debe confirmarse en Allplan.
+Saneamiento no tiene una longitud máxima de tramo definida.
 
-Por eso, antes de cerrar la versión final de esta unidad conviene validar en entorno real:
-
-\begin{itemize}
-\item si existe un límite máximo;
-\item qué ocurre cuando se supera;
-\item y si aparece o no un aviso específico.
-\end{itemize}
+A diferencia de Agua, la herramienta no divide automáticamente un tramo largo por superar un límite máximo. En esta instalación, la validación de longitud documentada es la longitud mínima.
 
 \subsubsection{Ajustes automáticos y sentido del trazado}
 
@@ -1656,7 +1662,9 @@ Esto significa que el diámetro disponible depende del sistema seleccionado.
 
 \subsubsection{Qué ocurre al modificar el diámetro}
 
-El botón \texttt{Modificar diámetro} recalcula el tramo y las uniones afectadas.
+El cambio de diámetro sigue el comportamiento general descrito en \hyperref[sec:cambiar-diametro]{Cambiar el diámetro}.
+
+En Ventilación, después de aceptar el cambio, la herramienta recalcula el tramo y las uniones afectadas. Esto puede afectar no solo al tramo seleccionado, sino también a las reducciones, conexiones, manguitos o codos que dependan de ese diámetro.
 
 Cuando el cambio de diámetro se produce entre dos tramos consecutivos en línea recta:
 
@@ -1782,6 +1790,12 @@ Si el usuario dibuja un segmento más corto que la longitud mínima permitida, l
 {capturas/CAPTURA-VENTILACION-06D.png}
 {\texttt{Conducto Recuperador}}
 {Avisos de longitud mínima no cumplida en Conducto Aislado y Conducto Recuperador}
+
+\subsubsection{Longitud máxima}
+
+Ventilación no tiene una longitud máxima de tramo definida.
+
+A diferencia de Agua, la herramienta no divide automáticamente un conducto largo por superar un límite máximo. En esta instalación, la validación de longitud documentada es la longitud mínima de cada sistema.
 
 \subsection{Layers y atributos específicos de Ventilación}
 
@@ -1975,7 +1989,7 @@ Esto significa que cada recorrido eléctrico queda ligado al diámetro definido 
 
 \subsubsection{Qué ocurre al modificar el diámetro}
 
-La paleta incluye el botón \texttt{Modificar diámetro}.
+El cambio de diámetro sigue el comportamiento general descrito en \hyperref[sec:cambiar-diametro]{Cambiar el diámetro}.
 
 En esta instalación, el cambio de diámetro debe revisarse con especial cuidado porque:
 
@@ -2025,6 +2039,12 @@ La longitud mínima indicada para todos los sistemas principales de Electricidad
 \end{itemize}
 
 \pendingtag\ El mensaje exacto mostrado cuando no se cumple la longitud mínima debe validarse en Allplan.
+
+\subsubsection{Longitud máxima}
+
+Electricidad no tiene una longitud máxima de tramo definida.
+
+A diferencia de Agua, la herramienta no divide automáticamente un recorrido eléctrico largo por superar un límite máximo. En esta instalación, la validación de longitud documentada es la longitud mínima.
 
 \subsection{Layers y atributos específicos de Electricidad}
 
