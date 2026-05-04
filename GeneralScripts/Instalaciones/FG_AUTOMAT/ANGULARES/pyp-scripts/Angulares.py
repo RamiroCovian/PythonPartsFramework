@@ -40,6 +40,18 @@ HOLE_RADIUS = HOLE_DIAMETER / 2.0
 
 ANG_LAYER = "PMP_ANGULARS"
 
+DISTRIBUTION_GROUP = "grupal"
+DISTRIBUTION_INDIVIDUAL = "individual"
+ANGULARES_SCRIPT_VERSION = "1.1-distribucion-individual"
+
+
+def normalize_distribution_type(value: Any) -> str:
+    """Normaliza el valor del combobox de distribución."""
+    normalized = str(value or "").strip().lower().replace("'", "")
+    if normalized == DISTRIBUTION_INDIVIDUAL:
+        return DISTRIBUTION_INDIVIDUAL
+    return DISTRIBUTION_GROUP
+
 
 def create_element_hash(element_type: str, stable: bool = False, **params) -> str:
     """
@@ -1180,6 +1192,24 @@ def adjust_line_length_incremental(line: AllplanGeo.Line3D,
     except Exception:
         return line
 
+def set_line_length(line: AllplanGeo.Line3D, length: float) -> AllplanGeo.Line3D:
+    """Mantiene el punto inicial y ajusta el final al largo indicado."""
+    try:
+        if length < 1e-6:
+            return line
+
+        start = line.StartPoint
+        end = line.EndPoint
+        line_vector = vector_from_points(start, end)
+        line_dir = normalize_vector(line_vector)
+        if not line_dir:
+            return line
+
+        adjusted_end = move_point(start, line_dir, length)
+        return AllplanGeo.Line3D(start, adjusted_end)
+    except Exception:
+        return line
+
 def create_single_angular(definition: dict,
                           origin: AllplanGeo.Point3D,
                           x_dir: AllplanGeo.Vector3D,
@@ -1794,6 +1824,83 @@ def normalize_line_direction(start: AllplanGeo.Point3D,
 
     return start, end, False
 
+def create_single_angular_on_line(definition: dict,
+                                  start_point: AllplanGeo.Point3D,
+                                  end_point: AllplanGeo.Point3D,
+                                  invert_side: bool,
+                                  rotation_deg: float,
+                                  face_normal: AllplanGeo.Vector3D = None,
+                                  face_point: AllplanGeo.Point3D = None,
+                                  is_opposite_face: bool = False,
+                                  is_free_mode: bool = False) -> tuple[list[AllplanGeo.BRep3D], list[AllplanGeo.Line3D]]:
+    """Genera una sola pieza posicionada desde el punto inicial de la línea."""
+    is_tensor = bool(definition.get("is_tensor", False))
+    if not is_tensor:
+        rotation_deg = rotation_deg + 90.0
+    if is_tensor and not is_free_mode:
+        return [], []
+
+    base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
+    if base_vector.GetLength() < 1e-6:
+        return [], []
+
+    x_dir, y_dir, z_dir = decompose_vector(base_vector, rotation_deg, face_normal, is_opposite_face)
+    piece_length = definition.get("piece_length", definition.get("length", 0.0))
+    if piece_length <= 0:
+        return [], []
+
+    if face_normal and face_point:
+        origin = project_point_to_plane(start_point, face_point, face_normal)
+    else:
+        origin = start_point
+
+    if is_tensor:
+        geometry = create_tensor_solid(
+            origin=origin,
+            x_dir=x_dir,
+            y_dir=y_dir,
+            z_dir=z_dir,
+            invert_profile=False,
+            rotation_deg=rotation_deg
+        )
+        edge = create_edge_angulars_group(
+            definition=definition,
+            start_point=origin,
+            x_dir=x_dir,
+            y_dir=y_dir,
+            z_dir=z_dir,
+            piece_length=piece_length,
+            is_tensor=True
+        )
+
+        if invert_side:
+            reflection_plane = AllplanGeo.Plane3D(origin, y_dir)
+            mirror = AllplanGeo.Matrix3D()
+            mirror.SetReflection(reflection_plane)
+            geometry = AllplanGeo.Transform(geometry, mirror)
+            edge = AllplanGeo.Transform(edge, mirror)
+
+        return [geometry], [edge]
+
+    geometry = create_single_angular(definition, origin, x_dir, y_dir, z_dir, invert_profile=False)
+    edge = create_edge_angulars_group(
+        definition=definition,
+        start_point=origin,
+        x_dir=x_dir,
+        y_dir=y_dir,
+        z_dir=z_dir,
+        piece_length=piece_length
+    )
+
+    if invert_side:
+        reflection_plane = AllplanGeo.Plane3D(origin, z_dir)
+        mirror = AllplanGeo.Matrix3D()
+        mirror.SetReflection(reflection_plane)
+        geometry = AllplanGeo.Transform(geometry, mirror)
+        edge = AllplanGeo.Transform(edge, mirror)
+
+    return [geometry], [edge]
+
 def create_angulars_on_line(definition: dict,
                             start_point: AllplanGeo.Point3D,
                             end_point: AllplanGeo.Point3D,
@@ -2266,6 +2373,60 @@ class AngularLineScript(BaseScriptObject):
             return bool(val)
         return False
 
+    def _get_distribution_type(self) -> str:
+        """Obtiene el tipo de distribución seleccionado en la paleta."""
+        if hasattr(self.build_ele, "TipoDistribucion"):
+            return normalize_distribution_type(getattr(self.build_ele.TipoDistribucion, "value", "Grupal"))
+        return DISTRIBUTION_GROUP
+
+    def _create_geometries_for_distribution(
+        self,
+        *,
+        distribution_type: str,
+        definition: dict,
+        start_point: AllplanGeo.Point3D,
+        end_point: AllplanGeo.Point3D,
+        invert_side: bool,
+        rotation_deg: float,
+        gap: float,
+    ) -> tuple[list[AllplanGeo.BRep3D], list[AllplanGeo.Line3D]]:
+        distribution_type = normalize_distribution_type(distribution_type)
+        print(f"[DISTRIBUTION] Tipo seleccionado: {distribution_type}")
+
+        if distribution_type == DISTRIBUTION_INDIVIDUAL:
+            print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
+            geometries, edges = create_single_angular_on_line(
+                definition=definition,
+                start_point=start_point,
+                end_point=end_point,
+                invert_side=invert_side,
+                rotation_deg=rotation_deg,
+                face_normal=None,
+                face_point=None,
+                is_opposite_face=False,
+                is_free_mode=True,
+            )
+            print(f"[DISTRIBUTION][INDIVIDUAL] Geometrias generadas: {len(geometries) if geometries else 0}")
+            return geometries, edges
+
+        print("[DISTRIBUTION][GRUPAL] Entrando al flujo grupal actual")
+        geometries, edges = create_angulars_on_line(
+            definition=definition,
+            start_point=start_point,
+            end_point=end_point,
+            invert_side=invert_side,
+            rotation_deg=rotation_deg,
+            gap=gap,
+            face_normal=None,
+            face_point=None,
+            face_polygon=None,
+            wall_element=None,
+            is_opposite_face=False,
+            is_free_mode=True,
+        )
+        print(f"[DISTRIBUTION][GRUPAL] Geometrias generadas: {len(geometries) if geometries else 0}")
+        return geometries, edges
+
     def _reset_build_ele_for_create(self) -> None:
         """Reset SOLO para CREATE. Nunca se llama en EDIT."""
         be = self.build_ele
@@ -2283,6 +2444,9 @@ class AngularLineScript(BaseScriptObject):
 
         if hasattr(be, "SeparacionAngulares"):
             be.SeparacionAngulares.value = 10.0
+
+        if hasattr(be, "TipoDistribucion"):
+            be.TipoDistribucion.value = "Grupal"
 
         if hasattr(be, "InvertirAngular"):
             be.InvertirAngular.value = False
@@ -2320,6 +2484,7 @@ class AngularLineScript(BaseScriptObject):
                 "p0": [p0.X, p0.Y, p0.Z],
                 "p1": [p1.X, p1.Y, p1.Z],
                 "tipo": str(getattr(self.build_ele.TipoAngular, "value", "") or "") if hasattr(self.build_ele, "TipoAngular") else "",
+                "distribucion": self._get_distribution_type(),
                 "sep": float(getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0) if hasattr(self.build_ele, "SeparacionAngulares") else 10.0,
                 "invert": bool(getattr(self.build_ele.InvertirAngular, "value", False)) if hasattr(self.build_ele, "InvertirAngular") else False,
                 "rot": float(rot_deg),
@@ -2355,6 +2520,9 @@ class AngularLineScript(BaseScriptObject):
                 # Clave exacta del combo (ej. ANG200_L460, TENSOR)
                 tipo_key = str(tipo or getattr(self.build_ele.TipoAngular, "value", "") or "").strip()
                 self.build_ele.TipoAngular.value = tipo_key
+            distribucion = state.get("distribucion") or state.get("TipoDistribucion") or DISTRIBUTION_GROUP
+            if hasattr(self.build_ele, "TipoDistribucion"):
+                self.build_ele.TipoDistribucion.value = "Individual" if normalize_distribution_type(distribucion) == DISTRIBUTION_INDIVIDUAL else "Grupal"
             sep = state.get("sep") if state.get("sep") is not None else state.get("SeparacionAngulares")
             if hasattr(self.build_ele, "SeparacionAngulares"):
                 try:
@@ -2524,6 +2692,7 @@ class AngularLineScript(BaseScriptObject):
         punto_inicial,
         punto_final,
         tipo_angular_key: str,
+        distribution_type: str,
         separation: float,
         libre: bool,
         rot_deg: float,
@@ -2544,13 +2713,14 @@ class AngularLineScript(BaseScriptObject):
         neopre = "Si" if lleva_neopreno else "No"
 
         # grosor_float = self._grosor_neopreno_to_float(grosor_neopre_value)
-        length_mm_str = f"{float(def_angular["length"]):.2f}mm"
+        length_mm_str = f"{float(def_angular['length']):.2f}mm"
         return {
             "z_unique": z_unique,
             "TotalElements": total_elements,
             "PuntoInicial": punto_inicial,
             "PuntoFinal": punto_final,
             "TipoAngular": tipo_angular_key,
+            "TipoDistribucion": "Individual" if normalize_distribution_type(distribution_type) == DISTRIBUTION_INDIVIDUAL else "Grupal",
             "SeparacionAngulares": separation,
             "Libre": libre,
             "RotacionManual": rot_deg,
@@ -3787,15 +3957,24 @@ class AngularLineScript(BaseScriptObject):
 
     def _start_line_input(self):
         """Inicia el interactor de línea"""
+        is_individual_distribution = self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL
         if self.is_free_mode:
-            prompt_msg = "Defina la línea para los angulares - Posicionamiento libre"
+            if is_individual_distribution:
+                prompt_msg = "Indique punto y dirección para el angular individual"
+            else:
+                prompt_msg = "Defina la línea para los angulares - Posicionamiento libre"
         else:
-            prompt_msg = "Defina la línea para los angulares"
+            if is_individual_distribution:
+                prompt_msg = "Indique punto y dirección para el angular individual"
+            else:
+                prompt_msg = "Defina la línea para los angulares"
+
+        print(f"[LINE_INPUT] Inicio: distribucion={self._get_distribution_type()} allow_pick_up={not is_individual_distribution}")
         self.script_object_interactor = LineInteractor(
             self.line_result,
             True,
             prompt_msg,
-            allow_pick_up=True,
+            allow_pick_up=not is_individual_distribution,
             preview_function=self.preview_line_function,
         )
 
@@ -3828,8 +4007,11 @@ class AngularLineScript(BaseScriptObject):
                         pass
 
                 if piece_length > 0:
-                    increment = piece_length + separation
-                    line = adjust_line_length_incremental(line, increment)
+                    if self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
+                        line = set_line_length(line, piece_length)
+                    else:
+                        increment = piece_length + separation
+                        line = adjust_line_length_incremental(line, increment)
         except (ValueError, TypeError, AttributeError):
             pass
 
@@ -3865,6 +4047,7 @@ class AngularLineScript(BaseScriptObject):
         self._update_incremental_growth()
 
         line = self.line_result.input_line
+        print("[LINE_INPUT] Recibida p0=", line.StartPoint, "p1=", line.EndPoint, "distribucion=", self._get_distribution_type())
 
         if not self.is_free_mode:
             line, local_system = self._prepare_line(line)
@@ -3893,8 +4076,11 @@ class AngularLineScript(BaseScriptObject):
                             pass
 
                     if piece_length > 0:
-                        increment = piece_length + separation
-                        adjusted_line = adjust_line_length_incremental(line, increment)
+                        if self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
+                            adjusted_line = set_line_length(line, piece_length)
+                        else:
+                            increment = piece_length + separation
+                            adjusted_line = adjust_line_length_incremental(line, increment)
                         self.line_result.input_line = adjusted_line
                         line = adjusted_line
             except (ValueError, TypeError, AttributeError):
@@ -4011,6 +4197,7 @@ class AngularLineScript(BaseScriptObject):
 
         # Siempre sincronizar la línea final a build_ele para que on_cancel/param_list tengan los puntos
         self._sync_line_to_build_ele()
+        print("[LINE_INPUT] Final p0=", self.line_result.input_line.StartPoint, "p1=", self.line_result.input_line.EndPoint)
 
     def _update_incremental_growth(self):
         """Calcula y actualiza el valor de CrecimientoIncremental basado en piece_length + separation"""
@@ -4031,7 +4218,10 @@ class AngularLineScript(BaseScriptObject):
                         pass
 
                 if piece_length > 0:
-                    increment = piece_length + separation
+                    if self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
+                        increment = piece_length
+                    else:
+                        increment = piece_length + separation
                     self.build_ele.CrecimientoIncremental.value = increment
                 else:
                     self.build_ele.CrecimientoIncremental.value = 0.0
@@ -4057,6 +4247,10 @@ class AngularLineScript(BaseScriptObject):
                 except (ValueError, TypeError):
                     self.build_ele.SeparacionAngulares.value = 10.0
             self._update_incremental_growth()
+
+        if name == "TipoDistribucion":
+            distribution_type = self._get_distribution_type()
+            print(f"[DISTRIBUTION] Cambio de combobox detectado: {distribution_type}")
 
         if self.script_object_interactor is not None:
             return True
@@ -4441,6 +4635,7 @@ class AngularLineScript(BaseScriptObject):
 
         # VERIFICACION DE QUE ID SE PRECARGA
         print("========== EXECUTE START ==========")
+        print(f"[EXECUTE] Angulares.py version: {ANGULARES_SCRIPT_VERSION}")
         print("[EXECUTE]  z_unique y pmp_pare existen en build_ele (con Persistent>MODEL_AND_FAVORITE)")
 
         if self.state == CANCEL:
@@ -4530,20 +4725,17 @@ class AngularLineScript(BaseScriptObject):
         rot_val = getattr(self.build_ele.RotacionManual, "value", 0.0) if hasattr(self.build_ele, "RotacionManual") else 0.0
         rotation_deg = rot_val.GetDeg() if hasattr(rot_val, "GetDeg") else float(rot_val) if rot_val is not None else 0.0
         invert_side = bool(getattr(self.build_ele.InvertirAngular, "value", False)) if hasattr(self.build_ele, "InvertirAngular") else False
+        distribution_type = self._get_distribution_type()
+        print(f"[CREATE][INPUTS] tipo={self.build_ele.TipoAngular.value} distribucion={distribution_type} sep={separation} inv={invert_side} rot={rotation_deg}")
 
-        geometries, edges = create_angulars_on_line(
+        geometries, edges = self._create_geometries_for_distribution(
+            distribution_type=distribution_type,
             definition=definition,
             start_point=start_point,
             end_point=end_point,
             invert_side=invert_side,
             rotation_deg=rotation_deg,
             gap=separation,
-            face_normal=None,
-            face_point=None,
-            face_polygon=None,
-            wall_element=None,
-            is_opposite_face=False,
-            is_free_mode=True,
         )
 
         if not geometries:
@@ -4597,6 +4789,7 @@ class AngularLineScript(BaseScriptObject):
         punto_inicial = self.build_ele.PuntoInicial.value if hasattr(self.build_ele, "PuntoInicial") else start_point
         punto_final = self.build_ele.PuntoFinal.value if hasattr(self.build_ele, "PuntoFinal") else end_point
         tipo_angular_key = self.build_ele.TipoAngular.value if hasattr(self.build_ele, "TipoAngular") else ""
+        distribution_type = self._get_distribution_type()
         libre = getattr(self, "is_free_mode", True)
         rot_val = getattr(self.build_ele.RotacionManual, "value", 0.0) if hasattr(self.build_ele, "RotacionManual") else 0.0
         rot = rot_val.GetDeg() if hasattr(rot_val, "GetDeg") else float(rot_val) if rot_val is not None else 0.0
@@ -4612,6 +4805,7 @@ class AngularLineScript(BaseScriptObject):
             punto_inicial=punto_inicial,
             punto_final=punto_final,
             tipo_angular_key=tipo_angular_key,
+            distribution_type=distribution_type,
             separation=separation,
             libre=libre,
             rot_deg=rot,
@@ -4703,6 +4897,7 @@ class AngularLineScript(BaseScriptObject):
         end_point = None
         tipo_angular_key = ""
         separation = 10.0
+        distribution_type = self._get_distribution_type()
         libre = getattr(self, "is_free_mode", True)
         rot = 0.0
         invertido = False
@@ -4813,21 +5008,17 @@ class AngularLineScript(BaseScriptObject):
 
         # ===== LOG DE VERIFICACIÓN: INPUTS ANTES DE GENERAR GEOMETRÍA =====
         print("[EDIT][INPUTS] p0=", start_point, "p1=", end_point)
-        print("[EDIT][INPUTS] tipo=", tipo_angular_key, "sep=", separation, "inv=", invertido, "rot=", rot)
+        distribution_type = self._get_distribution_type()
+        print("[EDIT][INPUTS] tipo=", tipo_angular_key, "distribucion=", distribution_type, "sep=", separation, "inv=", invertido, "rot=", rot)
 
-        geometries, edges = create_angulars_on_line(
+        geometries, edges = self._create_geometries_for_distribution(
+            distribution_type=distribution_type,
             definition=definition,
             start_point=start_point,
             end_point=end_point,
             invert_side=invertido,
             rotation_deg=rot,
             gap=separation,
-            face_normal=None,
-            face_point=None,
-            face_polygon=None,
-            wall_element=None,
-            is_opposite_face=False,
-            is_free_mode=True
         )
 
         # ===== LOG DE VERIFICACIÓN: RESULTADO DE GEOMETRÍA =====
@@ -4889,6 +5080,7 @@ class AngularLineScript(BaseScriptObject):
         punto_inicial_edit = self.build_ele.PuntoInicial.value if hasattr(self.build_ele, "PuntoInicial") else start_point
         punto_final_edit = self.build_ele.PuntoFinal.value if hasattr(self.build_ele, "PuntoFinal") else end_point
         tipo_key_edit = self.build_ele.TipoAngular.value if hasattr(self.build_ele, "TipoAngular") else tipo_angular_key
+        distribution_type_edit = self._get_distribution_type()
         libre_edit = getattr(self, "is_free_mode", True)
         rot_edit_val = getattr(self.build_ele.RotacionManual, "value", 0.0) if hasattr(self.build_ele, "RotacionManual") else rot
         rot_edit = rot_edit_val.GetDeg() if hasattr(rot_edit_val, "GetDeg") else float(rot_edit_val) if rot_edit_val is not None else 0.0
@@ -4907,6 +5099,7 @@ class AngularLineScript(BaseScriptObject):
             punto_inicial=punto_inicial_edit,
             punto_final=punto_final_edit,
             tipo_angular_key=tipo_key_edit,
+            distribution_type=distribution_type_edit,
             separation=separation,
             libre=libre_edit,
             rot_deg=rot_edit,

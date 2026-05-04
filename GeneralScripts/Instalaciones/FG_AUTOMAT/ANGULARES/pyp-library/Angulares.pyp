@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Element>
   <Script>
-    <Name>FG_AUTOMAT\ANGULARES\pyp-scripts\Angulares.py</Name>
+    <Name>Instalaciones\FG_AUTOMAT\ANGULARES\pyp-scripts\Angulares.py</Name>
     <Title>Angulars Catálogo sobre Línea</Title>
-    <Version>1.0</Version>
+    <Version>1.1</Version>
     <ReadLastInput>True</ReadLastInput>
     <Interactor>False</Interactor>
     <ScriptObject>True</ScriptObject>
@@ -138,6 +138,16 @@
         <TextId>2008</TextId>
       </Parameter>
 
+    </Parameter>
+
+    <Parameter>
+      <Name>TipoDistribucion</Name>
+      <Text>Tipo de distribución</Text>
+      <Value>Grupal</Value>
+      <ValueList>Grupal|Individual</ValueList>
+      <ValueType>StringComboBox</ValueType>
+      <TextId>1043</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
