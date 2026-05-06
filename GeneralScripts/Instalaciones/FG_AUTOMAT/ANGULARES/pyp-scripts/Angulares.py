@@ -23,6 +23,7 @@ from BaseScriptObject import BaseScriptObject, BaseScriptObjectData
 from BuildingElement import BuildingElement
 from CreateElementResult import CreateElementResult
 from ScriptObjectInteractors.LineInteractor import LineInteractor, LineInteractorResult
+from ScriptObjectInteractors.PointInteractor import PointInteractor, PointInteractorResult
 from ScriptObjectInteractors.BaseScriptObjectInteractor import BaseScriptObjectInteractor
 from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResult
 from TypeCollections.ModelEleList import ModelEleList
@@ -2243,6 +2244,8 @@ SELECTING_WALL = 0
 SELECTING_LINE = 1
 STOPPED = 2
 CANCEL = 3
+SELECTING_FACE = 4
+SELECTING_POSITION = 5
 
 def check_allplan_version(_build_ele: BuildingElement, _version: float) -> bool:
     return True
@@ -2332,6 +2335,7 @@ class AngularLineScript(BaseScriptObject):
         self.face_select_result = SolidFaceSelectResult()
         self.wall_select_result = WallSelectResult()
         self.line_result = LineInteractorResult()
+        self.position_result = PointInteractorResult()
 
         self.detected_wall = None
         self.detected_wall_guid = None
@@ -2385,6 +2389,10 @@ class AngularLineScript(BaseScriptObject):
             return normalize_distribution_type(getattr(self.build_ele.TipoDistribucion, "value", "Grupal"))
         return DISTRIBUTION_GROUP
 
+    def _is_individual_distribution(self) -> bool:
+        """Devuelve True si el flujo debe posicionar una sola pieza por punto."""
+        return self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL
+
     def _create_geometries_for_distribution(
         self,
         *,
@@ -2401,16 +2409,24 @@ class AngularLineScript(BaseScriptObject):
 
         if distribution_type == DISTRIBUTION_INDIVIDUAL:
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
+            face_normal_for_creation = None if self.is_free_mode else self.face_normal
+            if face_normal_for_creation:
+                face_normal_for_creation = vector_scale(face_normal_for_creation, -1.0)
+                print("[DISTRIBUTION][INDIVIDUAL] Normal invertida para apoyar la cara perforada contra el muro")
+
+            rotation_for_creation = rotation_deg - 90.0
+            print(f"[DISTRIBUTION][INDIVIDUAL] Rotacion compensada para cara perforada paralela al muro: {rotation_for_creation}")
+
             geometries, edges = create_single_angular_on_line(
                 definition=definition,
                 start_point=start_point,
                 end_point=end_point,
                 invert_side=invert_side,
-                rotation_deg=rotation_deg,
-                face_normal=None,
-                face_point=None,
+                rotation_deg=rotation_for_creation,
+                face_normal=face_normal_for_creation,
+                face_point=None if self.is_free_mode else self.face_point,
                 is_opposite_face=False,
-                is_free_mode=True,
+                is_free_mode=self.is_free_mode,
             )
             print(f"[DISTRIBUTION][INDIVIDUAL] Geometrias generadas: {len(geometries) if geometries else 0}")
             return geometries, edges
@@ -3714,12 +3730,19 @@ class AngularLineScript(BaseScriptObject):
 
     def start_input(self):
         """Inicia el input del script"""
-        if not self.is_modification_mode and self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
+        is_individual_distribution = self._is_individual_distribution()
+
+        if not self.is_modification_mode and is_individual_distribution:
             self.line_result = LineInteractorResult()
+            self.position_result = PointInteractorResult()
+            self.wall_select_result = WallSelectResult()
+            self.face_select_result = SolidFaceSelectResult()
 
         self._update_incremental_growth()
 
-        if hasattr(self.build_ele, 'angular_libre'):
+        if is_individual_distribution:
+            self.is_free_mode = False
+        elif hasattr(self.build_ele, 'angular_libre'):
             val = self.build_ele.angular_libre.value
             if isinstance(val, bool):
                 self.is_free_mode = val
@@ -3799,7 +3822,13 @@ class AngularLineScript(BaseScriptObject):
             else:
                 pass
 
-        if self.is_free_mode:
+        if is_individual_distribution:
+            self.state = SELECTING_WALL
+            self.script_object_interactor = WallSelectInteractor(
+                self.wall_select_result,
+                "Seleccione el muro para el angular individual"
+            )
+        elif self.is_free_mode:
             self.state = SELECTING_WALL
             self.script_object_interactor = WallSelectInteractor(
                 self.wall_select_result,
@@ -3815,7 +3844,20 @@ class AngularLineScript(BaseScriptObject):
     def start_next_input(self):
         """Gestiona la transición entre interactors"""
         if self.state == SELECTING_WALL:
-            if self.is_free_mode:
+            if self._is_individual_distribution():
+                if self.wall_select_result.is_selected:
+                    print("[INPUT][INDIVIDUAL] Muro seleccionado; pasando a seleccion de cara")
+                    self._process_wall_selection_free()
+                    self.state = SELECTING_FACE
+                    self.face_select_result = SolidFaceSelectResult()
+                    self.script_object_interactor = SolidFaceSelectInteractor(
+                        self.face_select_result,
+                        "Seleccione la cara del muro para orientar el angular"
+                    )
+                else:
+                    self.state = CANCEL
+                    self.script_object_interactor = None
+            elif self.is_free_mode:
                 if self.wall_select_result.is_selected:
                     self._process_wall_selection_free()
                 self.state = SELECTING_LINE
@@ -3829,10 +3871,26 @@ class AngularLineScript(BaseScriptObject):
                     self.state = CANCEL
                     self.script_object_interactor = None
 
+        elif self.state == SELECTING_FACE:
+            if self.face_select_result.is_selected:
+                print("[INPUT][INDIVIDUAL] Cara seleccionada; pasando a seleccion de posicion")
+                self._process_wall_selection()
+                self.state = SELECTING_POSITION
+                self._start_position_input()
+            else:
+                self.state = CANCEL
+                self.script_object_interactor = None
+
         elif self.state == SELECTING_LINE:
             if self.line_result.input_line:
                 self._process_line_input()
 
+            self.script_object_interactor = None
+            self.preview_active = True
+
+        elif self.state == SELECTING_POSITION:
+            print("[INPUT][INDIVIDUAL] Posicion seleccionada; construyendo linea interna")
+            self._process_position_input()
             self.script_object_interactor = None
             self.preview_active = True
 
@@ -3963,6 +4021,148 @@ class AngularLineScript(BaseScriptObject):
         end = self._clamp_point_to_face(line.EndPoint, local_system)
 
         return AllplanGeo.Line3D(start, end), local_system
+
+    def _get_individual_horizontal_axis_on_face(self) -> AllplanGeo.Vector3D:
+        """Obtiene el eje longitudinal más horizontal dentro del plano de la cara."""
+        local_system = self.face_local_system
+        if not local_system and self.face_polygon and self.face_normal:
+            local_system = calculate_local_coordinate_system(self.face_polygon, self.face_normal)
+            if local_system:
+                self.face_local_system = local_system
+
+        candidates = []
+        if local_system:
+            for key in ("axis_u", "axis_v"):
+                axis = local_system.get(key)
+                axis = normalize_vector(axis) if axis else None
+                if axis and axis.GetLength() > 1e-6:
+                    candidates.append(axis)
+
+        if not candidates and self.face_normal:
+            normal = normalize_vector(self.face_normal)
+            if normal:
+                global_x = AllplanGeo.Vector3D(1.0, 0.0, 0.0)
+                dot = vector_dot(global_x, normal)
+                projected = AllplanGeo.Vector3D(
+                    global_x.X - dot * normal.X,
+                    global_x.Y - dot * normal.Y,
+                    global_x.Z - dot * normal.Z
+                )
+                projected = normalize_vector(projected)
+                if projected and projected.GetLength() > 1e-6:
+                    candidates.append(projected)
+
+        if not candidates:
+            return AllplanGeo.Vector3D(1.0, 0.0, 0.0)
+
+        return normalize_vector(min(candidates, key=lambda item: abs(item.Z)))
+
+    def _build_individual_line_from_position(self, position: AllplanGeo.Point3D) -> AllplanGeo.Line3D:
+        """Construye una línea interna de pieza desde el punto clicado."""
+        angular_key = self.build_ele.TipoAngular.value if hasattr(self.build_ele, 'TipoAngular') else None
+        definition = ANGULAR_CATALOG.get(angular_key, None)
+        if not definition:
+            return AllplanGeo.Line3D()
+
+        piece_length = definition.get("piece_length", definition.get("length", 0.0))
+        if piece_length <= 0:
+            return AllplanGeo.Line3D()
+
+        if self.face_point and self.face_normal:
+            position = project_point_to_plane(position, self.face_point, self.face_normal)
+            position = self._clamp_point_to_face(position)
+
+        x_dir = self._get_individual_horizontal_axis_on_face()
+        end = move_point(position, x_dir, piece_length)
+        line = AllplanGeo.Line3D(position, end)
+
+        if self.face_polygon and self.face_normal and self.face_point:
+            line = project_line_on_face(line, self.face_point, self.face_normal)
+            line = clamp_line_to_face_bounds(line, self.face_polygon, self.face_normal)
+
+        return line
+
+    def _start_position_input(self):
+        """Inicia el tercer click: posición final del angular individual."""
+        self.position_result = PointInteractorResult()
+        self.script_object_interactor = PointInteractor(
+            self.position_result,
+            True,
+            "Indique la posición del angular individual",
+            preview_function=self.preview_position_function,
+        )
+
+    def preview_position_function(self):
+        """Preview de la línea interna que se creará desde el punto clicado."""
+        point = self.position_result.input_point
+        if not point:
+            return
+
+        line = self._build_individual_line_from_position(point)
+        if line == AllplanGeo.Line3D():
+            return
+
+        model_list = self.preview_line_function(line)
+        if model_list:
+            AllplanBaseElements.DrawElementPreview(
+                self.document,
+                AllplanGeo.Matrix3D(),
+                model_list,
+                True,
+                None
+            )
+
+    def _process_position_input(self):
+        """Convierte el tercer click en línea interna y procesa la pieza."""
+        point = self.position_result.input_point
+        if not point:
+            return
+
+        line = self._build_individual_line_from_position(point)
+        if line == AllplanGeo.Line3D():
+            return
+
+        self.line_result.input_line = line
+        self._process_line_input(apply_incremental_growth=False)
+
+    def _restart_interactor_for_current_distribution(self) -> bool:
+        """Reinicia el primer input cuando cambia el tipo de distribución."""
+        coord_input = getattr(self.script_object_interactor, "coord_input", None)
+
+        self.line_result = LineInteractorResult()
+        self.position_result = PointInteractorResult()
+        self.wall_select_result = WallSelectResult()
+        self.face_select_result = SolidFaceSelectResult()
+        self.preview_active = False
+
+        is_individual_distribution = self._is_individual_distribution()
+        self.is_free_mode = False if is_individual_distribution else self._get_free_mode()
+        if hasattr(self.build_ele, 'angular_libre'):
+            self.build_ele.angular_libre.value = bool(self.is_free_mode)
+
+        if is_individual_distribution:
+            self.state = SELECTING_WALL
+            self.script_object_interactor = WallSelectInteractor(
+                self.wall_select_result,
+                "Seleccione el muro para el angular individual"
+            )
+        elif self.is_free_mode:
+            self.state = SELECTING_WALL
+            self.script_object_interactor = WallSelectInteractor(
+                self.wall_select_result,
+                "Seleccione el muro (opcional)"
+            )
+        else:
+            self.state = SELECTING_WALL
+            self.script_object_interactor = SolidFaceSelectInteractor(
+                self.face_select_result,
+                "Seleccione la cara del muro para los angulares"
+            )
+
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+            return True
+        return False
 
     def _start_line_input(self):
         """Inicia el interactor de línea"""
@@ -4260,12 +4460,18 @@ class AngularLineScript(BaseScriptObject):
         if name == "TipoDistribucion":
             distribution_type = self._get_distribution_type()
             print(f"[DISTRIBUTION] Cambio de combobox detectado: {distribution_type}")
+            if distribution_type == DISTRIBUTION_INDIVIDUAL:
+                self.is_free_mode = False
+                if hasattr(self.build_ele, 'angular_libre'):
+                    self.build_ele.angular_libre.value = False
+            self._restart_interactor_for_current_distribution()
+            return True
 
         if self.script_object_interactor is not None:
             return True
 
         if name == "angular_libre":
-            self.is_free_mode = self._get_free_mode()
+            self.is_free_mode = False if self._is_individual_distribution() else self._get_free_mode()
 
         self.execute()
         return True
@@ -4785,7 +4991,7 @@ class AngularLineScript(BaseScriptObject):
             angular_key=angular_key,
             invert_side=invert_side,
             rotation_deg=rotation_deg,
-            is_free_mode=True,
+            is_free_mode=self.is_free_mode,
             is_modify=False,
             pmp_pare=wall_pare
         )
@@ -4868,8 +5074,8 @@ class AngularLineScript(BaseScriptObject):
         handles = create_handles(
             self.build_ele,
             self.line_result.input_line,
-            None,  # No hay face_normal (modo libre)
-            None   # No hay face_point (modo libre)
+            None if self.is_free_mode else self.face_normal,
+            None if self.is_free_mode else self.face_point
         )
 
         #  Crear connect_to_ele si hay muro
@@ -5065,7 +5271,7 @@ class AngularLineScript(BaseScriptObject):
             angular_key=tipo_angular_key or None,
             invert_side=invertido,
             rotation_deg=rot,
-            is_free_mode=True,
+            is_free_mode=self.is_free_mode,
             is_modify=True,
             pmp_pare=wall_pare
         )
@@ -5149,8 +5355,8 @@ class AngularLineScript(BaseScriptObject):
         handles = create_handles(
             self.build_ele,
             line,
-            None,  # No hay face_normal (modo libre)
-            None   # No hay face_point (modo libre)
+            None if self.is_free_mode else self.face_normal,
+            None if self.is_free_mode else self.face_point
         )
 
         #  RETURN FINAL: igual que Neoprenos — NO pasar elements_to_delete; el framework reemplaza por UUID.
