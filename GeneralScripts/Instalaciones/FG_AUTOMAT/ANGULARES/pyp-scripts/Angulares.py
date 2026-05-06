@@ -4601,6 +4601,53 @@ class AngularLineScript(BaseScriptObject):
         except (ValueError, TypeError, AttributeError):
             self.build_ele.CrecimientoIncremental.value = 0.0
 
+    def _sync_individual_line_to_z_value(self) -> bool:
+        """Actualiza la línea individual existente al ValorZIndividual indicado."""
+        if not self._is_individual_distribution() or not hasattr(self.build_ele, "ValorZIndividual"):
+            return False
+
+        try:
+            z_value = float(self.build_ele.ValorZIndividual.value)
+        except (TypeError, ValueError):
+            return False
+
+        start_point = getattr(getattr(self.build_ele, "PuntoInicial", None), "value", None)
+        end_point = getattr(getattr(self.build_ele, "PuntoFinal", None), "value", None)
+        if start_point is None or end_point is None:
+            return False
+
+        line_vector = vector_from_points(start_point, end_point)
+        line_length = line_vector.GetLength()
+        if line_length < 1e-6:
+            return False
+
+        line_dir = normalize_vector(line_vector)
+        center = AllplanGeo.Point3D(
+            (start_point.X + end_point.X) / 2.0,
+            (start_point.Y + end_point.Y) / 2.0,
+            z_value
+        )
+        updated_start = move_point(center, line_dir, -line_length / 2.0)
+        updated_end = move_point(center, line_dir, line_length / 2.0)
+        updated_line = AllplanGeo.Line3D(updated_start, updated_end)
+
+        self.is_free_mode = False
+        if hasattr(self.build_ele, "angular_libre"):
+            self.build_ele.angular_libre.value = False
+
+        if not (self.face_normal and self.face_point):
+            self._load_existing_points()
+            self._load_face_info_from_properties()
+
+        if self.face_normal and self.face_point:
+            updated_line = project_line_on_face(updated_line, self.face_point, self.face_normal)
+            if self.face_polygon:
+                updated_line = clamp_line_to_face_bounds(updated_line, self.face_polygon, self.face_normal)
+
+        self.line_result.input_line = updated_line
+        self._process_line_input(apply_incremental_growth=False)
+        return True
+
     def modify_element_property(self, name: str, _value) -> bool:
         if name == "TipoAngular":
             if hasattr(self.build_ele, 'TipoAngular'):
@@ -4627,6 +4674,10 @@ class AngularLineScript(BaseScriptObject):
                 if hasattr(self.build_ele, 'angular_libre'):
                     self.build_ele.angular_libre.value = False
             self._restart_interactor_for_current_distribution()
+            return True
+
+        if name == "ValorZIndividual" and self._sync_individual_line_to_z_value():
+            self.execute()
             return True
 
         if self.script_object_interactor is not None:
