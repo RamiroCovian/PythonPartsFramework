@@ -454,6 +454,19 @@ def apply_local_y_rotation(x_dir: AllplanGeo.Vector3D,
     z_dir = normalize_vector(rotate_vector_around_axis(z_dir, y_dir, rotation_rad))
     return x_dir, y_dir, z_dir
 
+def apply_local_z_rotation(x_dir: AllplanGeo.Vector3D,
+                           y_dir: AllplanGeo.Vector3D,
+                           z_dir: AllplanGeo.Vector3D,
+                           rotation_z_deg: float) -> tuple[AllplanGeo.Vector3D, AllplanGeo.Vector3D, AllplanGeo.Vector3D]:
+    """Aplica un giro adicional alrededor del eje local Z."""
+    if abs(rotation_z_deg) <= 1e-6:
+        return x_dir, y_dir, z_dir
+
+    rotation_rad = math.radians(rotation_z_deg)
+    x_dir = normalize_vector(rotate_vector_around_axis(x_dir, z_dir, rotation_rad))
+    y_dir = normalize_vector(rotate_vector_around_axis(y_dir, z_dir, rotation_rad))
+    return x_dir, y_dir, z_dir
+
 def move_point(point: AllplanGeo.Point3D, direction: AllplanGeo.Vector3D, distance: float) -> AllplanGeo.Point3D:
     return AllplanGeo.Point3D(
         point.X + direction.X * distance,
@@ -1846,6 +1859,7 @@ def create_single_angular_on_line(definition: dict,
                                   invert_side: bool,
                                   rotation_deg: float,
                                   rotation_y_deg: float = 0.0,
+                                  rotation_z_deg: float = 0.0,
                                   face_normal: AllplanGeo.Vector3D = None,
                                   face_point: AllplanGeo.Point3D = None,
                                   is_opposite_face: bool = False,
@@ -1863,6 +1877,7 @@ def create_single_angular_on_line(definition: dict,
 
     x_dir, y_dir, z_dir = decompose_vector(base_vector, rotation_deg, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = apply_local_y_rotation(x_dir, y_dir, z_dir, rotation_y_deg)
+    x_dir, y_dir, z_dir = apply_local_z_rotation(x_dir, y_dir, z_dir, rotation_z_deg)
     piece_length = definition.get("piece_length", definition.get("length", 0.0))
     if piece_length <= 0:
         return [], []
@@ -1925,6 +1940,7 @@ def create_angulars_on_line(definition: dict,
                             invert_side: bool,
                             rotation_deg: float,
                             rotation_y_deg: float = 0.0,
+                            rotation_z_deg: float = 0.0,
                             gap: float = 10.0,
                             face_normal: AllplanGeo.Vector3D = None,
                             face_point: AllplanGeo.Point3D = None,
@@ -1950,6 +1966,7 @@ def create_angulars_on_line(definition: dict,
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = decompose_vector(base_vector, rotation_deg, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = apply_local_y_rotation(x_dir, y_dir, z_dir, rotation_y_deg)
+    x_dir, y_dir, z_dir = apply_local_z_rotation(x_dir, y_dir, z_dir, rotation_z_deg)
 
     line_length = base_vector.GetLength()
     if line_length < 1e-6:
@@ -2533,7 +2550,7 @@ class AngularLineScript(BaseScriptObject):
 
         if distribution_type == DISTRIBUTION_INDIVIDUAL:
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
-            rotation_x_deg, rotation_y_deg = self._get_individual_axis_rotations()
+            rotation_axis_z_deg, rotation_y_deg = self._get_individual_axis_rotations()
             placement_center = AllplanGeo.Point3D(
                 (start_point.X + end_point.X) / 2.0,
                 (start_point.Y + end_point.Y) / 2.0,
@@ -2558,8 +2575,8 @@ class AngularLineScript(BaseScriptObject):
                 face_normal_for_creation = vector_scale(face_normal_for_creation, -1.0)
                 print("[DISTRIBUTION][INDIVIDUAL] Normal invertida para apoyar la cara perforada contra el muro")
 
-            rotation_for_creation = rotation_deg + rotation_x_deg - 90.0
-            print(f"[DISTRIBUTION][INDIVIDUAL] Rotacion compensada para cara perforada paralela al muro: {rotation_for_creation} (x={rotation_x_deg}, y={rotation_y_deg})")
+            rotation_for_creation = rotation_deg - 90.0
+            print(f"[DISTRIBUTION][INDIVIDUAL] Rotacion compensada para cara perforada paralela al muro: {rotation_for_creation} (axis_z={rotation_axis_z_deg}, y_original={rotation_y_deg})")
 
             geometries, edges = create_single_angular_on_line(
                 definition=definition,
@@ -2568,6 +2585,7 @@ class AngularLineScript(BaseScriptObject):
                 invert_side=invert_side,
                 rotation_deg=rotation_for_creation,
                 rotation_y_deg=rotation_y_deg,
+                rotation_z_deg=rotation_axis_z_deg,
                 face_normal=face_normal_for_creation,
                 face_point=None if self.is_free_mode else self.face_point,
                 is_opposite_face=False,
