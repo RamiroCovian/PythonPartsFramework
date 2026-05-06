@@ -441,6 +441,19 @@ def rotate_vector_around_axis(vector: AllplanGeo.Vector3D,
     rotated = vector_add(vector_add(term1, term2), term3)
     return normalize_vector(rotated)
 
+def apply_local_y_rotation(x_dir: AllplanGeo.Vector3D,
+                           y_dir: AllplanGeo.Vector3D,
+                           z_dir: AllplanGeo.Vector3D,
+                           rotation_y_deg: float) -> tuple[AllplanGeo.Vector3D, AllplanGeo.Vector3D, AllplanGeo.Vector3D]:
+    """Aplica un giro adicional alrededor del eje local Y."""
+    if abs(rotation_y_deg) <= 1e-6:
+        return x_dir, y_dir, z_dir
+
+    rotation_rad = math.radians(rotation_y_deg)
+    x_dir = normalize_vector(rotate_vector_around_axis(x_dir, y_dir, rotation_rad))
+    z_dir = normalize_vector(rotate_vector_around_axis(z_dir, y_dir, rotation_rad))
+    return x_dir, y_dir, z_dir
+
 def move_point(point: AllplanGeo.Point3D, direction: AllplanGeo.Vector3D, distance: float) -> AllplanGeo.Point3D:
     return AllplanGeo.Point3D(
         point.X + direction.X * distance,
@@ -1832,6 +1845,7 @@ def create_single_angular_on_line(definition: dict,
                                   end_point: AllplanGeo.Point3D,
                                   invert_side: bool,
                                   rotation_deg: float,
+                                  rotation_y_deg: float = 0.0,
                                   face_normal: AllplanGeo.Vector3D = None,
                                   face_point: AllplanGeo.Point3D = None,
                                   is_opposite_face: bool = False,
@@ -1848,6 +1862,7 @@ def create_single_angular_on_line(definition: dict,
         return [], []
 
     x_dir, y_dir, z_dir = decompose_vector(base_vector, rotation_deg, face_normal, is_opposite_face)
+    x_dir, y_dir, z_dir = apply_local_y_rotation(x_dir, y_dir, z_dir, rotation_y_deg)
     piece_length = definition.get("piece_length", definition.get("length", 0.0))
     if piece_length <= 0:
         return [], []
@@ -1909,6 +1924,7 @@ def create_angulars_on_line(definition: dict,
                             end_point: AllplanGeo.Point3D,
                             invert_side: bool,
                             rotation_deg: float,
+                            rotation_y_deg: float = 0.0,
                             gap: float = 10.0,
                             face_normal: AllplanGeo.Vector3D = None,
                             face_point: AllplanGeo.Point3D = None,
@@ -1933,6 +1949,7 @@ def create_angulars_on_line(definition: dict,
 
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = decompose_vector(base_vector, rotation_deg, face_normal, is_opposite_face)
+    x_dir, y_dir, z_dir = apply_local_y_rotation(x_dir, y_dir, z_dir, rotation_y_deg)
 
     line_length = base_vector.GetLength()
     if line_length < 1e-6:
@@ -2413,6 +2430,27 @@ class AngularLineScript(BaseScriptObject):
         """Devuelve True si el flujo debe posicionar una sola pieza por punto."""
         return self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL
 
+    def _get_angle_degrees(self, param_name: str, default: float = 0.0) -> float:
+        """Lee un parámetro Angle de la paleta en grados."""
+        if not hasattr(self.build_ele, param_name):
+            return default
+
+        value = getattr(getattr(self.build_ele, param_name), "value", default)
+        try:
+            return value.GetDeg() if hasattr(value, "GetDeg") else float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _get_individual_axis_rotations(self) -> tuple[float, float]:
+        """Obtiene los giros adicionales disponibles solo en distribución individual."""
+        if not self._is_individual_distribution():
+            return 0.0, 0.0
+
+        return (
+            self._get_angle_degrees("RotacionEjeX"),
+            self._get_angle_degrees("RotacionEjeY"),
+        )
+
     def _create_geometries_for_distribution(
         self,
         *,
@@ -2429,6 +2467,7 @@ class AngularLineScript(BaseScriptObject):
 
         if distribution_type == DISTRIBUTION_INDIVIDUAL:
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
+            rotation_x_deg, rotation_y_deg = self._get_individual_axis_rotations()
             placement_center = AllplanGeo.Point3D(
                 (start_point.X + end_point.X) / 2.0,
                 (start_point.Y + end_point.Y) / 2.0,
@@ -2444,8 +2483,8 @@ class AngularLineScript(BaseScriptObject):
                 face_normal_for_creation = vector_scale(face_normal_for_creation, -1.0)
                 print("[DISTRIBUTION][INDIVIDUAL] Normal invertida para apoyar la cara perforada contra el muro")
 
-            rotation_for_creation = rotation_deg - 90.0
-            print(f"[DISTRIBUTION][INDIVIDUAL] Rotacion compensada para cara perforada paralela al muro: {rotation_for_creation}")
+            rotation_for_creation = rotation_deg + rotation_x_deg - 90.0
+            print(f"[DISTRIBUTION][INDIVIDUAL] Rotacion compensada para cara perforada paralela al muro: {rotation_for_creation} (x={rotation_x_deg}, y={rotation_y_deg})")
 
             geometries, edges = create_single_angular_on_line(
                 definition=definition,
@@ -2453,6 +2492,7 @@ class AngularLineScript(BaseScriptObject):
                 end_point=end_point,
                 invert_side=invert_side,
                 rotation_deg=rotation_for_creation,
+                rotation_y_deg=rotation_y_deg,
                 face_normal=face_normal_for_creation,
                 face_point=None if self.is_free_mode else self.face_point,
                 is_opposite_face=False,
@@ -2506,6 +2546,12 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(be, "RotacionManual"):
             be.RotacionManual.value = 0.0
 
+        if hasattr(be, "RotacionEjeX"):
+            be.RotacionEjeX.value = 0.0
+
+        if hasattr(be, "RotacionEjeY"):
+            be.RotacionEjeY.value = 0.0
+
         if hasattr(be, "ValorZIndividual"):
             be.ValorZIndividual.value = 0.0
 
@@ -2528,6 +2574,7 @@ class AngularLineScript(BaseScriptObject):
 
             rot_val = getattr(self.build_ele.RotacionManual, "value", 0.0) if hasattr(self.build_ele, "RotacionManual") else 0.0
             rot_deg = rot_val.GetDeg() if hasattr(rot_val, "GetDeg") else float(rot_val) if rot_val is not None else 0.0
+            rot_x_deg, rot_y_deg = self._get_individual_axis_rotations()
 
             libre_val = getattr(self, "is_free_mode", False)
             if hasattr(self.build_ele, "angular_libre") and hasattr(self.build_ele.angular_libre, "value"):
@@ -2543,6 +2590,8 @@ class AngularLineScript(BaseScriptObject):
                 "sep": float(getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0) if hasattr(self.build_ele, "SeparacionAngulares") else 10.0,
                 "invert": bool(getattr(self.build_ele.InvertirAngular, "value", False)) if hasattr(self.build_ele, "InvertirAngular") else False,
                 "rot": float(rot_deg),
+                "rot_x": float(rot_x_deg),
+                "rot_y": float(rot_y_deg),
                 "valor_z_individual": float(getattr(self.build_ele.ValorZIndividual, "value", 0.0) or 0.0) if hasattr(self.build_ele, "ValorZIndividual") else 0.0,
                 "libre": bool(libre_val),
                 "lleva_neopreno": bool(getattr(self.build_ele.SiLlevaNeopreno, "value", False)) if hasattr(self.build_ele, "SiLlevaNeopreno") else False,
@@ -2599,6 +2648,12 @@ class AngularLineScript(BaseScriptObject):
                 except Exception:
                     self.build_ele.RotacionManual.value = rot_deg
 
+            if hasattr(self.build_ele, "RotacionEjeX"):
+                self.build_ele.RotacionEjeX.value = float(state.get("rot_x", state.get("RotacionEjeX", 0.0)) or 0.0)
+
+            if hasattr(self.build_ele, "RotacionEjeY"):
+                self.build_ele.RotacionEjeY.value = float(state.get("rot_y", state.get("RotacionEjeY", 0.0)) or 0.0)
+
             if hasattr(self.build_ele, "ValorZIndividual"):
                 valor_z = state.get("valor_z_individual") if "valor_z_individual" in state else state.get("ValorZIndividual")
                 if valor_z is not None:
@@ -2636,7 +2691,7 @@ class AngularLineScript(BaseScriptObject):
                 if not hasattr(attr, "value"):
                     continue
                 try:
-                    if key == "RotacionManual":
+                    if key in ("RotacionManual", "RotacionEjeX", "RotacionEjeY"):
                         rot_deg = float(value) if value is not None else 0.0
                         attr.value = rot_deg
                     elif key in ("PuntoInicial", "PuntoFinal") and isinstance(value, AllplanGeo.Point3D):
@@ -2772,6 +2827,7 @@ class AngularLineScript(BaseScriptObject):
         num_forats = get_num_forats_from_definition(def_angular) if def_angular else 0
         nom = get_nom_from_angular_key(tipo_angular_key) if tipo_angular_key else ""
         neopre = "Si" if lleva_neopreno else "No"
+        rot_x_deg, rot_y_deg = self._get_individual_axis_rotations()
 
         # grosor_float = self._grosor_neopreno_to_float(grosor_neopre_value)
         length_mm_str = f"{float(def_angular['length']):.2f}mm"
@@ -2786,6 +2842,8 @@ class AngularLineScript(BaseScriptObject):
             "SeparacionAngulares": separation,
             "Libre": libre,
             "RotacionManual": rot_deg,
+            "RotacionEjeX": rot_x_deg,
+            "RotacionEjeY": rot_y_deg,
             "InvertirAngular": invertido,
             "SiLlevaNeopreno": lleva_neopreno,
             "SavedState": saved_state_str if saved_state_str else "",
@@ -4952,6 +5010,10 @@ class AngularLineScript(BaseScriptObject):
                     params['InvertSide'] = bool(invert_side)
                 if rotation_deg is not None:
                     params['Rotation'] = float(rotation_deg)
+                if hasattr(self.build_ele, "RotacionEjeX"):
+                    params['RotationX'] = self._get_angle_degrees("RotacionEjeX")
+                if hasattr(self.build_ele, "RotacionEjeY"):
+                    params['RotationY'] = self._get_angle_degrees("RotacionEjeY")
                 if is_free_mode is not None:
                     params['FreeMode'] = bool(is_free_mode)
 

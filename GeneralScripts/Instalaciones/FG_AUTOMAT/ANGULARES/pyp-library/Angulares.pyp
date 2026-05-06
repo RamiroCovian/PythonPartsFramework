@@ -216,8 +216,30 @@
       <ValueType>Angle</ValueType>
       <Value>0.0</Value>
       <Enable>angular_libre == True</Enable>
-      <Visible>True</Visible>
+      <Visible>False</Visible>
       <TextId>1002</TextId>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>RotacionEjeX</Name>
+      <Text>Añadir rotación en eje X (°)</Text>
+      <ValueType>Angle</ValueType>
+      <Value>0.0</Value>
+      <Enable>True</Enable>
+      <Visible>True</Visible>
+      <TextId>1045</TextId>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>RotacionEjeY</Name>
+      <Text>Añadir rotación en eje Y (°)</Text>
+      <ValueType>Angle</ValueType>
+      <Value>0.0</Value>
+      <Enable>True</Enable>
+      <Visible>True</Visible>
+      <TextId>1046</TextId>
       <Persistent>Model</Persistent>
     </Parameter>
 
@@ -226,7 +248,7 @@
       <Text>Invertir orientación</Text>
       <Value>false</Value>
       <ValueType>CheckBox</ValueType>
-      <Enable>angular_libre == True</Enable>
+      <Enable>True</Enable>
       <Visible>True</Visible>
       <TextId>1003</TextId>
       <Persistent>Model</Persistent>
