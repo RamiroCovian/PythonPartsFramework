@@ -1945,7 +1945,7 @@ def create_angulars_on_line(definition: dict,
     if not is_tensor:
         rotation_deg = rotation_deg + 90.0
     if is_tensor and not is_free_mode:
-        return []
+        return [], []
 
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = decompose_vector(base_vector, rotation_deg, face_normal, is_opposite_face)
@@ -1953,7 +1953,7 @@ def create_angulars_on_line(definition: dict,
 
     line_length = base_vector.GetLength()
     if line_length < 1e-6:
-        return []
+        return [], []
 
     piece_length = definition.get("piece_length", definition.get("length", 0.0))
 
@@ -2451,6 +2451,72 @@ class AngularLineScript(BaseScriptObject):
             self._get_angle_degrees("RotacionEjeY"),
         )
 
+    def _is_manual_z_enabled(self) -> bool:
+        if not hasattr(self.build_ele, "UsarValorZManual"):
+            return False
+
+        value = getattr(self.build_ele.UsarValorZManual, "value", False)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes")
+        return bool(value)
+
+    def _set_individual_z_value(self, z_value: float) -> None:
+        if hasattr(self.build_ele, "ValorZIndividual"):
+            self.build_ele.ValorZIndividual.value = float(z_value)
+
+    def _get_individual_z_value(self, fallback: float = 0.0) -> float:
+        if not hasattr(self.build_ele, "ValorZIndividual"):
+            return fallback
+
+        try:
+            return float(self.build_ele.ValorZIndividual.value)
+        except (TypeError, ValueError):
+            return fallback
+
+    def _resolve_individual_z_from_point(self, point: AllplanGeo.Point3D, update_from_point: bool) -> float:
+        if update_from_point and not self._is_manual_z_enabled():
+            self._set_individual_z_value(point.Z)
+            return float(point.Z)
+
+        return self._get_individual_z_value(point.Z)
+
+    def _get_verticalized_face_normal(self) -> AllplanGeo.Vector3D | None:
+        if not self.face_normal:
+            return None
+
+        normal_xy = AllplanGeo.Vector3D(self.face_normal.X, self.face_normal.Y, 0.0)
+        normal_xy = normalize_vector(normal_xy)
+        if normal_xy and normal_xy.GetLength() > 1e-6:
+            return normal_xy
+
+        return normalize_vector(self.face_normal)
+
+    def _project_point_to_individual_vertical_face(self, point: AllplanGeo.Point3D, z_value: float) -> AllplanGeo.Point3D:
+        if not (self.face_point and self.face_normal):
+            return AllplanGeo.Point3D(point.X, point.Y, z_value)
+
+        normal = self._get_verticalized_face_normal()
+        if not normal or normal.GetLength() < 1e-6:
+            return AllplanGeo.Point3D(point.X, point.Y, z_value)
+
+        delta = AllplanGeo.Vector3D(point.X - self.face_point.X, point.Y - self.face_point.Y, 0.0)
+        distance = vector_dot(delta, normal)
+        return AllplanGeo.Point3D(
+            point.X - normal.X * distance,
+            point.Y - normal.Y * distance,
+            z_value
+        )
+
+    def _project_line_to_individual_vertical_face(self, line: AllplanGeo.Line3D, z_value: float = None) -> AllplanGeo.Line3D:
+        if z_value is None:
+            z_value = self._get_individual_z_value((line.StartPoint.Z + line.EndPoint.Z) / 2.0)
+
+        start = self._project_point_to_individual_vertical_face(line.StartPoint, z_value)
+        end = self._project_point_to_individual_vertical_face(line.EndPoint, z_value)
+        return AllplanGeo.Line3D(start, end)
+
     def _create_geometries_for_distribution(
         self,
         *,
@@ -2477,9 +2543,18 @@ class AngularLineScript(BaseScriptObject):
             if placement_dir and placement_dir.GetLength() > 1e-6:
                 start_point = placement_center
                 end_point = move_point(placement_center, placement_dir, definition.get("piece_length", definition.get("length", 0.0)))
+            else:
+                piece_length = definition.get("piece_length", definition.get("length", 0.0))
+                x_dir = self._get_individual_horizontal_axis_on_face()
+                if piece_length > 0 and x_dir and x_dir.GetLength() > 1e-6:
+                    start_point = move_point(placement_center, x_dir, -piece_length / 2.0)
+                    end_point = move_point(placement_center, x_dir, piece_length / 2.0)
 
             face_normal_for_creation = None if self.is_free_mode else self.face_normal
             if face_normal_for_creation:
+                verticalized_normal = self._get_verticalized_face_normal()
+                if verticalized_normal:
+                    face_normal_for_creation = verticalized_normal
                 face_normal_for_creation = vector_scale(face_normal_for_creation, -1.0)
                 print("[DISTRIBUTION][INDIVIDUAL] Normal invertida para apoyar la cara perforada contra el muro")
 
@@ -2552,6 +2627,9 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(be, "RotacionEjeY"):
             be.RotacionEjeY.value = 0.0
 
+        if hasattr(be, "UsarValorZManual"):
+            be.UsarValorZManual.value = False
+
         if hasattr(be, "ValorZIndividual"):
             be.ValorZIndividual.value = 0.0
 
@@ -2592,6 +2670,7 @@ class AngularLineScript(BaseScriptObject):
                 "rot": float(rot_deg),
                 "rot_x": float(rot_x_deg),
                 "rot_y": float(rot_y_deg),
+                "usar_z_manual": self._is_manual_z_enabled(),
                 "valor_z_individual": float(getattr(self.build_ele.ValorZIndividual, "value", 0.0) or 0.0) if hasattr(self.build_ele, "ValorZIndividual") else 0.0,
                 "libre": bool(libre_val),
                 "lleva_neopreno": bool(getattr(self.build_ele.SiLlevaNeopreno, "value", False)) if hasattr(self.build_ele, "SiLlevaNeopreno") else False,
@@ -2653,6 +2732,9 @@ class AngularLineScript(BaseScriptObject):
 
             if hasattr(self.build_ele, "RotacionEjeY"):
                 self.build_ele.RotacionEjeY.value = float(state.get("rot_y", state.get("RotacionEjeY", 0.0)) or 0.0)
+
+            if hasattr(self.build_ele, "UsarValorZManual"):
+                self.build_ele.UsarValorZManual.value = bool(state.get("usar_z_manual", state.get("UsarValorZManual", False)))
 
             if hasattr(self.build_ele, "ValorZIndividual"):
                 valor_z = state.get("valor_z_individual") if "valor_z_individual" in state else state.get("ValorZIndividual")
@@ -2838,6 +2920,7 @@ class AngularLineScript(BaseScriptObject):
             "PuntoFinal": punto_final,
             "TipoAngular": tipo_angular_key,
             "TipoDistribucion": "Individual" if normalize_distribution_type(distribution_type) == DISTRIBUTION_INDIVIDUAL else "Grupal",
+            "UsarValorZManual": self._is_manual_z_enabled(),
             "ValorZIndividual": float(getattr(self.build_ele.ValorZIndividual, "value", 0.0) or 0.0) if hasattr(self.build_ele, "ValorZIndividual") else 0.0,
             "SeparacionAngulares": separation,
             "Libre": libre,
@@ -4157,14 +4240,7 @@ class AngularLineScript(BaseScriptObject):
 
     def _apply_individual_manual_z(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
         """Aplica la Z global indicada en paleta para el posicionamiento individual."""
-        if not hasattr(self.build_ele, "ValorZIndividual"):
-            return point
-
-        try:
-            z_value = float(self.build_ele.ValorZIndividual.value)
-        except (TypeError, ValueError):
-            return point
-
+        z_value = self._get_individual_z_value(point.Z)
         return AllplanGeo.Point3D(point.X, point.Y, z_value)
 
     def _build_individual_line_from_position(self, position: AllplanGeo.Point3D) -> AllplanGeo.Line3D:
@@ -4178,24 +4254,13 @@ class AngularLineScript(BaseScriptObject):
         if piece_length <= 0:
             return AllplanGeo.Line3D()
 
-        if self.face_point and self.face_normal:
-            position = project_point_to_plane(position, self.face_point, self.face_normal)
-            position = self._clamp_point_to_face(position)
-
-        position = self._apply_individual_manual_z(position)
-        if self.face_point and self.face_normal:
-            position = project_point_to_plane(position, self.face_point, self.face_normal)
-            position = self._clamp_point_to_face(position)
+        z_value = self._resolve_individual_z_from_point(position, update_from_point=True)
+        position = self._project_point_to_individual_vertical_face(position, z_value)
 
         x_dir = self._get_individual_horizontal_axis_on_face()
         start = move_point(position, x_dir, -piece_length / 2.0)
         end = move_point(position, x_dir, piece_length / 2.0)
-        line = AllplanGeo.Line3D(start, end)
-
-        if self.face_normal and self.face_point:
-            line = project_line_on_face(line, self.face_point, self.face_normal)
-
-        return line
+        return self._project_line_to_individual_vertical_face(AllplanGeo.Line3D(start, end), z_value)
 
     def _build_individual_centered_preview_line(self, line: AllplanGeo.Line3D) -> AllplanGeo.Line3D:
         """Construye la guía visual centrada en el punto de colocación del angular."""
@@ -4225,7 +4290,7 @@ class AngularLineScript(BaseScriptObject):
         preview_line = AllplanGeo.Line3D(start, end)
 
         if self.face_normal and self.face_point:
-            preview_line = project_line_on_face(preview_line, self.face_point, self.face_normal)
+            preview_line = self._project_line_to_individual_vertical_face(preview_line)
 
         return preview_line
 
@@ -4348,8 +4413,11 @@ class AngularLineScript(BaseScriptObject):
         self._update_incremental_growth()
 
         if not self.is_free_mode and self.face_polygon and self.face_normal and self.face_point:
-            projected_line = project_line_on_face(line, self.face_point, self.face_normal)
-            line = clamp_line_to_face_bounds(projected_line, self.face_polygon, self.face_normal)
+            if self._is_individual_distribution():
+                line = self._project_line_to_individual_vertical_face(line)
+            else:
+                projected_line = project_line_on_face(line, self.face_point, self.face_normal)
+                line = clamp_line_to_face_bounds(projected_line, self.face_polygon, self.face_normal)
 
         try:
             angular_key = self.build_ele.TipoAngular.value if hasattr(self.build_ele, 'TipoAngular') else None
@@ -4410,7 +4478,7 @@ class AngularLineScript(BaseScriptObject):
 
         if not self.is_free_mode:
             if is_individual_distribution and self.face_normal and self.face_point:
-                line = project_line_on_face(line, self.face_point, self.face_normal)
+                line = self._project_line_to_individual_vertical_face(line)
                 local_system = self.face_local_system
                 if not local_system and self.face_polygon and self.face_normal:
                     local_system = calculate_local_coordinate_system(
@@ -4471,7 +4539,7 @@ class AngularLineScript(BaseScriptObject):
                 )
 
             if is_individual_distribution:
-                line = project_line_on_face(line, self.face_point, self.face_normal)
+                line = self._project_line_to_individual_vertical_face(line)
             else:
                 line, local_system = self._clamp_line_to_face(line)
                 if local_system:
@@ -4640,9 +4708,7 @@ class AngularLineScript(BaseScriptObject):
             self._load_face_info_from_properties()
 
         if self.face_normal and self.face_point:
-            updated_line = project_line_on_face(updated_line, self.face_point, self.face_normal)
-            if self.face_polygon:
-                updated_line = clamp_line_to_face_bounds(updated_line, self.face_polygon, self.face_normal)
+            updated_line = self._project_line_to_individual_vertical_face(updated_line, z_value)
 
         self.line_result.input_line = updated_line
         self._process_line_input(apply_incremental_growth=False)
@@ -4731,10 +4797,11 @@ class AngularLineScript(BaseScriptObject):
         Limita el punto movido a los límites de la cara del muro usando el sistema local (solo en modo acoplado).
         """
         self.is_free_mode = self._get_free_mode()
+        is_individual_distribution = self._is_individual_distribution()
 
         self._update_incremental_growth()
 
-        if not self.is_free_mode:
+        if not self.is_free_mode and not is_individual_distribution:
             if not (self.face_polygon and self.face_normal and self.face_point):
                 self._load_existing_points()
                 if not (self.face_polygon and self.face_normal and self.face_point):
@@ -4773,6 +4840,8 @@ class AngularLineScript(BaseScriptObject):
 
         if start_point and end_point:
             self.line_result.input_line = AllplanGeo.Line3D(start_point, end_point)
+            if is_individual_distribution:
+                self.line_result.input_line = self._project_line_to_individual_vertical_face(self.line_result.input_line)
             self._process_line_input(apply_incremental_growth=False)
         else:
             self.line_result.input_line = None
@@ -5404,6 +5473,40 @@ class AngularLineScript(BaseScriptObject):
         if not definition:
             print("[EDIT]  ERROR: No se encontró definición para TipoAngular")
             return CreateElementResult(elements=[], handles=[], elements_to_delete=None)
+
+        if self._is_individual_distribution():
+            if not (self.face_normal and self.face_point):
+                self._load_face_info_from_properties()
+
+            current_line = AllplanGeo.Line3D(start_point, end_point)
+            current_length = vector_from_points(start_point, end_point).GetLength()
+            center = AllplanGeo.Point3D(
+                (start_point.X + end_point.X) / 2.0,
+                (start_point.Y + end_point.Y) / 2.0,
+                (start_point.Z + end_point.Z) / 2.0,
+            )
+            if not self._is_manual_z_enabled() and hasattr(self.build_ele, "ValorZIndividual"):
+                if abs(float(getattr(self.build_ele.ValorZIndividual, "value", 0.0) or 0.0)) <= 1e-6 and abs(center.Z) > 1e-6:
+                    self.build_ele.ValorZIndividual.value = center.Z
+
+            if current_length < 1e-6:
+                piece_length = definition.get("piece_length", definition.get("length", 0.0))
+                x_dir = self._get_individual_horizontal_axis_on_face()
+                if piece_length > 0 and x_dir and x_dir.GetLength() > 1e-6:
+                    current_line = AllplanGeo.Line3D(
+                        move_point(center, x_dir, -piece_length / 2.0),
+                        move_point(center, x_dir, piece_length / 2.0),
+                    )
+
+            current_line = self._project_line_to_individual_vertical_face(current_line)
+            start_point = current_line.StartPoint
+            end_point = current_line.EndPoint
+            if hasattr(self.build_ele, "PuntoInicial"):
+                self.build_ele.PuntoInicial.value = start_point
+            if hasattr(self.build_ele, "PuntoFinal"):
+                self.build_ele.PuntoFinal.value = end_point
+            if getattr(self, "line_result", None):
+                self.line_result.input_line = current_line
 
 
         try:

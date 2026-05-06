@@ -182,10 +182,21 @@
     </Parameter>
 
     <Parameter>
+      <Name>UsarValorZManual</Name>
+      <Text>Usar Valor Z manual</Text>
+      <Value>false</Value>
+      <ValueType>CheckBox</ValueType>
+      <Visible>True</Visible>
+      <TextId>1047</TextId>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
       <Name>ValorZIndividual</Name>
-      <Text>Valor Z</Text>
+      <Text>Cota Z desde el origen del muro</Text>
       <Value>0</Value>
       <ValueType>Length</ValueType>
+      <Enable>True</Enable>
       <Visible>True</Visible>
       <TextId>1044</TextId>
       <Persistent>Model</Persistent>
@@ -223,7 +234,7 @@
 
     <Parameter>
       <Name>RotacionEjeX</Name>
-      <Text>Añadir rotación en eje X (°)</Text>
+      <Text>Rotación eje Y (Plano ZX)</Text>
       <ValueType>Angle</ValueType>
       <Value>0.0</Value>
       <Enable>True</Enable>
@@ -234,7 +245,7 @@
 
     <Parameter>
       <Name>RotacionEjeY</Name>
-      <Text>Añadir rotación en eje Y (°)</Text>
+      <Text>Rotación eje Z (Plano XY)</Text>
       <ValueType>Angle</ValueType>
       <Value>0.0</Value>
       <Enable>True</Enable>
