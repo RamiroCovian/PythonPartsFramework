@@ -42,7 +42,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "1.1-distribucion-individual"
+ANGULARES_SCRIPT_VERSION = "1.2-distribucion-individual-multiple-ppg"
 
 
 def normalize_distribution_type(value: Any) -> str:
@@ -1228,10 +1228,12 @@ def create_single_angular(definition: dict,
     horizontal = definition["horizontal"]
     thickness = definition["thickness"]
 
-    horizontal_axis = axis_with_offset(origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0)
+    angular_origin = move_point(origin, x_dir, -length / 2.0)
+
+    horizontal_axis = axis_with_offset(angular_origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0)
     horizontal_leg = AllplanGeo.BRep3D.CreateCuboid(horizontal_axis, length, horizontal, thickness)
 
-    vertical_axis = axis_with_offset(origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0)
+    vertical_axis = axis_with_offset(angular_origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0)
     vertical_leg = AllplanGeo.BRep3D.CreateCuboid(vertical_axis, length, thickness, vertical)
 
     err, geometry = AllplanGeo.MakeUnion(horizontal_leg, vertical_leg)
@@ -1405,12 +1407,12 @@ def create_single_angular(definition: dict,
             if err != AllplanGeo.eGeometryErrorCode.eOK:
                 continue
 
-            vec_to_start = AllplanGeo.Vector3D(p_start.X - origin.X,
-                                              p_start.Y - origin.Y,
-                                              p_start.Z - origin.Z)
-            vec_to_end = AllplanGeo.Vector3D(p_end.X - origin.X,
-                                            p_end.Y - origin.Y,
-                                            p_end.Z - origin.Z)
+            vec_to_start = AllplanGeo.Vector3D(p_start.X - angular_origin.X,
+                                              p_start.Y - angular_origin.Y,
+                                              p_start.Z - angular_origin.Z)
+            vec_to_end = AllplanGeo.Vector3D(p_end.X - angular_origin.X,
+                                            p_end.Y - angular_origin.Y,
+                                            p_end.Z - angular_origin.Z)
 
             z_start_local = (vec_to_start.X * z_dir.X +
                             vec_to_start.Y * z_dir.Y +
@@ -1457,9 +1459,9 @@ def create_single_angular(definition: dict,
             if edge_info['idx'] in all_target_edges:
                 continue
 
-            vec_to_start = AllplanGeo.Vector3D(edge_info['start'].X - origin.X,
-                                              edge_info['start'].Y - origin.Y,
-                                              edge_info['start'].Z - origin.Z)
+            vec_to_start = AllplanGeo.Vector3D(edge_info['start'].X - angular_origin.X,
+                                              edge_info['start'].Y - angular_origin.Y,
+                                              edge_info['start'].Z - angular_origin.Z)
             z_start_local = (vec_to_start.X * z_dir.X +
                             vec_to_start.Y * z_dir.Y +
                             vec_to_start.Z * z_dir.Z)
@@ -1497,7 +1499,7 @@ def create_single_angular(definition: dict,
     for row in definition["hole_rows"]:
         hole_y = row["y"]
         for hole_x in row["x_positions"]:
-            hole_origin = local_to_world(origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0)
+            hole_origin = local_to_world(angular_origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0)
             hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, z_dir)
             hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(hole_axis, HOLE_RADIUS, thickness)
             err, geometry = AllplanGeo.MakeSubtraction(geometry, hole_cylinder)
@@ -2027,28 +2029,32 @@ def create_edge_angulars_group(definition,
                                 piece_length: float,
                                 is_tensor: bool = False) -> AllplanGeo.Line3D:
 
-    end_point = move_point(start_point, x_dir, piece_length)
-
     thickness = definition["thickness"]
     if not is_tensor:
-        origin = move_point(start_point, x_dir, 0.0)
+        guide_start = move_point(start_point, x_dir, -piece_length / 2.0)
+        guide_end = move_point(start_point, x_dir, piece_length / 2.0)
+
+        origin = move_point(guide_start, x_dir, 0.0)
         origin = move_point(origin, z_dir, thickness)
         origin = move_point(origin, y_dir, thickness)
 
-        final = move_point(end_point, x_dir, 0.0)
+        final = move_point(guide_end, x_dir, 0.0)
         final = move_point(final, z_dir, thickness)
         final = move_point(final, y_dir, thickness)
     else:
+        guide_start = start_point
+        guide_end = move_point(start_point, x_dir, piece_length)
+
         origin = move_point(start_point, x_dir, 0.0)
         origin = move_point(origin, z_dir, definition["vertical"])
         origin = move_point(origin, y_dir, -thickness)
 
-        final = move_point(end_point, x_dir, 0.0)
+        final = move_point(guide_end, x_dir, 0.0)
         final = move_point(final, z_dir, definition["vertical"])
         final = move_point(final, y_dir, -thickness)
 
     axis_origin = local_to_world(origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0)
-    axis_point = AllplanGeo.Axis3D(axis_origin, AllplanGeo.Vector3D(start_point, end_point))
+    axis_point = AllplanGeo.Axis3D(axis_origin, AllplanGeo.Vector3D(guide_start, guide_end))
     pnt_inici = AllplanGeo.Rotate(origin, axis_point, AllplanGeo.Angle.FromDeg(0.0))
     pnt_final = AllplanGeo.Rotate(final, axis_point, AllplanGeo.Angle.FromDeg(0.0))
     line = AllplanGeo.Line3D(pnt_inici, pnt_final)
@@ -3708,6 +3714,9 @@ class AngularLineScript(BaseScriptObject):
 
     def start_input(self):
         """Inicia el input del script"""
+        if not self.is_modification_mode and self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
+            self.line_result = LineInteractorResult()
+
         self._update_incremental_growth()
 
         if hasattr(self.build_ele, 'angular_libre'):
@@ -4882,7 +4891,8 @@ class AngularLineScript(BaseScriptObject):
             handles=handles,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
             connect_to_ele=connect_to_ele,
-            uuid_parameter_name="PythonPartUUID"
+            uuid_parameter_name="PythonPartUUID",
+            multi_placement=distribution_type == DISTRIBUTION_INDIVIDUAL
         )
 
 
