@@ -2506,6 +2506,9 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(be, "RotacionManual"):
             be.RotacionManual.value = 0.0
 
+        if hasattr(be, "ValorZIndividual"):
+            be.ValorZIndividual.value = 0.0
+
         if hasattr(be, "SiLlevaNeopreno"):
             be.SiLlevaNeopreno.value = False
 
@@ -2540,6 +2543,7 @@ class AngularLineScript(BaseScriptObject):
                 "sep": float(getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0) if hasattr(self.build_ele, "SeparacionAngulares") else 10.0,
                 "invert": bool(getattr(self.build_ele.InvertirAngular, "value", False)) if hasattr(self.build_ele, "InvertirAngular") else False,
                 "rot": float(rot_deg),
+                "valor_z_individual": float(getattr(self.build_ele.ValorZIndividual, "value", 0.0) or 0.0) if hasattr(self.build_ele, "ValorZIndividual") else 0.0,
                 "libre": bool(libre_val),
                 "lleva_neopreno": bool(getattr(self.build_ele.SiLlevaNeopreno, "value", False)) if hasattr(self.build_ele, "SiLlevaNeopreno") else False,
                 "pmp_pare": str(getattr(self.build_ele.pmp_pare, "value", "") or "") if hasattr(self.build_ele, "pmp_pare") else "",
@@ -2594,6 +2598,11 @@ class AngularLineScript(BaseScriptObject):
                     self.build_ele.RotacionManual.value = float(state["rot"])
                 except Exception:
                     self.build_ele.RotacionManual.value = rot_deg
+
+            if hasattr(self.build_ele, "ValorZIndividual"):
+                valor_z = state.get("valor_z_individual") if "valor_z_individual" in state else state.get("ValorZIndividual")
+                if valor_z is not None:
+                    self.build_ele.ValorZIndividual.value = float(valor_z)
 
             if hasattr(self.build_ele, "SiLlevaNeopreno"):
                 lleva_val = state.get("lleva_neopreno") if "lleva_neopreno" in state else state.get("SiLlevaNeopreno", False)
@@ -2773,6 +2782,7 @@ class AngularLineScript(BaseScriptObject):
             "PuntoFinal": punto_final,
             "TipoAngular": tipo_angular_key,
             "TipoDistribucion": "Individual" if normalize_distribution_type(distribution_type) == DISTRIBUTION_INDIVIDUAL else "Grupal",
+            "ValorZIndividual": float(getattr(self.build_ele.ValorZIndividual, "value", 0.0) or 0.0) if hasattr(self.build_ele, "ValorZIndividual") else 0.0,
             "SeparacionAngulares": separation,
             "Libre": libre,
             "RotacionManual": rot_deg,
@@ -4087,6 +4097,18 @@ class AngularLineScript(BaseScriptObject):
 
         return normalize_vector(min(candidates, key=lambda item: abs(item.Z)))
 
+    def _apply_individual_manual_z(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
+        """Aplica la Z global indicada en paleta para el posicionamiento individual."""
+        if not hasattr(self.build_ele, "ValorZIndividual"):
+            return point
+
+        try:
+            z_value = float(self.build_ele.ValorZIndividual.value)
+        except (TypeError, ValueError):
+            return point
+
+        return AllplanGeo.Point3D(point.X, point.Y, z_value)
+
     def _build_individual_line_from_position(self, position: AllplanGeo.Point3D) -> AllplanGeo.Line3D:
         """Construye una línea interna de pieza desde el punto clicado."""
         angular_key = self.build_ele.TipoAngular.value if hasattr(self.build_ele, 'TipoAngular') else None
@@ -4098,6 +4120,11 @@ class AngularLineScript(BaseScriptObject):
         if piece_length <= 0:
             return AllplanGeo.Line3D()
 
+        if self.face_point and self.face_normal:
+            position = project_point_to_plane(position, self.face_point, self.face_normal)
+            position = self._clamp_point_to_face(position)
+
+        position = self._apply_individual_manual_z(position)
         if self.face_point and self.face_normal:
             position = project_point_to_plane(position, self.face_point, self.face_normal)
             position = self._clamp_point_to_face(position)

@@ -182,6 +182,16 @@
     </Parameter>
 
     <Parameter>
+      <Name>ValorZIndividual</Name>
+      <Text>Valor Z</Text>
+      <Value>0</Value>
+      <ValueType>Length</ValueType>
+      <Visible>True</Visible>
+      <TextId>1044</TextId>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
       <Name>SeparatorModo</Name>
       <Text>Modo de Posicionamiento</Text>
       <ValueType>Separator</ValueType>
