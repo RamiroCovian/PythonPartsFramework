@@ -11,8 +11,8 @@
   </Script>
 
   <Page>
-    <Name>Configuración</Name>
-    <Text>Configuración</Text>
+    <Name>Individual</Name>
+    <Text>Individual</Text>
     <TextId>1000</TextId>
 
     <Parameter>
@@ -142,10 +142,12 @@
 
     <Parameter>
       <Name>TipoDistribucion</Name>
-      <Text>Tipo de distribución</Text>
-      <Value>Grupal</Value>
+      <Text>Distribución activa</Text>
+      <Value>Individual</Value>
       <ValueList>Grupal|Individual</ValueList>
       <ValueType>StringComboBox</ValueType>
+      <Visible>False</Visible>
+      <Enable>False</Enable>
       <TextId>1043</TextId>
       <Persistent>Model</Persistent>
     </Parameter>
@@ -190,7 +192,7 @@
     <Parameter>
       <Name>angular_libre</Name>
       <Text>Posicionamiento libre</Text>
-      <Value>True</Value>
+      <Value>False</Value>
       <ValueType>CheckBox</ValueType>
       <Visible>True</Visible>
       <Enable>False</Enable>
@@ -227,6 +229,214 @@
       <ValueType>CheckBox</ValueType>
       <Visible>True</Visible>
       <TextId>1008</TextId>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+  </Page>
+
+  <Page>
+    <Name>Grupal</Name>
+    <Text>Grupal</Text>
+    <TextId>1100</TextId>
+
+    <Parameter>
+      <Name>TipoAngular</Name>
+      <Text>Tipos de angulares</Text>
+      <Value>ANG200_L460</Value>
+      <ValueType>RadioButtonGroup</ValueType>
+      <TextId>1001</TextId>
+      <Persistent>No</Persistent>
+
+      <Parameter>
+        <Name>Separador1_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2101</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloSerie200_Grupal</Name>
+        <Text>Serie 200mm × 200mm × 20mm</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2102</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_200_460_Grupal</Name>
+        <Text>460mm</Text>
+        <Value>ANG200_L460</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1110</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_200_310_Grupal</Name>
+        <Text>310mm</Text>
+        <Value>ANG200_L310</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1111</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_200_150_Grupal</Name>
+        <Text>150mm</Text>
+        <Value>ANG200_L150</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1112</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador2_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2103</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloSerie250_Grupal</Name>
+        <Text>Serie 250mm × 250mm × 25mm</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2104</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_250_460_Grupal</Name>
+        <Text>460mm</Text>
+        <Value>ANG250_L460</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1120</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_250_310_Grupal</Name>
+        <Text>310mm</Text>
+        <Value>ANG250_L310</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1121</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_250_150_Grupal</Name>
+        <Text>150mm</Text>
+        <Value>ANG250_L150</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1122</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador3_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2105</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloTensor_Grupal</Name>
+        <Text>Serie tensores</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2110</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Tensor_Grupal</Name>
+        <Text>Tensor Estandar</Text>
+        <Value>TENSOR</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1123</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador4_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2108</TextId>
+      </Parameter>
+
+    </Parameter>
+
+    <Parameter>
+      <Name>ModoGrupalTitulo</Name>
+      <Text>Distribución grupal</Text>
+      <ValueType>Text</ValueType>
+      <Enable>False</Enable>
+      <TextId>1101</TextId>
+    </Parameter>
+
+    <Parameter>
+      <Name>SeparacionAngulares</Name>
+      <Text>Separación entre angulares</Text>
+      <Value>10</Value>
+      <ValueType>Length</ValueType>
+      <TextId>1005</TextId>
+    </Parameter>
+
+    <Parameter>
+      <Name>CrecimientoIncremental</Name>
+      <Text>Incremento de crecimiento de línea</Text>
+      <Value>0.0</Value>
+      <ValueType>Length</ValueType>
+      <Enable>False</Enable>
+      <ReadOnly>True</ReadOnly>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>LongitudLinea</Name>
+      <Text>Longitud de línea</Text>
+      <Value>0</Value>
+      <ValueType>Length</ValueType>
+      <Enable>False</Enable>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>SeparatorModoGrupal</Name>
+      <Text>Modo de Posicionamiento</Text>
+      <ValueType>Separator</ValueType>
+      <TextId>1102</TextId>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>angular_libre</Name>
+      <Text>Posicionamiento libre</Text>
+      <Value>True</Value>
+      <ValueType>CheckBox</ValueType>
+      <Visible>True</Visible>
+      <Enable>False</Enable>
+      <ReadOnly>z_unique > 0</ReadOnly>
+      <TextId>2007</TextId>
+    </Parameter>
+
+    <Parameter>
+      <Name>RotacionManual</Name>
+      <Text>Rotación manual (°)</Text>
+      <ValueType>Angle</ValueType>
+      <Value>0.0</Value>
+      <Enable>angular_libre == True</Enable>
+      <Visible>True</Visible>
+      <TextId>1002</TextId>
+      <Persistent>Model</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>InvertirAngular</Name>
+      <Text>Invertir orientación</Text>
+      <Value>false</Value>
+      <ValueType>CheckBox</ValueType>
+      <Enable>angular_libre == True</Enable>
+      <Visible>True</Visible>
+      <TextId>1003</TextId>
       <Persistent>Model</Persistent>
     </Parameter>
 

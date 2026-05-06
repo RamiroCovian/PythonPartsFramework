@@ -2250,8 +2250,17 @@ SELECTING_POSITION = 5
 def check_allplan_version(_build_ele: BuildingElement, _version: float) -> bool:
     return True
 
+_ACTIVE_ANGULAR_SCRIPT_OBJECT = None
+
 def create_script_object(build_ele: BuildingElement, script_object_data: BaseScriptObjectData) -> BaseScriptObject:
-    return AngularLineScript(build_ele, script_object_data)
+    global _ACTIVE_ANGULAR_SCRIPT_OBJECT
+    _ACTIVE_ANGULAR_SCRIPT_OBJECT = AngularLineScript(build_ele, script_object_data)
+    return _ACTIVE_ANGULAR_SCRIPT_OBJECT
+
+def set_active_palette_page_index(page_index: int) -> None:
+    """Reenvía el cambio de pestaña del módulo al ScriptObject activo."""
+    if _ACTIVE_ANGULAR_SCRIPT_OBJECT is not None:
+        _ACTIVE_ANGULAR_SCRIPT_OBJECT.set_active_palette_page_index(page_index)
 
 class WallSelectResult:
     """Resultado de la selección de un muro completo"""
@@ -2319,13 +2328,24 @@ class AngularLineScript(BaseScriptObject):
         self.state: int | None = None
 
         self.build_ele.TipoAngular.value = self.build_ele.TipoAngular.value.replace("'", "")
-        self.build_ele.TipoAngular_200_460.selected_value = self.build_ele.TipoAngular.value
-        self.build_ele.TipoAngular_200_310.selected_value = self.build_ele.TipoAngular.value
-        self.build_ele.TipoAngular_200_150.selected_value = self.build_ele.TipoAngular.value
-        self.build_ele.TipoAngular_250_460.selected_value = self.build_ele.TipoAngular.value
-        self.build_ele.TipoAngular_250_310.selected_value = self.build_ele.TipoAngular.value
-        self.build_ele.TipoAngular_250_150.selected_value = self.build_ele.TipoAngular.value
-        self.build_ele.TipoAngular_Tensor.selected_value = self.build_ele.TipoAngular.value
+        for tipo_param_name in (
+            "TipoAngular_200_460",
+            "TipoAngular_200_310",
+            "TipoAngular_200_150",
+            "TipoAngular_250_460",
+            "TipoAngular_250_310",
+            "TipoAngular_250_150",
+            "TipoAngular_Tensor",
+            "TipoAngular_200_460_Grupal",
+            "TipoAngular_200_310_Grupal",
+            "TipoAngular_200_150_Grupal",
+            "TipoAngular_250_460_Grupal",
+            "TipoAngular_250_310_Grupal",
+            "TipoAngular_250_150_Grupal",
+            "TipoAngular_Tensor_Grupal",
+        ):
+            if hasattr(self.build_ele, tipo_param_name):
+                getattr(self.build_ele, tipo_param_name).selected_value = self.build_ele.TipoAngular.value
 
         self.preview_active = False
         self.script_object_interactor: BaseScriptObjectInteractor | None = None
@@ -2386,8 +2406,8 @@ class AngularLineScript(BaseScriptObject):
     def _get_distribution_type(self) -> str:
         """Obtiene el tipo de distribución seleccionado en la paleta."""
         if hasattr(self.build_ele, "TipoDistribucion"):
-            return normalize_distribution_type(getattr(self.build_ele.TipoDistribucion, "value", "Grupal"))
-        return DISTRIBUTION_GROUP
+            return normalize_distribution_type(getattr(self.build_ele.TipoDistribucion, "value", "Individual"))
+        return DISTRIBUTION_INDIVIDUAL
 
     def _is_individual_distribution(self) -> bool:
         """Devuelve True si el flujo debe posicionar una sola pieza por punto."""
@@ -2478,7 +2498,7 @@ class AngularLineScript(BaseScriptObject):
             be.SeparacionAngulares.value = 10.0
 
         if hasattr(be, "TipoDistribucion"):
-            be.TipoDistribucion.value = "Grupal"
+            be.TipoDistribucion.value = "Individual"
 
         if hasattr(be, "InvertirAngular"):
             be.InvertirAngular.value = False
@@ -2552,7 +2572,7 @@ class AngularLineScript(BaseScriptObject):
                 # Clave exacta del combo (ej. ANG200_L460, TENSOR)
                 tipo_key = str(tipo or getattr(self.build_ele.TipoAngular, "value", "") or "").strip()
                 self.build_ele.TipoAngular.value = tipo_key
-            distribucion = state.get("distribucion") or state.get("TipoDistribucion") or DISTRIBUTION_GROUP
+            distribucion = state.get("distribucion") or state.get("TipoDistribucion") or DISTRIBUTION_INDIVIDUAL
             if hasattr(self.build_ele, "TipoDistribucion"):
                 self.build_ele.TipoDistribucion.value = "Individual" if normalize_distribution_type(distribucion) == DISTRIBUTION_INDIVIDUAL else "Grupal"
             sep = state.get("sep") if state.get("sep") is not None else state.get("SeparacionAngulares")
@@ -4532,6 +4552,40 @@ class AngularLineScript(BaseScriptObject):
 
         self.execute()
         return True
+
+    def set_active_palette_page_index(self, page_index: int) -> None:
+        """Sincroniza la distribución con la pestaña activa de la paleta."""
+        try:
+            page_index = int(page_index)
+        except (TypeError, ValueError):
+            return
+
+        if not hasattr(self.build_ele, "TipoDistribucion"):
+            return
+
+        if page_index == 0:
+            distribution_value = "Individual"
+        elif page_index == 1:
+            distribution_value = "Grupal"
+        else:
+            return
+
+        if self.build_ele.TipoDistribucion.value == distribution_value:
+            return
+
+        self.build_ele.TipoDistribucion.value = distribution_value
+        print(f"[DISTRIBUTION] Cambio de pestana detectado: {distribution_value}")
+
+        if distribution_value == "Individual":
+            self.is_free_mode = False
+            if hasattr(self.build_ele, 'angular_libre'):
+                self.build_ele.angular_libre.value = False
+        else:
+            if hasattr(self.build_ele, 'angular_libre'):
+                self.build_ele.angular_libre.value = True
+            self.is_free_mode = self._get_free_mode()
+
+        self._restart_interactor_for_current_distribution()
 
     def move_handle(self,
                     handle_prop: HandleProperties,
