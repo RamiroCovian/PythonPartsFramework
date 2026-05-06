@@ -4076,11 +4076,38 @@ class AngularLineScript(BaseScriptObject):
         end = move_point(position, x_dir, piece_length)
         line = AllplanGeo.Line3D(position, end)
 
-        if self.face_polygon and self.face_normal and self.face_point:
+        if self.face_normal and self.face_point:
             line = project_line_on_face(line, self.face_point, self.face_normal)
-            line = clamp_line_to_face_bounds(line, self.face_polygon, self.face_normal)
 
         return line
+
+    def _build_individual_centered_preview_line(self, line: AllplanGeo.Line3D) -> AllplanGeo.Line3D:
+        """Construye la guía visual centrada en el punto de colocación del angular."""
+        if not line:
+            return AllplanGeo.Line3D()
+
+        angular_key = self.build_ele.TipoAngular.value if hasattr(self.build_ele, 'TipoAngular') else None
+        definition = ANGULAR_CATALOG.get(angular_key, None)
+        if not definition:
+            return line
+
+        piece_length = definition.get("piece_length", definition.get("length", 0.0))
+        if piece_length <= 0:
+            return line
+
+        x_dir = normalize_vector(vector_from_points(line.StartPoint, line.EndPoint))
+        if not x_dir or x_dir.GetLength() < 1e-6:
+            return line
+
+        center = line.StartPoint
+        start = move_point(center, x_dir, -piece_length / 2.0)
+        end = move_point(center, x_dir, piece_length / 2.0)
+        preview_line = AllplanGeo.Line3D(start, end)
+
+        if self.face_normal and self.face_point:
+            preview_line = project_line_on_face(preview_line, self.face_point, self.face_normal)
+
+        return preview_line
 
     def _start_position_input(self):
         """Inicia el tercer click: posición final del angular individual."""
@@ -4102,7 +4129,9 @@ class AngularLineScript(BaseScriptObject):
         if line == AllplanGeo.Line3D():
             return
 
-        model_list = self.preview_line_function(line)
+        preview_line = self._build_individual_centered_preview_line(line)
+        model_list = ModelEleList()
+        model_list.append_geometry_3d(preview_line)
         if model_list:
             AllplanBaseElements.DrawElementPreview(
                 self.document,
@@ -4256,10 +4285,20 @@ class AngularLineScript(BaseScriptObject):
         self._update_incremental_growth()
 
         line = self.line_result.input_line
+        is_individual_distribution = self._is_individual_distribution()
         print("[LINE_INPUT] Recibida p0=", line.StartPoint, "p1=", line.EndPoint, "distribucion=", self._get_distribution_type())
 
         if not self.is_free_mode:
-            line, local_system = self._prepare_line(line)
+            if is_individual_distribution and self.face_normal and self.face_point:
+                line = project_line_on_face(line, self.face_point, self.face_normal)
+                local_system = self.face_local_system
+                if not local_system and self.face_polygon and self.face_normal:
+                    local_system = calculate_local_coordinate_system(
+                        self.face_polygon,
+                        self.face_normal
+                    )
+            else:
+                line, local_system = self._prepare_line(line)
             self.line_result.input_line = line
 
             if local_system:
@@ -4285,7 +4324,7 @@ class AngularLineScript(BaseScriptObject):
                             pass
 
                     if piece_length > 0:
-                        if self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
+                        if is_individual_distribution:
                             adjusted_line = set_line_length(line, piece_length)
                         else:
                             increment = piece_length + separation
@@ -4311,11 +4350,14 @@ class AngularLineScript(BaseScriptObject):
                     self.face_polygon, self.face_normal
                 )
 
-            line, local_system = self._clamp_line_to_face(line)
-            if local_system:
-                self.face_local_system = local_system
+            if is_individual_distribution:
+                line = project_line_on_face(line, self.face_point, self.face_normal)
+            else:
+                line, local_system = self._clamp_line_to_face(line)
+                if local_system:
+                    self.face_local_system = local_system
 
-            line = clamp_line_to_face_bounds(line, self.face_polygon, self.face_normal)
+                line = clamp_line_to_face_bounds(line, self.face_polygon, self.face_normal)
             self.line_result.input_line = line
 
             if hasattr(self.build_ele, 'PuntoInicial'):
