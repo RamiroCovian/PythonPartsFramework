@@ -2409,6 +2409,16 @@ class AngularLineScript(BaseScriptObject):
 
         if distribution_type == DISTRIBUTION_INDIVIDUAL:
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
+            placement_center = AllplanGeo.Point3D(
+                (start_point.X + end_point.X) / 2.0,
+                (start_point.Y + end_point.Y) / 2.0,
+                (start_point.Z + end_point.Z) / 2.0
+            )
+            placement_dir = normalize_vector(vector_from_points(start_point, end_point))
+            if placement_dir and placement_dir.GetLength() > 1e-6:
+                start_point = placement_center
+                end_point = move_point(placement_center, placement_dir, definition.get("piece_length", definition.get("length", 0.0)))
+
             face_normal_for_creation = None if self.is_free_mode else self.face_normal
             if face_normal_for_creation:
                 face_normal_for_creation = vector_scale(face_normal_for_creation, -1.0)
@@ -4073,8 +4083,9 @@ class AngularLineScript(BaseScriptObject):
             position = self._clamp_point_to_face(position)
 
         x_dir = self._get_individual_horizontal_axis_on_face()
-        end = move_point(position, x_dir, piece_length)
-        line = AllplanGeo.Line3D(position, end)
+        start = move_point(position, x_dir, -piece_length / 2.0)
+        end = move_point(position, x_dir, piece_length / 2.0)
+        line = AllplanGeo.Line3D(start, end)
 
         if self.face_normal and self.face_point:
             line = project_line_on_face(line, self.face_point, self.face_normal)
@@ -4099,7 +4110,11 @@ class AngularLineScript(BaseScriptObject):
         if not x_dir or x_dir.GetLength() < 1e-6:
             return line
 
-        center = line.StartPoint
+        center = AllplanGeo.Point3D(
+            (line.StartPoint.X + line.EndPoint.X) / 2.0,
+            (line.StartPoint.Y + line.EndPoint.Y) / 2.0,
+            (line.StartPoint.Z + line.EndPoint.Z) / 2.0
+        )
         start = move_point(center, x_dir, -piece_length / 2.0)
         end = move_point(center, x_dir, piece_length / 2.0)
         preview_line = AllplanGeo.Line3D(start, end)
