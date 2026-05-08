@@ -48,7 +48,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "1.2.12-hash-pythonparts-internos"
+ANGULARES_SCRIPT_VERSION = "1.2.13-sin-handles-individual"
 
 # Parámetros del .pyp que deben viajar en SavedState y en param_list del grupo para que EDIT
 # no pierda muro/cara/ejes (si no, la geometría se recalcula con contexto incompleto).
@@ -6598,12 +6598,16 @@ class AngularLineScript(BaseScriptObject):
         final_line_length = line_vector.GetLength()
         self.build_ele.LongitudLinea.value = final_line_length
 
-        #  Crear handles
-        handles = create_handles(
-            self.build_ele,
-            self.line_result.input_line,
-            None if self.is_free_mode else self.face_normal,
-            None if self.is_free_mode else self.face_point,
+        # En distribución individual no se muestran handles auxiliares.
+        handles = (
+            []
+            if distribution_type == DISTRIBUTION_INDIVIDUAL
+            else create_handles(
+                self.build_ele,
+                self.line_result.input_line,
+                None if self.is_free_mode else self.face_normal,
+                None if self.is_free_mode else self.face_point,
+            )
         )
 
         #  Crear connect_to_ele si hay muro
@@ -7183,13 +7187,18 @@ class AngularLineScript(BaseScriptObject):
         self._save_state_to_build_ele()
         self._palette_distribution_user_override = False
 
-        #  HANDLES
+        # En distribución individual no se muestran handles auxiliares.
         line = AllplanGeo.Line3D(start_point, end_point)
-        handles = create_handles(
-            self.build_ele,
-            line,
-            None if self.is_free_mode else self.face_normal,
-            None if self.is_free_mode else self.face_point,
+        handles = (
+            []
+            if normalize_distribution_type(distribution_type_edit)
+            == DISTRIBUTION_INDIVIDUAL
+            else create_handles(
+                self.build_ele,
+                line,
+                None if self.is_free_mode else self.face_normal,
+                None if self.is_free_mode else self.face_point,
+            )
         )
 
         connect_to_ele_edit = ConnectToElements()
