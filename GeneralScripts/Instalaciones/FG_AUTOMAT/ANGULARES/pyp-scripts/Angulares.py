@@ -48,7 +48,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "1.2.4-edit-persistencia-muro-cara"
+ANGULARES_SCRIPT_VERSION = "1.2.7-edit-no-reiniciar-por-pestana"
 
 # Parámetros del .pyp que deben viajar en SavedState y en param_list del grupo para que EDIT
 # no pierda muro/cara/ejes (si no, la geometría se recalcula con contexto incompleto).
@@ -3174,6 +3174,12 @@ class AngularLineScript(BaseScriptObject):
                     if hasattr(self.build_ele, "pmp_pare")
                     else ""
                 ),
+                "z_unique": (
+                    float(getattr(self.build_ele.z_unique, "value", 0.0) or 0.0)
+                    if hasattr(self.build_ele, "z_unique")
+                    and hasattr(self.build_ele.z_unique, "value")
+                    else float(getattr(self, "_z_unique_from_group", 0) or 0)
+                ),
             }
             for key in PPG_WALL_FACE_PARAM_KEYS:
                 if not hasattr(self.build_ele, key):
@@ -3561,6 +3567,37 @@ class AngularLineScript(BaseScriptObject):
             if k not in result:
                 result[k] = v
         return result
+
+    def _ensure_line_result_from_build_ele_for_modify(self) -> None:
+        """Evita MODIFY sin línea: reconstruye line_result desde paleta o SavedState."""
+        if self.line_result.input_line:
+            return
+        p0 = (
+            getattr(self.build_ele.PuntoInicial, "value", None)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else None
+        )
+        p1 = (
+            getattr(self.build_ele.PuntoFinal, "value", None)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else None
+        )
+        if p0 is not None and p1 is not None:
+            self.line_result.input_line = AllplanGeo.Line3D(p0, p1)
+            print("[EDIT] line_result reconstruida desde PuntoInicial/PuntoFinal")
+            return
+        ss = (
+            (self.build_ele.SavedState.value or "").strip()
+            if hasattr(self.build_ele, "SavedState")
+            and hasattr(self.build_ele.SavedState, "value")
+            else ""
+        )
+        st = parse_saved_state(ss) if ss else {}
+        q0 = saved_state_to_point3d(st, "p0")
+        q1 = saved_state_to_point3d(st, "p1")
+        if q0 is not None and q1 is not None:
+            self.line_result.input_line = AllplanGeo.Line3D(q0, q1)
+            print("[EDIT] line_result reconstruida desde SavedState (p0/p1)")
 
     def _check_if_editing_existing(self) -> bool:
         """Verifica si se está editando un angular existente"""
@@ -4773,8 +4810,16 @@ class AngularLineScript(BaseScriptObject):
                 self.script_object_interactor = None
                 self.preview_active = True
                 return
-            else:
-                pass
+            self._ensure_line_result_from_build_ele_for_modify()
+            if self.line_result.input_line:
+                self.state = STOPPED
+                self.script_object_interactor = None
+                self.preview_active = True
+                return
+            self.state = STOPPED
+            self.script_object_interactor = None
+            self.preview_active = False
+            return
 
         if is_individual_distribution:
             self.state = SELECTING_WALL
@@ -5150,6 +5195,14 @@ class AngularLineScript(BaseScriptObject):
 
     def _restart_interactor_for_current_distribution(self) -> bool:
         """Reinicia el primer input cuando cambia el tipo de distribución."""
+        if getattr(self, "is_modification_mode", False):
+            self._ensure_line_result_from_build_ele_for_modify()
+            self.state = STOPPED
+            self.script_object_interactor = None
+            self.preview_active = bool(self.line_result.input_line)
+            print("[DISTRIBUTION] EDIT: no se reinicia interactor de selección")
+            return False
+
         coord_input = getattr(self.script_object_interactor, "coord_input", None)
 
         self.line_result = LineInteractorResult()
@@ -5681,8 +5734,6 @@ class AngularLineScript(BaseScriptObject):
             return
 
         self.build_ele.TipoDistribucion.value = distribution_value
-        if getattr(self, "is_modification_mode", False):
-            self._palette_distribution_user_override = True
         print(f"[DISTRIBUTION] Cambio de pestana detectado: {distribution_value}")
 
         if distribution_value == "Individual":
@@ -5693,6 +5744,17 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "angular_libre"):
                 self.build_ele.angular_libre.value = True
             self.is_free_mode = self._get_free_mode()
+
+        if getattr(self, "is_modification_mode", False):
+            # En EDIT la pestaña puede sincronizarse al cerrar la paleta. No reiniciar
+            # interactors aquí: eso deja el estado en SELECTING_WALL y Allplan cancela
+            # el input, provocando que el PPG sustituido desaparezca.
+            self._ensure_line_result_from_build_ele_for_modify()
+            self.state = STOPPED
+            self.script_object_interactor = None
+            self.preview_active = bool(self.line_result.input_line)
+            print("[DISTRIBUTION] EDIT: pestaña sincronizada sin reiniciar interactor")
+            return
 
         self._restart_interactor_for_current_distribution()
 
@@ -6133,15 +6195,19 @@ class AngularLineScript(BaseScriptObject):
             "[EXECUTE]  z_unique y pmp_pare existen en build_ele (con Persistent>MODEL_AND_FAVORITE)"
         )
 
-        if self.state == CANCEL:
-            return CreateElementResult()
-
-        # Detectar modo
         if hasattr(self.build_ele, "IsModify"):
             is_modify = self.build_ele.IsModify
         else:
             is_modify = getattr(self, "is_modification_mode", False)
 
+        # En CREATE, CANCEL vacía el resultado; en MODIFY no (si no, el PPG desaparece al salir con ESC).
+        if self.state == CANCEL and not is_modify:
+            return CreateElementResult()
+
+        if self.state == CANCEL:
+            print("[EXECUTE] state=CANCEL pero MODIFY=True → se ejecuta _execute_modify (no vaciar)")
+
+        # Detectar modo
         print("[MODE]", "EDIT" if is_modify else "CREATE")
 
         self.is_editing_existing = is_modify
@@ -6715,6 +6781,33 @@ class AngularLineScript(BaseScriptObject):
                 z_unique = float(self.build_ele.z_unique.value)
             except (ValueError, TypeError):
                 z_unique = 0.0
+        if abs(z_unique) < 1e-9:
+            z_from_group = float(
+                getattr(self, "_z_unique_from_group", 0) or 0
+            )
+            if abs(z_from_group) > 1e-9:
+                z_unique = z_from_group
+                if hasattr(self.build_ele, "z_unique") and hasattr(
+                    self.build_ele.z_unique, "value"
+                ):
+                    self.build_ele.z_unique.value = z_unique
+                print(
+                    f"[EDIT] z_unique recuperado del param_list del grupo: {z_unique}"
+                )
+        if abs(z_unique) < 1e-9:
+            try:
+                z_from_saved_state = float(parsed_saved_state_edit.get("z_unique", 0) or 0)
+            except (TypeError, ValueError):
+                z_from_saved_state = 0.0
+            if abs(z_from_saved_state) > 1e-9:
+                z_unique = z_from_saved_state
+                if hasattr(self.build_ele, "z_unique") and hasattr(
+                    self.build_ele.z_unique, "value"
+                ):
+                    self.build_ele.z_unique.value = z_unique
+                print(
+                    f"[EDIT] z_unique recuperado de SavedState: {z_unique}"
+                )
         print(f"[EDIT]  z_unique final: {z_unique}")
 
         if not wall_pare:
@@ -6985,15 +7078,36 @@ class AngularLineScript(BaseScriptObject):
             None if self.is_free_mode else self.face_point,
         )
 
-        #  RETURN FINAL: igual que Neoprenos — NO pasar elements_to_delete; el framework reemplaza por UUID.
+        connect_to_ele_edit = ConnectToElements()
+        if hasattr(self.build_ele, "MuroGUID") and getattr(
+            self.build_ele.MuroGUID, "value", None
+        ):
+            mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
+            if mg:
+                connect_to_ele_edit.connection_elements.append(mg)
+
+        multi_pl = normalize_distribution_type(distribution_type_edit) == DISTRIBUTION_INDIVIDUAL
+
+        #  RETURN FINAL: mismo contrato que CREATE (connect_to_ele + multi_placement) para que Allplan sustituya el PPG bien.
         #  Si se pasa elements_to_delete, Allplan borra el grupo y luego añade el nuevo; un fallo en ese flujo hace que el angular desaparezca.
+        self.state = STOPPED
         print(f"[EDIT]  Edición completada: {len(model_elem_list)} elementos")
         return CreateElementResult(
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
+            connect_to_ele=connect_to_ele_edit,
             uuid_parameter_name="PythonPartUUID",
+            multi_placement=multi_pl,
         )
 
     def on_cancel_function(self) -> OnCancelFunctionResult:
+        # Al salir de MODIFY (ESC / cerrar), forzar estado estable para que execute no devuelva vacío
+        # por un CANCEL heredado del flujo de interactors.
+        if hasattr(self.build_ele, "IsModify"):
+            is_m = self.build_ele.IsModify
+        else:
+            is_m = getattr(self, "is_modification_mode", False)
+        if is_m:
+            self.state = STOPPED
         return OnCancelFunctionResult.CREATE_ELEMENTS
