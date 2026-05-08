@@ -48,7 +48,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "1.2.7-edit-no-reiniciar-por-pestana"
+ANGULARES_SCRIPT_VERSION = "1.2.12-hash-pythonparts-internos"
 
 # Parámetros del .pyp que deben viajar en SavedState y en param_list del grupo para que EDIT
 # no pierda muro/cara/ejes (si no, la geometría se recalcula con contexto incompleto).
@@ -2683,6 +2683,8 @@ class AngularLineScript(BaseScriptObject):
         self.face_polygon = None
         self.face_local_system = None
         self._z_unique_from_group = 0  # Se rellena desde script_object_data.param_list en __init__ para usar en EDIT
+        self._group_hash_from_params = ""
+        self._current_group_hash = ""
 
         # EDIT: precargar desde param_list. CREATE: resetear paleta a valores por defecto (no precargar creación anterior).
         self._restored_from_saved_state = False
@@ -2695,6 +2697,9 @@ class AngularLineScript(BaseScriptObject):
                     self._apply_param_list_to_build_ele(param_list_src)
                     _params = parse_params_list_to_dict(param_list_src)
                     self._z_unique_from_group = _params.get("z_unique", 0)
+                    self._group_hash_from_params = str(
+                        _params.get("GroupHash", "") or ""
+                    ).strip().strip("'").strip('"')
                     try:
                         self._z_unique_from_group = (
                             float(self._z_unique_from_group)
@@ -3180,6 +3185,11 @@ class AngularLineScript(BaseScriptObject):
                     and hasattr(self.build_ele.z_unique, "value")
                     else float(getattr(self, "_z_unique_from_group", 0) or 0)
                 ),
+                "GroupHash": str(
+                    getattr(self, "_current_group_hash", "")
+                    or getattr(self, "_group_hash_from_params", "")
+                    or ""
+                ),
             }
             for key in PPG_WALL_FACE_PARAM_KEYS:
                 if not hasattr(self.build_ele, key):
@@ -3316,6 +3326,12 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "pmp_pare"):
                 raw_pp = str(state.get("pmp_pare", "") or "").strip()
                 self.build_ele.pmp_pare.value = raw_pp.strip("'").strip('"')
+
+            state_group_hash = str(
+                state.get("GroupHash", state.get("group_hash", "")) or ""
+            ).strip().strip("'").strip('"')
+            if state_group_hash:
+                self._group_hash_from_params = state_group_hash
 
             self._merge_wall_face_params_from_saved_dict(state)
 
@@ -3557,6 +3573,11 @@ class AngularLineScript(BaseScriptObject):
             "SiLlevaNeopreno": lleva_neopreno,
             "SavedState": saved_state_str if saved_state_str else "",
             "pmp_pare": pmp_pare_value if pmp_pare_value else "",
+            "GroupHash": str(
+                getattr(self, "_current_group_hash", "")
+                or getattr(self, "_group_hash_from_params", "")
+                or ""
+            ),
             "PMP_FG_ANG_DETALL": "",
             "PMP_FG_ANG_FORATS": num_forats,
             "PMP_FG_ANG_NOM": nom,
@@ -5660,6 +5681,19 @@ class AngularLineScript(BaseScriptObject):
         return True
 
     def modify_element_property(self, name: str, _value) -> bool:
+        should_reexecute = name in (
+            "TipoAngular",
+            "SeparacionAngulares",
+            "RotacionManual",
+            "RotacionEjeX",
+            "RotacionEjeY",
+            "InvertirAngular",
+            "SiLlevaNeopreno",
+            "UsarValorZManual",
+            "ValorZIndividual",
+            "angular_libre",
+        )
+
         if name == "TipoAngular":
             if hasattr(self.build_ele, "TipoAngular"):
                 if self.build_ele.TipoAngular.value not in ANGULAR_CATALOG:
@@ -5699,8 +5733,7 @@ class AngularLineScript(BaseScriptObject):
             return True
 
         if name == "ValorZIndividual" and self._sync_individual_line_to_z_value():
-            self.execute()
-            return True
+            return False
 
         if self.script_object_interactor is not None:
             return True
@@ -5710,7 +5743,12 @@ class AngularLineScript(BaseScriptObject):
                 False if self._is_individual_distribution() else self._get_free_mode()
             )
 
-        self.execute()
+        if should_reexecute:
+            self.state = STOPPED
+            self._ensure_line_result_from_build_ele_for_modify()
+            print(f"[MODIFY_PROPERTY] name={name} -> framework ejecutara execute()")
+            return False
+
         return True
 
     def set_active_palette_page_index(self, page_index: int) -> None:
@@ -6159,10 +6197,34 @@ class AngularLineScript(BaseScriptObject):
                 if is_free_mode is not None:
                     params["FreeMode"] = bool(is_free_mode)
 
-                #  Hash del elemento individual
+                hash_params = {
+                    "Index": idx,
+                    "ElementType": params.get("ElementType", ""),
+                    "AngularKey": params.get("AngularKey", ""),
+                    "InvertSide": params.get("InvertSide", False),
+                    "Rotation": round(float(params.get("Rotation", 0.0) or 0.0), 6),
+                    "RotationX": round(float(params.get("RotationX", 0.0) or 0.0), 6),
+                    "RotationY": round(float(params.get("RotationY", 0.0) or 0.0), 6),
+                    "FreeMode": params.get("FreeMode", False),
+                }
+                for point_key in ("Start", "End"):
+                    for axis in ("X", "Y", "Z"):
+                        value = params.get(f"{point_key}{axis}")
+                        if value is not None:
+                            hash_params[f"{point_key}{axis}"] = round(float(value), 6)
+
+                # En EDIT también debe cambiar el hash del PythonPart interno.
+                # Si solo queda fijo por índice, Allplan puede reutilizar una macro anterior
+                # aunque la geometría ya venga recalculada.
                 hash_value = create_element_hash(
-                    "angular_elem", stable=is_modify, Index=idx
+                    "angular_elem", stable=is_modify, **hash_params
                 )
+                if is_modify:
+                    print(
+                        f"[EDIT][PP_HASH] idx={idx} hash={hash_value[:20]}... "
+                        f"rot_x={hash_params.get('RotationX')} rot_y={hash_params.get('RotationY')} "
+                        f"invert={hash_params.get('InvertSide')}"
+                    )
                 param_list = create_params_list_from_dict(params)
 
                 pythonpart = PythonPart(
@@ -6205,7 +6267,9 @@ class AngularLineScript(BaseScriptObject):
             return CreateElementResult()
 
         if self.state == CANCEL:
-            print("[EXECUTE] state=CANCEL pero MODIFY=True → se ejecuta _execute_modify (no vaciar)")
+            print(
+                "[EXECUTE] state=CANCEL pero MODIFY=True → se ejecuta _execute_modify (no vaciar)"
+            )
 
         # Detectar modo
         print("[MODE]", "EDIT" if is_modify else "CREATE")
@@ -6465,6 +6529,12 @@ class AngularLineScript(BaseScriptObject):
             else False
         )
 
+        group_hash = create_element_hash(
+            "angular_group", stable=False, z_unique=z_unique  # CREATE = random
+        )
+        self._current_group_hash = group_hash
+        self._group_hash_from_params = group_hash
+
         saved_state_str = self._serialize_state_to_json()
 
         print("[CHECK] z_unique antes del group:", z_unique)
@@ -6485,10 +6555,6 @@ class AngularLineScript(BaseScriptObject):
         )
         print(
             f"[CREATE] global_params: z_unique={global_params.get('z_unique')}, SiLlevaNeopreno={lleva_neopreno}, SavedState={len(saved_state_str or '')} chars"
-        )
-
-        group_hash = create_element_hash(
-            "angular_group", stable=False, z_unique=z_unique  # CREATE = random
         )
 
         param_list = create_params_list_from_dict(global_params)
@@ -6782,9 +6848,7 @@ class AngularLineScript(BaseScriptObject):
             except (ValueError, TypeError):
                 z_unique = 0.0
         if abs(z_unique) < 1e-9:
-            z_from_group = float(
-                getattr(self, "_z_unique_from_group", 0) or 0
-            )
+            z_from_group = float(getattr(self, "_z_unique_from_group", 0) or 0)
             if abs(z_from_group) > 1e-9:
                 z_unique = z_from_group
                 if hasattr(self.build_ele, "z_unique") and hasattr(
@@ -6796,7 +6860,9 @@ class AngularLineScript(BaseScriptObject):
                 )
         if abs(z_unique) < 1e-9:
             try:
-                z_from_saved_state = float(parsed_saved_state_edit.get("z_unique", 0) or 0)
+                z_from_saved_state = float(
+                    parsed_saved_state_edit.get("z_unique", 0) or 0
+                )
             except (TypeError, ValueError):
                 z_from_saved_state = 0.0
             if abs(z_from_saved_state) > 1e-9:
@@ -6805,9 +6871,7 @@ class AngularLineScript(BaseScriptObject):
                     self.build_ele.z_unique, "value"
                 ):
                     self.build_ele.z_unique.value = z_unique
-                print(
-                    f"[EDIT] z_unique recuperado de SavedState: {z_unique}"
-                )
+                print(f"[EDIT] z_unique recuperado de SavedState: {z_unique}")
         print(f"[EDIT]  z_unique final: {z_unique}")
 
         if not wall_pare:
@@ -6825,15 +6889,38 @@ class AngularLineScript(BaseScriptObject):
                 wall_pare = "SIN_PARE"
             print(f"[EDIT]  pmp_pare: '{wall_pare}'")
 
-        # EDIT: SIEMPRE intentar leer el hash existente. z_unique NO decide nada.
-        existing_group_hash = None
-        if hasattr(self.build_ele, "get_hash"):
+        # EDIT: conservar el hash anterior solo como diagnóstico/fallback.
+        # El hash que se devuelve al grupo se recalcula con los parámetros actuales,
+        # para que Allplan no reutilice una definición anterior cuando cambia la geometría.
+        existing_group_hash = (
+            str(getattr(self, "_group_hash_from_params", "") or "")
+            .strip()
+            .strip("'")
+            .strip('"')
+        )
+        if not existing_group_hash:
+            existing_group_hash = (
+                str(
+                    parsed_saved_state_edit.get(
+                        "GroupHash", parsed_saved_state_edit.get("group_hash", "")
+                    )
+                    or ""
+                )
+                .strip()
+                .strip("'")
+                .strip('"')
+            )
+        if existing_group_hash:
+            self._group_hash_from_params = existing_group_hash
+            self._current_group_hash = existing_group_hash
+            print(f"[EDIT] Hash persistido del grupo: {existing_group_hash[:20]}...")
+        elif hasattr(self.build_ele, "get_hash"):
             try:
                 existing_group_hash = self.build_ele.get_hash()
                 if existing_group_hash:
-                    print(
-                        f"[EDIT] Hash del grupo existente: {existing_group_hash[:20]}..."
-                    )
+                    self._group_hash_from_params = existing_group_hash
+                    self._current_group_hash = existing_group_hash
+                    print(f"[EDIT] Hash fallback desde build_ele: {existing_group_hash[:20]}...")
             except Exception as e:
                 print(f"[EDIT] ERROR al obtener hash existente: {e}")
         print("[EDIT] ==========================================================")
@@ -6965,17 +7052,6 @@ class AngularLineScript(BaseScriptObject):
             print("[EDIT]  ERROR: No se crearon PythonParts individuales")
             return CreateElementResult(elements=[], handles=[], elements_to_delete=None)
 
-        #  HASH DEL GROUP — En EDIT solo usar hash existente. NUNCA recalcular.
-        if existing_group_hash:
-            group_hash = existing_group_hash
-            print(
-                f"[EDIT] Usando hash del grupo existente (estable): {group_hash[:20]}..."
-            )
-            print(f"[EDIT] Hash completo: {group_hash}")
-        else:
-            print("[EDIT] ERROR CRÍTICO: no se pudo obtener hash del grupo existente")
-            return CreateElementResult(elements=[], handles=[], elements_to_delete=None)
-
         punto_inicial_edit = (
             self.build_ele.PuntoInicial.value
             if hasattr(self.build_ele, "PuntoInicial")
@@ -7013,6 +7089,44 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "SiLlevaNeopreno")
             else lleva_neopreno
         )
+        rot_x_edit = self._get_angle_degrees("RotacionEjeX")
+        rot_y_edit = self._get_angle_degrees("RotacionEjeY")
+
+        group_hash = create_element_hash(
+            "angular_group",
+            stable=True,
+            z_unique=z_unique,
+            tipo=tipo_key_edit,
+            distribucion=distribution_type_edit,
+            sep=round(float(separation), 6),
+            rot=round(float(rot_edit), 6),
+            rot_x=round(float(rot_x_edit), 6),
+            rot_y=round(float(rot_y_edit), 6),
+            invertido=bool(invertido_edit),
+            neopreno=bool(lleva_neopreno_edit),
+            p0=(
+                round(float(start_point.X), 6),
+                round(float(start_point.Y), 6),
+                round(float(start_point.Z), 6),
+            ),
+            p1=(
+                round(float(end_point.X), 6),
+                round(float(end_point.Y), 6),
+                round(float(end_point.Z), 6),
+            ),
+        )
+        print(
+            f"[EDIT] Hash estable de geometria/parametros: {group_hash[:20]}... "
+            f"(rot_x={rot_x_edit}, rot_y={rot_y_edit}, invert={invertido_edit})"
+        )
+
+        if not group_hash:
+            print("[EDIT] ERROR CRÍTICO: no se pudo obtener hash para el grupo")
+            return CreateElementResult(elements=[], handles=[], elements_to_delete=None)
+
+        self._current_group_hash = group_hash
+        self._group_hash_from_params = group_hash
+        print(f"[EDIT] Hash completo: {group_hash}")
 
         # Justo antes de armar global_params: serializar SavedState desde build_ele
         saved_state_edit = self._serialize_state_to_json()
@@ -7086,7 +7200,10 @@ class AngularLineScript(BaseScriptObject):
             if mg:
                 connect_to_ele_edit.connection_elements.append(mg)
 
-        multi_pl = normalize_distribution_type(distribution_type_edit) == DISTRIBUTION_INDIVIDUAL
+        multi_pl = (
+            normalize_distribution_type(distribution_type_edit)
+            == DISTRIBUTION_INDIVIDUAL
+        )
 
         #  RETURN FINAL: mismo contrato que CREATE (connect_to_ele + multi_placement) para que Allplan sustituya el PPG bien.
         #  Si se pasa elements_to_delete, Allplan borra el grupo y luego añade el nuevo; un fallo en ese flujo hace que el angular desaparezca.
