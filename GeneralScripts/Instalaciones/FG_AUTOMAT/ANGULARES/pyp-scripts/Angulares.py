@@ -1375,6 +1375,35 @@ def adjust_line_length_incremental(
         return line
 
 
+def adjust_group_line_to_occupied_length(
+    line: AllplanGeo.Line3D, piece_length: float, gap: float
+) -> AllplanGeo.Line3D:
+    """Ajusta la guia grupal al largo real ocupado por piezas completas."""
+    try:
+        if piece_length < 1e-6:
+            return line
+
+        start = line.StartPoint
+        end = line.EndPoint
+        line_vector = vector_from_points(start, end)
+        current_length = line_vector.GetLength()
+        if current_length < 1e-6:
+            return line
+
+        line_dir = normalize_vector(line_vector)
+        if not line_dir:
+            return line
+
+        gap = max(0.0, gap)
+        increment = piece_length + gap
+        piece_count = max(1, int(math.floor(current_length / increment)) + 1)
+        occupied_length = piece_count * piece_length + (piece_count - 1) * gap
+        adjusted_end = move_point(start, line_dir, occupied_length)
+        return AllplanGeo.Line3D(start, adjusted_end)
+    except Exception:
+        return line
+
+
 def set_line_length(line: AllplanGeo.Line3D, length: float) -> AllplanGeo.Line3D:
     """Mantiene el punto inicial y ajusta el final al largo indicado."""
     try:
@@ -2228,7 +2257,7 @@ def create_angulars_on_line(
     geometries: list[AllplanGeo.BRep3D] = []
     edges: list[AllplanGeo.Line3D] = []
 
-    start_offset = 0.0
+    start_offset = 0.0 if is_tensor else piece_length / 2.0
 
     for index in range(piece_count):
         offset_y = start_offset + index * (piece_length + gap)
@@ -5370,8 +5399,9 @@ class AngularLineScript(BaseScriptObject):
                     if self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
                         line = set_line_length(line, piece_length)
                     else:
-                        increment = piece_length + separation
-                        line = adjust_line_length_incremental(line, increment)
+                        line = adjust_group_line_to_occupied_length(
+                            line, piece_length, separation
+                        )
         except (ValueError, TypeError, AttributeError):
             pass
 
@@ -5469,9 +5499,8 @@ class AngularLineScript(BaseScriptObject):
                         if is_individual_distribution:
                             adjusted_line = set_line_length(line, piece_length)
                         else:
-                            increment = piece_length + separation
-                            adjusted_line = adjust_line_length_incremental(
-                                line, increment
+                            adjusted_line = adjust_group_line_to_occupied_length(
+                                line, piece_length, separation
                             )
                         self.line_result.input_line = adjusted_line
                         line = adjusted_line
