@@ -2869,10 +2869,7 @@ class AngularLineScript(BaseScriptObject):
             return default
 
     def _get_individual_axis_rotations(self) -> tuple[float, float]:
-        """Obtiene los giros adicionales disponibles solo en distribución individual."""
-        if not self._is_individual_distribution():
-            return 0.0, 0.0
-
+        """Obtiene los giros adicionales disponibles para distribución individual y grupal."""
         return (
             self._get_angle_degrees("RotacionEjeX"),
             self._get_angle_degrees("RotacionEjeY"),
@@ -2954,6 +2951,24 @@ class AngularLineScript(BaseScriptObject):
         end = self._project_point_to_individual_vertical_face(line.EndPoint, z_value)
         return AllplanGeo.Line3D(start, end)
 
+    def _apply_manual_z_to_distribution_line(
+        self, line: AllplanGeo.Line3D, update_from_line: bool = False
+    ) -> AllplanGeo.Line3D:
+        if not line:
+            return line
+
+        average_z = (float(line.StartPoint.Z) + float(line.EndPoint.Z)) / 2.0
+        if not self._is_manual_z_enabled():
+            if update_from_line:
+                self._set_individual_z_value(average_z)
+            return line
+
+        z_value = self._get_individual_z_value(average_z)
+        return AllplanGeo.Line3D(
+            AllplanGeo.Point3D(line.StartPoint.X, line.StartPoint.Y, z_value),
+            AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, z_value),
+        )
+
     def _create_geometries_for_distribution(
         self,
         *,
@@ -2967,6 +2982,16 @@ class AngularLineScript(BaseScriptObject):
     ) -> tuple[list[AllplanGeo.BRep3D], list[AllplanGeo.Line3D]]:
         distribution_type = normalize_distribution_type(distribution_type)
         print(f"[DISTRIBUTION] Tipo seleccionado: {distribution_type}")
+        distribution_line = self._apply_manual_z_to_distribution_line(
+            AllplanGeo.Line3D(start_point, end_point), update_from_line=False
+        )
+        start_point = distribution_line.StartPoint
+        end_point = distribution_line.EndPoint
+        if self._is_manual_z_enabled():
+            if hasattr(self.build_ele, "PuntoInicial"):
+                self.build_ele.PuntoInicial.value = start_point
+            if hasattr(self.build_ele, "PuntoFinal"):
+                self.build_ele.PuntoFinal.value = end_point
 
         if distribution_type == DISTRIBUTION_INDIVIDUAL:
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
@@ -3029,12 +3054,15 @@ class AngularLineScript(BaseScriptObject):
             return geometries, edges
 
         print("[DISTRIBUTION][GRUPAL] Entrando al flujo grupal actual")
+        rotation_axis_z_deg, rotation_y_deg = self._get_individual_axis_rotations()
         geometries, edges = create_angulars_on_line(
             definition=definition,
             start_point=start_point,
             end_point=end_point,
             invert_side=invert_side,
             rotation_deg=rotation_deg,
+            rotation_y_deg=rotation_y_deg,
+            rotation_z_deg=rotation_axis_z_deg,
             gap=gap,
             face_normal=None,
             face_point=None,
@@ -5575,6 +5603,9 @@ class AngularLineScript(BaseScriptObject):
                         conn.element = self.detected_wall
                     except Exception:
                         pass
+
+        line = self._apply_manual_z_to_distribution_line(line, update_from_line=True)
+        self.line_result.input_line = line
 
         if hasattr(self.build_ele, "PuntoInicial"):
             self.build_ele.PuntoInicial.value = line.StartPoint
