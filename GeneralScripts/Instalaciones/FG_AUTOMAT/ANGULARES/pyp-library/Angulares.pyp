@@ -4,7 +4,6 @@
     <Name>Instalaciones\FG_AUTOMAT\ANGULARES\pyp-scripts\Angulares.py</Name>
     <Title>Angulars Catálogo sobre Línea</Title>
     <Version>1.1</Version>
-    <ReadLastInput>True</ReadLastInput>
     <Interactor>False</Interactor>
     <ScriptObject>True</ScriptObject>
     <Text>Genera angulares prefijados a partir de una línea base</Text>
@@ -144,7 +143,7 @@
       <Name>TipoDistribucion</Name>
       <Text>Distribución activa</Text>
       <Value>Individual</Value>
-      <ValueList>Grupal|Individual</ValueList>
+      <ValueList>Individual|Grupal</ValueList>
       <ValueType>StringComboBox</ValueType>
       <Visible>False</Visible>
       <Enable>False</Enable>
