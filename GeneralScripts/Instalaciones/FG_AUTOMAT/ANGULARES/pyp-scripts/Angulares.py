@@ -48,7 +48,40 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "1.2.3-fix-llamada-reproyeccion-partida"
+ANGULARES_SCRIPT_VERSION = "1.2.4-edit-persistencia-muro-cara"
+
+# Parámetros del .pyp que deben viajar en SavedState y en param_list del grupo para que EDIT
+# no pierda muro/cara/ejes (si no, la geometría se recalcula con contexto incompleto).
+PPG_WALL_FACE_PARAM_KEYS: tuple[str, ...] = (
+    "MuroGUID",
+    "CaraNormalX",
+    "CaraNormalY",
+    "CaraNormalZ",
+    "PuntoClicX",
+    "PuntoClicY",
+    "PuntoClicZ",
+    "CaraIndice",
+    "LineaOrientacionU",
+    "LineaOrientacionV",
+    "PosicionRelativaU",
+    "PosicionRelativaV",
+    "PosicionRelativaU_Inicio",
+    "PosicionRelativaV_Inicio",
+    "PosicionRelativaU_Fin",
+    "PosicionRelativaV_Fin",
+    "PosicionRelativaU_BBox",
+    "PosicionRelativaV_BBox",
+    "PosicionRelativaU_Inicio_BBox",
+    "PosicionRelativaV_Inicio_BBox",
+    "PosicionRelativaU_Fin_BBox",
+    "PosicionRelativaV_Fin_BBox",
+    "AxisU_X",
+    "AxisU_Y",
+    "AxisU_Z",
+    "AxisV_X",
+    "AxisV_Y",
+    "AxisV_Z",
+)
 
 
 def normalize_distribution_type(value: Any) -> str:
@@ -2737,6 +2770,84 @@ class AngularLineScript(BaseScriptObject):
             f"paleta era '{palette}' → '{persisted}'"
         )
 
+    def _wall_face_params_from_build_ele(self) -> Dict[str, Any]:
+        """Lee parámetros de muro/cara/ejes desde build_ele para param_list / fusión."""
+        out: Dict[str, Any] = {}
+        for key in PPG_WALL_FACE_PARAM_KEYS:
+            if not hasattr(self.build_ele, key):
+                continue
+            attr = getattr(self.build_ele, key)
+            if not hasattr(attr, "value"):
+                continue
+            try:
+                out[key] = attr.value
+            except Exception:
+                continue
+        return out
+
+    def _merge_wall_face_params_from_saved_dict(self, state: Dict[str, Any]) -> None:
+        """En EDIT, rellenar muro/cara/ejes desde SavedState si vienen en el JSON."""
+        if not state:
+            return
+        for key in PPG_WALL_FACE_PARAM_KEYS:
+            if key not in state:
+                continue
+            if not hasattr(self.build_ele, key):
+                continue
+            attr = getattr(self.build_ele, key)
+            if not hasattr(attr, "value"):
+                continue
+            val = state[key]
+            try:
+                if key == "MuroGUID":
+                    attr.value = str(val or "").strip().strip("'").strip('"')
+                elif key == "CaraIndice":
+                    attr.value = int(val)
+                else:
+                    attr.value = float(val)
+            except (TypeError, ValueError) as e:
+                print(f"[EDIT] merge SavedState omitido {key}={val!r}: {e}")
+
+    def _restore_line_z_from_saved_state_if_needed(self, state: Dict[str, Any]) -> None:
+        """
+        Si la línea en paleta está a Z=0 pero el JSON guardado lleva Z real, restaurar Z en los puntos.
+        No toca XY (suele venir bien del plano); evita piezas "bajadas" al plano al editar.
+        """
+        if self._is_manual_z_enabled():
+            return
+        p0 = state.get("p0")
+        p1 = state.get("p1")
+        if (
+            not p0
+            or not p1
+            or len(p0) != 3
+            or len(p1) != 3
+            or not hasattr(self.build_ele, "PuntoInicial")
+            or not hasattr(self.build_ele, "PuntoFinal")
+        ):
+            return
+        b0 = getattr(self.build_ele.PuntoInicial, "value", None)
+        b1 = getattr(self.build_ele.PuntoFinal, "value", None)
+        if b0 is None or b1 is None:
+            return
+        sz0, sz1 = float(p0[2]), float(p1[2])
+        if abs(sz0) < 1e-6 and abs(sz1) < 1e-6:
+            return
+        if abs(float(b0.Z)) > 1e-3 or abs(float(b1.Z)) > 1e-3:
+            return
+        self.build_ele.PuntoInicial.value = AllplanGeo.Point3D(
+            float(b0.X), float(b0.Y), sz0
+        )
+        self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(
+            float(b1.X), float(b1.Y), sz1
+        )
+        if hasattr(self.build_ele, "ValorZIndividual"):
+            self.build_ele.ValorZIndividual.value = (sz0 + sz1) / 2.0
+        print(
+            f"[EDIT] Z de línea restaurada desde SavedState (paleta tenía Z≈0): "
+            f"{sz0:.3f} → {sz1:.3f}"
+        )
+
     def _is_individual_distribution(self) -> bool:
         """Devuelve True si el flujo debe posicionar una sola pieza por punto."""
         return self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL
@@ -3057,10 +3168,29 @@ class AngularLineScript(BaseScriptObject):
                 ),
                 "pmp_pare": (
                     str(getattr(self.build_ele.pmp_pare, "value", "") or "")
+                    .strip()
+                    .strip("'")
+                    .strip('"')
                     if hasattr(self.build_ele, "pmp_pare")
                     else ""
                 ),
             }
+            for key in PPG_WALL_FACE_PARAM_KEYS:
+                if not hasattr(self.build_ele, key):
+                    continue
+                attr = getattr(self.build_ele, key)
+                if not hasattr(attr, "value"):
+                    continue
+                try:
+                    val = attr.value
+                    if key == "MuroGUID":
+                        state[key] = str(val or "").strip().strip("'").strip('"')
+                    elif key == "CaraIndice":
+                        state[key] = int(val)
+                    else:
+                        state[key] = float(val)
+                except (TypeError, ValueError):
+                    pass
             return json.dumps(state, separators=(",", ":"))
         except Exception as e:
             print(f"[SO] Error serializando SavedState: {e}")
@@ -3178,9 +3308,10 @@ class AngularLineScript(BaseScriptObject):
                 self.build_ele.SiLlevaNeopreno.value = bool(lleva_val)
 
             if hasattr(self.build_ele, "pmp_pare"):
-                self.build_ele.pmp_pare.value = str(state.get("pmp_pare", "")).replace(
-                    "'", ""
-                )
+                raw_pp = str(state.get("pmp_pare", "") or "").strip()
+                self.build_ele.pmp_pare.value = raw_pp.strip("'").strip('"')
+
+            self._merge_wall_face_params_from_saved_dict(state)
 
             self._restored_state = state
             print("[SO] ✓ SavedState restaurado desde JSON")
@@ -3393,7 +3524,7 @@ class AngularLineScript(BaseScriptObject):
 
         # grosor_float = self._grosor_neopreno_to_float(grosor_neopre_value)
         length_mm_str = f"{float(def_angular['length']):.2f}mm"
-        return {
+        result = {
             "z_unique": z_unique,
             "TotalElements": total_elements,
             "PuntoInicial": punto_inicial,
@@ -3426,6 +3557,10 @@ class AngularLineScript(BaseScriptObject):
             "PMP_FG_ANGULAR_NEOPRE": neopre,
             "PMP_FG_ANG_NEOPRE": length_mm_str,
         }
+        for k, v in self._wall_face_params_from_build_ele().items():
+            if k not in result:
+                result[k] = v
+        return result
 
     def _check_if_editing_existing(self) -> bool:
         """Verifica si se está editando un angular existente"""
@@ -6428,6 +6563,20 @@ class AngularLineScript(BaseScriptObject):
 
         # Alinear distribución con el JSON persistido si la paleta quedó incoherente (no pisa cambio explícito de usuario).
         self._apply_saved_distribution_to_build_ele_in_modify(parsed_saved_state_edit)
+
+        # Persistencia EDIT: muro, cara, ejes y Z de la línea (param_list/SavedState antes minimal → build_ele incompleto).
+        self._merge_wall_face_params_from_saved_dict(parsed_saved_state_edit)
+        self._restore_line_z_from_saved_state_if_needed(parsed_saved_state_edit)
+        start_point = (
+            getattr(self.build_ele.PuntoInicial, "value", start_point)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else start_point
+        )
+        end_point = (
+            getattr(self.build_ele.PuntoFinal, "value", end_point)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else end_point
+        )
 
         # Esta es la línea geométrica final (de build_ele o fallback SavedState)
         if getattr(self, "line_result", None):
