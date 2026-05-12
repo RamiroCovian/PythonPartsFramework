@@ -1597,6 +1597,13 @@ def _create_elements_for_segment_group(
                 if p_idx == path_idx
             }
 
+            if not processor.resolve_elbow_diameter_conflicts(segments_to_process):
+                print(
+                    "[AGUA][ELBOW][DIAM] Preview/creación omitida: "
+                    "el usuario canceló la corrección de diámetro en codo."
+                )
+                return []
+
             all_cuts = compute_segment_cuts_for_all_paths(split_segment_groups)
             segment_cuts = {
                 seg_idx: all_cuts.get((path_idx, seg_idx), {"start": 0.0, "end": 0.0})

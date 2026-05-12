@@ -6058,6 +6058,141 @@ class PipelineProcessor:
         self._te_invalid_warning_cache = set()
         # Orientación global capturada por PolyLib (start_orientation_capture).
         self.reference_orientation_angle = None
+        # Si el usuario cancela una corrección de diámetro en codo, el ciclo de
+        # generación debe abortarse para no crear reductores en un nodo angular.
+        self.cancelled_by_elbow_diameter_conflict = False
+
+    @staticmethod
+    def _segment_diameter(seg_item, default=20.0) -> float:
+        try:
+            info = getattr(seg_item, "info", None)
+            d = getattr(info, "diameter", None) if info is not None else None
+            if isinstance(d, (list, tuple)) and d:
+                d = d[0]
+            if d is None:
+                return float(default)
+            return float(d)
+        except Exception:
+            return float(default)
+
+    @staticmethod
+    def _format_segment_label(diameter_mm: int, current_label: str = "") -> str:
+        suffix = "P"
+        try:
+            parts = str(current_label or "").strip().split()
+            if len(parts) > 1 and parts[-1]:
+                suffix = parts[-1]
+        except Exception:
+            suffix = "P"
+        return f"D{int(diameter_mm)} {suffix}"
+
+    def _set_segment_diameter(self, seg_item, diameter_mm: int) -> bool:
+        info = getattr(seg_item, "info", None)
+        if info is None:
+            return False
+        try:
+            old_diam = getattr(info, "diameter", None)
+            info.diameter = int(diameter_mm)
+            info.section_type = f"{int(diameter_mm)} mm"
+            info.label = self._format_segment_label(
+                int(diameter_mm), getattr(info, "label", "")
+            )
+            print(
+                f"[AGUA][ELBOW][DIAM] segmento actualizado "
+                f"{old_diam}mm -> {int(diameter_mm)}mm"
+            )
+            return True
+        except Exception as ex:
+            print(f"[AGUA][ELBOW][DIAM] No se pudo actualizar segmento: {ex}")
+            return False
+
+    def _ask_elbow_diameter(self, d_prev: float, d_next: float):
+        di_prev = int(round(float(d_prev)))
+        di_next = int(round(float(d_next)))
+        diam_mayor = max(di_prev, di_next)
+        diam_menor = min(di_prev, di_next)
+        warning_message = (
+            "ADVERTENCIA: Cambio de diámetro detectado en codo\n\n"
+            f"Diámetro segmento anterior: {di_prev}mm\n"
+            f"Diámetro segmento siguiente: {di_next}mm\n\n"
+            "Los codos no permiten cambio de diámetro.\n"
+            "¿Qué diámetro desea usar para ambos segmentos?\n\n"
+            f"Sí: Usar diámetro MAYOR ({diam_mayor}mm)\n"
+            f"No: Usar diámetro MENOR ({diam_menor}mm)\n"
+            "Cancelar: No crear y corregir manualmente"
+        )
+
+        try:
+            if hasattr(PythonUtility, "MB_YESNOCANCEL"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_YESNOCANCEL
+                )
+            elif hasattr(PythonUtility, "MB_YESNO"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_YESNO
+                )
+            else:
+                PythonUtility.ShowMessageBox(warning_message, PythonUtility.MB_OK)
+                response = getattr(PythonUtility, "IDCANCEL", None)
+        except Exception as ex:
+            print(f"[AGUA][ELBOW][DIAM] Error mostrando advertencia: {ex}")
+            response = getattr(PythonUtility, "IDCANCEL", None)
+
+        if response == getattr(PythonUtility, "IDYES", None):
+            return diam_mayor
+        if response == getattr(PythonUtility, "IDNO", None):
+            return diam_menor
+        return None
+
+    def resolve_elbow_diameter_conflicts(self, segments: list) -> bool:
+        """
+        En un codo, el fitting tiene un único diámetro nominal. Si los dos
+        segmentos adyacentes difieren, se unifica antes de calcular recortes y
+        antes de decidir manguitos. La orientación se determina con los vectores:
+        prev = p_curr - p_prev, next = p_next - p_curr; si cambia el eje
+        dominante es un codo ortogonal.
+        """
+        from .vertex_utils import is_90_deg_turn
+
+        self.cancelled_by_elbow_diameter_conflict = False
+        for idx in range(1, len(segments)):
+            seg_prev = segments[idx - 1]
+            seg_curr = segments[idx]
+            p_prev = getattr(getattr(seg_prev, "data", None), "start", None)
+            p_curr = getattr(getattr(seg_prev, "data", None), "end", None)
+            p_next = getattr(getattr(seg_curr, "data", None), "end", None)
+            if not (p_prev and p_curr and p_next):
+                continue
+            if not is_90_deg_turn(p_prev, p_curr, p_next):
+                continue
+
+            d_prev = self._segment_diameter(seg_prev)
+            d_next = self._segment_diameter(seg_curr)
+            di_prev = int(round(float(d_prev)))
+            di_next = int(round(float(d_next)))
+            if di_prev == di_next:
+                continue
+
+            print(
+                "[AGUA][ELBOW][DIAM] conflicto en codo idx=%s "
+                "d_prev=%s d_next=%s node=(%.3f,%.3f,%.3f)"
+                % (idx, di_prev, di_next, p_curr.X, p_curr.Y, p_curr.Z)
+            )
+            selected = self._ask_elbow_diameter(d_prev, d_next)
+            if selected is None:
+                self.cancelled_by_elbow_diameter_conflict = True
+                print(
+                    "[AGUA][ELBOW][DIAM] generación cancelada por conflicto "
+                    f"de diámetro en codo idx={idx}"
+                )
+                return False
+
+            if di_prev != selected:
+                self._set_segment_diameter(seg_prev, selected)
+            if di_next != selected:
+                self._set_segment_diameter(seg_curr, selected)
+
+        return True
 
     def _resolve_vertical_rotation_angle(self, p_prev, p_mid) -> float:
         """
