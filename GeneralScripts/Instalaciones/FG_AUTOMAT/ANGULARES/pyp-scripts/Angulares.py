@@ -3011,18 +3011,19 @@ class AngularLineScript(BaseScriptObject):
     ) -> tuple[list[AllplanGeo.BRep3D], list[AllplanGeo.Line3D]]:
         distribution_type = normalize_distribution_type(distribution_type)
         print(f"[DISTRIBUTION] Tipo seleccionado: {distribution_type}")
-        distribution_line = self._apply_manual_z_to_distribution_line(
-            AllplanGeo.Line3D(start_point, end_point), update_from_line=False
-        )
-        start_point = distribution_line.StartPoint
-        end_point = distribution_line.EndPoint
-        if self._is_manual_z_enabled():
-            if hasattr(self.build_ele, "PuntoInicial"):
-                self.build_ele.PuntoInicial.value = start_point
-            if hasattr(self.build_ele, "PuntoFinal"):
-                self.build_ele.PuntoFinal.value = end_point
 
         if distribution_type == DISTRIBUTION_INDIVIDUAL:
+            distribution_line = self._apply_manual_z_to_distribution_line(
+                AllplanGeo.Line3D(start_point, end_point), update_from_line=False
+            )
+            start_point = distribution_line.StartPoint
+            end_point = distribution_line.EndPoint
+            if self._is_manual_z_enabled():
+                if hasattr(self.build_ele, "PuntoInicial"):
+                    self.build_ele.PuntoInicial.value = start_point
+                if hasattr(self.build_ele, "PuntoFinal"):
+                    self.build_ele.PuntoFinal.value = end_point
+
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
             rotation_axis_z_deg, rotation_y_deg = self._get_individual_axis_rotations()
             placement_center = AllplanGeo.Point3D(
@@ -3083,15 +3084,12 @@ class AngularLineScript(BaseScriptObject):
             return geometries, edges
 
         print("[DISTRIBUTION][GRUPAL] Entrando al flujo grupal actual")
-        rotation_axis_z_deg, rotation_y_deg = self._get_individual_axis_rotations()
         geometries, edges = create_angulars_on_line(
             definition=definition,
             start_point=start_point,
             end_point=end_point,
             invert_side=invert_side,
             rotation_deg=rotation_deg,
-            rotation_y_deg=rotation_y_deg,
-            rotation_z_deg=rotation_axis_z_deg,
             gap=gap,
             face_normal=None,
             face_point=None,

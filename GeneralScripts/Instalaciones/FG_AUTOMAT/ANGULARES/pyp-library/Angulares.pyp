@@ -442,27 +442,6 @@
     </Parameter>
 
     <Parameter>
-      <Name>UsarValorZManual</Name>
-      <Text>Usar Valor Z manual</Text>
-      <Value>false</Value>
-      <ValueType>CheckBox</ValueType>
-      <Visible>True</Visible>
-      <TextId>1047</TextId>
-      <Persistent>Model</Persistent>
-    </Parameter>
-
-    <Parameter>
-      <Name>ValorZIndividual</Name>
-      <Text>Cota Z desde el origen del muro</Text>
-      <Value>0</Value>
-      <ValueType>Length</ValueType>
-      <Enable>True</Enable>
-      <Visible>True</Visible>
-      <TextId>1044</TextId>
-      <Persistent>Model</Persistent>
-    </Parameter>
-
-    <Parameter>
       <Name>SeparatorModoGrupal</Name>
       <Text>Modo de Posicionamiento</Text>
       <ValueType>Separator</ValueType>
@@ -489,28 +468,6 @@
       <Enable>angular_libre == True</Enable>
       <Visible>True</Visible>
       <TextId>1002</TextId>
-      <Persistent>Model</Persistent>
-    </Parameter>
-
-    <Parameter>
-      <Name>RotacionEjeX</Name>
-      <Text>Rotación eje Y (Plano ZX)</Text>
-      <ValueType>Angle</ValueType>
-      <Value>0.0</Value>
-      <Enable>True</Enable>
-      <Visible>True</Visible>
-      <TextId>1045</TextId>
-      <Persistent>Model</Persistent>
-    </Parameter>
-
-    <Parameter>
-      <Name>RotacionEjeY</Name>
-      <Text>Rotación eje Z (Plano XY)</Text>
-      <ValueType>Angle</ValueType>
-      <Value>0.0</Value>
-      <Enable>True</Enable>
-      <Visible>True</Visible>
-      <TextId>1046</TextId>
       <Persistent>Model</Persistent>
     </Parameter>
 
