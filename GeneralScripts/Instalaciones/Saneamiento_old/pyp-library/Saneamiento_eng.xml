@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Element>
+    <StringTable>Saneamiento - English</StringTable>
+    <!-- All TextIds must be numeric in range 1000-29999 for local string table -->
+    <Item><TextId>1000</TextId><Text>SANITATION</Text></Item>
+    <Item><TextId>1001</TextId><Text>Tube parameters</Text></Item>
+    <Item><TextId>1002</TextId><Text>Main window</Text></Item>
+    <Item><TextId>1003</TextId><Text>Create polylines</Text></Item>
+    <Item><TextId>1004</TextId><Text>Create polyline</Text></Item>
+    <Item><TextId>1005</TextId><Text>Insert point</Text></Item>
+    <Item><TextId>1006</TextId><Text>Insert point mode</Text></Item>
+    <Item><TextId>1007</TextId><Text>Limit angles</Text></Item>
+    <Item><TextId>1008</TextId><Text>Limit angles</Text></Item>
+    <Item><TextId>1009</TextId><Text>Angle check</Text></Item>
+    <Item><TextId>1010</TextId><Text>Allowed angles (popup)</Text></Item>
+    <Item><TextId>1011</TextId><Text>Min. segment length (mm)</Text></Item>
+    <Item><TextId>1012</TextId><Text>Min. length for insert point (mm)</Text></Item>
+    <Item><TextId>1013</TextId><Text>Delete</Text></Item>
+    <Item><TextId>1014</TextId><Text>Delete section</Text></Item>
+    <Item><TextId>1015</TextId><Text>3D orientation</Text></Item>
+    <Item><TextId>1016</TextId><Text>Define orientation</Text></Item>
+    <Item><TextId>1017</TextId><Text>Current orientation</Text></Item>
+    <Item><TextId>1018</TextId><Text></Text></Item>
+    <Item><TextId>1019</TextId><Text>Invert</Text></Item>
+    <Item><TextId>1020</TextId><Text>Invert arrows</Text></Item>
+    <Item><TextId>1021</TextId><Text>Save</Text></Item>
+    <Item><TextId>1022</TextId><Text>Save polyline</Text></Item>
+    <Item><TextId>1023</TextId><Text>PreviewModeButtonText</Text></Item>
+    <Item><TextId>1024</TextId><Text>Finalize</Text></Item>
+    <Item><TextId>1025</TextId><Text>Console</Text></Item>
+    <Item><TextId>1026</TextId><Text>Status</Text></Item>
+    <Item><TextId>1027</TextId><Text></Text></Item>
+    <Item><TextId>1028</TextId><Text>Section management</Text></Item>
+    <Item><TextId>1029</TextId><Text>Sanitation type</Text></Item>
+    <Item><TextId>1030</TextId><Text>Stormwater</Text></Item>
+    <Item><TextId>1031</TextId><Text>Fecal</Text></Item>
+    <Item><TextId>1032</TextId><Text>Diameter to apply</Text></Item>
+    <Item><TextId>1033</TextId><Text>Diameter to apply</Text></Item>
+    <Item><TextId>1034</TextId><Text>Diameter to apply</Text></Item>
+    <Item><TextId>1035</TextId><Text>Section change</Text></Item>
+    <Item><TextId>1036</TextId><Text>Apply diameter</Text></Item>
+    <Item><TextId>1037</TextId><Text>Layer management</Text></Item>
+    <Item><TextId>1038</TextId><Text>Installation orientation</Text></Item>
+    <Item><TextId>1039</TextId><Text>Horizontal (Ceiling)</Text></Item>
+    <Item><TextId>1040</TextId><Text>Vertical (Wall)</Text></Item>
+    <Item><TextId>1041</TextId><Text>Horizontal installation type</Text></Item>
+    <Item><TextId>1042</TextId><Text>Vertical installation type</Text></Item>
+    <Item><TextId>1043</TextId><Text>Face (EN only)</Text></Item>
+    <Item><TextId>1044</TextId><Text>Section actions</Text></Item>
+    <Item><TextId>1045</TextId><Text>Apply layers</Text></Item>
+    <Item><TextId>1046</TextId><Text>Parent attributes</Text></Item>
+    <Item><TextId>1047</TextId><Text></Text></Item>
+    <Item><TextId>1048</TextId><Text>Attribute value</Text></Item>
+    <Item><TextId>1049</TextId><Text>Apply attributes</Text></Item>
+    <Item><TextId>1050</TextId><Text>Unic</Text></Item>
+    <Item><TextId>1051</TextId><Text>SavedState</Text></Item>
+    <Item><TextId>1052</TextId><Text>Total pieces (files)</Text></Item>
+    <Item><TextId>1053</TextId><Text>Child .pyp path</Text></Item>
+    <Item><TextId>1054</TextId><Text>Child files</Text></Item>
+    <Item><TextId>1055</TextId><Text>Element UUIDs</Text></Item>
+    <Item><TextId>1056</TextId><Text>CopiedElementsFiles</Text></Item>
+    <Item><TextId>1057</TextId><Text>File for copy (name contains)</Text></Item>
+    <Item><TextId>1058</TextId><Text>Work plane</Text></Item>
+    <Item><TextId>1059</TextId><Text>Restrict trace to plane</Text></Item>
+    <Item><TextId>1060</TextId><Text>Default Z elevation (mm)</Text></Item>
+</Element>

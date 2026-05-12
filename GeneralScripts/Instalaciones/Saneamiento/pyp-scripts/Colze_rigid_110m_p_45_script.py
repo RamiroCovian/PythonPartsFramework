@@ -39,9 +39,9 @@ class CodoRigido110mP45:
     FACTOR = 1.0
     CALCULATION_MODE = "m³"
 
-    ROT_X_110MM_45 = 180.0
+    ROT_X_110MM_45 = 0.0
     ROT_Y_110MM_45 = 0.0
-    ROT_Z_110MM_45 = 45.0
+    ROT_Z_110MM_45 = -90.0
 
     PARAM_110_45 = dict(
         DIAMETRO=110.0,

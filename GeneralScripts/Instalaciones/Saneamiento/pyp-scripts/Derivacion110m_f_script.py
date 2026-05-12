@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Bifurcación Y Ø110 pluvial, derivación 45° (geometría D110 portada de DerivacioY_45_008).
-
-Instalación fecal: usar otro script cuando exista; este no se carga en tricapa fecal (ver geo_handler).
-"""
+"""Bifurcación en Y Ø110 mm red fecal, derivación 45° (geometría D110 portada de DerivacioY_45_008)."""
 
 import math
 from typing import Any, List
@@ -20,21 +17,23 @@ def check_allplan_version(_build_ele, _version) -> bool:
     return True
 
 
-class DerivacionY110D110:
-    """Equivalente a TipoTubo==0 en DerivacioY_45_008; solo red pluvial (tricapa_v / p_110)."""
+class BifurcacionY110Fecal110mm:
+    """Modelo 3D TE 110-110-110 para instalación fecal (tricapa fecal / f_110)."""
 
-    type_te = "SAN_Y110_PLUVIAL"
+    type_te = "SAN_Y110_FECAL"
     LAYER = 40148
-    COLOR = 120
-    ROT_X_D110 = 0.0
-    ROT_Y_D110 = 0.0
+    COLOR = 70
+    ROT_X_D110 = -90.0
+    ROT_Y_D110 = -180.0
     ROT_Z_D110 = 0.0
     ROTAR_FINAL_Y_GRADOS = 270.0
+    TRANS_X_D110 = -169
+    TRANS_Y_D110 = -55.0
+    TRANS_Z_D110 = 55.0
     MAINTAIN_PROPORTIONS = True
     REF_DIAM_PROPORTION = 110.0
     RAMA_OFFSET_Z = 42.0
     ANGULO_DEFAULT = 45.0
-    # Valores base D110 (TIPO_TUBO_MAP[0] + DEFAULTS del script antiguo).
     DIAMETRO = 110.0
     LARGO_PRINCIPAL = 373.0
     LARGO_RAMA = 200.0
@@ -115,7 +114,7 @@ class DerivacionY110D110:
             id_pes = get_id(doc, "pmp_pes_unitari")
             id_sec = get_id(doc, "pmp_seccio")
             if id6 and id6 > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(id6, ""))
+                attr_list.append(AllplanBaseElements.AttributeString(id6, "IS"))
             if id_cart and id_cart > 0:
                 attr_list.append(
                     AllplanBaseElements.AttributeString(id_cart, "KN07_008_002")
@@ -132,7 +131,7 @@ class DerivacionY110D110:
                 except Exception:
                     attr_list.append(AllplanBaseElements.AttributeString(id_sec, "110"))
         except Exception as e:
-            print(f"[Derivacion110m_f_script] Atributos usuario 110mm pluvial: {e}")
+            print(f"[Derivacion110m_f_script] Atributos usuario 110mm fecal: {e}")
 
     def create_result(self) -> CreateElementResult:
         angulo = self._attr_val("Angulo", self.ANGULO_DEFAULT)
@@ -220,6 +219,18 @@ class DerivacionY110D110:
             ry=self.ROTAR_FINAL_Y_GRADOS + self.ROT_Y_D110,
             rz=self.ROT_Z_D110,
         )
+        if (
+            abs(self.TRANS_X_D110) > 1e-6
+            or abs(self.TRANS_Y_D110) > 1e-6
+            or abs(self.TRANS_Z_D110) > 1e-6
+        ):
+            mat_trans = AllplanGeo.Matrix3D()
+            mat_trans.SetTranslation(
+                AllplanGeo.Vector3D(
+                    self.TRANS_X_D110, self.TRANS_Y_D110, self.TRANS_Z_D110
+                )
+            )
+            brep_ext = AllplanGeo.Transform(brep_ext, mat_trans)
 
         props = self._props(self.COLOR)
         props.Layer = self.LAYER
@@ -255,10 +266,10 @@ class DerivacionY110D110:
 
 
 def create_element(build_ele, _doc) -> CreateElementResult:
-    return DerivacionY110D110(build_ele, _doc).create_result()
+    return BifurcacionY110Fecal110mm(build_ele, _doc).create_result()
 
 
-class Derivacion110mScript(BaseScriptObject):
+class Derivacion110mFecalScript(BaseScriptObject):
     def __init__(self, build_ele: BuildingElement, script_object_data: Any):
         super().__init__(script_object_data)
         self.build_ele = build_ele

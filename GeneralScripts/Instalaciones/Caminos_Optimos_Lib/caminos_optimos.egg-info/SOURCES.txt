@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+caminos_optimos/__init__.py
+caminos_optimos.egg-info/PKG-INFO
+caminos_optimos.egg-info/SOURCES.txt
+caminos_optimos.egg-info/dependency_links.txt
+caminos_optimos.egg-info/requires.txt
+caminos_optimos.egg-info/top_level.txt
+tests/test_modelos.py
+tests/test_optimizacion.py

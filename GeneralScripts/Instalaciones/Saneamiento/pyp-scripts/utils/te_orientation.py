@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import math
 from typing import Callable
+import NemAll_Python_Utility as PythonUtility
 
 
 def _norm2(x: float, y: float) -> float:
@@ -23,6 +24,34 @@ def _norm2(x: float, y: float) -> float:
 
 # Debug TE: por defecto ON (hasta estabilizar orientación XZ/YZ)
 DEBUG_TE = os.getenv("AGUA_DEBUG_TE", "1").strip() not in ("", "0", "false", "False")
+_CABAL_WARNING_SHOWN_KEYS: set[tuple[tuple[float, float, float], int, int, int]] = set()
+_INVALID_SANE_Y45_ANGLE_MSG_KEYS: set[tuple[float, float, float]] = set()
+
+
+def _acute_angle_between_dirs_deg(
+    dir_a: tuple[float, float, float], dir_b: tuple[float, float, float]
+) -> float:
+    """Ángulo agudo entre dos rectas dirigidas por vectores unitarios (0–90°)."""
+    dotp = _dot3_early(dir_a, dir_b)
+    dotp = max(-1.0, min(1.0, float(dotp)))
+    theta = math.acos(dotp)
+    acute = min(theta, math.pi - theta)
+    return math.degrees(acute)
+
+
+def _dot3_early(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _saneamiento_y45_applies(di_in: int, di_out: int, di_branch: int) -> bool:
+    """Combinaciones TE con modelo bifurcación Y45 en saneamiento (recortes en vertex_utils)."""
+    if di_in == 110 and di_out == 110 and di_branch == 110:
+        return True
+    if di_in == 40 and di_out == 40 and di_branch == 40:
+        return True
+    if di_in == 110 and di_out == 110 and di_branch == 40:
+        return True
+    return False
 
 
 def _key_from_point(pt) -> tuple[float, float, float]:
@@ -41,6 +70,22 @@ def _any_conn_fecal_system(segment_groups: list, conns: list) -> bool:
         except Exception:
             continue
     return False
+
+
+def _all_conn_fecal_system(segment_groups: list, conns: list) -> bool:
+    """True si los tres tramos del nodo declaran sistema fecal."""
+    if len(conns) != 3:
+        return False
+    for c in conns:
+        try:
+            seg = segment_groups[c["path_idx"]][c["seg_idx"]]
+            info = getattr(seg, "info", None)
+            s = str(getattr(info, "system", None) or "").strip().lower()
+            if not s.startswith("fecal"):
+                return False
+        except Exception:
+            return False
+    return True
 
 
 def _other_point(segment_groups: list, conn: dict):
@@ -84,6 +129,9 @@ def build_te_params(
     vertex_map: dict[tuple[float, float, float], list[dict]],
     te_vertices: set,
     get_diameter: Callable[[int, int], float] | None = None,
+    *,
+    saneamiento_enforce_y45_branch_geometry: bool = False,
+    saneamiento_y45_tolerance_deg: float = 6.0,
 ) -> dict[tuple[float, float, float], dict]:
     """
     Calcula parámetros de orientación por nodo TE.
@@ -118,6 +166,42 @@ def build_te_params(
             return "IS"
 
     out: dict[tuple[float, float, float], dict] = {}
+
+    def _reject_invalid_sane_y45(
+        vkey_inner: tuple[float, float, float],
+        base_main: tuple[float, float, float],
+        v_br: tuple[float, float, float],
+        din: int,
+        dout: int,
+        dbra: int,
+    ) -> bool:
+        """
+        True si no se debe generar TE (geometría ≠ Y45 en troncal/rama).
+        Muestra un único aviso por vértice en la sesión.
+        """
+        if not saneamiento_enforce_y45_branch_geometry:
+            return False
+        if not _saneamiento_y45_applies(din, dout, dbra):
+            return False
+        phi = _acute_angle_between_dirs_deg(base_main, v_br)
+        if abs(phi - 45.0) <= float(saneamiento_y45_tolerance_deg):
+            return False
+        if vkey_inner not in _INVALID_SANE_Y45_ANGLE_MSG_KEYS:
+            _INVALID_SANE_Y45_ANGLE_MSG_KEYS.add(vkey_inner)
+            try:
+                PythonUtility.ShowMessageBox(
+                    "angulo no valido para bifurcación 45° Y",
+                    PythonUtility.MB_OK,
+                )
+            except Exception:
+                pass
+        if DEBUG_TE:
+            print(
+                "[SANEAMIENTO][TE-Y45] TE omitida (ángulo troncal–rama). "
+                f"vkey={vkey_inner} acute={phi:.1f}° "
+                f"di_in={din} di_out={dout} di_branch={dbra}"
+            )
+        return True
 
     def _dot3(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -373,6 +457,16 @@ def build_te_params(
         ]
         te_dist_type = "TD" if any(d == "TD" for d in dist_candidates) else "IS"
 
+        if _reject_invalid_sane_y45(
+            vkey,
+            base_main,
+            v_branch,
+            di_main_in,
+            di_main_out,
+            di_branch,
+        ):
+            continue
+
         plane = _detect_plane_from_dir(base_main)
         mx3, my3, mz3 = base_main
 
@@ -387,6 +481,10 @@ def build_te_params(
                 and di_branch == 110
                 and not _any_conn_fecal_system(segment_groups, conns)
             )
+            y110_bif_script_variant = "pluvial"
+            if di_main_in == 110 and di_main_out == 110 and di_branch == 110:
+                if _all_conn_fecal_system(segment_groups, conns):
+                    y110_bif_script_variant = "fecal"
             out[vkey] = {
                 "center_pt": (cx, cy, cz),
                 "distribution_type": te_dist_type,
@@ -405,6 +503,7 @@ def build_te_params(
                 "branch_points_down": False,
                 "type_te": 1,
                 "bif_y110_pluvial_only": bif_y110_pluvial_only,
+                "y110_bif_script_variant": y110_bif_script_variant,
             }
             if DEBUG_TE:
                 print(
@@ -424,6 +523,8 @@ def build_te_params(
 
         # Descomponer rama
         bx, by, bz = v_branch
+        branch_along_main = (bx * mx3) + (by * my3) + (bz * mz3)
+        branch_side = 0.0
 
         # Rama en el plano del troncal vs "elevada" fuera del plano (generalizado a XY/XZ/YZ).
         if plane == "XY":
@@ -441,8 +542,16 @@ def build_te_params(
         branch_points_up = out_comp > 0.1
         branch_points_down = out_comp < -0.1
 
-        # Ajuste de ang (fontaneria): si la rama en plano apunta al lado opuesto, rotar 180°
-        if branch_in_plane:
+        # Ajuste de ang (fontaneria): si la rama en plano apunta al lado opuesto, rotar 180°.
+        # Solo cuando el troncal NO es simétrico (entrada ≠ salida). Si el troncal es simétrico
+        # (110-110-110, 110-110-40, etc.), la orientación en plano la fijan los mirrors locales
+        # más abajo; aplicar también ang+=π duplica la corrección y desalinea la rama Ø40.
+        symmetric_main_trunk = (
+            branch_in_plane
+            and not branch_elevated
+            and di_main_in == di_main_out
+        )
+        if branch_in_plane and not symmetric_main_trunk:
             branch_dir_initial_a = math.sin(ang)
             branch_dir_initial_b = math.cos(ang)
             dot_branch_initial = (
@@ -479,10 +588,58 @@ def build_te_params(
             )
         )
 
+        # Regla geométrica robusta para TE con troncal simétrico (misma Ø entrada/salida) y rama en plano:
+        # mismo criterio lateral/arriba-abajo que 110-110-110, aplicable también a 110-110-40 (rama Ø40)
+        # y otras Y con rama distinta al troncal — el modelo local (Bif_Reduc / Y Ø110) comparte convención.
+        if branch_in_plane and not branch_elevated and di_main_in == di_main_out:
+            # Para TE simétrica dividimos el "encaje" en:
+            # - need_mirror_y_local: controla la convención arriba/abajo (según branch_along_main).
+            # - need_mirror_x_local: controla el lado izquierda/derecha (según branch_side).
+            # Eje lateral local: b = n x t, donde t es el troncal (main) y n es el normal del plano.
+            # El signo de side = dot(branch, b) indica hacia qué lado cae la rama respecto al troncal.
+            if plane == "XY":
+                nx, ny, nz = 0.0, 0.0, 1.0
+            elif plane == "XZ":
+                nx, ny, nz = 0.0, 1.0, 0.0
+            else:  # "YZ"
+                nx, ny, nz = 1.0, 0.0, 0.0
+
+            # t = (mx3,my3,mz3) ya está normalizado
+            bxl = ny * mz3 - nz * my3
+            byl = nz * mx3 - nx * mz3
+            bzl = nx * my3 - ny * mx3
+            blen = math.sqrt(bxl * bxl + byl * byl + bzl * bzl)
+            if blen > 1e-9:
+                bxl /= blen
+                byl /= blen
+                bzl /= blen
+            else:
+                # Fallback: troncal degenerado en el plano -> no definir lado fiable
+                bxl, byl, bzl = 1.0, 0.0, 0.0
+
+            branch_side = bx * bxl + by * byl + bz * bzl
+            # Mirror horizontal (lado): branch_side>0 => mirror en X local.
+            need_mirror_x_local = branch_side > 0.0
+            # Mirror vertical/convención: branch_along_main<0 => mirror en Y local.
+            need_mirror_y_local = branch_along_main < 0.0
+            if need_mirror_y_local:
+                warn_key = (vkey, di_main_in, di_main_out, di_branch)
+                if warn_key not in _CABAL_WARNING_SHOWN_KEYS:
+                    _CABAL_WARNING_SHOWN_KEYS.add(warn_key)
+                    try:
+                        PythonUtility.ShowMessageBox(
+                            "caval sin sentido sera creado",
+                            PythonUtility.MB_OK,
+                        )
+                    except Exception:
+                        pass
+            # (DEBUG) branch_along_main y branch_side ayudan a verificar estabilidad del mirror
+
         if DEBUG_TE:
             print(
                 "[DBG TE] node=%s plane=%s ang=%.1f° main=(%.3f,%.3f,%.3f) branch=(%.3f,%.3f,%.3f) "
-                "branch_in_plane=%s branch_elevated=%s mirrors(x=%s y=%s z=%s) type_te=%s di_in=%s di_out=%s"
+                "branch_in_plane=%s branch_elevated=%s branch_along_main=%.3f branch_side=%.3f "
+                "mirrors(x=%s y=%s z=%s) type_te=%s di_in=%s di_out=%s di_branch=%s"
                 % (
                     vkey,
                     plane,
@@ -495,12 +652,15 @@ def build_te_params(
                     bz,
                     str(branch_in_plane),
                     str(branch_elevated),
+                    branch_along_main,
+                    branch_side,
                     str(need_mirror_x_local),
                     str(need_mirror_y_local),
                     str(need_mirror_z_local),
                     str(type_te),
                     str(di_main_in),
                     str(di_main_out),
+                    str(di_branch),
                 )
             )
 
@@ -510,6 +670,10 @@ def build_te_params(
             and di_branch == 110
             and not _any_conn_fecal_system(segment_groups, conns)
         )
+        y110_bif_script_variant = "pluvial"
+        if di_main_in == 110 and di_main_out == 110 and di_branch == 110:
+            if _all_conn_fecal_system(segment_groups, conns):
+                y110_bif_script_variant = "fecal"
         out[vkey] = {
             "center_pt": (cx, cy, cz),
             "distribution_type": te_dist_type,
@@ -528,6 +692,7 @@ def build_te_params(
             "branch_points_down": branch_points_down,
             "type_te": type_te,
             "bif_y110_pluvial_only": bif_y110_pluvial_only,
+            "y110_bif_script_variant": y110_bif_script_variant,
         }
 
     return out

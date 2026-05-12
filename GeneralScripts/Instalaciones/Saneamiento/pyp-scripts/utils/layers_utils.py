@@ -181,6 +181,19 @@ def _apply_layer_to_element(
     en algunos flujos de PythonPart `SetCommonProperties` / asignación a `.CommonProperties`
     no es la que lee `create_individual_pythonpart` vía `GetCommonProperties()`.
     """
+    # Si no existe una capa aplicada explícitamente para esta key, respetar la capa
+    # que ya trae el modelo (definida por el propio script del fitting/tubo).
+    try:
+        has_explicit_layer = bool(
+            hasattr(so, "applied_layers")
+            and isinstance(getattr(so, "applied_layers", None), dict)
+            and key_layer in (so.applied_layers or {})
+        )
+        if not has_explicit_layer:
+            return model_elem
+    except Exception:
+        pass
+
     layer_id = _get_layer_id(key_layer, so)
     if not layer_id:
         if _SANEAMIENTO_LAYER_DEBUG:

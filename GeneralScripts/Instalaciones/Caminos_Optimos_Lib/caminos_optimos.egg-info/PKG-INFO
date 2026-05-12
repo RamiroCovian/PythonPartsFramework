@@ -1,0 +1,239 @@
+Metadata-Version: 2.4
+Name: caminos-optimos
+Version: 1.0.0
+Summary: Sistema de optimizacion de rutas de tuberias de ventilacion bajo techos inclinados
+License: Proprietary
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.21.0
+Requires-Dist: plotly>=5.15.0
+Requires-Dist: networkx>=3.0
+
+# Caminos Optimos
+
+Sistema de optimizacion de tuberias de ventilacion para techos inclinados.
+
+## Descripcion
+
+Este proyecto proporciona herramientas para:
+
+- **Modelado 3D** de techos inclinados definidos por vertices IS (IS1, IS2, IS3, IS4)
+- **Optimizacion de rutas** de tuberias con restricciones de angulos y longitud minima
+- **Visualizacion 3D interactiva** usando Plotly
+- **Gestion de obstaculos** (vigas, columnas, etc.)
+- **Validacion de restricciones** segun subtipos de tuberia
+
+## Estructura del Proyecto
+
+```
+Caminos_Optimos/
+├── config/                    # Configuraciones y constantes JSON
+│   ├── subtipos_ventilacion.json
+│   └── dimensiones_is.json
+├── src/                       # Codigo fuente principal
+│   ├── modelos/              # Clases de datos
+│   │   ├── punto.py          # Punto3D
+│   │   ├── techo.py          # Techo, VerticeIS
+│   │   ├── tuberia.py        # Tuberia, SubtipoTuberia
+│   │   └── obstaculo.py      # Obstaculo, GestorObstaculos
+│   ├── core/                 # Logica central
+│   │   ├── gestor_configuracion.py
+│   │   └── gestor_is.py
+│   ├── visualizacion/        # Graficacion 3D
+│   │   └── visualizador_3d.py
+│   ├── optimizacion/         # Algoritmos de busqueda
+│   │   └── buscador_caminos.py
+│   ├── gui/                  # Interfaz grafica (futuro)
+│   └── utils/                # Utilidades
+│       ├── geometria.py
+│       └── validadores.py
+├── inputs/                   # Archivos de entrada
+├── outputs/                  # Resultados generados
+├── ejemplos/                 # Ejemplos de uso
+├── tests/                    # Tests unitarios
+├── requirements.txt
+└── README.md
+```
+
+## Instalacion
+
+1. Clonar el repositorio:
+```bash
+git clone <url-repositorio>
+cd Caminos_Optimos
+```
+
+2. Crear entorno virtual (recomendado):
+```bash
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
+```
+
+3. Instalar dependencias:
+```bash
+pip install -r requirements.txt
+```
+
+## Uso Rápido
+
+### 1. Crear archivo de entrada
+
+Copiar la plantilla y editarla con tus datos:
+
+```powershell
+Copy-Item inputs/plantilla.json inputs/mi_proyecto.json
+```
+
+### 2. Editar el archivo JSON
+
+Abrir `inputs/mi_proyecto.json` y modificar:
+
+```json
+{
+    "nombre": "Mi Proyecto",
+    "subtipo": "extraccion_impulsion",
+    
+    "inicio": { "x": 500, "y": 500, "z": 2800 },
+    "fin": { "x": 5000, "y": 3000, "z": 2800 },
+    
+    "puntos_obligatorios": [
+        { "id": "O1", "x": 2000, "y": 1500, "z": 2850 }
+    ],
+    
+    "obstaculos": [
+        {
+            "id": "Viga",
+            "centro": { "x": 2500, "y": 1500, "z": 2600 },
+            "ancho_mm": 500, "largo_mm": 500, "alto_mm": 400,
+            "modo": "saltar"
+        }
+    ]
+}
+```
+
+**Modos de obstáculo (por cada obstáculo):**
+| Modo | Descripción |
+|------|-------------|
+| `saltar` | La tubería sube para pasar por encima del obstáculo |
+| `rodear` | La tubería se desvía horizontalmente para evitar el obstáculo |
+
+**Subtipos disponibles:**
+| Subtipo | Ángulo | Radio | Uso |
+|---------|--------|-------|-----|
+| `extraccion_impulsion` | 135° | 37.5mm | Ductos de extracción |
+| `aislado` | 135° | 80mm | Ductos con aislamiento |
+| `recuperador` | 90° | 40mm | Ductos ortogonales |
+
+### 3. Ejecutar
+
+```powershell
+.\venv\Scripts\python.exe main.py inputs/mi_proyecto.json
+```
+
+### 4. Ver resultados
+
+- **Gráfica 3D**: Se abre automáticamente en el navegador
+- **Archivo HTML**: `outputs/mi_proyecto.html`
+- **Reporte MD**: `outputs/mi_proyecto.md`
+
+### Opciones
+
+```powershell
+# Sin abrir navegador
+.\venv\Scripts\python.exe main.py inputs/mi_proyecto.json --no-mostrar
+
+# Sin guardar archivos
+.\venv\Scripts\python.exe main.py inputs/mi_proyecto.json --no-guardar
+```
+
+### Ejecutar Ejemplos
+
+```powershell
+# Ver todos los ejemplos disponibles
+.\venv\Scripts\python.exe main.py ejemplos/ejm_saltar_doble.json
+
+# Ejecutar batch de tests
+.\tests_hibrido_90.ps1    # Ejemplos con ángulos de 90°
+.\tests_hibrido_45.ps1    # Ejemplos con ángulos de 45°/135°
+.\tests_rodear_examples.ps1
+.\tests_saltar_examples.ps1
+```
+
+## Subtipos de Tuberia
+
+| Subtipo | Dimensiones | Angulos Permitidos | Longitud Min | Descripcion |
+|---------|-------------|-------------------|--------------|-------------|
+| extraccion_impulsion | 75x75 mm | 45, 135 grados | 150 mm | Ductos de extraccion e impulsion |
+| aislado | 160x160 mm | 45, 135 grados | 150 mm | Ductos con aislamiento termico |
+| recuperador | 160x160 mm | 90 grados | 150 mm | Ductos para recuperadores (solo ortogonal) |
+
+## Especificaciones de IS
+
+- **Ancho**: 1450 mm - 5650 mm
+- **Alto**: 1450 mm - 2150 mm
+- **Margen entre IS**: 50 mm
+
+## Restricciones de Tuberias
+
+- **Longitud minima** por segmento: 150 mm
+- **Margen de seguridad**: 10 mm alrededor de cada tuberia
+- **Angulos**: Segun subtipo (45/135 o solo 90 grados)
+
+## Tests
+
+Ejecutar tests:
+```bash
+pytest tests/ -v
+```
+
+Con cobertura:
+```bash
+pytest tests/ --cov=src --cov-report=html
+```
+
+## Configuracion
+
+Los parametros se pueden modificar en los archivos JSON de la carpeta `config/`:
+
+- `subtipos_ventilacion.json`: Definicion de subtipos de tuberia
+- `dimensiones_is.json`: Limites de dimensiones para IS
+
+## API Principal
+
+### Punto3D
+```python
+p = Punto3D(x=100, y=200, z=300, id="punto1")
+distancia = p.distancia_a(otro_punto)
+```
+
+### Techo
+```python
+techo = Techo.desde_vertices([[x, y, z], ...])
+z = techo.calcular_z_en_plano(x, y)  # Proyeccion sobre plano inclinado
+```
+
+### BuscadorCaminos
+```python
+buscador = BuscadorCaminos(subtipo, techo, gestor_obstaculos)
+camino = buscador.buscar_camino(inicio, fin, puntos_intermedios)
+```
+
+### Visualizador3D
+```python
+vis = Visualizador3D("Titulo")
+vis.agregar_techo(techo)
+vis.agregar_puntos(puntos)
+vis.agregar_tuberia(tuberia)
+vis.agregar_obstaculo(obstaculo)
+vis.mostrar()
+vis.guardar_html("salida.html")
+```
+
+## Licencia
+
+MIT License
+
+## Autor
+
+Coder - 2026

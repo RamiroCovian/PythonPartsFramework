@@ -36,8 +36,8 @@ TE_TRIMS: dict[tuple[int, int, int], tuple[float, float, float]] = {
 # Manguitos asimétricos. Tap 40↔25: IN en Ø25, OUT en Ø40.
 # Reductor 110↔40: IN en Ø110, OUT en Ø40 (ambos sentidos 110→40 y 40→110).
 # Valores reexportados desde geo_handler; hot-reload: utils.trim_config en saneamiento_polyline.
-TAPRED_40_25_TRIM_IN_MM = 30.0
-TAPRED_40_25_TRIM_OUT_MM = 20.0
+TAPRED_40_25_TRIM_IN_MM = 3.0
+TAPRED_40_25_TRIM_OUT_MM = 3.0
 REDUCT_110_40_TRIM_IN_MM = 50.0
 REDUCT_110_40_TRIM_OUT_MM = 100.0
 

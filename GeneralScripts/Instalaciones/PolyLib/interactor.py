@@ -232,6 +232,11 @@ class PolylineInteractor:
         print("="*80)
 
         self.coord_input = coord_input
+        try:
+            self.is_modification_mode = self.script_object.modification_ele_list.is_modification_element()
+        except Exception:
+            self.is_modification_mode = False
+        print(f"[CC-DBG] start_input | is_modification_mode={self.is_modification_mode} | cc_path_numbers ANTES restore={dict(self.script_object.cc_path_numbers)}")
         self._print_prompt()
         self._change_draw_mode()
         self.doc = coord_input.GetInputViewDocument() # type: ignore
@@ -364,6 +369,8 @@ class PolylineInteractor:
         Restaura el estado guardado desde build_ele o desde el PythonPartGroup si existe.
         Se llama en __init__ cuando se edita una instancia existente.
         """
+        self.script_object.cc_path_numbers = {}
+        print(f"[CC-DBG] _restore_saved_state INICIO | is_modification_mode={getattr(self, 'is_modification_mode', '??')} | cc_path_numbers reseteado={{}}")
         try:
             # Intentar restaurar desde build_ele
             for param_name in ["SavedState", "PolylineState", "StateData"]:
@@ -373,8 +380,19 @@ class PolylineInteractor:
                     if not hasattr(param, "value"): continue
 
                     state_json = param.value
+                    print(f"[CC-DBG] build_ele.{param_name} encontrado | tiene_valor={bool(state_json and state_json.strip())} | len={len(state_json) if state_json else 0}")
                     if state_json and isinstance(state_json, str) and state_json.strip():
-                        if self._deserialize_state_from_json(state_json):
+                        deserialize_ok = self._deserialize_state_from_json(state_json)
+                        print(f"[CC-DBG] _deserialize_state_from_json resultado={deserialize_ok} | cc_path_numbers POST-deserialize={dict(self.script_object.cc_path_numbers)}")
+                        if deserialize_ok:
+                            if not getattr(self, "is_modification_mode", False):
+                                self.script_object.cc_path_numbers = {}
+                                self.script_object.saved_paths = []
+                                self.script_object.saved_cut_points = []
+                                self.script_object.saved_vertex_cut_points = []
+                                print(f"[CC-DBG] NO modification_mode → estado limpiado para elemento nuevo (cc_path_numbers + saved_paths)")
+                            else:
+                                print(f"[CC-DBG] modification_mode=True → cc_path_numbers PRESERVADO={dict(self.script_object.cc_path_numbers)}")
                             print(f"[SO] Estado previo restaurado desde build_ele.{param_name}")
                             return True
                 except Exception as e:
@@ -439,6 +457,8 @@ class PolylineInteractor:
         self.script_object.applied_layers = {}
         self.script_object.applied_default_attributes = {}
         self.script_object.applied_attributes = {}
+        self.script_object.applied_codificacion = {}
+        self.script_object.cc_path_numbers = {}
         self.script_object.global_group_numbers = {}
         self.script_object._fn_name = ""
         self.script_object.reference_orientation_angle = 0
@@ -566,6 +586,12 @@ class PolylineInteractor:
 
             if "applied_custom_attrs" in state:
                 self.script_object.applied_attributes = ElementSerializer.deserialize_attributes(state["applied_custom_attrs"])
+
+            if "applied_codificacion" in state:
+                self.script_object.applied_codificacion = dict(state["applied_codificacion"])
+
+            if "cc_path_numbers" in state:
+                self.script_object.cc_path_numbers = {int(k): v for k, v in state["cc_path_numbers"].items()}
 
             if "global_group_numbers" in state:
                 self.script_object.global_group_numbers = ElementSerializer.deserialize_global_numbers(state["global_group_numbers"])
@@ -1214,15 +1240,14 @@ class PolylineInteractor:
                 for final_idx, element in enumerate(current_path_elements):
                     # Actualizamos el 4to índice de la tupla key con el índice real
 
-                    element["key"][1] = _current_global_idx
+                    element["key"][1] = path_idx
                     element["key"][3] = final_idx
                     element["key"] = tuple(element["key"]) # Volvemos a tupla para
-                    # element["key"][1] = _next_path_group_idx # Usar el contador global
-                    element["path_idx"] = _current_global_idx
+                    element["path_idx"] = path_idx
                     element["seq_id"] = final_idx
 
                     # Aplicar Layer si existe en applied_layers usando la NUEVA estructura de storage_key
-                    storage_key = f"seg_{_current_global_idx}_elem_{final_idx}"
+                    storage_key = f"seg_{path_idx}_elem_{final_idx}"
                     if hasattr(self, 'applied_layers') and storage_key in self.applied_layers:
                         element["layer"] = self.applied_layers[storage_key]["layer"]
 
@@ -4321,8 +4346,9 @@ class PolylineInteractor:
 
     def _shift_applied_path_idx(self, from_path_idx: int) -> None:
         """Incrementa en +1 el path_idx de todas las claves >= from_path_idx
-        en applied_attributes y applied_layers."""
-        for d in [self.script_object.applied_attributes, self.script_object.applied_layers]:
+        en applied_attributes, applied_layers, applied_codificacion y cc_path_numbers."""
+        for d in [self.script_object.applied_attributes, self.script_object.applied_layers,
+                  self.script_object.applied_codificacion]:
             new_d: dict = {}
             for k, v in d.items():
                 parts = k.split("_")  # "seg_{p}_elem_{s}" → ["seg","p","elem","s"]
@@ -4337,6 +4363,13 @@ class PolylineInteractor:
                 new_d[k] = v
             d.clear()
             d.update(new_d)
+
+        cc = getattr(self.script_object, "cc_path_numbers", {})
+        new_cc: dict = {}
+        for p, num in cc.items():
+            new_cc[p + 1 if p >= from_path_idx else p] = num
+        cc.clear()
+        cc.update(new_cc)
 
     def _remap_applied_after_insert(
         self, path_idx: int, seg_idx: int, snapshot: dict, inherited: dict
@@ -4359,6 +4392,8 @@ class PolylineInteractor:
                     self.script_object.applied_attributes[_new_k] = self.script_object.applied_attributes.pop(_old_k)
                 if _old_k in self.script_object.applied_layers:
                     self.script_object.applied_layers[_new_k] = self.script_object.applied_layers.pop(_old_k)
+                if _old_k in self.script_object.applied_codificacion:
+                    self.script_object.applied_codificacion[_new_k] = self.script_object.applied_codificacion.pop(_old_k)
         # Fase 2: heredar para elementos nuevos
         if not inherited:
             return
@@ -4393,6 +4428,10 @@ class PolylineInteractor:
         """
         new_path_idx = old_path_idx + 1
         self._shift_applied_path_idx(new_path_idx)
+        # Propagar CC number del path padre al nuevo sub-path (cortes comparten número)
+        cc = getattr(self.script_object, "cc_path_numbers", {})
+        if old_path_idx in cc and new_path_idx not in cc:
+            cc[new_path_idx] = cc[old_path_idx]
         # Remap del path derecho
         for _pg in self.generated_elements:
             for _e in _pg:  # type: ignore[assignment]
@@ -4407,6 +4446,8 @@ class PolylineInteractor:
                     self.script_object.applied_attributes[_new_k] = self.script_object.applied_attributes.pop(_old_k)
                 if _old_k in self.script_object.applied_layers:
                     self.script_object.applied_layers[_new_k] = self.script_object.applied_layers.pop(_old_k)
+                if _old_k in self.script_object.applied_codificacion:
+                    self.script_object.applied_codificacion[_new_k] = self.script_object.applied_codificacion.pop(_old_k)
         # Heredar para elementos nuevos del path derecho
         if not inherited:
             return
@@ -4829,9 +4870,13 @@ class PolylineInteractor:
         if result != 6:  # 6 = Yes
             return False
 
-        seg_info.diameter     = new_diameter
+        current_system = self.script_object.selected_inst_type or seg_info.system or ""
+        seg_info.diameter = new_diameter
         seg_info.section_type = f"{new_diameter} mm"
-        seg_info.label        = self._format_segment_label(new_diameter, seg_info.system or "")
+        seg_info.system = current_system
+        seg_info.distribution_type = self.script_object.distribution_type
+        seg_info.water_type = self.script_object.water_type
+        seg_info.label = self._format_segment_label(new_diameter, current_system)
 
         self.get_segments()
         self.highlight_geometry = None
@@ -4897,9 +4942,13 @@ class PolylineInteractor:
             seg_info = self.script_object.persistent_metadata.get(key)
             if seg_info is None:
                 continue
-            seg_info.diameter     = new_diameter
+            current_system = self.script_object.selected_inst_type or seg_info.system or ""
+            seg_info.diameter = new_diameter
             seg_info.section_type = f"{new_diameter} mm"
-            seg_info.label        = self._format_segment_label(new_diameter, seg_info.system or "")
+            seg_info.system = current_system
+            seg_info.distribution_type = self.script_object.distribution_type
+            seg_info.water_type = self.script_object.water_type
+            seg_info.label = self._format_segment_label(new_diameter, current_system)
             changed = True
 
         if changed:
@@ -5116,6 +5165,45 @@ class PolylineInteractor:
         )
         PythonUtility.ShowMessageBox(message, PythonUtility.MB_OK)
 
+    def apply_codificacion_cajetin_input(self):
+        """
+        Aplica la codificación cajetín a los elementos seleccionados.
+        Se combina con la numeración absoluta CC-{num} en el Atributo personalizado 01.
+        """
+        input_val = getattr(self.script_object.build_ele, ParamNames.Attributes.CODIFICACION).value
+
+        targets = []
+        if self.selected_segments:
+            targets = list(self.selected_segments)
+        elif self.selected_element_id:
+            targets = [self.selected_element_id]
+
+        if not targets:
+            PythonUtility.ShowMessageBox("⚠️ Selecciona elements per aplicar la codificació.", PythonUtility.MB_OK)
+            return
+
+        if not hasattr(self.script_object, "applied_codificacion"):
+            self.script_object.applied_codificacion = {}
+
+        applied_count = 0
+        affected_paths = set()
+
+        for item in targets:
+            elem_type, path_idx, elem_idx, layer_idx, idx = item
+            storage_key = f"seg_{idx}_elem_{layer_idx}"
+            if input_val:
+                self.script_object.applied_codificacion[storage_key] = input_val
+            else:
+                self.script_object.applied_codificacion.pop(storage_key, None)
+            applied_count += 1
+            affected_paths.add(idx)
+
+        label = input_val if input_val else "(buit)"
+        PythonUtility.ShowMessageBox(
+            f"✅ Codificació aplicada!\nValor: {label}\nElements actualitzats: {applied_count}",
+            PythonUtility.MB_OK
+        )
+
     # ============================================================================
     # EVENTS
     # ============================================================================
@@ -5142,6 +5230,17 @@ class PolylineInteractor:
                 # Si todo está bien, creamos y cerramos
                 self.script_object.element_list_final = []
                 self.script_object._generate_pythonparts()
+                # Reset completo del estado de dibujo para el siguiente elemento independiente.
+                # saved_paths es acumulativo: sin este reset, los paths del tubo anterior quedan
+                # en la lista y el siguiente tubo los hereda, compartiendo el mismo CC number.
+                self.script_object.cc_path_numbers = {}
+                self.script_object.saved_paths = []
+                self.script_object.saved_cut_points = []
+                self.script_object.saved_vertex_cut_points = []
+                self.points = []
+                self.data = []
+                self.last_points = []
+                print(f"[CC-DBG] Elemento creado → estado de dibujo limpiado para el siguiente tubo independiente")
                 return OnCancelFunctionResult.CREATE_ELEMENTS
 
             elif status == "BORRAR":
@@ -5156,6 +5255,7 @@ class PolylineInteractor:
         except Exception as ex:
             self.script_object.element_list_final = []
             self.script_object._generate_pythonparts()
+            self.script_object.cc_path_numbers = {}
             print(f"[INT] Error during cancel function: {ex}")
             return OnCancelFunctionResult.CANCEL_INPUT
 
@@ -5223,9 +5323,15 @@ class PolylineInteractor:
         elif event_id == EventIds.ATTRIBUTE_APPLY: # 1011
             self.apply_attributes_input()
 
+        elif event_id == EventIds.CODIFICACION_CAJETIN_APPLY: # 1039
+            self.apply_codificacion_cajetin_input()
+
         elif event_id == EventIds.DEFINIR_ORIENTACION: # 1012
             # Definir orientación 3D (captura de línea en XY)
             return bool(self.start_orientation_capture())
+
+        elif event_id == EventIds.INVERTIR_CAVAL: # 1017
+            return bool(self._handle_invertir_caval())
 
         # ── Soportes: botones de acción (independientes de la instalación) ──
         elif event_id == EventIds.INSERTAR_SOPORTE: # 1033
@@ -5380,6 +5486,18 @@ class PolylineInteractor:
                 PythonUtility.MB_OK,
             )
             return True
+
+    def _handle_invertir_caval(self) -> bool:
+        """
+        Handler mínimo para el botón "Invertir caval".
+        Punto de extensión para implementar la lógica de inversión más adelante.
+        """
+        PythonUtility.ShowMessageBox(
+            "Evento 'Invertir caval' recibido.\n"
+            "Handler base activo (sin lógica de inversión todavía).",
+            PythonUtility.MB_OK,
+        )
+        return True
 
     # ========================================
     # HELPERS

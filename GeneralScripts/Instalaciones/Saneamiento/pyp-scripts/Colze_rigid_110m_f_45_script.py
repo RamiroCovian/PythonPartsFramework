@@ -21,9 +21,9 @@ class CodoRigido110mF45:
     """Solo codo 110mm 45° usado en Saneamiento_old."""
 
     LAYER = 40148  # IS_CON_SANE_FAB
-    ROT_X_110MM_45 = 180.0
+    ROT_X_110MM_45 = 0.0
     ROT_Y_110MM_45 = 0.0
-    ROT_Z_110MM_45 = 45.0
+    ROT_Z_110MM_45 = -90.0
 
     PARAM_110_45 = dict(
         DIAMETRO=110.0,

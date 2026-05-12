@@ -120,35 +120,12 @@ class ConductoAlimentacionHornoScript(BaseScriptObject):
             color_name = _COLOR_NAME_MAP.get(color, "")
 
             if tipo:
-                id_attr04 = AttributeService.GetAttributeID(
-                    self.doc, "Atributo personalizado 04"
-                )
-                if id_attr04 and id_attr04 > 0:
-                    attr_list.append(AllplanBaseElements.AttributeString(id_attr04, tipo))
+                attr_list.append(AllplanBaseElements.AttributeString(1086, tipo))
 
-            id_attr06 = AttributeService.GetAttributeID(
-                self.doc, "Atributo personalizado 06"
-            )
-            if id_attr06 and id_attr06 > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(id_attr06, color_name))
-
-            id_attr07 = AttributeService.GetAttributeID(
-                self.doc, "Atributo personalizado 07"
-            )
-            if id_attr07 and id_attr07 > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(id_attr07, str(int(diameter))))
-
-            id_attr09 = AttributeService.GetAttributeID(
-                self.doc, "Atributo personalizado 09"
-            )
-            if id_attr09 and id_attr09 > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(id_attr09, str(int(area))))
-
-            id_attr10 = AttributeService.GetAttributeID(
-                self.doc, "Atributo personalizado 10"
-            )
-            if id_attr10 and id_attr10 > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(id_attr10, "0"))
+            attr_list.append(AllplanBaseElements.AttributeString(1895, color_name))
+            attr_list.append(AllplanBaseElements.AttributeString(1896, str(int(diameter))))
+            attr_list.append(AllplanBaseElements.AttributeString(1898, str(int(area))))
+            attr_list.append(AllplanBaseElements.AttributeString(1899, "0"))
 
         except Exception as e:
             print(f"[AlimentacionHorno] Error en get_attributes_custom: {e}")

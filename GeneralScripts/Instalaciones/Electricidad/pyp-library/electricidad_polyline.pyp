@@ -265,11 +265,11 @@
         </Parameter>
         <Parameter>
             <Name>RowAttribute</Name>
-            <Text>Atributos</Text>
+            <Text>Atributs</Text>
             <ValueType>Expander</ValueType>
             <Parameter>
                 <Name>AttributeValue</Name>
-                <Text>Valor atributo</Text>
+                <Text>Valor atribut</Text>
                 <Value></Value>
                 <ValueType>String</ValueType>
             </Parameter>
@@ -278,8 +278,28 @@
             <ValueType>Row</ValueType>
             <Parameter>
                 <Name>AttributeApply</Name>
-                <Text>Aplicar atributo</Text>
+                <Text>Aplicar atribut</Text>
                 <EventId>1011</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowCodificacion</Name>
+            <Text>Codificació Cajetín</Text>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>CodificacionCajetin</Name>
+                <Text>Codificació Cajetín</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <ValueType>Row</ValueType>
+            <Parameter>
+                <Name>CodificacionCajetinApply</Name>
+                <Text>Aplicar codificació</Text>
+                <EventId>1039</EventId>
                 <ValueType>Button</ValueType>
             </Parameter>
         </Parameter>

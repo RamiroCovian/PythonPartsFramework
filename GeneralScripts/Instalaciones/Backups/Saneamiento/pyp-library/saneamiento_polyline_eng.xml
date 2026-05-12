@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Element>
+    <StringTable>Saneamiento polyline - English</StringTable>
+    <!-- Allplan expects this file next to saneamiento_polyline.pyp for EN locale. -->
+    <!-- TextIds 1000-29999 for local string table when parameters use LocalisedString. -->
+    <Item><TextId>1000</TextId><Text>Polyline MVP</Text></Item>
+    <Item><TextId>1001</TextId><Text>Define polyline for an installation and generate elements.</Text></Item>
+    <Item><TextId>1002</TextId><Text>Installation</Text></Item>
+    <Item><TextId>1003</TextId><Text>Installation types</Text></Item>
+    <Item><TextId>1004</TextId><Text>Finalize</Text></Item>
+</Element>

@@ -72,6 +72,8 @@ PARAM_APLICAR_LAYERS = "aplicarLayers"                 # Button para aplicar lay
 # ─────────────────── Atributos ───────────────────
 PARAM_ATTRIBUTE_VALUE = "AttributeValue"               # String con valor del atributo
 PARAM_ATTRIBUTE_APPLY = "AttributeApply"               # Button para aplicar atributo
+PARAM_CODIFICACION_CAJETIN = "CodificacionCajetin"     # String codificación cajetín (attr01 extra)
+PARAM_CODIFICACION_CAJETIN_APPLY = "CodificacionCajetinApply"  # Button para aplicar codificación
 
 # ─────────────────── Opciones Generales ───────────────────
 PARAM_COMMON_PROP = "CommonProp"                      # Propiedades comunes (oculto)
@@ -83,6 +85,7 @@ PARAM_FUNCTIONAL_NAME = "FunctionalName"      # String con valor para definir no
 # ─────────────────── Acciones/Botones ───────────────────
 PARAM_ROW_BORRAR = "RowBorrar"                        # Row de borrar
 PARAM_BORRAR_SECCION = "borrarSeccion"                # Button borrar segmento
+PARAM_INVERTIR_CAVAL = "invertirCaval"                # Button invertir caval
 PARAM_ROW_FINALIZAR = "RowFinalizar"                  # Row de finalizar
 PARAM_FINALIZAR_CREACION = "finalizarCreacion"        # Button finalizar y crear
 
@@ -114,13 +117,6 @@ PARAM_APLICAR_ATTR_SOPORTE = "AplicarAtributoSoporte" # Button - aplica atributo
 PARAM_SOPORTE_COUNT = "SoporteCount"                  # Text - cantidad acumulada (solo lectura)
 # Estado interno
 PARAM_SOPORTES_SAVED_STATE = "SoportesSavedState"    # String JSON - lista de soportes acumulados
-
-# ─────────────────── Puntos Definidos / Puntos Libres ───────────────────
-PARAM_DEFINED_ELEMENT_TYPE = "DefinedElementType"    # StringComboBox: tipo de elemento
-PARAM_DEFINED_POINT_TYPE = "PointType"               # StringComboBox: tipo de punto libre
-PARAM_DEFINED_ROT_X = "RotX"                         # Double - rotación en X
-PARAM_DEFINED_ROT_Y = "RotY"                         # Double - rotación en Y
-PARAM_DEFINED_ROT_Z = "RotZ"                         # Double - rotación en Z
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
@@ -224,12 +220,15 @@ class ParamNames:
         Parámetros de atributos personalizados.
 
         Atributos:
-            ROW: Expander de atributos
             VALUE: String con el valor del atributo
             APPLY: Button para aplicar atributo
+            CODIFICACION: String codificación cajetín (Electricidad)
+            CODIFICACION_APPLY: Button para aplicar codificación
         """
         VALUE = PARAM_ATTRIBUTE_VALUE
         APPLY = PARAM_ATTRIBUTE_APPLY
+        CODIFICACION = PARAM_CODIFICACION_CAJETIN
+        CODIFICACION_APPLY = PARAM_CODIFICACION_CAJETIN_APPLY
 
     class General:
         """
@@ -261,6 +260,7 @@ class ParamNames:
             FINALIZAR_CREACION: Button para finalizar y crear elementos
         """
         BORRAR_SECCION = PARAM_BORRAR_SECCION
+        INVERTIR_CAVAL = PARAM_INVERTIR_CAVAL
         FINALIZAR_CREACION = PARAM_FINALIZAR_CREACION
 
     class Hidden:
@@ -314,27 +314,6 @@ class ParamNames:
         COUNT = PARAM_SOPORTE_COUNT
         # Estado interno
         SAVED_STATE = PARAM_SOPORTES_SAVED_STATE
-
-    class DefinedPointInput:
-        """
-        Parámetros de la sección de puntos definidos / puntos libres.
-
-        Corresponden al bloque "Modo puntos libres" de `agua_polyline.pyp`
-        y permiten acceder desde `build_ele` a la configuración del elemento
-        definido que debe reflejarse en la paleta.
-
-        Atributos:
-            ELEMENT_TYPE: Tipo de elemento seleccionado.
-            POINT_TYPE: Tipo de punto libre seleccionado.
-            ROT_X: Rotación en eje X.
-            ROT_Y: Rotación en eje Y.
-            ROT_Z: Rotación en eje Z.
-        """
-        ELEMENT_TYPE = PARAM_DEFINED_ELEMENT_TYPE
-        POINT_TYPE = PARAM_DEFINED_POINT_TYPE
-        ROT_X = PARAM_DEFINED_ROT_X
-        ROT_Y = PARAM_DEFINED_ROT_Y
-        ROT_Z = PARAM_DEFINED_ROT_Z
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
@@ -391,6 +370,8 @@ class EventIds:
     MOSTRAR_INFO = 1010             # Click en botón "Ver Info"
     ATTRIBUTE_APPLY = 1011            # Click en botón "Aplicar atributo"
     DEFINIR_ORIENTACION = 1012            # Click en botón "Definir orientación"
+    CODIFICACION_CAJETIN_APPLY = 1039     # Click en botón "Aplicar codificación cajetín"
+    INVERTIR_CAVAL = 1017                 # Click en botón "Invertir caval"
 
     # --- Soportes page events ---
     TYPE_SUPPORT_CHANGED = 1030       # Cambio en ComboBox TypeSupport (Zeta/Omega)

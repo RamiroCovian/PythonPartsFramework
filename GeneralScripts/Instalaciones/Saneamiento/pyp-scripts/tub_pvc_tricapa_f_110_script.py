@@ -6,6 +6,7 @@ import math
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_AllplanSettings as AllplanSettings
 import NemAll_Python_BasisElements as AllplanBasisElements
+import NemAll_Python_BaseElements as AllplanBaseElements
 
 from BuildingElement import BuildingElement
 from CreateElementResult import CreateElementResult
@@ -19,10 +20,54 @@ FLECHA_COLOR = 27
 FLECHA_FACTOR_LARGO = 0.7
 FLECHA_OFFSET_Z = 0.5
 FLECHA_DIST_ANILLO = 30.0
+MODEL_ROT_Z_DEG = 180.0
 
 
 def check_allplan_version(_build_ele: BuildingElement, _version: str) -> bool:
     return True
+
+
+def _rotate_z(geo):
+    eje_z = AllplanGeo.Axis3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 0, 1))
+    rotated = AllplanGeo.Rotate(geo, eje_z, AllplanGeo.Angle(math.radians(MODEL_ROT_Z_DEG)))
+    if isinstance(rotated, tuple):
+        err, geo_rot = rotated
+        if err != 0:
+            raise RuntimeError(f"Rotate Z falló (err={err})")
+        return geo_rot
+    return rotated
+
+
+def _flip_flecha_sentido_tubo(flecha_brep):
+    """Invierte el sentido de la flecha a lo largo del tubo (desde el anillo hacia el interior).
+
+    Igual que en tub_pvc_tricapa_f_40_script: 180° en Y por el centroide.
+    """
+    err_v, verts = flecha_brep.GetVertices()
+    if err_v != 0 or not verts:
+        return flecha_brep
+    cx = sum(v.X for v in verts) / len(verts)
+    cy = sum(v.Y for v in verts) / len(verts)
+    cz = sum(v.Z for v in verts) / len(verts)
+    flecha_brep = AllplanGeo.Move(
+        flecha_brep, AllplanGeo.Vector3D(-cx, -cy, -cz)
+    )
+    eje_y = AllplanGeo.Axis3D(
+        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 1, 0)
+    )
+    r = AllplanGeo.Rotate(
+        flecha_brep, eje_y, AllplanGeo.Angle(math.radians(180))
+    )
+    if isinstance(r, tuple):
+        err, g = r
+        if err != 0 or g is None:
+            return AllplanGeo.Move(
+                flecha_brep, AllplanGeo.Vector3D(cx, cy, cz)
+            )
+        flecha_brep = g
+    else:
+        flecha_brep = r
+    return AllplanGeo.Move(flecha_brep, AllplanGeo.Vector3D(cx, cy, cz))
 
 
 def _build_arrow_110_brep(largo: float) -> AllplanGeo.BRep3D:
@@ -81,6 +126,64 @@ def _build_arrow_110_brep(largo: float) -> AllplanGeo.BRep3D:
     return flecha_brep
 
 
+def _apply_own_attributes_110(model_elem, doc) -> None:
+    """Asigna atributos propios del TS-110 según ficha solicitada."""
+    try:
+        attr_list = [
+            AllplanBaseElements.AttributeString(1083, "TS-110"),
+            AllplanBaseElements.AttributeString(1084, "Ø110"),
+            AllplanBaseElements.AttributeString(1085, ""),
+            AllplanBaseElements.AttributeString(1086, ""),
+            AllplanBaseElements.AttributeString(1087, ""),
+            AllplanBaseElements.AttributeString(1895, ""),
+            AllplanBaseElements.AttributeString(1896, "110"),
+            AllplanBaseElements.AttributeString(1897, ""),
+            AllplanBaseElements.AttributeString(1898, "12100"),
+            AllplanBaseElements.AttributeString(1899, ""),
+            AllplanBaseElements.AttributeString(1900, ""),
+            AllplanBaseElements.AttributeString(1901, ""),
+            AllplanBaseElements.AttributeString(1902, ""),
+            AllplanBaseElements.AttributeString(1903, ""),
+            AllplanBaseElements.AttributeString(1904, ""),
+        ]
+
+        if doc:
+            get_id = AllplanBaseElements.AttributeService.GetAttributeID
+            id_6ccis = get_id(doc, "6_CC_IS")
+            id_cart = get_id(doc, "pmp_CARTICULO")
+            id_nom = get_id(doc, "pmp_nom")
+            id_area = get_id(doc, "pmp_area")
+            id_dlin = get_id(doc, "pmp_densitat_lineal")
+            id_diam = get_id(doc, "pmp_diametre")
+            id_sec = get_id(doc, "pmp_seccio")
+
+            if id_6ccis and id_6ccis > 0:
+                attr_list.append(AllplanBaseElements.AttributeString(id_6ccis, "IS"))
+            if id_cart and id_cart > 0:
+                attr_list.append(AllplanBaseElements.AttributeString(id_cart, "KN07_005_003"))
+            if id_nom and id_nom > 0:
+                attr_list.append(AllplanBaseElements.AttributeString(id_nom, "TS-110"))
+            if id_area and id_area > 0:
+                attr_list.append(AllplanBaseElements.AttributeDouble(id_area, 12100.000000))
+            if id_dlin and id_dlin > 0:
+                attr_list.append(AllplanBaseElements.AttributeDouble(id_dlin, 0.2288))
+            if id_diam and id_diam > 0:
+                try:
+                    attr_list.append(AllplanBaseElements.AttributeInteger(id_diam, 110))
+                except Exception:
+                    attr_list.append(AllplanBaseElements.AttributeString(id_diam, "110"))
+            if id_sec and id_sec > 0:
+                try:
+                    attr_list.append(AllplanBaseElements.AttributeInteger(id_sec, 110))
+                except Exception:
+                    attr_list.append(AllplanBaseElements.AttributeString(id_sec, "110"))
+
+        attr_set = AllplanBaseElements.AttributeSet(attr_list)
+        model_elem.SetAttributes(AllplanBaseElements.Attributes([attr_set]))
+    except Exception as ex:
+        print(f"[TubPvcTricapaF110] Advertencia al asignar atributos propios: {ex}")
+
+
 def _create_fecal_110_with_color(
     doc, largo_total_mm: float | None = None
 ) -> CreateElementResult:
@@ -92,16 +195,17 @@ def _create_fecal_110_with_color(
     prop = orig.GetCommonProperties()
     prop.Color = FECAL_110_COLOR
     prop.ColorByLayer = False
-    tube = AllplanBasisElements.ModelElement3D(prop, orig.GetGeometryObject())
-    try:
-        attrs = orig.GetAttributes()
-        if attrs:
-            tube.SetAttributes(attrs)
-    except Exception:
-        pass
+    tube_geom = orig.GetGeometryObject()
+
+    # Giro solicitado en modelo: 180° alrededor del eje Z.
+    tube_geom = _rotate_z(tube_geom)
+    tube = AllplanBasisElements.ModelElement3D(prop, tube_geom)
+    _apply_own_attributes_110(tube, doc)
 
     largo = float(largo_total_mm) if largo_total_mm is not None else 1000.0
     flecha_brep = _build_arrow_110_brep(largo)
+    flecha_brep = _flip_flecha_sentido_tubo(flecha_brep)
+    flecha_brep = _rotate_z(flecha_brep)
     flecha_props = AllplanSettings.AllplanGlobalSettings.GetCurrentCommonProperties()
     flecha_props.Color = FLECHA_COLOR
     flecha_props.ColorByLayer = False

@@ -16,6 +16,8 @@ import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_Utility as PythonUtility
+import NemAll_Python_AllplanSettings as AllplanSettings
+
 
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
@@ -47,9 +49,6 @@ from .clau_de_pas_006 import ClauDePasModel
 from .colze_base_002 import ColzeBaseModel
 from .taps_010 import TapsModel
 from .te_sortida_004 import TeSortidaModel
-from Instalaciones.MacroCore import manager as _macrocore_manager_module
-from .macros import macro_manager as _macro_manager_module
-from .macros.macro_manager import AguaMacroManager
 from Instalaciones.ElementosDefinidos import (
     CallbackDefinedElement,
     DefinedElementsFacadeConfig as ED_FacadeConfig,
@@ -94,17 +93,11 @@ from Instalaciones.ElementosNoDefinidos import (
 
 print(f"[AGUA] Loaded agua_polyline.py from: {__file__}")
 
-# ---------------- CUSTOM NUM_TD PATH ----------------
-project_name, host_name = (
-    AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
-)
-error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(
-    project_name, host_name
-)
+# ---------------- CUSTOM ABSOLUTE ENUM PATH ----------------
+project_name, host_name = AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
+error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, host_name)
 if error != 0:
-    error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(
-        project_name, ""
-    )
+    base_path = AllplanSettings.AllplanPaths.GetCurPrjPath()
 
 # ---------------- ENABLE - SHOW PARAMS ----------------
 profile = Agua.profile()
@@ -118,7 +111,6 @@ CONFIG = PBL.script_object.PolylineBaseConfig(
     num_td_path=base_path,
     limit_angles=True,
     allowed_angles=[0.0, 45.0, 90.0, 135.0, 180.0, -45.0, -90.0, -135.0],
-    marker_manager_factory=lambda so, be: AguaMacroManager(so, be),
 )
 
 # ------ MODULES LOADED FOR TEST ------
@@ -126,8 +118,6 @@ reload_module = [
     PBL,
     PBL_interactor,
     PBL_object,
-    _macrocore_manager_module,
-    _macro_manager_module,
 ]
 
 MAX_SEGMENT_LENGTH = 5000.0  # 5m (fallback)
@@ -1040,9 +1030,6 @@ def check_allplan_version(_build_ele, _version):
             importlib.reload(module)
         except Exception as e:
             print(f"Error al recargar el módulo {module.__name__}: {e}")
-    global AguaMacroManager
-    from .macros.macro_manager import AguaMacroManager as _AMM
-    AguaMacroManager = _AMM
     return True
 
 

@@ -24,8 +24,8 @@ class CodoRigido40mF90:
 
     # En el script old para Tipo 3 están a 0; se mantienen exactos.
     ROT_X_1_40MM_87 = 90.0
-    ROT_Y_1_40MM_87 = 180.0
-    ROT_Z_1_40MM_87 = -135.0
+    ROT_Y_1_40MM_87 = 0.0
+    ROT_Z_1_40MM_87 = -45.0
 
     def __init__(self, build_ele, doc=None):
         self.build_ele = build_ele

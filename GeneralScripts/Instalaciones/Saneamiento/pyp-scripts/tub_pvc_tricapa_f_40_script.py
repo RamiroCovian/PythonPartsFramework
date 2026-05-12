@@ -29,8 +29,14 @@ LAYER_IS_CON_SANE_FAB = 40148
 TUBO_FECAL_40_COLOR = 70
 FLECHA_COLOR = 27
 FLECHA_FACTOR_LARGO = 0.7
-FLECHA_OFFSET_Z = 0.0
+# Mismos criterios que tub_pvc_tricapa_p_110_script (pluvial Ø110).
+FLECHA_OFFSET_Z = 0.5
 FLECHA_DIST_ANILLO = 20.0
+# altura_flecha del CONFIG Ø40 en tub_pvc_tricapa_v_script (1.0).
+FLECHA_ALTURA_FRACCION_DIAM = 1.0
+# Giro del tubo y de la flecha alrededor del eje X por el origen (mismas coords que el prisma).
+MODEL_ROT_X_DEG = 0.0
+MODEL_ROT_Z_DEG = 0.0
 
 
 def _build_tube(largo: float) -> AllplanGeo.BRep3D:
@@ -72,14 +78,17 @@ def _build_tube(largo: float) -> AllplanGeo.BRep3D:
 
 
 def _build_arrow(largo: float) -> AllplanGeo.BRep3D:
-    """Construye la flecha direccional superior como sólido (BRep)."""
+    """Copia de la lógica de `_build_arrow_110_brep` (f_110 / p_110) para Ø40.
+
+    La flecha queda alineada con el **eje X** (como el tubo ya orientado en tricapa_v).
+    Este script mantiene el tubo en **Z**; `_rotate_y_90` aplica solo a la flecha.
+    """
     diametro = 40.0
-    flecha_largo = diametro * FLECHA_FACTOR_LARGO
-    z_flecha = diametro * 1.0 + FLECHA_OFFSET_Z
     largo_anillo = 40.0
+    flecha_largo = diametro * FLECHA_FACTOR_LARGO
+    z_flecha = diametro * FLECHA_ALTURA_FRACCION_DIAM + FLECHA_OFFSET_Z
     largo_tubo = max(largo - largo_anillo, 0.0)
 
-    # Flecha invertida sobre su propio eje: debe apuntar en sentido contrario.
     base_x = max(largo_tubo - flecha_largo - FLECHA_DIST_ANILLO, 0.0)
     sentido = 1.0
     y_centro, y_span = diametro * 0.5, diametro * 0.15
@@ -98,17 +107,114 @@ def _build_arrow(largo: float) -> AllplanGeo.BRep3D:
     polygon = AllplanGeo.Polygon3D(puntos)
     area = AllplanGeo.PolygonalArea3D()
     area += polygon
-    extruded_solid = AllplanGeo.ExtrudedAreaSolid3D()
-    # Espesor pequeño para que se comporte como sólido transformable.
-    extruded_solid.SetDirection(AllplanGeo.Vector3D(0.0, 0.0, 1.0))
-    extruded_solid.SetExtrudedArea(area)
-    err, polyhedron = AllplanGeo.CreatePolyhedron(extruded_solid)
+    extruded = AllplanGeo.ExtrudedAreaSolid3D()
+    extruded.SetDirection(AllplanGeo.Vector3D(0.0, 0.0, 1.0))
+    extruded.SetExtrudedArea(area)
+    err, polyhedron = AllplanGeo.CreatePolyhedron(extruded)
     if err != AllplanGeo.eGeometryErrorCode.eOK or polyhedron is None:
         raise RuntimeError("CreatePolyhedron flecha falló")
     err, flecha_brep = AllplanGeo.CreateBRep3D(polyhedron)
     if err != AllplanGeo.eGeometryErrorCode.eOK or flecha_brep is None:
         raise RuntimeError("CreateBRep3D flecha falló")
+
+    rot_matrix = AllplanGeo.Matrix3D()
+    rot_matrix.SetRotation(
+        AllplanGeo.Line3D(0, 0, z_flecha, 1, 0, z_flecha),
+        AllplanGeo.Angle(math.radians(180)),
+    )
+    flecha_brep = AllplanGeo.Transform(flecha_brep, rot_matrix)
+
+    err_v, verts = flecha_brep.GetVertices()
+    if err_v == 0 and verts:
+        cx = sum(v.X for v in verts) / len(verts)
+        cy = sum(v.Y for v in verts) / len(verts)
+        cz = sum(v.Z for v in verts) / len(verts)
+        flecha_brep = AllplanGeo.Move(flecha_brep, AllplanGeo.Vector3D(-cx, -cy, -cz))
+
+    x_pos = base_x - (largo_tubo * 0.5)
+    mat_pos = AllplanGeo.Matrix3D()
+    mat_pos.SetTranslation(AllplanGeo.Vector3D(x_pos, 0.0, 0.0))
+    flecha_brep = AllplanGeo.Transform(flecha_brep, mat_pos)
     return flecha_brep
+
+
+def _rotate_y_90(geo):
+    """Ry -90°: mapea la flecha (eje X como en Ø110) al tubo Ø40 en +Z con anillo en z=largo_tubo.
+
+    Con +90° la punta hacia el anillo acababa en -Z; el anillo del prisma está en +Z.
+    """
+    eje_y = AllplanGeo.Axis3D(
+        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 1, 0)
+    )
+    rotated = AllplanGeo.Rotate(geo, eje_y, AllplanGeo.Angle(math.radians(-90)))
+    if isinstance(rotated, tuple):
+        err, g = rotated
+        if err != 0 or g is None:
+            raise RuntimeError(f"Rotate Y falló (err={err})")
+        return g
+    return rotated
+
+
+def _flip_flecha_sentido_tubo(flecha_brep):
+    """Anillo en z=largo_tubo: la flecha debe apuntar hacia el interior (-Z), lejos del anillo.
+
+    Giro 180° en Y por el centroide invierte el eje longitudinal sin desplazar el conjunto.
+    """
+    err_v, verts = flecha_brep.GetVertices()
+    if err_v != 0 or not verts:
+        return flecha_brep
+    cx = sum(v.X for v in verts) / len(verts)
+    cy = sum(v.Y for v in verts) / len(verts)
+    cz = sum(v.Z for v in verts) / len(verts)
+    flecha_brep = AllplanGeo.Move(
+        flecha_brep, AllplanGeo.Vector3D(-cx, -cy, -cz)
+    )
+    eje_y = AllplanGeo.Axis3D(
+        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 1, 0)
+    )
+    r = AllplanGeo.Rotate(
+        flecha_brep, eje_y, AllplanGeo.Angle(math.radians(180))
+    )
+    if isinstance(r, tuple):
+        err, g = r
+        if err != 0 or g is None:
+            return AllplanGeo.Move(
+                flecha_brep, AllplanGeo.Vector3D(cx, cy, cz)
+            )
+        flecha_brep = g
+    else:
+        flecha_brep = r
+    return AllplanGeo.Move(flecha_brep, AllplanGeo.Vector3D(cx, cy, cz))
+
+
+def _rotate_z(geo):
+    eje_z = AllplanGeo.Axis3D(AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 0, 1))
+    rotated = AllplanGeo.Rotate(geo, eje_z, AllplanGeo.Angle(math.radians(MODEL_ROT_Z_DEG)))
+    if isinstance(rotated, tuple):
+        err, geo_rot = rotated
+        if err != 0:
+            raise RuntimeError(f"Rotate Z falló (err={err})")
+        return geo_rot
+    return rotated
+
+
+def _rotate_x(geo):
+    if abs(MODEL_ROT_X_DEG) < 1e-9:
+        return geo
+    eje_x = AllplanGeo.Axis3D(
+        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(1, 0, 0)
+    )
+    rotated = AllplanGeo.Rotate(
+        geo, eje_x, AllplanGeo.Angle(math.radians(MODEL_ROT_X_DEG))
+    )
+    if isinstance(rotated, tuple):
+        err, geo_rot = rotated
+        if err != 0 or not geo_rot.IsValid():
+            raise RuntimeError(f"Rotate X falló (err={err})")
+        return geo_rot
+    if hasattr(rotated, "IsValid") and not rotated.IsValid():
+        raise RuntimeError("Rotate X falló: geometría no válida")
+    return rotated
 
 def _create_element(
     tipo_tubo: int,
@@ -122,48 +228,18 @@ def _create_element(
 
     brep = _build_tube(largo)
     flecha_brep = _build_arrow(largo)
-    z_flecha = 40.0 + FLECHA_OFFSET_Z
 
-    eje_x = AllplanGeo.Axis3D(
-        AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(1, 0, 0)
-    )
-    rotated = AllplanGeo.Rotate(brep, eje_x, AllplanGeo.Angle(math.radians(180)))
-    if isinstance(rotated, tuple):
-        err, brep_rot = rotated
-        if err != 0 or not brep_rot.IsValid():
-            raise RuntimeError(f"Rotate falló (err={err})")
-        brep = brep_rot
-    else:
-        if hasattr(rotated, "IsValid") and not rotated.IsValid():
-            raise RuntimeError("Rotate falló: brep no válido")
-        brep = rotated
+    # Flecha como en Ø110 en eje X; tubo local en +Z. Ry(-90) alinea la zona del anillo con z=largo_tubo.
+    flecha_brep = _rotate_y_90(flecha_brep)
+    # Sentido: desde el anillo hacia el interior del tramo (como croquis de referencia).
+    flecha_brep = _flip_flecha_sentido_tubo(flecha_brep)
 
-    rot_matrix = AllplanGeo.Matrix3D()
-    rot_matrix.SetRotation(
-        AllplanGeo.Line3D(0, 0, z_flecha, 1, 0, z_flecha),
-        AllplanGeo.Angle(math.radians(180)),
-    )
-    flecha_brep = AllplanGeo.Transform(flecha_brep, rot_matrix)
-    # Recentrar la flecha en origen local para que el ajuste manual XYZ sea intuitivo.
-    err_v, verts = flecha_brep.GetVertices()
-    if err_v == 0 and verts:
-        cx = sum(v.X for v in verts) / len(verts)
-        cy = sum(v.Y for v in verts) / len(verts)
-        cz = sum(v.Z for v in verts) / len(verts)
-        flecha_brep = AllplanGeo.Move(flecha_brep, AllplanGeo.Vector3D(-cx, -cy, -cz))
-    # Posicionamiento de flecha solo por distancia al anillo (FLECHA_DIST_ANILLO).
-    largo_tubo = max(largo - 40.0, 0.0)
-    base_x = max(largo_tubo - (40.0 * FLECHA_FACTOR_LARGO) - FLECHA_DIST_ANILLO, 0.0)
-    x_pos = base_x - (largo_tubo * 0.5)
-    mat_trasl_flecha = AllplanGeo.Matrix3D()
-    mat_trasl_flecha.SetTranslation(
-        AllplanGeo.Vector3D(
-            x_pos,
-            0.0,
-            0.0,
-        )
-    )
-    flecha_brep = AllplanGeo.Transform(flecha_brep, mat_trasl_flecha)
+    brep = _rotate_x(brep)
+    flecha_brep = _rotate_x(flecha_brep)
+
+    # Giro opcional del modelo alrededor del eje Z (tubo y flecha ya llevan MODEL_ROT_X_DEG).
+    brep = _rotate_z(brep)
+    flecha_brep = _rotate_z(flecha_brep)
 
     elementos = []
     for i in range(3):

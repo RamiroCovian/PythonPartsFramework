@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 import os
-from typing import Any, Callable
+from typing import AbstractSet, Any, Callable
 
 import NemAll_Python_Geometry as AllplanGeo
 
@@ -624,18 +624,17 @@ def register_te_cuts_into(
         except Exception:
             trims = (71.0, 70.6, 30.0)
     elif main_in == 110 and main_out == 110 and d_branch == 110:
-        any_fecal = any(_conn_segment_system_is_fecal(segment_groups, c) for c in conns)
-        if not any_fecal:
-            try:
-                from . import geo_handler as _gh_bif_y110p
+        # Mismo set de recortes para 110-110-110 en pluvial y fecal.
+        try:
+            from . import geo_handler as _gh_bif_y110p
 
-                trims = (
-                    float(_gh_bif_y110p.BIF_Y110_PLUVIAL_TE_TRIM_MAIN_IN_MM),
-                    float(_gh_bif_y110p.BIF_Y110_PLUVIAL_TE_TRIM_BRANCH_MM),
-                    float(_gh_bif_y110p.BIF_Y110_PLUVIAL_TE_TRIM_MAIN_OUT_MM),
-                )
-            except Exception:
-                trims = (140.0, 148.0, 47.0)
+            trims = (
+                float(_gh_bif_y110p.BIF_Y110_PLUVIAL_TE_TRIM_MAIN_IN_MM),
+                float(_gh_bif_y110p.BIF_Y110_PLUVIAL_TE_TRIM_BRANCH_MM),
+                float(_gh_bif_y110p.BIF_Y110_PLUVIAL_TE_TRIM_MAIN_OUT_MM),
+            )
+        except Exception:
+            trims = (140.0, 148.0, 47.0)
     elif main_in == 110 and main_out == 110 and d_branch == 40:
         try:
             from . import geo_handler as _gh_bif_y110_40
@@ -669,6 +668,33 @@ def register_te_cuts_into(
     else:
         conn_in, conn_out = main_b, main_a
 
+    # Troncal simétrico (misma Ø en ambos brazos): intercambio in/out de recortes según
+    # la mano de la rama (110-110-110 y 110-110-40 con la misma geometría de decisión).
+    if d_main_a == d_main_b:
+        v_main_a = _seg_dir_from_conn(main_a, segment_groups)
+        v_main_b = _seg_dir_from_conn(main_b, segment_groups)
+        v_branch = _seg_dir_from_conn(branch, segment_groups)
+        # Mismo criterio usado en te_orientation: elegir una dirección troncal base.
+        base_main = v_main_a
+        if (
+            (v_main_a[0] * v_main_b[0] + v_main_a[1] * v_main_b[1] + v_main_a[2] * v_main_b[2])
+            > 0.0
+        ):
+            base_main = (-base_main[0], -base_main[1], -base_main[2])
+        branch_along_main = (
+            v_branch[0] * base_main[0]
+            + v_branch[1] * base_main[1]
+            + v_branch[2] * base_main[2]
+        )
+        # Cuando la rama apunta "a favor" del troncal (dot>0), en los casos reportados
+        # los trims in/out quedan invertidos para la TE orientada.
+        # Misma regla para TE 110-110-40 (troncal simétrico, rama reducida).
+        _trim_hand_te = d_branch == d_main_a or (
+            d_main_a == 110 and d_main_b == 110 and int(d_branch) == 40
+        )
+        if _trim_hand_te and branch_along_main > 0.0:
+            trim_main_in, trim_main_out = trim_main_out, trim_main_in
+
     def add_cut(conn: dict, trim_mm: float) -> None:
         seg_key = (conn["path_idx"], conn["seg_idx"])
         cuts = segment_cuts.setdefault(seg_key, {"start": 0.0, "end": 0.0})
@@ -689,11 +715,15 @@ def register_te_cuts_into(
 def compute_segment_cuts_for_all_paths(
     segment_groups: list,
     get_diameter: Callable[[int, int], float] | None = None,
+    *,
+    skip_te_vertices: AbstractSet[tuple[float, float, float]] | None = None,
 ) -> dict[tuple[int, int], dict[str, float]]:
     """
     Recortes por codo, manguito y TE para todos los paths.
     - segment_groups: lista de listas de segmentos.
     - get_diameter: (path_idx, seg_idx) -> diámetro mm. Si None, se usa .info.diameter del segmento.
+    - skip_te_vertices: vértices (x,y,z) redondeados donde no debe aplicarse recorte de TE
+      (sin pieza bifurcación en ese nodo).
 
     Returns:
         {(path_idx, seg_idx): {"start": mm, "end": mm}}
@@ -736,7 +766,10 @@ def compute_segment_cuts_for_all_paths(
     )
 
     # 2.C) TE
+    skip_te = skip_te_vertices or set()
     for vkey in te_vertices:
+        if vkey in skip_te:
+            continue
         register_te_cuts_into(all_cuts, vkey, vertex_map, segment_groups, get_diameter)
 
     return all_cuts

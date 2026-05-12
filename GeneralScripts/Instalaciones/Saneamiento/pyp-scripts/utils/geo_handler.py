@@ -10,10 +10,10 @@ import NemAll_Python_Utility as PythonUtility
 from typing import Any, List, Optional, Type
 
 from .trim_config import (
-    REDUCT_110_40_TRIM_IN_MM,
-    REDUCT_110_40_TRIM_OUT_MM,
-    TAPRED_40_25_TRIM_IN_MM,
-    TAPRED_40_25_TRIM_OUT_MM,
+    REDUCT_110_40_TRIM_IN_MM as _TRIMCFG_REDUCT_110_40_TRIM_IN_MM,
+    REDUCT_110_40_TRIM_OUT_MM as _TRIMCFG_REDUCT_110_40_TRIM_OUT_MM,
+    TAPRED_40_25_TRIM_IN_MM as _TRIMCFG_TAPRED_40_25_TRIM_IN_MM,
+    TAPRED_40_25_TRIM_OUT_MM as _TRIMCFG_TAPRED_40_25_TRIM_OUT_MM,
 )
 
 _SANEAMIENTO_DEBUG_VERTICES = str(
@@ -61,70 +61,71 @@ CODO45_25_OFFSET_Z_MM = 0.0
 # SANEAMIENTO 90° = 2x45° (40 mm) — ajustes globales
 # ---------------------------------------------------
 DOUBLE45_40_AUTO_SEP_MM = 0.0
-DOUBLE45_40_CODO1_OFFSET_X_MM = -45.0
-DOUBLE45_40_CODO1_OFFSET_Y_MM = 30.0
+DOUBLE45_40_CODO1_OFFSET_X_MM = -50.0
+DOUBLE45_40_CODO1_OFFSET_Y_MM = 28.5
 DOUBLE45_40_CODO1_OFFSET_Z_MM = 0.0
-DOUBLE45_40_CODO2_OFFSET_X_MM = 55.0
-DOUBLE45_40_CODO2_OFFSET_Y_MM = 30.0
+DOUBLE45_40_CODO2_OFFSET_X_MM = 41.0
+DOUBLE45_40_CODO2_OFFSET_Y_MM = 29.0
 DOUBLE45_40_CODO2_OFFSET_Z_MM = 0.0
 # Ajuste global para codo 90° de 40 mm (outer + inner).
-CODO90_40_OFFSET_X_MM = -12.0
+CODO90_40_OFFSET_X_MM = -27.0
 CODO90_40_OFFSET_Y_MM = -15.0
-CODO90_40_OFFSET_Z_MM = 17.0
+CODO90_40_OFFSET_Z_MM = 40.0
 # Ajuste global para codo 45° individual de 40 mm (outer + inner).
-CODO45_40_OFFSET_X_MM = 5.0
+CODO45_40_OFFSET_X_MM = -5.0
 CODO45_40_OFFSET_Y_MM = 10.0
 CODO45_40_OFFSET_Z_MM = 0.0
 # Bifurcación Y45 Ø40 (TE 40-40-40, colocación BIF40 / Saneamiento_old): traslación extra en mm (ejes mundo).
 BIF_Y40_PLACEMENT_OFFSET_X_MM = 0.0
 BIF_Y40_PLACEMENT_OFFSET_Y_MM = 0.0
-BIF_Y40_PLACEMENT_OFFSET_Z_MM = -40.0
+BIF_Y40_PLACEMENT_OFFSET_Z_MM = 40.0
 # Recortes de tubo en nudo TE Y45 Ø40 (40-40-40), en mm (portado de Saneamiento_old BIF40_*).
 # Se aplican a los tres brazos: troncal “entrada”, rama, troncal “salida” (ver vertex_utils.register_te_cuts_into).
-BIF_Y40_TE_TRIM_MAIN_IN_MM = 30.0
-BIF_Y40_TE_TRIM_MAIN_OUT_MM = 65.0
-BIF_Y40_TE_TRIM_BRANCH_MM = 70.6
-# Bifurcación Y Ø110 pluvial (TE 110-110-110, Derivacion110m_f_script + colocación D110-D110).
+BIF_Y40_TE_TRIM_MAIN_IN_MM = 60.0
+BIF_Y40_TE_TRIM_MAIN_OUT_MM = 60.0
+BIF_Y40_TE_TRIM_BRANCH_MM = 62.0
+# Bifurcación Y Ø110 (TE 110-110-110): modelo fecal `Derivacion110m_f_script.py`,
+# modelo pluvial `Derivacion110m_p_script.py` (según `y110_bif_script_variant` en te_nodes).
 BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM = 0.0
 BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM = 0.0
 BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM = 0.0
 # Bifurcación TE 110-110-40 (Bif_Reduc_110_50): mm en el mismo marco local que
 # BIF110_D110_OFFSET_* (se combinan vía _rotate_offset_like_old con Rx,Ry,Rz del nodo).
 BIF_Y110_40_PLACEMENT_OFFSET_X_MM = 0.0
-BIF_Y110_40_PLACEMENT_OFFSET_Y_MM = -40.0
+BIF_Y110_40_PLACEMENT_OFFSET_Y_MM = 0.0
 BIF_Y110_40_PLACEMENT_OFFSET_Z_MM = 0.0
-# Recortes nudo TE 110-110-110 solo pluvial (editar; fecal usa TE_TRIMS / otro script).
-BIF_Y110_PLUVIAL_TE_TRIM_MAIN_IN_MM = 50.0
-BIF_Y110_PLUVIAL_TE_TRIM_MAIN_OUT_MM = 147.0
-BIF_Y110_PLUVIAL_TE_TRIM_BRANCH_MM = 148.0
+# Recortes nudo TE 110-110-110 compartidos (pluvial/fecal).
+BIF_Y110_PLUVIAL_TE_TRIM_MAIN_IN_MM = 94.0
+BIF_Y110_PLUVIAL_TE_TRIM_MAIN_OUT_MM = 132.0
+BIF_Y110_PLUVIAL_TE_TRIM_BRANCH_MM = 140.86
 # TE 110-110-40 (Bif_Reduc_110_50_script): recortes por tramo; afinar en obra si hace falta.
-BIF_Y110_40_TE_TRIM_MAIN_IN_MM = 10.0
+BIF_Y110_40_TE_TRIM_MAIN_IN_MM = 15.0
 BIF_Y110_40_TE_TRIM_MAIN_OUT_MM = 110.0
 BIF_Y110_40_TE_TRIM_BRANCH_MM = 190.0
 # ---------------------------------------------------
 # SANEAMIENTO 90° = 2x45° (110 mm) — ajustes globales
 # ---------------------------------------------------
 DOUBLE45_110_AUTO_SEP_MM = 0.0
-DOUBLE45_110_CODO1_OFFSET_X_MM = -110.0
+DOUBLE45_110_CODO1_OFFSET_X_MM = -250.0
 DOUBLE45_110_CODO1_OFFSET_Y_MM = 60.0
-DOUBLE45_110_CODO1_OFFSET_Z_MM = 100.0
-DOUBLE45_110_CODO2_OFFSET_X_MM = 80.0
+DOUBLE45_110_CODO1_OFFSET_Z_MM = 50.0
+DOUBLE45_110_CODO2_OFFSET_X_MM = -70.0
 DOUBLE45_110_CODO2_OFFSET_Y_MM = 60.0
-DOUBLE45_110_CODO2_OFFSET_Z_MM = 100.0
+DOUBLE45_110_CODO2_OFFSET_Z_MM = 50.0
 # Ajuste global para codo 90° de 110 mm (outer + inner).
 # Portado de Saneamiento_old (L1000_D87) para el codo 110/90-87.
-CODO90_110_OFFSET_X_MM = 183.0
-CODO90_110_OFFSET_Y_MM = 68.0
-CODO90_110_OFFSET_Z_MM = 0.0
+CODO90_110_OFFSET_X_MM = -370.0
+CODO90_110_OFFSET_Y_MM = 65.0
+CODO90_110_OFFSET_Z_MM = 300.0
 # Codo 110mm 90° fecal (cambio de plano): copia explícita de offsets.
 # Se mantiene independiente por nombre para separar fecal/pluvial.
 CODO90_110_FECAL_OFFSET_X_MM = CODO90_110_OFFSET_X_MM
 CODO90_110_FECAL_OFFSET_Y_MM = CODO90_110_OFFSET_Y_MM
 CODO90_110_FECAL_OFFSET_Z_MM = CODO90_110_OFFSET_Z_MM
 # Ajuste global para codo 45° individual de 110 mm (outer + inner).
-CODO45_110_OFFSET_X_MM = -15.0
-CODO45_110_OFFSET_Y_MM = 22.0
-CODO45_110_OFFSET_Z_MM = 100.0
+CODO45_110_OFFSET_X_MM = -160.0
+CODO45_110_OFFSET_Y_MM = 22.5
+CODO45_110_OFFSET_Z_MM = 50.0
 # Ajuste global para Tap reductor 40<->25 (outer + inner), en eje local del fitting.
 TAPRED_40_25_OFFSET_X_MM = 0.0
 TAPRED_40_25_OFFSET_Y_MM = 0.0
@@ -139,8 +140,10 @@ REDUCT_110_40_OFFSET_Z_MM = 0.0
 
 _DERIV_Y45_D40_CLASS: Any = None
 _DERIV_Y45_D40_LOAD_FAILED = False
-_DERIV_Y110_D110_CLASS: Any = None
-_DERIV_Y110_D110_LOAD_FAILED = False
+_DERIV_Y110_FECAL_CLASS: Any = None
+_DERIV_Y110_FECAL_LOAD_FAILED = False
+_DERIV_Y110_PLUVIAL_CLASS: Any = None
+_DERIV_Y110_PLUVIAL_LOAD_FAILED = False
 _BIF_REDUC_110_50_CLASS: Any = None
 _BIF_REDUC_110_50_LOAD_FAILED = False
 
@@ -178,36 +181,71 @@ def _get_derivacion_y45_d40_model_class() -> Optional[Type[Any]]:
         return None
 
 
-def _get_derivacion_y110_d110_model_class() -> Optional[Type[Any]]:
-    """Carga perezosa de DerivacionY110D110 (pluvial) para TE 110-110-110 en el pipeline."""
-    global _DERIV_Y110_D110_CLASS, _DERIV_Y110_D110_LOAD_FAILED
-    if _DERIV_Y110_D110_CLASS is not None:
-        return _DERIV_Y110_D110_CLASS
-    if _DERIV_Y110_D110_LOAD_FAILED:
-        return None
+def _get_derivacion_y110_model_class(variant: str = "pluvial") -> Optional[Type[Any]]:
+    """
+    Carga perezosa del modelo TE 110-110-110.
+    variant: 'fecal' -> Derivacion110m_f_script (BifurcacionY110Fecal110mm),
+             'pluvial' -> Derivacion110m_p_script (BifurcacionY110Pluvial110mm).
+    """
+    global _DERIV_Y110_FECAL_CLASS, _DERIV_Y110_FECAL_LOAD_FAILED
+    global _DERIV_Y110_PLUVIAL_CLASS, _DERIV_Y110_PLUVIAL_LOAD_FAILED
+    v = str(variant or "pluvial").strip().lower()
+    if v == "fecal":
+        if _DERIV_Y110_FECAL_CLASS is not None:
+            return _DERIV_Y110_FECAL_CLASS
+        if _DERIV_Y110_FECAL_LOAD_FAILED:
+            return None
+        rel_name = "Derivacion110m_f_script.py"
+        mod_tag = "saneamiento_derivacion_y110_fecal_runtime"
+        class_names = ("BifurcacionY110Fecal110mm", "DerivacionY110D110")
+    else:
+        if _DERIV_Y110_PLUVIAL_CLASS is not None:
+            return _DERIV_Y110_PLUVIAL_CLASS
+        if _DERIV_Y110_PLUVIAL_LOAD_FAILED:
+            return None
+        rel_name = "Derivacion110m_p_script.py"
+        mod_tag = "saneamiento_derivacion_y110_pluvial_runtime"
+        class_names = ("BifurcacionY110Pluvial110mm", "DerivacionY110D110")
     try:
         pyp_dir = os.path.dirname(os.path.dirname(__file__))
-        path = os.path.join(pyp_dir, "Derivacion110m_f_script.py")
+        path = os.path.join(pyp_dir, rel_name)
         if not os.path.isfile(path):
-            _DERIV_Y110_D110_LOAD_FAILED = True
+            if v == "fecal":
+                _DERIV_Y110_FECAL_LOAD_FAILED = True
+            else:
+                _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
             return None
-        spec = importlib.util.spec_from_file_location(
-            "saneamiento_derivacion_y110_pluvial_runtime", path
-        )
+        spec = importlib.util.spec_from_file_location(mod_tag, path)
         if not spec or not spec.loader:
-            _DERIV_Y110_D110_LOAD_FAILED = True
+            if v == "fecal":
+                _DERIV_Y110_FECAL_LOAD_FAILED = True
+            else:
+                _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
             return None
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        cls = getattr(mod, "DerivacionY110D110", None)
+        cls = None
+        for name in class_names:
+            cls = getattr(mod, name, None)
+            if cls is not None:
+                break
         if cls is None:
-            _DERIV_Y110_D110_LOAD_FAILED = True
+            if v == "fecal":
+                _DERIV_Y110_FECAL_LOAD_FAILED = True
+            else:
+                _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
             return None
-        _DERIV_Y110_D110_CLASS = cls
+        if v == "fecal":
+            _DERIV_Y110_FECAL_CLASS = cls
+        else:
+            _DERIV_Y110_PLUVIAL_CLASS = cls
         return cls
     except Exception as ex:
-        print(f"[SANEAMIENTO][TE-Y110-P] Error cargando Derivacion110m_f_script: {ex}")
-        _DERIV_Y110_D110_LOAD_FAILED = True
+        print(f"[SANEAMIENTO][TE-Y110] Error cargando {rel_name}: {ex}")
+        if v == "fecal":
+            _DERIV_Y110_FECAL_LOAD_FAILED = True
+        else:
+            _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
         return None
 
 
@@ -258,8 +296,8 @@ CODO45_25_TRIM_OUT_MM = 20.0
 # Recortes extra para codo_45 individual (40 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_45
 # - TRIM_OUT: recorta el tramo saliente del codo_45
-CODO45_40_TRIM_IN_MM = 30.0
-CODO45_40_TRIM_OUT_MM = 20.0
+CODO45_40_TRIM_IN_MM = 19.60
+CODO45_40_TRIM_OUT_MM = 16.13
 # Recortes extra para codo_90 real (25 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_90
 # - TRIM_OUT: recorta el tramo saliente del codo_90
@@ -268,19 +306,19 @@ CODO90_25_TRIM_OUT_MM = 30.0
 # Recortes extra para codo_90 real (40 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_90
 # - TRIM_OUT: recorta el tramo saliente del codo_90
-CODO90_40_TRIM_IN_MM = 30.0
-CODO90_40_TRIM_OUT_MM = 45.0
+CODO90_40_TRIM_IN_MM = 42.70
+CODO90_40_TRIM_OUT_MM = 22.80
 # Recortes extra para codo_45 individual (110 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_45
 # - TRIM_OUT: recorta el tramo saliente del codo_45
-CODO45_110_TRIM_IN_MM = 40.0
-CODO45_110_TRIM_OUT_MM = 50.0
+CODO45_110_TRIM_IN_MM = 33.80
+CODO45_110_TRIM_OUT_MM = 32.82
 # Recortes extra para codo_90 real (110 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_90
 # - TRIM_OUT: recorta el tramo saliente del codo_90
 # Valores de Saneamiento_old para codo rígido 110mm/90° (L1000_D87).
-CODO90_110_TRIM_IN_MM = 82.0
-CODO90_110_TRIM_OUT_MM = 150.0
+CODO90_110_TRIM_IN_MM = 134.20
+CODO90_110_TRIM_OUT_MM = 75.40
 # Codo 110mm 90° fecal (cambio de plano): copia explícita de trims.
 # Se mantiene independiente por nombre para separar fecal/pluvial.
 CODO90_110_FECAL_TRIM_IN_MM = CODO90_110_TRIM_IN_MM
@@ -293,13 +331,23 @@ DOUBLE45_TRIM_OUT_MM = 50.0
 # Recortes extra para 2x45 (40 mm):
 # - TRIM_IN: acorta la entrada al primer codo
 # - TRIM_OUT: acorta la salida del segundo codo
-DOUBLE45_40_TRIM_IN_MM = 70.0
-DOUBLE45_40_TRIM_OUT_MM = 70.0
+DOUBLE45_40_TRIM_IN_MM = 64.95
+DOUBLE45_40_TRIM_OUT_MM = 65.90
 # Recortes extra para 2x45 (110 mm):
 # - TRIM_IN: acorta la entrada al primer codo
 # - TRIM_OUT: acorta la salida del segundo codo
-DOUBLE45_110_TRIM_IN_MM = 150.0
-DOUBLE45_110_TRIM_OUT_MM = 150.0
+DOUBLE45_110_TRIM_IN_MM = 131.30
+DOUBLE45_110_TRIM_OUT_MM = 130.32
+# Recortes extra para Tap reductor 40<->25:
+# - TRIM_IN: recorta el tramo del lado 25
+# - TRIM_OUT: recorta el tramo del lado 40
+TAPRED_40_25_TRIM_IN_MM = _TRIMCFG_TAPRED_40_25_TRIM_IN_MM
+TAPRED_40_25_TRIM_OUT_MM = _TRIMCFG_TAPRED_40_25_TRIM_OUT_MM
+# Recortes extra para Reductor 110<->40:
+# - TRIM_IN: recorta el tramo del lado 110
+# - TRIM_OUT: recorta el tramo del lado 40
+REDUCT_110_40_TRIM_IN_MM = _TRIMCFG_REDUCT_110_40_TRIM_IN_MM
+REDUCT_110_40_TRIM_OUT_MM = _TRIMCFG_REDUCT_110_40_TRIM_OUT_MM
 
 
 def _reduct_110_40_offsets_mm():
@@ -6864,6 +6912,7 @@ class PipelineProcessor:
         d_branch,
         distribution_type="IS",
         mirror_model_x: bool = False,
+        y110_script_variant: str = "pluvial",
     ):
         """
         Devuelve [outer, inner?] de TE para el nodo según diámetros reales
@@ -6913,7 +6962,12 @@ class PipelineProcessor:
             )
             return []
 
-        cache_key = (dist, di_in, di_out, di_branch, bool(mirror_model_x))
+        y110_var = (
+            str(y110_script_variant or "pluvial").strip().lower()
+            if di_in == di_out == di_branch == 110
+            else ""
+        )
+        cache_key = (dist, di_in, di_out, di_branch, bool(mirror_model_x), y110_var)
         cached = self._te_model_cache.get(cache_key)
         if cached is not None:
             print(
@@ -6999,35 +7053,34 @@ class PipelineProcessor:
                 return model_list_110_40
 
             if di_in == di_out == di_branch == 110:
-                if getattr(self, "saneamiento_fecal_tricapa_install", False):
-                    # TE Y110 pluvial (Derivacion110m_f_script) no aplica a tricapa fecal.
-                    pass
-                else:
-                    ModelCls110 = _get_derivacion_y110_d110_model_class()
-                    if ModelCls110 is None:
-                        self._te_model_cache[cache_key] = []
-                        print(
-                            f"[SANEAMIENTO][TE-Y110-P] clase no disponible dist={dist} "
-                            f"di={di_in}/{di_out}/{di_branch}"
-                        )
-                        return []
-                    try:
-                        te_obj_110 = ModelCls110(self.build_ele, self.doc)
-                        if hasattr(te_obj_110, "set_diameters"):
-                            if mirror_model_x:
-                                te_obj_110.set_diameters(di_out, di_branch, di_in)
-                            else:
-                                te_obj_110.set_diameters(di_in, di_branch, di_out)
-                        model_list_110 = list(te_obj_110.build() or [])
-                    except Exception as ex:
-                        print(f"[SANEAMIENTO][TE-Y110-P] build error: {ex}")
-                        model_list_110 = []
-                    self._te_model_cache[cache_key] = model_list_110
+                ModelCls110 = _get_derivacion_y110_model_class(
+                    "fecal" if y110_var == "fecal" else "pluvial"
+                )
+                if ModelCls110 is None:
+                    self._te_model_cache[cache_key] = []
                     print(
-                        f"[SANEAMIENTO][TE-Y110-P] build dist={dist} di_in={di_in} di_out={di_out} "
-                        f"di_branch={di_branch} elems={len(model_list_110)}"
+                        f"[SANEAMIENTO][TE-Y110] clase no disponible dist={dist} "
+                        f"di={di_in}/{di_out}/{di_branch}"
                     )
-                    return model_list_110
+                    return []
+                try:
+                    te_obj_110 = ModelCls110(self.build_ele, self.doc)
+                    if hasattr(te_obj_110, "set_diameters"):
+                        if mirror_model_x:
+                            te_obj_110.set_diameters(di_out, di_branch, di_in)
+                        else:
+                            te_obj_110.set_diameters(di_in, di_branch, di_out)
+                    model_list_110 = list(te_obj_110.build() or [])
+                except Exception as ex:
+                    print(f"[SANEAMIENTO][TE-Y110] build error: {ex}")
+                    model_list_110 = []
+                self._te_model_cache[cache_key] = model_list_110
+                print(
+                    f"[SANEAMIENTO][TE-Y110] build dist={dist} di_in={di_in} di_out={di_out} "
+                    f"di_branch={di_branch} y110_variant={y110_var or '-'} "
+                    f"elems={len(model_list_110)}"
+                )
+                return model_list_110
 
         classes = self._load_te_classes()
         ModelClass = classes.get(dist) if classes else None
@@ -7514,56 +7567,83 @@ class PipelineProcessor:
                             try_apply_old_d110_d110_bif_transform,
                         )
 
-                        if use_y110_40:
-                            _bif110_extra_dx = BIF_Y110_40_PLACEMENT_OFFSET_X_MM
-                            _bif110_extra_dy = BIF_Y110_40_PLACEMENT_OFFSET_Y_MM
-                            _bif110_extra_dz = BIF_Y110_40_PLACEMENT_OFFSET_Z_MM
-                        else:
-                            _bif110_extra_dx = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM
-                            _bif110_extra_dy = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM
-                            _bif110_extra_dz = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM
-
-                        if _debug_te_y110_40_enabled() and use_y110_40:
-                            print(
-                                "[SANEAMIENTO][TE-Y110-40][DEBUG] _aplicar_transformacion "
-                                f"orientación D110 nodo=({p_destino.X:.3f},{p_destino.Y:.3f},"
-                                f"{p_destino.Z:.3f}) main_dir={mv} branch_dir={bv} "
-                                f"extra_offset=({_bif110_extra_dx},{_bif110_extra_dy},"
-                                f"{_bif110_extra_dz})"
-                            )
-                        brep_110 = try_apply_old_d110_d110_bif_transform(
-                            brep,
-                            p_destino.X,
-                            p_destino.Y,
-                            p_destino.Z,
-                            mv,
-                            bv,
-                            extra_dx=_bif110_extra_dx,
-                            extra_dy=_bif110_extra_dy,
-                            extra_dz=_bif110_extra_dz,
+                        # Por defecto, preferimos la orientación nueva (te_orientation + mirrors locales)
+                        # porque es la única que decide mirrors de forma robusta en cualquier plano/ángulo.
+                        # El modo "old" queda disponible solo para compatibilidad/diagnóstico.
+                        use_old_y110 = (
+                            str(os.getenv("SANEAMIENTO_USE_OLD_TE_ORIENTATION", "0"))
+                            .strip()
+                            .lower()
+                            in ("1", "true", "yes", "on")
                         )
-                        if brep_110 is not None:
+                        if not use_old_y110:
+                            # No aplicar ni retornar: dejar que el bloque TE moderno (Parte 2) oriente el modelo.
+                            if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
+                                "",
+                                "0",
+                                "false",
+                                "False",
+                            ):
+                                print(
+                                    "[DBG TE] skip old D110 orientation (SANEAMIENTO_USE_OLD_TE_ORIENTATION=0)"
+                                )
+                        else:
+                            if use_y110_40:
+                                _bif110_extra_dx = BIF_Y110_40_PLACEMENT_OFFSET_X_MM
+                                _bif110_extra_dy = BIF_Y110_40_PLACEMENT_OFFSET_Y_MM
+                                _bif110_extra_dz = BIF_Y110_40_PLACEMENT_OFFSET_Z_MM
+                            else:
+                                _bif110_extra_dx = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM
+                                _bif110_extra_dy = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM
+                                _bif110_extra_dz = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM
+
+                            if _debug_te_y110_40_enabled() and use_y110_40:
+                                print(
+                                    "[SANEAMIENTO][TE-Y110-40][DEBUG] _aplicar_transformacion "
+                                    f"orientación D110 nodo=({p_destino.X:.3f},{p_destino.Y:.3f},"
+                                    f"{p_destino.Z:.3f}) main_dir={mv} branch_dir={bv} "
+                                    f"extra_offset=({_bif110_extra_dx},{_bif110_extra_dy},"
+                                    f"{_bif110_extra_dz})"
+                                )
+                            brep_110 = try_apply_old_d110_d110_bif_transform(
+                                brep,
+                                p_destino.X,
+                                p_destino.Y,
+                                p_destino.Z,
+                                mv,
+                                bv,
+                                extra_dx=_bif110_extra_dx,
+                                extra_dy=_bif110_extra_dy,
+                                extra_dz=_bif110_extra_dz,
+                            )
+                            if brep_110 is not None:
+                                if _debug_te_y110_40_enabled() and use_y110_40:
+                                    print(
+                                        "[SANEAMIENTO][TE-Y110-40][DEBUG] "
+                                        "try_apply_old_d110_d110_bif_transform -> BRep OK"
+                                    )
+                                return _build_model_with_source_attrs(brep_110)
                             if _debug_te_y110_40_enabled() and use_y110_40:
                                 print(
                                     "[SANEAMIENTO][TE-Y110-40][DEBUG] "
-                                    "try_apply_old_d110_d110_bif_transform -> BRep OK"
+                                    "try_apply_old_d110_d110_bif_transform -> None (sin cambio)"
                                 )
-                            return _build_model_with_source_attrs(brep_110)
-                        if _debug_te_y110_40_enabled() and use_y110_40:
-                            print(
-                                "[SANEAMIENTO][TE-Y110-40][DEBUG] "
-                                "try_apply_old_d110_d110_bif_transform -> None (sin cambio)"
-                            )
 
         # ==========================================
         # PARTE 2: LÓGICA VERTICAL (PITCH / ZX)
         # ==========================================
-        # TE: aplicar mirrors/rotación/elevación como en fontaneria.py
-        if elem_type == "te" and custom_yaw_deg is not None:
-            te_params = getattr(self, "te_nodes", {}).get(
-                (round(p_destino.X, 3), round(p_destino.Y, 3), round(p_destino.Z, 3)),
-                None,
-            )
+        # TE: aplicar mirrors/rotación/elevación como en fontaneria.py.
+        # Importante: la TE no depende del yaw del tramo; si hay parámetros en self.te_nodes
+        # para el nodo, se deben aplicar siempre (aunque custom_yaw_deg sea None).
+        if elem_type == "te":
+            te_key = (round(p_destino.X, 3), round(p_destino.Y, 3), round(p_destino.Z, 3))
+            te_map = getattr(self, "te_nodes", {}) or {}
+            te_params = te_map.get(te_key, None)
+            if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in ("", "0", "false", "False"):
+                print(
+                    "[DBG TE APPLY_LOOKUP] key=%s found=%s te_nodes_len=%s"
+                    % (str(te_key), str(bool(te_params)), str(len(te_map)))
+                )
             if te_params:
                 # Debug TE: por defecto ON (hasta estabilizar orientación XZ/YZ)
                 debug_te = str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
@@ -7613,6 +7693,42 @@ class PipelineProcessor:
 
                 if debug_te_pos:
                     try:
+                        print(
+                            "[DBG TE ORIENT] node=(%.3f,%.3f,%.3f) plane=%s ang=%.1f° "
+                            "need_mx=%s need_my=%s need_mz=%s elevated=%s "
+                            "main_dir_3d=(%.3f,%.3f,%.3f) branch_dir_3d=(%.3f,%.3f,%.3f) "
+                            "offset_perp_local=%.2f"
+                            % (
+                                p_destino.X,
+                                p_destino.Y,
+                                p_destino.Z,
+                                plane,
+                                math.degrees(ang),
+                                str(need_mx),
+                                str(need_my),
+                                str(need_mz),
+                                str(branch_elevated),
+                                float(main_dir_3d[0])
+                                if isinstance(main_dir_3d, (list, tuple)) and len(main_dir_3d) == 3
+                                else 0.0,
+                                float(main_dir_3d[1])
+                                if isinstance(main_dir_3d, (list, tuple)) and len(main_dir_3d) == 3
+                                else 0.0,
+                                float(main_dir_3d[2])
+                                if isinstance(main_dir_3d, (list, tuple)) and len(main_dir_3d) == 3
+                                else 0.0,
+                                float(branch_dir_3d[0])
+                                if isinstance(branch_dir_3d, (list, tuple)) and len(branch_dir_3d) == 3
+                                else 0.0,
+                                float(branch_dir_3d[1])
+                                if isinstance(branch_dir_3d, (list, tuple)) and len(branch_dir_3d) == 3
+                                else 0.0,
+                                float(branch_dir_3d[2])
+                                if isinstance(branch_dir_3d, (list, tuple)) and len(branch_dir_3d) == 3
+                                else 0.0,
+                                offset_perp_local,
+                            )
+                        )
                         _e, _verts = brep.GetVertices()
                         if _verts:
                             minx = min(v.X for v in _verts)
@@ -7662,14 +7778,21 @@ class PipelineProcessor:
                     )
 
                 mat = AllplanGeo.Matrix3D()
-                # Mirrors locales como en fontaneria: SIEMPRE antes de rotaciones (independiente del plano)
+                # Mirrors locales puros por eje (SIEMPRE antes de rotaciones, independiente del plano):
+                # Nota: los flags (need_mirror_x_local / need_mirror_y_local) están definidos en
+                # coordenadas del modelo TE, donde históricamente el eje "x" del flag corresponde
+                # al espejo en Y local. Por eso se permutan los scaling.
+                # - need_mirror_x_local: espejo en Y local  -> scale( 1, -1, 1)
+                # - need_mirror_y_local: espejo en X local  -> scale(-1,  1, 1)
+                # Nota: antes need_mirror_y_local usaba (-1,-1,1), que equivale a un giro 180° en XY
+                # y producía casos correctos "por casualidad" según cuadrante/plano.
                 if need_mx:
                     mirror_mat = AllplanGeo.Matrix3D()
                     mirror_mat.SetScaling(1, -1, 1)
                     mat = mat * mirror_mat
                 if need_my:
                     mirror_mat = AllplanGeo.Matrix3D()
-                    mirror_mat.SetScaling(-1, -1, 1)
+                    mirror_mat.SetScaling(-1, 1, 1)
                     mat = mat * mirror_mat
 
                 # Desplazamiento local perpendicular al troncal (offset de centrado)
@@ -7902,6 +8025,26 @@ class PipelineProcessor:
                             mat = mat * mirror_z_mat
 
                 brep = AllplanGeo.Transform(brep, mat)
+                if debug_te_pos:
+                    try:
+                        _e2, _verts2 = brep.GetVertices()
+                        if _verts2:
+                            minx2 = min(v.X for v in _verts2)
+                            miny2 = min(v.Y for v in _verts2)
+                            minz2 = min(v.Z for v in _verts2)
+                            maxx2 = max(v.X for v in _verts2)
+                            maxy2 = max(v.Y for v in _verts2)
+                            maxz2 = max(v.Z for v in _verts2)
+                            cx2 = (minx2 + maxx2) * 0.5
+                            cy2 = (miny2 + maxy2) * 0.5
+                            cz2 = (minz2 + maxz2) * 0.5
+                            print(
+                                "[DBG TE POS] BREP_AFTER_LOCAL_TRANS bbox_min=(%.3f,%.3f,%.3f) "
+                                "bbox_max=(%.3f,%.3f,%.3f) bbox_center=(%.3f,%.3f,%.3f)"
+                                % (minx2, miny2, minz2, maxx2, maxy2, maxz2, cx2, cy2, cz2)
+                            )
+                    except Exception:
+                        pass
                 brep = AllplanGeo.Move(
                     brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
                 )
@@ -8238,7 +8381,11 @@ class PipelineProcessor:
 
         # info de TE: opcional, se puede inyectar desde fuera
         te_nodes = getattr(self, "te_nodes", {}) or {}
-        inserted_te_keys = set()
+        # _global_te_inserted: set compartido entre procesadores de distintos paths
+        # para evitar triple colocación en el mismo nodo TE (bifurcación Case-1).
+        inserted_te_keys = getattr(self, "_global_te_inserted", None)
+        if inserted_te_keys is None:
+            inserted_te_keys = set()
         cross_path_elbows = getattr(self, "cross_path_elbows", {}) or {}
         inserted_cross_path_elbows = set()
         cross_path_manguitos = getattr(self, "cross_path_manguitos", {}) or {}
@@ -8994,12 +9141,17 @@ class PipelineProcessor:
                             )
                         )
 
+                        y110_sv = str(
+                            te_info_at_node.get("y110_bif_script_variant", "pluvial")
+                            or "pluvial"
+                        ).strip().lower()
                         dyn_te_models = self._get_te_models_for_diameters(
                             d_main_in,
                             d_main_out,
                             d_branch,
                             distribution_type=te_dist,
                             mirror_model_x=mirror_model_x,
+                            y110_script_variant=y110_sv,
                         )
                         te_outer_model = (
                             dyn_te_models[0] if dyn_te_models else self.templates["te"]
@@ -9072,6 +9224,38 @@ class PipelineProcessor:
                                         v_unit.Z,
                                         float(cut_start),
                                         float(cut_end),
+                                    )
+                                )
+                            except Exception:
+                                pass
+                        if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
+                            "",
+                            "0",
+                            "false",
+                            "False",
+                        ):
+                            try:
+                                print(
+                                    "[DBG TE CALL] geo_handler=%s node_key=%s pos_nodo=(%.3f,%.3f,%.3f) yaw=%.2f te_nodes_has=%s"
+                                    % (
+                                        __file__,
+                                        str(node_key),
+                                        pos_nodo.X,
+                                        pos_nodo.Y,
+                                        pos_nodo.Z,
+                                        float(yaw),
+                                        str(
+                                            bool(
+                                                getattr(self, "te_nodes", {}).get(
+                                                    (
+                                                        round(pos_nodo.X, 3),
+                                                        round(pos_nodo.Y, 3),
+                                                        round(pos_nodo.Z, 3),
+                                                    ),
+                                                    None,
+                                                )
+                                            )
+                                        ),
                                     )
                                 )
                             except Exception:
@@ -9856,36 +10040,38 @@ class PipelineProcessor:
                         )
                         element_index += 1
 
-                        # TD opcional: manguito inner (si existe en modelo dinámico o templates)
-                        manguito_inner_model = None
-                        if is_inner_only_reducer:
-                            manguito_inner_model = None
-                        elif len(dyn_models) > 1:
-                            manguito_inner_model = dyn_models[1]
-                        elif "manguito_inner" in self.templates:
-                            manguito_inner_model = self.templates["manguito_inner"]
+                        # TD opcional: añadir TODOS los modelos adicionales devueltos por dinámico.
+                        # Antes solo se añadía dyn_models[1] y se perdían dyn_models[2:], p.ej. reductores complejos.
+                        extra_models = []
+                        if not is_inner_only_reducer:
+                            if len(dyn_models) > 1:
+                                extra_models = list(dyn_models[1:])
+                            elif "manguito_inner" in self.templates:
+                                extra_models = [self.templates["manguito_inner"]]
 
-                        if manguito_inner_model is not None:
+                        if extra_models:
                             print(
-                                "[AGUA][MANGUITO] creando inner "
-                                f"(fuente={'dinamico' if len(dyn_models) > 1 else 'template'})"
+                                "[AGUA][MANGUITO] creando extras "
+                                f"(fuente={'dinamico' if len(dyn_models) > 1 else 'template'}) "
+                                f"count={len(extra_models)}"
                             )
-                            element_manguito_inner = self._aplicar_transformacion(
-                                manguito_inner_model,
-                                seg,
-                                elem_type="manguito",
-                                custom_position=pos_manguito,
-                                next_seg=next_seg,
-                                custom_mirror_x_local=need_mirror_x,
-                            )
-                            result_list.append(
-                                {
-                                    "element": element_manguito_inner,
-                                    "element_type": "manguito_inner",
-                                    "index": element_index,
-                                }
-                            )
-                            element_index += 1
+                            for extra_model in extra_models:
+                                element_manguito_inner = self._aplicar_transformacion(
+                                    extra_model,
+                                    seg,
+                                    elem_type="manguito",
+                                    custom_position=pos_manguito,
+                                    next_seg=next_seg,
+                                    custom_mirror_x_local=need_mirror_x,
+                                )
+                                result_list.append(
+                                    {
+                                        "element": element_manguito_inner,
+                                        "element_type": "manguito_inner",
+                                        "index": element_index,
+                                    }
+                                )
+                                element_index += 1
 
             # -------------------------------------------------------
             # 3.C CODO EN NODO COMPARTIDO ENTRE PATHS (grado=2)
@@ -10099,15 +10285,16 @@ class PipelineProcessor:
                     )
                     element_index += 1
 
-                    manguito_inner_model = None
+                    # Cross-path: añadir TODOS los modelos adicionales del dinámico.
+                    extra_models = []
                     if len(dyn_models) > 1:
-                        manguito_inner_model = dyn_models[1]
+                        extra_models = list(dyn_models[1:])
                     elif "manguito_inner" in self.templates:
-                        manguito_inner_model = self.templates["manguito_inner"]
+                        extra_models = [self.templates["manguito_inner"]]
 
-                    if manguito_inner_model is not None:
+                    for extra_model in extra_models:
                         element_manguito_inner = self._aplicar_transformacion(
-                            manguito_inner_model,
+                            extra_model,
                             seg_for_conn,
                             elem_type="manguito",
                             custom_position=pos_manguito,
@@ -10127,6 +10314,134 @@ class PipelineProcessor:
                     break
 
             perf_seg_total_ms += (time.perf_counter() - t_seg_start) * 1000.0
+
+        # -------------------------------------------------------
+        # POST-LOOP: TE en extremos del path (Case-1 bifurcación)
+        # Cuando los tres caminos son de un solo segmento, el nodo
+        # TE nunca es interior → la sección 3.A no lo cubre.
+        # -------------------------------------------------------
+        if "te" in self.templates and segments and te_nodes:
+            def _try_te_endpoint(pt, seg_obj):
+                nonlocal element_index
+                if pt is None:
+                    return
+                nk = (round(pt.X, 3), round(pt.Y, 3), round(pt.Z, 3))
+                te_info = te_nodes.get(nk)
+                if not te_info or nk in inserted_te_keys:
+                    return
+                inserted_te_keys.add(nk)
+                center_pt_raw = te_info.get("center_pt")
+                if (
+                    isinstance(center_pt_raw, (tuple, list))
+                    and len(center_pt_raw) == 3
+                ):
+                    pos_nodo = AllplanGeo.Point3D(
+                        float(center_pt_raw[0]),
+                        float(center_pt_raw[1]),
+                        float(center_pt_raw[2]),
+                    )
+                else:
+                    pos_nodo = pt
+                yaw = float(te_info.get("yaw_deg", 0.0) or 0.0)
+                te_dist = str(te_info.get("distribution_type", "IS") or "IS")
+                te_dist = "TD" if te_dist.upper() == "TD" else "IS"
+                d_main_in = te_info.get("d_main_in", None)
+                d_main_out = te_info.get("d_main_out", None)
+                d_branch = te_info.get("d_branch", None)
+                if d_main_in is None or d_main_out is None or d_branch is None:
+                    try:
+                        info_seg = getattr(seg_obj, "info", None)
+                        d_fallback = getattr(info_seg, "diameter", 20.0)
+                        d_main_in = d_main_out = d_branch = d_fallback
+                    except Exception:
+                        d_main_in = d_main_out = d_branch = 20.0
+                mirror_model_x = bool(
+                    te_info.get("model_mirror_x", False)
+                    or (
+                        d_main_in is not None
+                        and d_main_out is not None
+                        and int(round(float(d_main_in))) < int(round(float(d_main_out)))
+                    )
+                )
+                y110_sv = (
+                    str(te_info.get("y110_bif_script_variant", "pluvial") or "pluvial")
+                    .strip()
+                    .lower()
+                )
+                dyn_te_models = self._get_te_models_for_diameters(
+                    d_main_in,
+                    d_main_out,
+                    d_branch,
+                    distribution_type=te_dist,
+                    mirror_model_x=mirror_model_x,
+                    y110_script_variant=y110_sv,
+                )
+                te_outer_model = (
+                    dyn_te_models[0] if dyn_te_models else self.templates["te"]
+                )
+                is_inner_only_te = False
+                try:
+                    diam_set = {
+                        int(round(float(d_main_in))),
+                        int(round(float(d_main_out))),
+                        int(round(float(d_branch))),
+                    }
+                    is_inner_only_te = (
+                        te_dist == "TD"
+                        and len(dyn_te_models) == 1
+                        and len(diam_set) > 1
+                    )
+                except Exception:
+                    is_inner_only_te = False
+                te_inner_model = (
+                    dyn_te_models[1]
+                    if len(dyn_te_models) > 1
+                    else self.templates.get("te_inner")
+                )
+                print(
+                    "[AGUA][TE][ENDPOINT] node=%s dist=%s di_in=%s di_out=%s di_branch=%s"
+                    % (str(nk), te_dist, str(d_main_in), str(d_main_out), str(d_branch))
+                )
+                element_te = self._aplicar_transformacion(
+                    te_outer_model,
+                    seg_obj,
+                    elem_type="te",
+                    custom_position=pos_nodo,
+                    custom_yaw_deg=yaw,
+                )
+                result_list.append(
+                    {
+                        "element": element_te,
+                        "element_type": "te_inner" if is_inner_only_te else "te",
+                        "index": element_index,
+                    }
+                )
+                element_index += 1
+                if is_inner_only_te:
+                    te_inner_model = None
+                if te_inner_model is not None:
+                    element_te_inner = self._aplicar_transformacion(
+                        te_inner_model,
+                        seg_obj,
+                        elem_type="te",
+                        custom_position=pos_nodo,
+                        custom_yaw_deg=yaw,
+                    )
+                    result_list.append(
+                        {
+                            "element": element_te_inner,
+                            "element_type": "te_inner",
+                            "index": element_index,
+                        }
+                    )
+                    element_index += 1
+
+            _try_te_endpoint(
+                getattr(segments[0].data, "start", None), segments[0]
+            )
+            _try_te_endpoint(
+                getattr(segments[-1].data, "end", None), segments[-1]
+            )
 
         if _SANEAMIENTO_PERF_DEBUG:
             total_ms = (time.perf_counter() - t_total_start) * 1000.0

@@ -169,26 +169,26 @@ class ConjuntosReduccion:
             if attr_6_cc_is_id and attr_6_cc_is_id > 0:
                 attr_list.append(AllplanBaseElements.AttributeString(attr_6_cc_is_id, "IS"))
             if attr_pmp_carticulo_id and attr_pmp_carticulo_id > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(attr_pmp_carticulo_id, "KN07_007_003"))
+                attr_list.append(AllplanBaseElements.AttributeString(attr_pmp_carticulo_id, "KN07_007_002"))
             if attr_pmp_nom_id and attr_pmp_nom_id > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(attr_pmp_nom_id, "RED. M-F 110-40Ø"))
+                attr_list.append(AllplanBaseElements.AttributeString(attr_pmp_nom_id, "RED. M-F 110-50Ø"))
             if attr_pmp_pes_unitari_id and attr_pmp_pes_unitari_id > 0:
-                attr_list.append(AllplanBaseElements.AttributeDouble(attr_pmp_pes_unitari_id, 0.105))
+                attr_list.append(AllplanBaseElements.AttributeDouble(attr_pmp_pes_unitari_id, 0.1119))
             if attr_pmp_seccio_id and attr_pmp_seccio_id > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(attr_pmp_seccio_id, "110-40"))
+                attr_list.append(AllplanBaseElements.AttributeString(attr_pmp_seccio_id, "110-50"))
         except Exception as e:
             print(f"[Reduct_110_50_40_script] Advertencia atributos usuario reductor 110-40: {e}")
 
     def _attach_reductor_110_40_attributes(self, model_elem, include_user_attrs: bool = True):
-        """Ficha 110-40; el segundo sólido solo custom (evita duplicar peso pmp en listados)."""
+        """Ficha 110-50; el segundo sólido solo custom (evita duplicar peso pmp en listados)."""
         red_attr_list = [
-            AllplanBaseElements.AttributeString(1083, "RED. M-F 110-40Ø"),
-            AllplanBaseElements.AttributeString(1084, "Ø110-40"),
+            AllplanBaseElements.AttributeString(1083, "RED. M-F 110-50Ø"),
+            AllplanBaseElements.AttributeString(1084, "Ø110-50"),
             AllplanBaseElements.AttributeString(1085, ""),
             AllplanBaseElements.AttributeString(1086, ""),
             AllplanBaseElements.AttributeString(1087, ""),
             AllplanBaseElements.AttributeString(1895, ""),
-            AllplanBaseElements.AttributeString(1896, "110-40"),
+            AllplanBaseElements.AttributeString(1896, "110-50"),
             AllplanBaseElements.AttributeString(1897, ""),
             AllplanBaseElements.AttributeString(1898, ""),
             AllplanBaseElements.AttributeString(1899, ""),
@@ -203,6 +203,57 @@ class ConjuntosReduccion:
         red_attr_set = AllplanBaseElements.AttributeSet(red_attr_list)
         red_attributes = AllplanBaseElements.Attributes([red_attr_set])
         model_elem.SetAttributes(red_attributes)
+
+    def _attach_adapter_50_40_attributes(self, model_elem):
+        """Atributos propios del adaptador pequeño (50-40) según ficha."""
+        attr_list = [
+            AllplanBaseElements.AttributeString(1083, "RED. M-F 50-40Ø"),
+            AllplanBaseElements.AttributeString(1084, "Ø40-50"),
+            AllplanBaseElements.AttributeString(1085, ""),
+            AllplanBaseElements.AttributeString(1086, ""),
+            AllplanBaseElements.AttributeString(1087, ""),
+            AllplanBaseElements.AttributeString(1895, ""),
+            AllplanBaseElements.AttributeString(1896, "40-50"),
+            AllplanBaseElements.AttributeString(1897, ""),
+            AllplanBaseElements.AttributeString(1898, ""),
+            AllplanBaseElements.AttributeString(1899, ""),
+            AllplanBaseElements.AttributeString(1900, ""),
+            AllplanBaseElements.AttributeString(1901, ""),
+            AllplanBaseElements.AttributeString(1902, ""),
+            AllplanBaseElements.AttributeString(1903, ""),
+            AllplanBaseElements.AttributeString(1904, ""),
+        ]
+        if self.doc:
+            try:
+                get_id = AllplanBaseElements.AttributeService.GetAttributeID
+                id_6ccis = get_id(self.doc, "6_CC_IS")
+                id_cart = get_id(self.doc, "pmp_CARTICULO")
+                id_nom = get_id(self.doc, "pmp_nom")
+                id_pes = get_id(self.doc, "pmp_pes_unitari")
+                id_sec = get_id(self.doc, "pmp_seccio")
+                if id_6ccis and id_6ccis > 0:
+                    attr_list.append(AllplanBaseElements.AttributeString(id_6ccis, "IS"))
+                if id_cart and id_cart > 0:
+                    attr_list.append(
+                        AllplanBaseElements.AttributeString(id_cart, "KN07_007_001")
+                    )
+                if id_nom and id_nom > 0:
+                    attr_list.append(
+                        AllplanBaseElements.AttributeString(id_nom, "RED. M-F 50-40Ø")
+                    )
+                if id_pes and id_pes > 0:
+                    attr_list.append(AllplanBaseElements.AttributeDouble(id_pes, 0.0319))
+                if id_sec and id_sec > 0:
+                    attr_list.append(
+                        AllplanBaseElements.AttributeString(id_sec, "Ø40-50mm")
+                    )
+            except Exception as ex:
+                print(
+                    "[Reduct_110_50_40_script] Advertencia atributos adaptador 50-40: "
+                    f"{ex}"
+                )
+        attr_set = AllplanBaseElements.AttributeSet(attr_list)
+        model_elem.SetAttributes(AllplanBaseElements.Attributes([attr_set]))
 
     def _build_figura_reductora(self) -> List[Any]:
         props = self._props(color=70)
@@ -364,7 +415,7 @@ class ConjuntosReduccion:
         model_cuboides = AllplanBasisElements.ModelElement3D(props, obj_cuboides)
 
         self._attach_reductor_110_40_attributes(model_reductor, include_user_attrs=True)
-        self._attach_reductor_110_40_attributes(model_cuboides, include_user_attrs=False)
+        self._attach_adapter_50_40_attributes(model_cuboides)
 
         return [model_reductor, model_cuboides]
 

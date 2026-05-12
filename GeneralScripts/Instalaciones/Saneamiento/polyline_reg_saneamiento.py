@@ -137,8 +137,14 @@ INSTALLATION_INFO = {
         {
             "key": "bifurcacion_y110_pluvial",
             "label": "Bifurcación Y Ø110 45° Pluvial",
+            "module_path": "pyp-scripts.Derivacion110m_p_script",
+            "pythonpart": "Derivacion110mPluvialScript",
+        },
+        {
+            "key": "bifurcacion_y110_fecal",
+            "label": "Bifurcación Y Ø110 45° Fecal",
             "module_path": "pyp-scripts.Derivacion110m_f_script",
-            "pythonpart": "Derivacion110mScript",
+            "pythonpart": "Derivacion110mFecalScript",
         },
 
         # AQUI TENES QUE AGREGAR LOS NOMBRES DE LOS SCRIPTS DE CODOS, REDUCTORES, BIFURCACION.. ETC

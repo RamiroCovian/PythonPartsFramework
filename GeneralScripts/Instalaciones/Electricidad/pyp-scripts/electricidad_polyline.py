@@ -15,6 +15,7 @@ import math
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
+import NemAll_Python_AllplanSettings as AllplanSettings
 
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
@@ -31,20 +32,23 @@ from .macros.macro_manager import ElectricidadMacroManager
 
 from NemAll_Python_BaseElements import LayerService
 
-# ---------------- CUSTOM NUM_TD PATH ----------------
-BASE_PATH = Path(__file__).resolve()  # or custom path
-INST_NAME = "ELECTRICIDAD"
+# ---------------- CUSTOM ABSOLUTE ENUM PATH ----------------
+project_name, host_name = AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
+error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, host_name)
+if error != 0:
+    base_path = AllplanSettings.AllplanPaths.GetCurPrjPath()
 
 # ---------------- ENABLE - SHOW PARAMS ----------------
 profile = Electricidad.profile()
 profile.show.add_polilyne = False
 
+INST_NAME = "ELECTRICIDAD"
 # ---------------- DEFAULT CONFIG PARAMS ----------------
 CONFIG = PBL.script_object.PolylineBaseConfig(
     default_installation=INST_NAME.upper(),
     parameters_show=profile.show,
     parameters_enabled=profile.enabled,
-    num_td_path=str(BASE_PATH),
+    num_td_path=base_path,
 
     limit_angles=False,
     allowed_angles=[],
@@ -89,6 +93,9 @@ _EN_ELEMENT_MAP = _TD_ELEMENT_MAP   # misma geometría, distinto layer
 _TD_COLOR_INNER = 15    # tubo interior (igual que IS telecom)
 _TD_COLOR_OUTER = 4     # recubrimiento exterior XPS
 _TD_OUTER_OFFSET = 2.5  # mm: desplazamiento del recubrimiento hacia -Y (abajo en plano XY)
+
+# IDs de atributos personalizados Allplan — fallback si GetAttributeID falla
+_ATTR_PERSO_01_ID = 1083  # "Atributo personalizado 01" (numeración absoluta CC-{num})
 
 # ---- Mapa de default_layers por tipo de distribución ----
 _DEFAULT_LAYERS_BY_DISTRIBUTION: dict[str, dict] = {
@@ -663,6 +670,47 @@ def _layer_and_attr_storage_keys(
     return sk, sk
 
 
+def _find_cut_sibling_number(path_idx: int, so: 'PBL.script_object.PolylineScriptObject') -> int | None:
+    """
+    Devuelve el CC number de un path hermano si path_idx es un corte del mismo tubo.
+    Un path es corte si comparte un punto de corte explícito (saved_cut_points /
+    saved_vertex_cut_points) con otro path que ya tiene CC asignado.
+    Devuelve None para paths independientes → deben recibir número nuevo.
+    """
+    cut_pts = (
+        list(getattr(so, 'saved_cut_points', []))
+        + list(getattr(so, 'saved_vertex_cut_points', []))
+    )
+    if not cut_pts:
+        return None
+
+    saved_paths = getattr(so, 'saved_paths', [])
+    if path_idx >= len(saved_paths):
+        return None
+
+    current_path = saved_paths[path_idx]
+    if not current_path:
+        return None
+
+    current_start = current_path[0]
+    current_end   = current_path[-1]
+
+    for cp in cut_pts:
+        if not (_points_coincide(current_start, cp) or _points_coincide(current_end, cp)):
+            continue
+        for sibling_idx, sibling_num in so.cc_path_numbers.items():
+            if sibling_idx == path_idx or sibling_idx >= len(saved_paths):
+                continue
+            sibling_path = saved_paths[sibling_idx]
+            if sibling_path and (
+                _points_coincide(sibling_path[0], cp)
+                or _points_coincide(sibling_path[-1], cp)
+            ):
+                return sibling_num
+
+    return None
+
+
 def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PBL.script_object.PolylineScriptObject) -> list:
     """
     Hook final: aplica layers y atributos técnicos + nombre de usuario a cada elemento generado.
@@ -679,6 +727,34 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
     diameter     = float(cfg.get("diameter", 0))
     color        = int(cfg.get("color", 0))
     overlap_mm   = float(cfg.get("overlap_mm", 0.0))
+
+    # Prefijo y clave de contador: REJ para rejiband, CC para el resto.
+    _num_key = "REJ" if "rejiband" in str(element_key).lower() else "CC"
+
+    # Numeración absoluta: UN número por path, contador global compartido entre tipos.
+    # Todos los paths de un mismo tubo (incluyendo cortes) comparten el mismo número.
+    # Si el path ya tiene un número asignado (modo edición o propagación del split), se reutiliza.
+    path_num = 0
+    if so.init_storage:
+        if not hasattr(so, "cc_path_numbers"):
+            so.cc_path_numbers = {}
+        cc_before = dict(so.cc_path_numbers)
+        if path_idx in so.cc_path_numbers:
+            path_num = so.cc_path_numbers[path_idx]
+            print(f"[CC-DBG] ASIGNACION | path_idx={path_idx} | REUSAR cc_path_numbers existente → path_num={path_num} | cc={cc_before}")
+        else:
+            # Solo hereda si este path es un CORTE de otro (comparten punto de corte explícito).
+            # Paths independientes dibujados en la misma sesión NO deben heredar.
+            cut_sibling_num = _find_cut_sibling_number(path_idx, so)
+            if cut_sibling_num is not None:
+                path_num = cut_sibling_num
+                print(f"[CC-DBG] ASIGNACION | path_idx={path_idx} | HEREDAR de corte hermano → path_num={path_num} | cc={cc_before}")
+            else:
+                path_num = so.init_storage._get_next_number(_num_key)
+                print(f"[CC-DBG] ASIGNACION | path_idx={path_idx} | NUEVO numero de archivo ({_num_key}) → path_num={path_num} | cc={cc_before}")
+            so.cc_path_numbers[path_idx] = path_num
+    else:
+        print(f"[CC-DBG] ASIGNACION | path_idx={path_idx} | init_storage=None → path_num=0 (no se escribe attr01)")
 
     doc = so.coord_input.GetInputViewDocument()
 
@@ -716,6 +792,15 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
                     element_model.CommonProperties = _props
                 except Exception as _e:
                     print(f"[Error] Fallo al setear KN_XPS_RECESS: {_e}")
+        elif "rejiband" in str(etype or "").lower():
+            _rej_id = LayerService.GetIDByShortName("IS_REJIBANDS", doc)
+            if _rej_id:
+                try:
+                    _props = element_model.CommonProperties
+                    _props.Layer = _rej_id
+                    element_model.CommonProperties = _props
+                except Exception as _e:
+                    print(f"[Error] Fallo al setear IS_REJIBANDS: {_e}")
         else:
             element_model = _apply_layer_to_element(element_model, layer_storage_key, so)
 
@@ -738,16 +823,18 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
             raw_attrs = script_inst.get_attributes(value=diameter, tipo=None, color=color, overlap_mm=0.0)
 
         # 2. Post-proceso de raw_attrs para cumplir valores esperados por la biblioteca:
+        #    - attr01 = "{prefix}-{num}" (CC- para conductos, REJ- para rejiband)
         #    - attr04 = pmp_tipus_cablejat (tipo de cable/tubo, no descripción del layer)
         #    - attr07, attr09 = enteros sin decimales
         #    - attr10 = siempre 0 (valor calculado pendiente)
-        raw_attrs = _fix_numeric_and_attr04(doc, raw_attrs)
+        elem_num = path_num if not _is_geo_accessory_element_type(etype) else 0
+        codificacion = so.applied_codificacion.get(attr_storage_key, "") if attr_storage_key else ""
+        raw_attrs = _fix_numeric_and_attr04(doc, raw_attrs, num=elem_num, codificacion=codificacion, prefix=_num_key)
 
         # 3. Atributos de UI solo en tramos principales (misma clave que al aplicar desde marco)
         elem_attrs = so.applied_attributes.get(attr_storage_key, []) if attr_storage_key else []
 
         # 4. Fusión en orden de prioridad: Base <- Usuario (UI)
-        #    attr01 NO se autogenera: se deja vacío para que el usuario lo rellene manualmente
         final_attrs = _merge_attributes(raw_attrs, elem_attrs)
 
         # 7. Aplicar al modelo
@@ -782,6 +869,9 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
                     so._polyline_attrs[path_idx] = {}
                 if pt_idx not in so._polyline_attrs[path_idx]:
                     so._polyline_attrs[path_idx][pt_idx] = final_attrs
+
+    if so.init_storage:
+        so.init_storage._save_numbering_file()
 
     return elements_generated_final
 
@@ -832,9 +922,7 @@ def _build_attr01(doc, user_value: str, element_key: str) -> list:
     if not user_value:
         return []
     try:
-        attr_id = AllplanBaseElements.AttributeService.GetAttributeID(
-            doc, "Atributo personalizado 01"
-        )
+        attr_id = 1083
         if not attr_id or attr_id <= 0:
             return []
         if element_key != "rejiband_u":
@@ -952,22 +1040,26 @@ def _extract_number_from_attrs(attribute_list: list) -> int | None:
 
     return None
 
-def _fix_numeric_and_attr04(doc, raw_attrs: list) -> list:
+def _fix_numeric_and_attr04(doc, raw_attrs: list, num: int = 0, codificacion: str = "", prefix: str = "CC") -> list:
     """
     Post-procesa raw_attrs:
-      - Escribe attr01 = "CC" para todos los conductos eléctricos.
+      - Escribe attr01 = "{prefix}-{num}" (CC- para conductos, REJ- para rejiband).
+        Si num == 0, no escribe attr01.
       - Extrae pmp_tipus_cablejat y lo escribe como Atributo personalizado 04.
       - Convierte pmp_diametre y pmp_area a AttributeString (sin decimales).
     Los attrs 07, 09, 10 ya se generan como AttributeInteger directamente en cada script.
+    IDs hardcodeados (no GetAttributeID por nombre): attr01=1083, attr04=1086.
     """
+    id_attr01 = 1083  # Custom attribute 01
+    id_attr04 = 1086  # Custom attribute 04
     try:
-        id_attr01  = AllplanBaseElements.AttributeService.GetAttributeID(doc, "Atributo personalizado 01")
-        id_attr04  = AllplanBaseElements.AttributeService.GetAttributeID(doc, "Atributo personalizado 04")
-        id_tc      = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_tipus_cablejat")
-        id_diam    = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_diametre")
-        id_area    = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_area")
+        id_tc   = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_tipus_cablejat")
+        id_diam = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_diametre")
+        id_area = AllplanBaseElements.AttributeService.GetAttributeID(doc, "pmp_area")
     except Exception:
-        return raw_attrs
+        id_tc   = None
+        id_diam = None
+        id_area = None
 
     tipo_cablejat = ""
     result = []
@@ -983,11 +1075,13 @@ def _fix_numeric_and_attr04(doc, raw_attrs: list) -> list:
         else:
             result.append(attr)
 
-    # attr01 = "CC" para todos los conductos con tipo de cable definido
-    if tipo_cablejat and id_attr01 and id_attr01 > 0:
-        result.append(AllplanBaseElements.AttributeString(id_attr01, "CC"))
+    print(f"[DBG-CC] _fix_numeric_and_attr04 | num={num} | prefix={prefix} | tipo_cablejat={tipo_cablejat!r}")
+    if num > 0:
+        attr01_val = f"{prefix}-{num}:{codificacion}" if codificacion else f"{prefix}-{num}"
+        print(f"[DBG-CC] escribiendo attr01={attr01_val!r}")
+        result.append(AllplanBaseElements.AttributeString(id_attr01, attr01_val))
 
-    if tipo_cablejat and id_attr04 and id_attr04 > 0:
+    if tipo_cablejat:
         result.append(AllplanBaseElements.AttributeString(id_attr04, tipo_cablejat))
 
     return result

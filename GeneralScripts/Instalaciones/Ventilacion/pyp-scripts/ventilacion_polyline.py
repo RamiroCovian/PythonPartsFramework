@@ -12,6 +12,7 @@ import importlib
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
+import NemAll_Python_AllplanSettings as AllplanSettings
 
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
@@ -29,11 +30,11 @@ from .utils.segments import (
 
 from NemAll_Python_BaseElements import LayerService
 
-# ---------------- CUSTOM NUM_TD PATH ----------------
+# ---------------- CUSTOM ABSOLUTE ENUM PATH ----------------
 project_name, host_name = AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
 error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, host_name)
 if error != 0:
-    error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, "")
+    base_path = AllplanSettings.AllplanPaths.GetCurPrjPath()
 
 # ---------------- ENABLE - SHOW PARAMS ----------------
 profile = Ventilacion.profile()

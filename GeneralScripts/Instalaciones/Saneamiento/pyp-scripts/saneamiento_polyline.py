@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import importlib
+import math
 import os
 import re
 import sys
@@ -15,7 +16,9 @@ import traceback
 import time
 
 import NemAll_Python_BaseElements as AllplanBaseElements
+import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_Utility as PythonUtility
+import NemAll_Python_AllplanSettings as AllplanSettings
 
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
@@ -25,6 +28,7 @@ from Instalaciones.PolyLib.parameters import EventIds, ParamNames
 from Instalaciones.PolyLib.storage import PolylineStorage
 
 from .utils.attributes_utils import (
+    _apply_absolute_numbering_attr01,
     _apply_attributes_to_model_elem,
     _get_attributes_from_model_elem,
     _merge_attributes,
@@ -54,17 +58,11 @@ PLUVIAL_ELBOW_KEYS_BY_DIAMETER = {
     110: ("codo_45_110_p", "codo_90_110_p"),
 }
 
-# ---------------- CUSTOM NUM_TD PATH ----------------
-project_name, host_name = (
-    AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
-)
-error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(
-    project_name, host_name
-)
+# ---------------- CUSTOM ABSOLUTE ENUM PATH ----------------
+project_name, host_name = AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
+error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, host_name)
 if error != 0:
-    error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(
-        project_name, ""
-    )
+    base_path = AllplanSettings.AllplanPaths.GetCurPrjPath()
 
 # ---------------- ENABLE - SHOW PARAMS ----------------
 profile = Saneamiento.profile()
@@ -132,6 +130,7 @@ def _reload_saneamiento_runtime_modules():
         "Colze_rigid_110m_p_90_script",
         "DerivacionY45_script",
         "Derivacion110m_f_script",
+        "Derivacion110m_p_script",
         "utils.elbow_orientation",
         "utils.geo_handler",
         "utils.trim_config",
@@ -149,13 +148,17 @@ def _reload_saneamiento_runtime_modules():
             importlib.reload(mod)
             if mod_name.endswith("utils.geo_handler") or mod_name.endswith(
                 "DerivacionY45_script"
-            ) or mod_name.endswith("Derivacion110m_f_script"):
+            ) or mod_name.endswith("Derivacion110m_f_script") or mod_name.endswith(
+                "Derivacion110m_p_script"
+            ):
                 for _gh_mn, _gh_mod in list(sys.modules.items()):
                     if _gh_mn.endswith("utils.geo_handler") and _gh_mod is not None:
                         setattr(_gh_mod, "_DERIV_Y45_D40_CLASS", None)
                         setattr(_gh_mod, "_DERIV_Y45_D40_LOAD_FAILED", False)
-                        setattr(_gh_mod, "_DERIV_Y110_D110_CLASS", None)
-                        setattr(_gh_mod, "_DERIV_Y110_D110_LOAD_FAILED", False)
+                        setattr(_gh_mod, "_DERIV_Y110_FECAL_CLASS", None)
+                        setattr(_gh_mod, "_DERIV_Y110_FECAL_LOAD_FAILED", False)
+                        setattr(_gh_mod, "_DERIV_Y110_PLUVIAL_CLASS", None)
+                        setattr(_gh_mod, "_DERIV_Y110_PLUVIAL_LOAD_FAILED", False)
                         break
         except Exception as ex:
             print(f"[SANEAMIENTO][HOT-RELOAD] {mod_name}: {ex}")
@@ -388,6 +391,111 @@ def _invertir_caval_saneamiento(so) -> bool:
         PythonUtility.MB_OK,
     )
     return True
+
+
+# ---------------------------------------------------------------------------
+# Auto-inversión de segmentos rama de bifurcación
+# ---------------------------------------------------------------------------
+
+class _FlippedSegData:
+    """
+    Proxy de segment.data que intercambia start/end y niega el vector
+    para que el pipeline renderice el segmento en sentido opuesto.
+    """
+    def __init__(self, data):
+        self._d = data
+        self.start = data.end
+        self.end = data.start
+        v = getattr(data, "vector_normalizado", None)
+        # Debe ser un AllplanGeo.Vector3D real para que los bindings C++ funcionen.
+        self.vector_normalizado = (
+            AllplanGeo.Vector3D(-v.X, -v.Y, -v.Z) if v is not None else v
+        )
+        ang = float(getattr(data, "angulo_xy", 0.0))
+        inverted = (ang + 180.0) % 360.0
+        if inverted > 180.0:
+            inverted -= 360.0
+        self.angulo_xy = inverted
+        self.angulo_z = -float(getattr(data, "angulo_z", 0.0))
+
+    def __getattr__(self, name):
+        return getattr(self._d, name)
+
+
+class _FlippedSeg:
+    """Proxy de segmento con dirección invertida (start↔end) para auto-inversión de rama."""
+    def __init__(self, seg):
+        self._seg = seg
+        self.data = _FlippedSegData(seg.data)
+        self.info = getattr(seg, "info", None)
+        self.name = getattr(seg, "name", "")
+
+    def __getattr__(self, name):
+        return getattr(self._seg, name)
+
+
+def _compute_branch_invert_paths(
+    vertex_map: dict,
+    te_vertices: set,
+    segment_groups: list,
+) -> set[int]:
+    """
+    Devuelve el conjunto de path_idx cuya rama sale del nodo TE hacia afuera
+    (is_start=True en el vértice) y por tanto necesita inversión automática
+    para que las flechas converjan en lugar de divergir.
+    """
+    branch_paths: set[int] = set()
+
+    for vkey in te_vertices:
+        conns = vertex_map.get(vkey, [])
+        if len(conns) != 3:
+            continue
+
+        dirs: list[tuple[float, float, float]] = []
+        for c in conns:
+            p_idx = c["path_idx"]
+            s_idx = c["seg_idx"]
+            is_start = c.get("is_start", True)
+            if p_idx >= len(segment_groups) or s_idx >= len(segment_groups[p_idx]):
+                dirs.append((0.0, 0.0, 0.0))
+                continue
+            seg = segment_groups[p_idx][s_idx]
+            data = getattr(seg, "data", None)
+            if not data:
+                dirs.append((0.0, 0.0, 0.0))
+                continue
+            pt_s = getattr(data, "start", None)
+            pt_e = getattr(data, "end", None)
+            if not pt_s or not pt_e:
+                dirs.append((0.0, 0.0, 0.0))
+                continue
+            if is_start:
+                vx, vy, vz = pt_e.X - pt_s.X, pt_e.Y - pt_s.Y, pt_e.Z - pt_s.Z
+            else:
+                vx, vy, vz = pt_s.X - pt_e.X, pt_s.Y - pt_e.Y, pt_s.Z - pt_e.Z
+            ln = math.sqrt(vx * vx + vy * vy + vz * vz)
+            dirs.append((vx / ln, vy / ln, vz / ln) if ln > 1e-9 else (0.0, 0.0, 0.0))
+
+        def _dot(a, b):
+            return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+        # El par con dot más negativo es el troncal (dos segmentos opuestos).
+        # El índice sobrante (k) es la rama.
+        candidates = [
+            (_dot(dirs[0], dirs[1]), 0, 1, 2),
+            (_dot(dirs[0], dirs[2]), 0, 2, 1),
+            (_dot(dirs[1], dirs[2]), 1, 2, 0),
+        ]
+        dot_main, _, _, k = min(candidates, key=lambda x: x[0])
+        if dot_main > -0.5:
+            continue
+
+        branch_conn = conns[k]
+        # is_start=True → el nodo TE es el START del segmento rama → fluye hacia afuera → invertir
+        if branch_conn.get("is_start", True):
+            branch_paths.add(branch_conn["path_idx"])
+
+    return branch_paths
 
 
 def check_allplan_version(_build_ele, _version):
@@ -631,6 +739,18 @@ def _create_elements_for_segment_group(
                     elem3D_list.append(
                         {"type": "te", "elem": bif_te110[0], "rotate": True}
                     )
+            if element_type_core == "tub_pvc_tricapa" and 110 in _diameter_list_as_ints(
+                model_base.get("diameter", [])
+            ):
+                bif_te110_f = so._get_pythonpart_installed(
+                    element_key="bifurcacion_y110_fecal",
+                    exec_kwargs={},
+                    attr_kwargs={},
+                )
+                if bif_te110_f:
+                    elem3D_list.append(
+                        {"type": "te", "elem": bif_te110_f[0], "rotate": True}
+                    )
             # Tricapa con anillo: regenerar por longitud de tramo (el anillo no se escala).
             # Ø25 básico sigue usando solo el template + escalado en el pipeline.
             _rebuild_ring_tube_keys = frozenset(
@@ -773,25 +893,25 @@ def _create_elements_for_segment_group(
             )
 
             processor.te_nodes = (
-                build_te_params(split_segment_groups, vertex_map, te_vertices)
+                build_te_params(
+                    split_segment_groups,
+                    vertex_map,
+                    te_vertices,
+                    saneamiento_enforce_y45_branch_geometry=True,
+                )
                 if te_vertices
                 else {}
             )
-            # TE 40-40-40; TE 110-110-110 solo pluvial (Derivacion110m_f_script + orientación old).
+            # TE 40-40-40; TE 110-110-110: script fecal vs pluvial según `y110_bif_script_variant`.
             if processor.te_nodes:
                 for _te_params in processor.te_nodes.values():
                     try:
                         di_in = int(round(float(_te_params.get("d_main_in", 0) or 0)))
                         di_out = int(round(float(_te_params.get("d_main_out", 0) or 0)))
                         di_br = int(round(float(_te_params.get("d_branch", 0) or 0)))
-                        if di_in == 40 and di_out == 40 and di_br == 40:
-                            _te_params["use_saneamiento_old_d40_orientation"] = True
-                        elif (
-                            di_in == 110
-                            and di_out == 110
-                            and di_br == 110
-                            and bool(_te_params.get("bif_y110_pluvial_only"))
-                        ):
+                        # TE 40-40-40: misma orientación moderna (te_orientation + Parte 2)
+                        # que Ø110; no usar try_apply_old_d40_bif_transform.
+                        if di_in == 110 and di_out == 110 and di_br == 110:
                             _te_params[
                                 "use_saneamiento_old_d110_pluvial_orientation"
                             ] = True
@@ -844,11 +964,57 @@ def _create_elements_for_segment_group(
                 if p_idx == path_idx
             }
 
-            all_cuts = compute_segment_cuts_for_all_paths(split_segment_groups)
+            _te_skip_cuts: set | None = None
+            if te_vertices:
+                _te_skip_cuts = te_vertices - set((processor.te_nodes or {}).keys())
+
+            all_cuts = compute_segment_cuts_for_all_paths(
+                split_segment_groups,
+                skip_te_vertices=_te_skip_cuts,
+            )
             segment_cuts = {
                 seg_idx: all_cuts.get((path_idx, seg_idx), {"start": 0.0, "end": 0.0})
                 for seg_idx in range(len(segments))
             }
+
+            # Auto-inversión de segmentos rama: cuando la rama sale desde el nodo TE
+            # hacia afuera (diverge), invertimos localmente para que converja.
+            if te_vertices:
+                branch_invert_paths = _compute_branch_invert_paths(
+                    vertex_map, te_vertices, split_segment_groups
+                )
+                if path_idx in branch_invert_paths:
+                    n = len(segments)
+                    segments = [_FlippedSeg(s) for s in reversed(segments)]
+                    segment_cuts = {
+                        (n - 1 - old_i): {
+                            "start": c.get("end", 0.0),
+                            "end": c.get("start", 0.0),
+                        }
+                        for old_i, c in segment_cuts.items()
+                    }
+                    # Remapear junctions cross-path: (seg_idx, is_start) → (n-1-seg_idx, not is_start)
+                    processor.cross_path_elbows = {
+                        (n - 1 - si, not ist): data
+                        for (si, ist), data in processor.cross_path_elbows.items()
+                    }
+                    processor.cross_path_manguitos = {
+                        (n - 1 - si, not ist): data
+                        for (si, ist), data in processor.cross_path_manguitos.items()
+                    }
+                    print(
+                        f"[SANEAMIENTO][BRANCH-INVERT] path={path_idx} "
+                        f"n_segs={n} auto-invertido para convergencia"
+                    )
+
+            # Compartir el set de TE ya insertados entre todos los paths.
+            # Esto evita que en bifurcaciones Case-1 (3 paths de 1 segmento)
+            # el mismo nodo TE se inserte tres veces (una por path).
+            if path_idx == 0:
+                so._saneamiento_te_placed_verts = set()
+            processor._global_te_inserted = getattr(
+                so, "_saneamiento_te_placed_verts", None
+            )
 
             t_pipeline = time.perf_counter()
             try:
@@ -954,7 +1120,8 @@ def _create_elements_with_layers_attrs(
     elements_generated, path_idx: int, so: PBL.script_object.PolylineScriptObject
 ) -> list:
     """
-    Aplica capas guardadas por PolyLib (`applied_layers`, claves `seg_{path}_elem_{layer_idx}`).
+    Aplica capas + atributos de paleta y numeración absoluta ATTR01 en tubos (`tubo_saneamiento`).
+    Capas: PolyLib `applied_layers`, claves `seg_{path}_elem_{layer_idx}`.
 
     El interactor guarda la capa del tubo por **índice de tramo** (coincide con el orden de
     `tubo_saneamiento`). Las piezas anexas (inner, flecha, copias del script) reutilizan la
@@ -965,6 +1132,13 @@ def _create_elements_with_layers_attrs(
         inst_name = str(so._config.default_installation).lower()
         so.init_storage = PolylineStorage(name=inst_name)
         so.init_storage.base_path = so._config.num_td_path
+
+    path_segments: list = []
+    runtime_segments = getattr(so, "_runtime_segments_by_path", {})
+    if isinstance(runtime_segments, dict) and path_idx in runtime_segments:
+        path_segments = runtime_segments[path_idx]
+    elif getattr(so, "segment_groups", None) and path_idx < len(so.segment_groups):
+        path_segments = so.segment_groups[path_idx]
 
     if _SANEAMIENTO_DEBUG_HOOKS:
         try:
@@ -1063,8 +1237,39 @@ def _create_elements_with_layers_attrs(
         except Exception as ex:
             if _SANEAMIENTO_DEBUG_HOOKS:
                 print(f"[SANEAMIENTO][ATTRHOOK] No se pudo aplicar atributos ({layer_key}): {ex}")
+
+        if element_type == "tubo_saneamiento":
+            seg_info = None
+            if path_segments and 0 <= tube_segment_idx < len(path_segments):
+                seg_info = getattr(path_segments[tube_segment_idx], "info", None)
+            distribution_type = (
+                getattr(seg_info, "distribution_type", None) if seg_info is not None else None
+            )
+            if not distribution_type:
+                distribution_type = getattr(so, "distribution_type", None) or "IS"
+            diameter_raw = getattr(seg_info, "diameter", None) if seg_info is not None else None
+            if isinstance(diameter_raw, (list, tuple)) and diameter_raw:
+                diameter_raw = diameter_raw[0]
+            try:
+                if diameter_raw is not None:
+                    diameter_mm = int(round(float(diameter_raw)))
+                else:
+                    dt = getattr(so, "diameter_type", None)
+                    diameter_mm = int(round(float(dt))) if dt is not None else 110
+            except Exception:
+                diameter_mm = 110
+            _apply_absolute_numbering_attr01(
+                model_elem,
+                so,
+                diameter_mm=diameter_mm,
+                distribution_type=str(distribution_type),
+            )
+
         item.element = model_elem
         elements_generated_final.append(item)
+
+    if getattr(so, "init_storage", None):
+        so.init_storage._save_numbering_file()
 
     return elements_generated_final
 
