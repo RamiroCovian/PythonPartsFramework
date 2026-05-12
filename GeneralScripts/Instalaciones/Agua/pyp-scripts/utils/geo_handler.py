@@ -6106,26 +6106,45 @@ class PipelineProcessor:
             print(f"[AGUA][ELBOW][DIAM] No se pudo actualizar segmento: {ex}")
             return False
 
+    def _get_requested_palette_diameter(self):
+        for attr_name in ("DiameterType", "DiametroAplicar"):
+            try:
+                attr = getattr(self.build_ele, attr_name, None)
+                raw = getattr(attr, "value", attr)
+                if isinstance(raw, (list, tuple)) and raw:
+                    raw = raw[0]
+                if raw is None:
+                    continue
+                return int(round(float(raw)))
+            except Exception:
+                continue
+        return None
+
     def _ask_elbow_diameter(self, d_prev: float, d_next: float):
         di_prev = int(round(float(d_prev)))
         di_next = int(round(float(d_next)))
-        diam_mayor = max(di_prev, di_next)
-        diam_menor = min(di_prev, di_next)
+        requested = self._get_requested_palette_diameter()
+        if requested == di_prev:
+            original = di_next
+        elif requested == di_next:
+            original = di_prev
+        else:
+            requested = di_next
+            original = di_prev
         warning_message = (
-            "ADVERTENCIA: Cambio de diámetro detectado en codo\n\n"
-            f"Diámetro segmento anterior: {di_prev}mm\n"
-            f"Diámetro segmento siguiente: {di_next}mm\n\n"
-            "Los codos no permiten cambio de diámetro.\n"
-            "¿Qué diámetro desea usar para ambos segmentos?\n\n"
-            f"Sí: Usar diámetro MAYOR ({diam_mayor}mm)\n"
-            f"No: Usar diámetro MENOR ({diam_menor}mm)\n"
-            "Cancelar: No crear y corregir manualmente"
+            "ADVERTENCIA: Cambio de diametro detectado junto a un codo\n\n"
+            f"Diametro actual del tramo anterior: {di_prev}mm\n"
+            f"Diametro actual del tramo siguiente: {di_next}mm\n"
+            f"Nuevo diametro seleccionado: {requested}mm\n\n"
+            "Los codos no admiten dos diametros distintos.\n\n"
+            f"Aceptar: aplicar {requested}mm a ambos tramos del codo.\n"
+            f"Cancelar: descartar el cambio y volver a {original}mm."
         )
 
         try:
-            if hasattr(PythonUtility, "MB_YESNOCANCEL"):
+            if hasattr(PythonUtility, "MB_OKCANCEL"):
                 response = PythonUtility.ShowMessageBox(
-                    warning_message, PythonUtility.MB_YESNOCANCEL
+                    warning_message, PythonUtility.MB_OKCANCEL
                 )
             elif hasattr(PythonUtility, "MB_YESNO"):
                 response = PythonUtility.ShowMessageBox(
@@ -6138,11 +6157,21 @@ class PipelineProcessor:
             print(f"[AGUA][ELBOW][DIAM] Error mostrando advertencia: {ex}")
             response = getattr(PythonUtility, "IDCANCEL", None)
 
-        if response == getattr(PythonUtility, "IDYES", None):
-            return diam_mayor
-        if response == getattr(PythonUtility, "IDNO", None):
-            return diam_menor
-        return None
+        if response in (
+            getattr(PythonUtility, "IDOK", None),
+            getattr(PythonUtility, "IDYES", None),
+        ):
+            print(
+                f"[AGUA][ELBOW][DIAM] cambio aceptado: aplicar {requested}mm "
+                "a ambos tramos del codo"
+            )
+            return requested
+
+        print(
+            f"[AGUA][ELBOW][DIAM] cambio cancelado: restaurar ambos tramos "
+            f"a {original}mm"
+        )
+        return original
 
     def resolve_elbow_diameter_conflicts(self, segments: list) -> bool:
         """

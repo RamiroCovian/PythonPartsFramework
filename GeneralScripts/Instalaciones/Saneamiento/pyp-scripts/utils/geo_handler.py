@@ -6473,6 +6473,207 @@ class PipelineProcessor:
         self._te_invalid_warning_cache = set()
         # Orientación global capturada por PolyLib (start_orientation_capture).
         self.reference_orientation_angle = None
+        # Si el usuario cancela una correccion de diametro en codo, se aborta
+        # esa generacion para no insertar reductores en un nodo angular.
+        self.cancelled_by_elbow_diameter_conflict = False
+
+    @staticmethod
+    def _segment_diameter(seg_item, default=25.0) -> float:
+        try:
+            info = getattr(seg_item, "info", None)
+            d = getattr(info, "diameter", None) if info is not None else None
+            if isinstance(d, (list, tuple)) and d:
+                d = d[0]
+            if d is None:
+                return float(default)
+            return float(d)
+        except Exception:
+            return float(default)
+
+    @staticmethod
+    def _format_segment_label(diameter_mm: int, system: str = "") -> str:
+        try:
+            suffix = str(system or "").strip()[0].upper()
+        except Exception:
+            suffix = ""
+        if not suffix:
+            suffix = "F"
+        return f"D{int(diameter_mm)} {suffix}"
+
+    def _set_segment_diameter(self, seg_item, diameter_mm: int) -> bool:
+        info = getattr(seg_item, "info", None)
+        if info is None:
+            return False
+        try:
+            old_diam = getattr(info, "diameter", None)
+            info.diameter = int(diameter_mm)
+            info.section_type = f"{int(diameter_mm)} mm"
+            info.label = self._format_segment_label(
+                int(diameter_mm), getattr(info, "system", "")
+            )
+            print(
+                f"[SANEAMIENTO][ELBOW][DIAM] segmento actualizado "
+                f"{old_diam}mm -> {int(diameter_mm)}mm"
+            )
+            return True
+        except Exception as ex:
+            print(f"[SANEAMIENTO][ELBOW][DIAM] No se pudo actualizar segmento: {ex}")
+            return False
+
+    @staticmethod
+    def _is_elbow_turn_for_diameter_conflict(p_prev, p_curr, p_next) -> bool:
+        if not (p_prev and p_curr and p_next):
+            return False
+        try:
+            v1 = (
+                p_curr.X - p_prev.X,
+                p_curr.Y - p_prev.Y,
+                p_curr.Z - p_prev.Z,
+            )
+            v2 = (
+                p_next.X - p_curr.X,
+                p_next.Y - p_curr.Y,
+                p_next.Z - p_curr.Z,
+            )
+            n1 = math.sqrt(v1[0] * v1[0] + v1[1] * v1[1] + v1[2] * v1[2])
+            n2 = math.sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2])
+            if n1 < 1e-9 or n2 < 1e-9:
+                return False
+            dot = (
+                (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2])
+                / (n1 * n2)
+            )
+            dot = max(-1.0, min(1.0, dot))
+            angle_deg = math.degrees(math.acos(dot))
+            if abs(angle_deg) <= 1.0 or abs(angle_deg - 180.0) <= 1.0:
+                return False
+            return (
+                abs(angle_deg - 45.0) <= 7.5
+                or abs(angle_deg - 90.0) <= 10.0
+                or abs(angle_deg - 135.0) <= 7.5
+            )
+        except Exception:
+            return False
+
+    def _ask_elbow_diameter(self, d_prev: float, d_next: float):
+        di_prev = int(round(float(d_prev)))
+        di_next = int(round(float(d_next)))
+        requested = None
+        try:
+            explicit_requested = getattr(self, "requested_diameter", None)
+            if explicit_requested is not None:
+                requested = int(round(float(explicit_requested)))
+        except Exception:
+            requested = None
+        for attr_name in ("DiameterType", "DiametroAplicar"):
+            if requested is not None:
+                break
+            try:
+                attr = getattr(self.build_ele, attr_name, None)
+                raw = getattr(attr, "value", attr)
+                if isinstance(raw, (list, tuple)) and raw:
+                    raw = raw[0]
+                if raw is not None:
+                    requested = int(round(float(raw)))
+                    break
+            except Exception:
+                continue
+        if requested == di_prev:
+            original = di_next
+        elif requested == di_next:
+            original = di_prev
+        else:
+            requested = di_next
+            original = di_prev
+        warning_message = (
+            "ADVERTENCIA: Cambio de diametro detectado junto a un codo\n\n"
+            f"Diametro actual del tramo anterior: {di_prev}mm\n"
+            f"Diametro actual del tramo siguiente: {di_next}mm\n"
+            f"Nuevo diametro seleccionado: {requested}mm\n\n"
+            "Los codos no admiten dos diametros distintos.\n\n"
+            f"Aceptar: aplicar {requested}mm a ambos tramos del codo.\n"
+            f"Cancelar: descartar el cambio y volver a {original}mm."
+        )
+
+        try:
+            if hasattr(PythonUtility, "MB_OKCANCEL"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_OKCANCEL
+                )
+            elif hasattr(PythonUtility, "MB_YESNO"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_YESNO
+                )
+            else:
+                PythonUtility.ShowMessageBox(warning_message, PythonUtility.MB_OK)
+                response = getattr(PythonUtility, "IDCANCEL", None)
+        except Exception as ex:
+            print(f"[SANEAMIENTO][ELBOW][DIAM] Error mostrando advertencia: {ex}")
+            response = getattr(PythonUtility, "IDCANCEL", None)
+
+        if response in (
+            getattr(PythonUtility, "IDOK", None),
+            getattr(PythonUtility, "IDYES", None),
+        ):
+            print(
+                f"[SANEAMIENTO][ELBOW][DIAM] cambio aceptado: aplicar {requested}mm "
+                "a ambos tramos del codo"
+            )
+            return requested
+
+        print(
+            f"[SANEAMIENTO][ELBOW][DIAM] cambio cancelado: restaurar ambos tramos "
+            f"a {original}mm"
+        )
+        return original
+
+    def resolve_elbow_diameter_conflicts(self, segments: list) -> bool:
+        """
+        Un codo de saneamiento se selecciona por el giro entre los vectores:
+        v_prev = p_curr - p_prev y v_next = p_next - p_curr. Para 90 grados
+        o 45/135 grados legacy, el fitting tiene un diametro nominal unico.
+        Si los dos tramos difieren, se pregunta al usuario y se actualiza la
+        metadata antes de recortes, codos y reductores.
+        """
+        self.cancelled_by_elbow_diameter_conflict = False
+        for idx in range(1, len(segments)):
+            seg_prev = segments[idx - 1]
+            seg_curr = segments[idx]
+            p_prev = getattr(getattr(seg_prev, "data", None), "start", None)
+            p_curr = getattr(getattr(seg_prev, "data", None), "end", None)
+            p_next = getattr(getattr(seg_curr, "data", None), "end", None)
+            if not self._is_elbow_turn_for_diameter_conflict(
+                p_prev, p_curr, p_next
+            ):
+                continue
+
+            d_prev = self._segment_diameter(seg_prev)
+            d_next = self._segment_diameter(seg_curr)
+            di_prev = int(round(float(d_prev)))
+            di_next = int(round(float(d_next)))
+            if di_prev == di_next:
+                continue
+
+            print(
+                "[SANEAMIENTO][ELBOW][DIAM] conflicto en codo idx=%s "
+                "d_prev=%s d_next=%s node=(%.3f,%.3f,%.3f)"
+                % (idx, di_prev, di_next, p_curr.X, p_curr.Y, p_curr.Z)
+            )
+            selected = self._ask_elbow_diameter(d_prev, d_next)
+            if selected is None:
+                self.cancelled_by_elbow_diameter_conflict = True
+                print(
+                    "[SANEAMIENTO][ELBOW][DIAM] generacion cancelada por "
+                    f"conflicto de diametro en codo idx={idx}"
+                )
+                return False
+
+            if di_prev != selected:
+                self._set_segment_diameter(seg_prev, selected)
+            if di_next != selected:
+                self._set_segment_diameter(seg_curr, selected)
+
+        return True
 
     def logic_layers_copias(self, seg_info) -> bool:
         """

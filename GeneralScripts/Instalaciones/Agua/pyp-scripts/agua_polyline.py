@@ -33,6 +33,7 @@ from .utils.vertex_utils import (
     detect_bifurcations,
     detect_cross_path_elbows,
     detect_cross_path_manguitos,
+    is_90_deg_turn,
 )
 from .utils.te_orientation import build_te_params
 from .utils.attributes_utils import (
@@ -1603,6 +1604,65 @@ def _create_elements_for_segment_group(
                     "el usuario canceló la corrección de diámetro en codo."
                 )
                 return []
+
+            def _diam_from_segment_item(seg_item, default=20):
+                try:
+                    info = getattr(seg_item, "info", None)
+                    diam = getattr(info, "diameter", None) if info is not None else None
+                    if isinstance(diam, (list, tuple)) and diam:
+                        diam = diam[0]
+                    if diam is None:
+                        return int(default)
+                    return int(round(float(diam)))
+                except Exception:
+                    return int(default)
+
+            def _first_elbow_diameter_after_resolution():
+                try:
+                    for elbow_idx in range(1, len(segments_to_process)):
+                        seg_prev_item = segments_to_process[elbow_idx - 1]
+                        seg_next_item = segments_to_process[elbow_idx]
+                        p_prev = getattr(getattr(seg_prev_item, "data", None), "start", None)
+                        p_curr = getattr(getattr(seg_prev_item, "data", None), "end", None)
+                        p_next = getattr(getattr(seg_next_item, "data", None), "end", None)
+                        if is_90_deg_turn(p_prev, p_curr, p_next):
+                            return _diam_from_segment_item(seg_prev_item, diameter)
+                except Exception as ex:
+                    print(f"[AGUA][ELBOW][DIAM] No se pudo inferir diámetro de codo: {ex}")
+                return None
+
+            def _set_build_ele_diameter(diam_mm):
+                build_ele = getattr(so, "build_ele", None)
+                if build_ele is None or diam_mm is None:
+                    return
+                for attr_name in ("DiameterType", "DiametroAplicar"):
+                    try:
+                        attr = getattr(build_ele, attr_name, None)
+                        if attr is not None and hasattr(attr, "value"):
+                            attr.value = int(diam_mm)
+                        else:
+                            setattr(build_ele, attr_name, int(diam_mm))
+                    except Exception:
+                        continue
+
+            elbow_diam = _first_elbow_diameter_after_resolution()
+            if elbow_diam is not None and codo_selected:
+                _set_build_ele_diameter(elbow_diam)
+                refreshed_codo_model = so._get_pythonpart_installed(
+                    element_key=codo_selected[0].key,
+                    exec_kwargs={"dist_type": so.distribution_type},
+                    attr_kwargs={"dist_type": so.distribution_type},
+                )
+                if refreshed_codo_model:
+                    processor.templates["codo_90"] = refreshed_codo_model[0]
+                    if len(refreshed_codo_model) > 1:
+                        processor.templates["codo_90_inner"] = refreshed_codo_model[1]
+                    elif "codo_90_inner" in processor.templates:
+                        del processor.templates["codo_90_inner"]
+                    print(
+                        f"[AGUA][ELBOW][DIAM] template de codo refrescado "
+                        f"con diámetro {elbow_diam}mm"
+                    )
 
             all_cuts = compute_segment_cuts_for_all_paths(split_segment_groups)
             segment_cuts = {

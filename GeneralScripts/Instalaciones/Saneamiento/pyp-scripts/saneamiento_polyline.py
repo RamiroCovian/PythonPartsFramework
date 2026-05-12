@@ -870,6 +870,7 @@ def _create_elements_for_segment_group(
             processor.saneamiento_fecal_tricapa_install = (
                 element_type_core == "tub_pvc_tricapa"
             )
+            processor.requested_diameter = diam
             processor.reference_orientation_angle = getattr(
                 so, "reference_orientation_angle", None
             )
@@ -967,6 +968,118 @@ def _create_elements_for_segment_group(
             _te_skip_cuts: set | None = None
             if te_vertices:
                 _te_skip_cuts = te_vertices - set((processor.te_nodes or {}).keys())
+
+            if not processor.resolve_elbow_diameter_conflicts(segments):
+                print(
+                    "[SANEAMIENTO][ELBOW][DIAM] Preview/creacion omitida: "
+                    "el usuario cancelo la correccion de diametro en codo."
+                )
+                return []
+
+            def _diam_from_segment_item(seg_item, default=25):
+                try:
+                    info = getattr(seg_item, "info", None)
+                    diam = getattr(info, "diameter", None) if info is not None else None
+                    if isinstance(diam, (list, tuple)) and diam:
+                        diam = diam[0]
+                    if diam is None:
+                        return int(default)
+                    return int(round(float(diam)))
+                except Exception:
+                    return int(default)
+
+            def _first_elbow_diameter_after_resolution():
+                try:
+                    for elbow_idx in range(1, len(segments)):
+                        seg_prev_item = segments[elbow_idx - 1]
+                        seg_next_item = segments[elbow_idx]
+                        p_prev = getattr(getattr(seg_prev_item, "data", None), "start", None)
+                        p_curr = getattr(getattr(seg_prev_item, "data", None), "end", None)
+                        p_next = getattr(getattr(seg_next_item, "data", None), "end", None)
+                        if processor._is_elbow_turn_for_diameter_conflict(
+                            p_prev, p_curr, p_next
+                        ):
+                            return _diam_from_segment_item(seg_prev_item, diam or 25)
+                except Exception as ex:
+                    print(
+                        "[SANEAMIENTO][ELBOW][DIAM] No se pudo inferir "
+                        f"diametro de codo: {ex}"
+                    )
+                return None
+
+            def _set_build_ele_diameter(diam_mm):
+                build_ele = getattr(so, "build_ele", None)
+                if build_ele is None or diam_mm is None:
+                    return
+                for attr_name in ("DiameterType", "DiametroAplicar"):
+                    try:
+                        attr = getattr(build_ele, attr_name, None)
+                        if attr is not None and hasattr(attr, "value"):
+                            attr.value = int(diam_mm)
+                        else:
+                            setattr(build_ele, attr_name, int(diam_mm))
+                    except Exception:
+                        continue
+
+            def _refresh_elbow_templates(diam_mm):
+                if diam_mm is None:
+                    return
+                if element_type_core == "tub_pvc_tricapa":
+                    keys = FECAL_ELBOW_KEYS_BY_DIAMETER.get(int(diam_mm))
+                else:
+                    keys = PLUVIAL_ELBOW_KEYS_BY_DIAMETER.get(int(diam_mm))
+                if not keys:
+                    print(
+                        f"[SANEAMIENTO][ELBOW][DIAM] Sin codos registrados "
+                        f"para diametro {diam_mm}mm"
+                    )
+                    return
+
+                _set_build_ele_diameter(diam_mm)
+                c45_key, c90_key = keys
+                c45_kwargs = (
+                    {}
+                    if c45_key in ("codo_45_110", "codo_45_110_p")
+                    else {"TipoSaneamiento": 0}
+                )
+                c90_kwargs = (
+                    {}
+                    if c90_key in ("codo_90_40", "codo_90_110", "codo_90_110_p")
+                    else {"TipoSaneamiento": 1}
+                )
+                refreshed_c45 = so._get_pythonpart_installed(
+                    element_key=c45_key,
+                    exec_kwargs=c45_kwargs,
+                    attr_kwargs=c45_kwargs,
+                )
+                refreshed_c90 = so._get_pythonpart_installed(
+                    element_key=c90_key,
+                    exec_kwargs=c90_kwargs,
+                    attr_kwargs=c90_kwargs,
+                )
+
+                def _replace_templates(prefix, models):
+                    keys_to_clear = [prefix, f"{prefix}_inner", f"{prefix}_inner_2"]
+                    for key in keys_to_clear:
+                        if key in processor.templates:
+                            del processor.templates[key]
+                    if not models:
+                        return
+                    processor.templates[prefix] = models[0]
+                    if len(models) > 1:
+                        processor.templates[f"{prefix}_inner"] = models[1]
+                    if len(models) > 2:
+                        processor.templates[f"{prefix}_inner_2"] = models[2]
+
+                _replace_templates("codo_45", refreshed_c45)
+                _replace_templates("codo_90", refreshed_c90)
+                print(
+                    f"[SANEAMIENTO][ELBOW][DIAM] templates de codo refrescados "
+                    f"con diametro {diam_mm}mm"
+                )
+
+            elbow_diam = _first_elbow_diameter_after_resolution()
+            _refresh_elbow_templates(elbow_diam)
 
             all_cuts = compute_segment_cuts_for_all_paths(
                 split_segment_groups,
