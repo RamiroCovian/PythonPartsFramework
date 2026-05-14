@@ -14,6 +14,7 @@ import NemAll_Python_Geometry as AllplanGeo
 from .trim_config import (
     ELBOW_TRIM_BY_DIAM,
     MANGUITO_TRIM_BY_DIAM,
+    SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM,
     TE_TRIMS,
     manguito_asymmetric_trim_mm,
 )
@@ -512,12 +513,13 @@ def register_cross_path_manguito_cuts_into(
         d2 = int(round(float(get_diameter(p2, s2))))
         k_sorted = tuple(sorted((d1, d2)))
 
-        asymmetric_pair = k_sorted in ((25, 40), (40, 110))
+        asymmetric_pair = k_sorted in ((25, 40), (40, 110), (25, 110))
         if asymmetric_pair:
             try:
                 from .trim_config import (
                     REDUCT_110_40_TRIM_IN_MM,
                     REDUCT_110_40_TRIM_OUT_MM,
+                    SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM,
                     TAPRED_40_25_TRIM_IN_MM,
                     TAPRED_40_25_TRIM_OUT_MM,
                 )
@@ -533,6 +535,12 @@ def register_cross_path_manguito_cuts_into(
             trim_by_d = {
                 110: float(REDUCT_110_40_TRIM_IN_MM),
                 40: float(REDUCT_110_40_TRIM_OUT_MM),
+            }
+        elif asymmetric_pair and k_sorted == (25, 110):
+            trim_by_d = {
+                25: float(TAPRED_40_25_TRIM_IN_MM),
+                110: float(REDUCT_110_40_TRIM_IN_MM)
+                + float(SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM),
             }
         else:
             trim_by_d = {}

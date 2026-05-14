@@ -137,6 +137,8 @@ TAPRED_40_25_OFFSET_Z_MM = 0.0
 REDUCT_110_40_OFFSET_X_MM = 0.0
 REDUCT_110_40_OFFSET_Y_MM = 0.0
 REDUCT_110_40_OFFSET_Z_MM = 0.0
+# Ajuste axial adicional para el ultimo reductor en cadena fecal 25<->110.
+SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM = 129.0
 
 _DERIV_Y45_D40_CLASS: Any = None
 _DERIV_Y45_D40_LOAD_FAILED = False
@@ -409,6 +411,43 @@ def _manguito_bisector_offset_point(pos_base, seg, next_seg, off_x_mm, off_y_mm,
         + (y_local.Z * off_y_mm)
         + (z_local.Z * off_z_mm),
     )
+
+
+def _split_reducer_fallback_length_mm(d1, d2) -> float:
+    """Longitud axial aproximada para encadenar reductores cuando no hay vertices."""
+    try:
+        pair = {int(round(float(d1))), int(round(float(d2)))}
+    except Exception:
+        return 0.0
+    if pair == {25, 40}:
+        # Reduct_40_25_script: LARGO_PRINCIPAL + LARGO_ANILLO.
+        return 60.0
+    if pair == {40, 110}:
+        # Reduct_110_50_40_script: valor conservador si no se puede medir el BRep.
+        return 150.0
+    return 0.0
+
+
+def _split_reducer_axis_length_mm(model_list, d1, d2) -> float:
+    """
+    Mide la longitud local X del primer modelo del reductor.
+    El transformador alinea +X local con el tramo, asi que sirve como avance
+    para colocar el siguiente reductor inmediatamente despues.
+    """
+    fallback = _split_reducer_fallback_length_mm(d1, d2)
+    try:
+        if not model_list:
+            return fallback
+        geom = model_list[0].GetGeometryObject()
+        err, verts = geom.GetVertices()
+        if err == 0 and verts:
+            xs = [float(v.X) for v in verts]
+            length = max(xs) - min(xs)
+            if length > 1.0:
+                return float(length)
+    except Exception:
+        pass
+    return fallback
 
 
 class GeometryHandler:
@@ -10124,6 +10163,173 @@ class PipelineProcessor:
                         )
 
                         # Elegir modelo de manguito por PAR DE DIÁMETROS (port de fontaneria).
+                        try:
+                            di_curr = int(round(float(d_curr)))
+                            di_next = int(round(float(d_next)))
+                        except Exception:
+                            di_curr = None
+                            di_next = None
+
+                        split_fecal_25_110 = (
+                            di_curr is not None
+                            and di_next is not None
+                            and {di_curr, di_next} == {25, 110}
+                            and _segment_is_fecal(i)
+                            and _segment_is_fecal(i + 1)
+                        )
+
+                        if split_fecal_25_110:
+                            print(
+                                "[AGUA][MANGUITO] fecal 25<->110 detectado: "
+                                "creando reductores 25<->40 y 40<->110"
+                            )
+
+                            split_chain_offset_mm = 0.0
+
+                            def _append_split_reducer(
+                                part_d1,
+                                part_d2,
+                                chain_offset_mm,
+                                extra_x_mm=0.0,
+                            ):
+                                nonlocal element_index
+                                dyn_part_models = self._get_manguito_models_for_diameters(
+                                    part_d1,
+                                    part_d2,
+                                    distribution_type=dist_type,
+                                )
+                                if not dyn_part_models:
+                                    print(
+                                        "[AGUA][MANGUITO] sin modelo para reductor "
+                                        f"compuesto {part_d1}->{part_d2}"
+                                    )
+                                    return 0.0
+
+                                is_inner_only_part = (
+                                    dist_type == "TD"
+                                    and len(dyn_part_models) == 1
+                                    and int(round(float(part_d1)))
+                                    != int(round(float(part_d2)))
+                                )
+
+                                need_mirror_part = False
+                                try:
+                                    p1 = int(round(float(part_d1)))
+                                    p2 = int(round(float(part_d2)))
+                                    if {p1, p2} == {20, 25} and p1 > p2:
+                                        need_mirror_part = True
+                                    if {p1, p2} == {25, 40} and p1 < p2:
+                                        need_mirror_part = True
+                                    if {p1, p2} == {40, 110} and p1 < p2:
+                                        need_mirror_part = True
+                                except Exception:
+                                    need_mirror_part = False
+
+                                pos_part = pos_nodo
+                                try:
+                                    pair_part = {
+                                        int(round(float(part_d1))),
+                                        int(round(float(part_d2))),
+                                    }
+                                    if pair_part == {25, 40}:
+                                        off_x = (
+                                            -TAPRED_40_25_OFFSET_X_MM
+                                            if need_mirror_part
+                                            else TAPRED_40_25_OFFSET_X_MM
+                                        )
+                                        pos_part = _manguito_bisector_offset_point(
+                                            pos_nodo,
+                                            seg,
+                                            next_seg,
+                                            chain_offset_mm + extra_x_mm + off_x,
+                                            TAPRED_40_25_OFFSET_Y_MM,
+                                            TAPRED_40_25_OFFSET_Z_MM,
+                                        )
+                                    elif pair_part == {40, 110}:
+                                        rx, ry, rz = _reduct_110_40_offsets_mm()
+                                        off_x = -rx if need_mirror_part else rx
+                                        pos_part = _manguito_bisector_offset_point(
+                                            pos_nodo,
+                                            seg,
+                                            next_seg,
+                                            chain_offset_mm + extra_x_mm + off_x,
+                                            ry,
+                                            rz,
+                                        )
+                                        print(
+                                            "[AGUA][MANGUITO] offset reductor 110<->40 "
+                                            f"local_xyz=({chain_offset_mm + extra_x_mm + off_x:.2f},{ry:.2f},{rz:.2f}) "
+                                            f"chain_offset={chain_offset_mm:.2f} "
+                                            f"extra_x={extra_x_mm:.2f} "
+                                            f"mirror_x={need_mirror_part}"
+                                        )
+                                except Exception:
+                                    pos_part = pos_nodo
+
+                                element_part = self._aplicar_transformacion(
+                                    dyn_part_models[0],
+                                    seg,
+                                    elem_type="manguito",
+                                    custom_position=pos_part,
+                                    next_seg=next_seg,
+                                    custom_mirror_x_local=need_mirror_part,
+                                )
+                                result_list.append(
+                                    {
+                                        "element": element_part,
+                                        "element_type": (
+                                            "manguito_inner"
+                                            if is_inner_only_part
+                                            else "manguito"
+                                        ),
+                                        "index": element_index,
+                                    }
+                                )
+                                element_index += 1
+
+                                if is_inner_only_part:
+                                    return _split_reducer_axis_length_mm(
+                                        dyn_part_models,
+                                        part_d1,
+                                        part_d2,
+                                    )
+                                for extra_model in dyn_part_models[1:]:
+                                    element_extra = self._aplicar_transformacion(
+                                        extra_model,
+                                        seg,
+                                        elem_type="manguito",
+                                        custom_position=pos_part,
+                                        next_seg=next_seg,
+                                        custom_mirror_x_local=need_mirror_part,
+                                    )
+                                    result_list.append(
+                                        {
+                                            "element": element_extra,
+                                            "element_type": "manguito_inner",
+                                            "index": element_index,
+                                        }
+                                    )
+                                    element_index += 1
+
+                                return _split_reducer_axis_length_mm(
+                                    dyn_part_models,
+                                    part_d1,
+                                    part_d2,
+                                )
+
+                            split_chain_offset_mm += _append_split_reducer(
+                                di_curr,
+                                40,
+                                split_chain_offset_mm,
+                            )
+                            split_chain_offset_mm += _append_split_reducer(
+                                40,
+                                di_next,
+                                split_chain_offset_mm,
+                                SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM,
+                            )
+                            continue
+
                         dyn_models = self._get_manguito_models_for_diameters(
                             d_curr if d_curr is not None else 20.0,
                             d_next if d_next is not None else 20.0,
@@ -10397,6 +10603,156 @@ class PipelineProcessor:
                         dist_type = "TD" if str(dist_raw).upper() == "TD" else "IS"
                     except Exception:
                         dist_type = "IS"
+
+                    try:
+                        di_curr = int(round(float(d_curr)))
+                        di_next = int(round(float(d_next)))
+                    except Exception:
+                        di_curr = None
+                        di_next = None
+
+                    split_fecal_25_110 = (
+                        di_curr is not None
+                        and di_next is not None
+                        and {di_curr, di_next} == {25, 110}
+                        and _segment_is_fecal(i)
+                    )
+
+                    if split_fecal_25_110:
+                        print(
+                            "[AGUA][MANGUITO] fecal 25<->110 cross-path detectado: "
+                            "creando reductores 25<->40 y 40<->110"
+                        )
+
+                        cross_split_chain_offset_mm = 0.0
+
+                        def _append_cross_split_reducer(
+                            part_d1,
+                            part_d2,
+                            chain_offset_mm,
+                            extra_x_mm=0.0,
+                        ):
+                            nonlocal element_index
+                            dyn_part_models = self._get_manguito_models_for_diameters(
+                                part_d1,
+                                part_d2,
+                                distribution_type=dist_type,
+                            )
+                            if not dyn_part_models:
+                                print(
+                                    "[AGUA][MANGUITO] sin modelo cross para reductor "
+                                    f"compuesto {part_d1}->{part_d2}"
+                                )
+                                return 0.0
+
+                            need_mirror_part = False
+                            try:
+                                p1 = int(round(float(part_d1)))
+                                p2 = int(round(float(part_d2)))
+                                if {p1, p2} == {20, 25} and p1 > p2:
+                                    need_mirror_part = True
+                                if {p1, p2} == {25, 40} and p1 < p2:
+                                    need_mirror_part = True
+                                if {p1, p2} == {40, 110} and p1 < p2:
+                                    need_mirror_part = True
+                            except Exception:
+                                need_mirror_part = False
+
+                            pos_part = node_pt
+                            try:
+                                pair_part = {
+                                    int(round(float(part_d1))),
+                                    int(round(float(part_d2))),
+                                }
+                                if pair_part == {25, 40}:
+                                    off_x = (
+                                        -TAPRED_40_25_OFFSET_X_MM
+                                        if need_mirror_part
+                                        else TAPRED_40_25_OFFSET_X_MM
+                                    )
+                                    pos_part = _manguito_bisector_offset_point(
+                                        node_pt,
+                                        seg_for_conn,
+                                        next_for_conn,
+                                        chain_offset_mm + extra_x_mm + off_x,
+                                        TAPRED_40_25_OFFSET_Y_MM,
+                                        TAPRED_40_25_OFFSET_Z_MM,
+                                    )
+                                elif pair_part == {40, 110}:
+                                    rx, ry, rz = _reduct_110_40_offsets_mm()
+                                    off_x = -rx if need_mirror_part else rx
+                                    pos_part = _manguito_bisector_offset_point(
+                                        node_pt,
+                                        seg_for_conn,
+                                        next_for_conn,
+                                        chain_offset_mm + extra_x_mm + off_x,
+                                        ry,
+                                        rz,
+                                    )
+                                    print(
+                                        "[AGUA][MANGUITO] offset reductor 110<->40 (cross) "
+                                        f"local_xyz=({chain_offset_mm + extra_x_mm + off_x:.2f},{ry:.2f},{rz:.2f}) "
+                                        f"chain_offset={chain_offset_mm:.2f} "
+                                        f"extra_x={extra_x_mm:.2f} "
+                                        f"mirror_x={need_mirror_part}"
+                                    )
+                            except Exception:
+                                pos_part = node_pt
+
+                            element_part = self._aplicar_transformacion(
+                                dyn_part_models[0],
+                                seg_for_conn,
+                                elem_type="manguito",
+                                custom_position=pos_part,
+                                next_seg=next_for_conn,
+                                custom_mirror_x_local=need_mirror_part,
+                            )
+                            result_list.append(
+                                {
+                                    "element": element_part,
+                                    "element_type": "manguito",
+                                    "index": element_index,
+                                }
+                            )
+                            element_index += 1
+
+                            for extra_model in dyn_part_models[1:]:
+                                element_extra = self._aplicar_transformacion(
+                                    extra_model,
+                                    seg_for_conn,
+                                    elem_type="manguito",
+                                    custom_position=pos_part,
+                                    next_seg=next_for_conn,
+                                    custom_mirror_x_local=need_mirror_part,
+                                )
+                                result_list.append(
+                                    {
+                                        "element": element_extra,
+                                        "element_type": "manguito_inner",
+                                        "index": element_index,
+                                    }
+                                )
+                                element_index += 1
+
+                            return _split_reducer_axis_length_mm(
+                                dyn_part_models,
+                                part_d1,
+                                part_d2,
+                            )
+
+                        cross_split_chain_offset_mm += _append_cross_split_reducer(
+                            di_curr,
+                            40,
+                            cross_split_chain_offset_mm,
+                        )
+                        cross_split_chain_offset_mm += _append_cross_split_reducer(
+                            40,
+                            di_next,
+                            cross_split_chain_offset_mm,
+                            SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM,
+                        )
+                        inserted_cross_path_manguitos.add(node_key_cp)
+                        break
 
                     dyn_models = self._get_manguito_models_for_diameters(
                         d_curr if d_curr is not None else 20.0,
