@@ -139,6 +139,8 @@ REDUCT_110_40_OFFSET_Y_MM = 0.0
 REDUCT_110_40_OFFSET_Z_MM = 0.0
 # Ajuste axial adicional para el ultimo reductor en cadena fecal 25<->110.
 SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM = 109.25
+# Ajuste directo para transicion fecal 40->110 sin reductor intermedio 25->40.
+DIRECT_FECAL_40_110_REDUCER_OFFSET_X_MM = 60.0
 
 _DERIV_Y45_D40_CLASS: Any = None
 _DERIV_Y45_D40_LOAD_FAILED = False
@@ -366,7 +368,9 @@ def _reduct_110_40_offsets_mm():
     )
 
 
-def _manguito_bisector_offset_point(pos_base, seg, next_seg, off_x_mm, off_y_mm, off_z_mm):
+def _manguito_bisector_offset_point(
+    pos_base, seg, next_seg, off_x_mm, off_y_mm, off_z_mm
+):
     """
     Punto desplazado desde pos_base según offsets en marco local al nudo:
     X ~ bisectriz de las direcciones de tramo, Y/Z ~ referencia cruzada (igual que Tap 40-25).
@@ -387,7 +391,9 @@ def _manguito_bisector_offset_point(pos_base, seg, next_seg, off_x_mm, off_y_mm,
             a.X * b.Y - a.Y * b.X,
         )
 
-    x_local = _norm(AllplanGeo.Vector3D(v_in.X + v_out.X, v_in.Y + v_out.Y, v_in.Z + v_out.Z))
+    x_local = _norm(
+        AllplanGeo.Vector3D(v_in.X + v_out.X, v_in.Y + v_out.Y, v_in.Z + v_out.Z)
+    )
     if abs(x_local.X) < 1e-9 and abs(x_local.Y) < 1e-9 and abs(x_local.Z) < 1e-9:
         x_local = _norm(v_out)
     z_local = _norm(_cross(v_in, v_out))
@@ -6578,10 +6584,7 @@ class PipelineProcessor:
             n2 = math.sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2])
             if n1 < 1e-9 or n2 < 1e-9:
                 return False
-            dot = (
-                (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2])
-                / (n1 * n2)
-            )
+            dot = (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]) / (n1 * n2)
             dot = max(-1.0, min(1.0, dot))
             angle_deg = math.degrees(math.acos(dot))
             if abs(angle_deg) <= 1.0 or abs(angle_deg - 180.0) <= 1.0:
@@ -6681,9 +6684,7 @@ class PipelineProcessor:
             p_prev = getattr(getattr(seg_prev, "data", None), "start", None)
             p_curr = getattr(getattr(seg_prev, "data", None), "end", None)
             p_next = getattr(getattr(seg_curr, "data", None), "end", None)
-            if not self._is_elbow_turn_for_diameter_conflict(
-                p_prev, p_curr, p_next
-            ):
+            if not self._is_elbow_turn_for_diameter_conflict(p_prev, p_curr, p_next):
                 continue
 
             d_prev = self._segment_diameter(seg_prev)
@@ -6765,9 +6766,7 @@ class PipelineProcessor:
         prev_dx = p_mid.X - p_prev.X
         prev_dy = p_mid.Y - p_prev.Y
         prev_dz = p_mid.Z - p_prev.Z
-        prev_len = math.sqrt(
-            prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz
-        )
+        prev_len = math.sqrt(prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz)
 
         if prev_len > 1e-6 and abs(prev_dz) < 1e-6:
             return math.atan2(prev_dy, prev_dx)
@@ -7477,6 +7476,7 @@ class PipelineProcessor:
         Calcula el centro geométrico promediando todos los vértices del BRep3D.
         Soluciona el error de firma de MinMax3D.
         """
+
         def _extract_vertices_debug(_brep, _tag="center"):
             """Compatibilidad con firmas distintas de GetVertices según runtime."""
             try:
@@ -7639,7 +7639,9 @@ class PipelineProcessor:
         """
         Aplica transformaciones separando lógica horizontal (XY) y vertical (ZX/Pitch).
         """
-        debug_arrow = str(os.getenv("SANEAMIENTO_DEBUG_ARROW", "0")).strip().lower() in (
+        debug_arrow = str(
+            os.getenv("SANEAMIENTO_DEBUG_ARROW", "0")
+        ).strip().lower() in (
             "1",
             "true",
             "yes",
@@ -7750,9 +7752,10 @@ class PipelineProcessor:
         # PARTE 2a: TE saneamiento Y45/Y110 — orientación Saneamiento_old (BIF40 / D110-D110).
         # (Sin mirrors/planos de fontanería/te_orientation.)
         # ==========================================
-        if elem_type == "te" and getattr(
-            self, "element_type_core", None
-        ) == "tubo_saneamiento":
+        if (
+            elem_type == "te"
+            and getattr(self, "element_type_core", None) == "tubo_saneamiento"
+        ):
             te_key_old = (
                 round(p_destino.X, 3),
                 round(p_destino.Y, 3),
@@ -7810,12 +7813,9 @@ class PipelineProcessor:
                         # Por defecto, preferimos la orientación nueva (te_orientation + mirrors locales)
                         # porque es la única que decide mirrors de forma robusta en cualquier plano/ángulo.
                         # El modo "old" queda disponible solo para compatibilidad/diagnóstico.
-                        use_old_y110 = (
-                            str(os.getenv("SANEAMIENTO_USE_OLD_TE_ORIENTATION", "0"))
-                            .strip()
-                            .lower()
-                            in ("1", "true", "yes", "on")
-                        )
+                        use_old_y110 = str(
+                            os.getenv("SANEAMIENTO_USE_OLD_TE_ORIENTATION", "0")
+                        ).strip().lower() in ("1", "true", "yes", "on")
                         if not use_old_y110:
                             # No aplicar ni retornar: dejar que el bloque TE moderno (Parte 2) oriente el modelo.
                             if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
@@ -7833,9 +7833,15 @@ class PipelineProcessor:
                                 _bif110_extra_dy = BIF_Y110_40_PLACEMENT_OFFSET_Y_MM
                                 _bif110_extra_dz = BIF_Y110_40_PLACEMENT_OFFSET_Z_MM
                             else:
-                                _bif110_extra_dx = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM
-                                _bif110_extra_dy = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM
-                                _bif110_extra_dz = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM
+                                _bif110_extra_dx = (
+                                    BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM
+                                )
+                                _bif110_extra_dy = (
+                                    BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM
+                                )
+                                _bif110_extra_dz = (
+                                    BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM
+                                )
 
                             if _debug_te_y110_40_enabled() and use_y110_40:
                                 print(
@@ -7876,10 +7882,19 @@ class PipelineProcessor:
         # Importante: la TE no depende del yaw del tramo; si hay parámetros en self.te_nodes
         # para el nodo, se deben aplicar siempre (aunque custom_yaw_deg sea None).
         if elem_type == "te":
-            te_key = (round(p_destino.X, 3), round(p_destino.Y, 3), round(p_destino.Z, 3))
+            te_key = (
+                round(p_destino.X, 3),
+                round(p_destino.Y, 3),
+                round(p_destino.Z, 3),
+            )
             te_map = getattr(self, "te_nodes", {}) or {}
             te_params = te_map.get(te_key, None)
-            if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in ("", "0", "false", "False"):
+            if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
+                "",
+                "0",
+                "false",
+                "False",
+            ):
                 print(
                     "[DBG TE APPLY_LOOKUP] key=%s found=%s te_nodes_len=%s"
                     % (str(te_key), str(bool(te_params)), str(len(te_map)))
@@ -7948,24 +7963,42 @@ class PipelineProcessor:
                                 str(need_my),
                                 str(need_mz),
                                 str(branch_elevated),
-                                float(main_dir_3d[0])
-                                if isinstance(main_dir_3d, (list, tuple)) and len(main_dir_3d) == 3
-                                else 0.0,
-                                float(main_dir_3d[1])
-                                if isinstance(main_dir_3d, (list, tuple)) and len(main_dir_3d) == 3
-                                else 0.0,
-                                float(main_dir_3d[2])
-                                if isinstance(main_dir_3d, (list, tuple)) and len(main_dir_3d) == 3
-                                else 0.0,
-                                float(branch_dir_3d[0])
-                                if isinstance(branch_dir_3d, (list, tuple)) and len(branch_dir_3d) == 3
-                                else 0.0,
-                                float(branch_dir_3d[1])
-                                if isinstance(branch_dir_3d, (list, tuple)) and len(branch_dir_3d) == 3
-                                else 0.0,
-                                float(branch_dir_3d[2])
-                                if isinstance(branch_dir_3d, (list, tuple)) and len(branch_dir_3d) == 3
-                                else 0.0,
+                                (
+                                    float(main_dir_3d[0])
+                                    if isinstance(main_dir_3d, (list, tuple))
+                                    and len(main_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(main_dir_3d[1])
+                                    if isinstance(main_dir_3d, (list, tuple))
+                                    and len(main_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(main_dir_3d[2])
+                                    if isinstance(main_dir_3d, (list, tuple))
+                                    and len(main_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(branch_dir_3d[0])
+                                    if isinstance(branch_dir_3d, (list, tuple))
+                                    and len(branch_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(branch_dir_3d[1])
+                                    if isinstance(branch_dir_3d, (list, tuple))
+                                    and len(branch_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(branch_dir_3d[2])
+                                    if isinstance(branch_dir_3d, (list, tuple))
+                                    and len(branch_dir_3d) == 3
+                                    else 0.0
+                                ),
                                 offset_perp_local,
                             )
                         )
@@ -8128,13 +8161,15 @@ class PipelineProcessor:
                                                 theta_source,
                                                 math.degrees(theta_branch_xy),
                                                 (
-                                                    "%.1f°"
-                                                    % math.degrees(
-                                                        float(ref_orientation)
+                                                    (
+                                                        "%.1f°"
+                                                        % math.degrees(
+                                                            float(ref_orientation)
+                                                        )
                                                     )
-                                                )
-                                                if ref_orientation is not None
-                                                else "None",
+                                                    if ref_orientation is not None
+                                                    else "None"
+                                                ),
                                             )
                                         )
                                     r_yaw = AllplanGeo.Matrix3D()
@@ -8281,7 +8316,17 @@ class PipelineProcessor:
                             print(
                                 "[DBG TE POS] BREP_AFTER_LOCAL_TRANS bbox_min=(%.3f,%.3f,%.3f) "
                                 "bbox_max=(%.3f,%.3f,%.3f) bbox_center=(%.3f,%.3f,%.3f)"
-                                % (minx2, miny2, minz2, maxx2, maxy2, maxz2, cx2, cy2, cz2)
+                                % (
+                                    minx2,
+                                    miny2,
+                                    minz2,
+                                    maxx2,
+                                    maxy2,
+                                    maxz2,
+                                    cx2,
+                                    cy2,
+                                    cz2,
+                                )
                             )
                     except Exception:
                         pass
@@ -8577,7 +8622,9 @@ class PipelineProcessor:
                         f"theta_face={theta_deg:.2f}"
                     )
             except Exception as ex:
-                if str(os.getenv("SANEAMIENTO_DEBUG_ARROW_FACE", "0")).strip().lower() in (
+                if str(
+                    os.getenv("SANEAMIENTO_DEBUG_ARROW_FACE", "0")
+                ).strip().lower() in (
                     "1",
                     "true",
                     "yes",
@@ -8604,7 +8651,11 @@ class PipelineProcessor:
         result_list = []
         element_index = 0
         num_seg = len(segments)
-        from .vertex_utils import compute_segment_cuts_for_path, is_90_deg_turn, is_straight_turn
+        from .vertex_utils import (
+            compute_segment_cuts_for_path,
+            is_90_deg_turn,
+            is_straight_turn,
+        )
 
         if not segment_cuts:
             segment_cuts = compute_segment_cuts_for_path(segments)
@@ -8712,14 +8763,8 @@ class PipelineProcessor:
                 p_next.Y - p_curr.Y,
                 p_next.Z - p_curr.Z,
             )
-            if (
-                abs(v1[0]) < eps
-                and abs(v1[1]) < eps
-                and abs(v1[2]) < eps
-            ) or (
-                abs(v2[0]) < eps
-                and abs(v2[1]) < eps
-                and abs(v2[2]) < eps
+            if (abs(v1[0]) < eps and abs(v1[1]) < eps and abs(v1[2]) < eps) or (
+                abs(v2[0]) < eps and abs(v2[1]) < eps and abs(v2[2]) < eps
             ):
                 return False
 
@@ -8739,8 +8784,7 @@ class PipelineProcessor:
             angle_deg = math.degrees(math.acos(dot_product))
             tolerance = 5.0
             is_45_deg = (
-                abs(angle_deg - 45.0) < tolerance
-                or abs(angle_deg - 135.0) < tolerance
+                abs(angle_deg - 45.0) < tolerance or abs(angle_deg - 135.0) < tolerance
             )
 
             def _count_non_zero_components(v):
@@ -8888,15 +8932,23 @@ class PipelineProcessor:
                     cuts["start"] = float(cuts.get("start", 0.0)) + (
                         DOUBLE45_110_TRIM_OUT_MM
                         if diam == 110
-                        else (DOUBLE45_40_TRIM_OUT_MM if diam == 40 else DOUBLE45_TRIM_OUT_MM)
+                        else (
+                            DOUBLE45_40_TRIM_OUT_MM
+                            if diam == 40
+                            else DOUBLE45_TRIM_OUT_MM
+                        )
                     )
                 # trim_out para codo_90 real Ø25/Ø40.
                 if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 25):
                     cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO90_25_TRIM_OUT_MM
+                    cuts["start"] = (
+                        float(cuts.get("start", 0.0)) + CODO90_25_TRIM_OUT_MM
+                    )
                 if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 40):
                     cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO90_40_TRIM_OUT_MM
+                    cuts["start"] = (
+                        float(cuts.get("start", 0.0)) + CODO90_40_TRIM_OUT_MM
+                    )
                 if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 110):
                     cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
                     trim_out_110 = (
@@ -8908,13 +8960,19 @@ class PipelineProcessor:
                 # trim_out para codo_45 individual Ø25/Ø40.
                 if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 25):
                     cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_25_TRIM_OUT_MM
+                    cuts["start"] = (
+                        float(cuts.get("start", 0.0)) + CODO45_25_TRIM_OUT_MM
+                    )
                 if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 40):
                     cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_40_TRIM_OUT_MM
+                    cuts["start"] = (
+                        float(cuts.get("start", 0.0)) + CODO45_40_TRIM_OUT_MM
+                    )
                 if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 110):
                     cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_110_TRIM_OUT_MM
+                    cuts["start"] = (
+                        float(cuts.get("start", 0.0)) + CODO45_110_TRIM_OUT_MM
+                    )
 
             if i < num_seg - 1:
                 # offset final si en el vértice end del segmento actual hay codo
@@ -8931,7 +8989,11 @@ class PipelineProcessor:
                     cuts["end"] = float(cuts.get("end", 0.0)) + (
                         DOUBLE45_110_TRIM_IN_MM
                         if diam == 110
-                        else (DOUBLE45_40_TRIM_IN_MM if diam == 40 else DOUBLE45_TRIM_IN_MM)
+                        else (
+                            DOUBLE45_40_TRIM_IN_MM
+                            if diam == 40
+                            else DOUBLE45_TRIM_IN_MM
+                        )
                     )
                 # trim_in para codo_90 real Ø25/Ø40.
                 if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 25):
@@ -9000,7 +9062,9 @@ class PipelineProcessor:
                         else None
                     )
                     seg_system = (
-                        getattr(seg_info, "system", None) if seg_info is not None else None
+                        getattr(seg_info, "system", None)
+                        if seg_info is not None
+                        else None
                     )
                     seg_dist = "TD" if str(seg_dist).upper() == "TD" else "IS"
 
@@ -9049,7 +9113,9 @@ class PipelineProcessor:
                             rebuilt_models = self.saneamiento_tube_rebuild(
                                 longitud_recortada
                             )
-                        perf_rebuild_ms += (time.perf_counter() - t_rebuild_start) * 1000.0
+                        perf_rebuild_ms += (
+                            time.perf_counter() - t_rebuild_start
+                        ) * 1000.0
                         if isinstance(rebuilt_models, (list, tuple)):
                             model_cond = rebuilt_models[0] if rebuilt_models else None
                             # tub_pvc_basic_f_25 no consume LargoTramoMm; su modelo base
@@ -9063,7 +9129,9 @@ class PipelineProcessor:
                                     model_cond = self.modificar_dimensiones_brep(
                                         model_cond, longitud_recortada
                                     )
-                                    perf_brep_scale_ms += (time.perf_counter() - t_scale) * 1000.0
+                                    perf_brep_scale_ms += (
+                                        time.perf_counter() - t_scale
+                                    ) * 1000.0
                             except Exception:
                                 pass
                         else:
@@ -9073,7 +9141,9 @@ class PipelineProcessor:
                             model_cond = self.modificar_dimensiones_brep(
                                 tube_outer_tpl, longitud_recortada
                             )
-                            perf_brep_scale_ms += (time.perf_counter() - t_scale) * 1000.0
+                            perf_brep_scale_ms += (
+                                time.perf_counter() - t_scale
+                            ) * 1000.0
                     else:
                         t_scale = time.perf_counter()
                         model_cond = self.modificar_dimensiones_brep(
@@ -9135,12 +9205,17 @@ class PipelineProcessor:
                                     prev_seg=prev_seg_data,
                                 )
                                 p_line_start = AllplanGeo.Point3D(
-                                    seg.start.X + v_unit.X * (cut_start + offset_inicio),
-                                    seg.start.Y + v_unit.Y * (cut_start + offset_inicio),
-                                    seg.start.Z + v_unit.Z * (cut_start + offset_inicio),
+                                    seg.start.X
+                                    + v_unit.X * (cut_start + offset_inicio),
+                                    seg.start.Y
+                                    + v_unit.Y * (cut_start + offset_inicio),
+                                    seg.start.Z
+                                    + v_unit.Z * (cut_start + offset_inicio),
                                 )
-                                element_extra = self._align_saneamiento_tube_along_segment(
-                                    element_extra, p_line_start, v_unit
+                                element_extra = (
+                                    self._align_saneamiento_tube_along_segment(
+                                        element_extra, p_line_start, v_unit
+                                    )
                                 )
                                 if abs(self.saneamiento_extra_world_offset_z_mm) > 1e-9:
                                     try:
@@ -9149,11 +9224,16 @@ class PipelineProcessor:
                                         geo_extra = AllplanGeo.Move(
                                             geo_extra,
                                             AllplanGeo.Vector3D(
-                                                0.0, 0.0, self.saneamiento_extra_world_offset_z_mm
+                                                0.0,
+                                                0.0,
+                                                self.saneamiento_extra_world_offset_z_mm,
                                             ),
                                         )
-                                        element_extra = AllplanBasisElements.ModelElement3D(
-                                            prev_extra.GetCommonProperties(), geo_extra
+                                        element_extra = (
+                                            AllplanBasisElements.ModelElement3D(
+                                                prev_extra.GetCommonProperties(),
+                                                geo_extra,
+                                            )
                                         )
                                         try:
                                             src_attrs = (
@@ -9222,7 +9302,9 @@ class PipelineProcessor:
                                                 f"rot={float(getattr(seg, 'angulo_rotacion', 0.0) or 0.0):.2f}"
                                             )
                                         except Exception as _ex:
-                                            print(f"[SANEAMIENTO][ARROW][PIPE][ERROR] {_ex}")
+                                            print(
+                                                f"[SANEAMIENTO][ARROW][PIPE][ERROR] {_ex}"
+                                            )
                                     element_arrow = self._aplicar_transformacion(
                                         extra_model,
                                         seg,
@@ -9249,7 +9331,9 @@ class PipelineProcessor:
                                 model_extra = self.modificar_dimensiones_brep(
                                     extra_model, longitud_recortada
                                 )
-                                perf_brep_scale_ms += (time.perf_counter() - t_scale) * 1000.0
+                                perf_brep_scale_ms += (
+                                    time.perf_counter() - t_scale
+                                ) * 1000.0
                                 element_extra = self._aplicar_transformacion(
                                     model_extra,
                                     seg,
@@ -9259,14 +9343,21 @@ class PipelineProcessor:
                                 if self.element_type_core == "tubo_saneamiento":
                                     t_al = time.perf_counter()
                                     p_line_start = AllplanGeo.Point3D(
-                                        seg.start.X + v_unit.X * (cut_start + offset_inicio),
-                                        seg.start.Y + v_unit.Y * (cut_start + offset_inicio),
-                                        seg.start.Z + v_unit.Z * (cut_start + offset_inicio),
+                                        seg.start.X
+                                        + v_unit.X * (cut_start + offset_inicio),
+                                        seg.start.Y
+                                        + v_unit.Y * (cut_start + offset_inicio),
+                                        seg.start.Z
+                                        + v_unit.Z * (cut_start + offset_inicio),
                                     )
-                                    element_extra = self._align_saneamiento_tube_along_segment(
-                                        element_extra, p_line_start, v_unit
+                                    element_extra = (
+                                        self._align_saneamiento_tube_along_segment(
+                                            element_extra, p_line_start, v_unit
+                                        )
                                     )
-                                    perf_align_ms += (time.perf_counter() - t_al) * 1000.0
+                                    perf_align_ms += (
+                                        time.perf_counter() - t_al
+                                    ) * 1000.0
                                 result_list.append(
                                     {
                                         "element": element_extra,
@@ -9381,10 +9472,16 @@ class PipelineProcessor:
                             )
                         )
 
-                        y110_sv = str(
-                            te_info_at_node.get("y110_bif_script_variant", "pluvial")
-                            or "pluvial"
-                        ).strip().lower()
+                        y110_sv = (
+                            str(
+                                te_info_at_node.get(
+                                    "y110_bif_script_variant", "pluvial"
+                                )
+                                or "pluvial"
+                            )
+                            .strip()
+                            .lower()
+                        )
                         dyn_te_models = self._get_te_models_for_diameters(
                             d_main_in,
                             d_main_out,
@@ -9600,8 +9697,12 @@ class PipelineProcessor:
                             n1 = math.sqrt(v1.X * v1.X + v1.Y * v1.Y + v1.Z * v1.Z)
                             n2 = math.sqrt(v2.X * v2.X + v2.Y * v2.Y + v2.Z * v2.Z)
                             if n1 > 1e-9 and n2 > 1e-9:
-                                v1u = AllplanGeo.Vector3D(v1.X / n1, v1.Y / n1, v1.Z / n1)
-                                v2u = AllplanGeo.Vector3D(v2.X / n2, v2.Y / n2, v2.Z / n2)
+                                v1u = AllplanGeo.Vector3D(
+                                    v1.X / n1, v1.Y / n1, v1.Z / n1
+                                )
+                                v2u = AllplanGeo.Vector3D(
+                                    v2.X / n2, v2.Y / n2, v2.Z / n2
+                                )
                                 vm = AllplanGeo.Vector3D(
                                     v1u.X + v2u.X,
                                     v1u.Y + v2u.Y,
@@ -9627,10 +9728,14 @@ class PipelineProcessor:
                                     )
 
                                     def _normalize(v):
-                                        nv = math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z)
+                                        nv = math.sqrt(
+                                            v.X * v.X + v.Y * v.Y + v.Z * v.Z
+                                        )
                                         if nv <= 1e-9:
                                             return AllplanGeo.Vector3D(0.0, 0.0, 0.0)
-                                        return AllplanGeo.Vector3D(v.X / nv, v.Y / nv, v.Z / nv)
+                                        return AllplanGeo.Vector3D(
+                                            v.X / nv, v.Y / nv, v.Z / nv
+                                        )
 
                                     def _cross(a, b):
                                         return AllplanGeo.Vector3D(
@@ -9639,7 +9744,9 @@ class PipelineProcessor:
                                             a.X * b.Y - a.Y * b.X,
                                         )
 
-                                    def _build_local_offset_point(base_pt, a_u, b_u, off_x, off_y, off_z):
+                                    def _build_local_offset_point(
+                                        base_pt, a_u, b_u, off_x, off_y, off_z
+                                    ):
                                         # Ejes locales del codo:
                                         # X_local -> bisectriz del giro, Y_local -> lateral, Z_local -> normal del plano del giro.
                                         x_local = _normalize(
@@ -9693,7 +9800,10 @@ class PipelineProcessor:
                                         if info_curr is not None
                                         else None
                                     )
-                                    if isinstance(turn_diam, (list, tuple)) and turn_diam:
+                                    if (
+                                        isinstance(turn_diam, (list, tuple))
+                                        and turn_diam
+                                    ):
                                         turn_diam = turn_diam[0]
                                     try:
                                         turn_diam = int(round(float(turn_diam)))
@@ -9755,10 +9865,20 @@ class PipelineProcessor:
                                     )
 
                                     pos_codo_1 = _build_local_offset_point(
-                                        base_codo_1, v1u, vmu, c1_off[0], c1_off[1], c1_off[2]
+                                        base_codo_1,
+                                        v1u,
+                                        vmu,
+                                        c1_off[0],
+                                        c1_off[1],
+                                        c1_off[2],
                                     )
                                     pos_codo_2 = _build_local_offset_point(
-                                        base_codo_2, vmu, v2u, c2_off[0], c2_off[1], c2_off[2]
+                                        base_codo_2,
+                                        vmu,
+                                        v2u,
+                                        c2_off[0],
+                                        c2_off[1],
+                                        c2_off[2],
                                     )
 
                                     # Recortes dedicados para composición 90° = 2x45°
@@ -9774,7 +9894,9 @@ class PipelineProcessor:
                                         p_next.Z - (v2u.Z * trim_out),
                                     )
 
-                                    seg_codo_1 = _build_aux_seg_data(p_prev_trim, p_curr)
+                                    seg_codo_1 = _build_aux_seg_data(
+                                        p_prev_trim, p_curr
+                                    )
                                     next_codo_1 = _build_aux_seg_data(p_curr, p_after)
                                     e1_outer = self._aplicar_transformacion(
                                         self.templates["codo_45"],
@@ -9793,7 +9915,9 @@ class PipelineProcessor:
                                     element_index += 1
 
                                     seg_codo_2 = _build_aux_seg_data(p_before, p_curr)
-                                    next_codo_2 = _build_aux_seg_data(p_curr, p_next_trim)
+                                    next_codo_2 = _build_aux_seg_data(
+                                        p_curr, p_next_trim
+                                    )
                                     e2_outer = self._aplicar_transformacion(
                                         self.templates["codo_45"],
                                         seg_codo_2,
@@ -9812,7 +9936,10 @@ class PipelineProcessor:
                                     inserted_double_45 = True
 
                                     # Copias opcionales de codo_45 (inner) para ambos.
-                                    if allow_codo_copies and "codo_45_inner" in self.templates:
+                                    if (
+                                        allow_codo_copies
+                                        and "codo_45_inner" in self.templates
+                                    ):
                                         e1_in = self._aplicar_transformacion(
                                             self.templates["codo_45_inner"],
                                             seg_codo_1,
@@ -9844,7 +9971,10 @@ class PipelineProcessor:
                                         )
                                         element_index += 1
 
-                                    if allow_codo_copies and "codo_45_inner_2" in self.templates:
+                                    if (
+                                        allow_codo_copies
+                                        and "codo_45_inner_2" in self.templates
+                                    ):
                                         e1_in2 = self._aplicar_transformacion(
                                             self.templates["codo_45_inner_2"],
                                             seg_codo_1,
@@ -9883,7 +10013,9 @@ class PipelineProcessor:
 
                         if inserted_double_45:
                             if _SANEAMIENTO_DEBUG_VERTICES:
-                                print("[SANEAMIENTO][2x45] aplicado (90° sin cambio de plano)")
+                                print(
+                                    "[SANEAMIENTO][2x45] aplicado (90° sin cambio de plano)"
+                                )
                             continue
 
                     # Codo exterior (outer)
@@ -9898,14 +10030,20 @@ class PipelineProcessor:
                             )
                             if isinstance(diam, (list, tuple)) and diam:
                                 diam = diam[0]
-                            if diam is not None and int(round(float(diam))) in (25, 40, 110):
+                            if diam is not None and int(round(float(diam))) in (
+                                25,
+                                40,
+                                110,
+                            ):
                                 # Offsets de codos Ø25/Ø40/Ø110 aplicados en marco local del giro
                                 # para que el ajuste se mantenga en todos los vértices.
                                 def _norm(v):
                                     n = math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z)
                                     if n <= 1e-9:
                                         return AllplanGeo.Vector3D(0.0, 0.0, 0.0)
-                                    return AllplanGeo.Vector3D(v.X / n, v.Y / n, v.Z / n)
+                                    return AllplanGeo.Vector3D(
+                                        v.X / n, v.Y / n, v.Z / n
+                                    )
 
                                 def _cross(a, b):
                                     return AllplanGeo.Vector3D(
@@ -9914,8 +10052,16 @@ class PipelineProcessor:
                                         a.X * b.Y - a.Y * b.X,
                                     )
 
-                                v_in = getattr(seg, "vector_normalizado", AllplanGeo.Vector3D(0.0, 0.0, 0.0))
-                                v_out = getattr(next_seg, "vector_normalizado", AllplanGeo.Vector3D(0.0, 0.0, 0.0))
+                                v_in = getattr(
+                                    seg,
+                                    "vector_normalizado",
+                                    AllplanGeo.Vector3D(0.0, 0.0, 0.0),
+                                )
+                                v_out = getattr(
+                                    next_seg,
+                                    "vector_normalizado",
+                                    AllplanGeo.Vector3D(0.0, 0.0, 0.0),
+                                )
                                 x_local = _norm(
                                     AllplanGeo.Vector3D(
                                         v_in.X + v_out.X,
@@ -9923,15 +10069,27 @@ class PipelineProcessor:
                                         v_in.Z + v_out.Z,
                                     )
                                 )
-                                if abs(x_local.X) < 1e-9 and abs(x_local.Y) < 1e-9 and abs(x_local.Z) < 1e-9:
+                                if (
+                                    abs(x_local.X) < 1e-9
+                                    and abs(x_local.Y) < 1e-9
+                                    and abs(x_local.Z) < 1e-9
+                                ):
                                     x_local = _norm(v_out)
 
                                 z_local = _norm(_cross(v_in, v_out))
-                                if abs(z_local.X) < 1e-9 and abs(z_local.Y) < 1e-9 and abs(z_local.Z) < 1e-9:
+                                if (
+                                    abs(z_local.X) < 1e-9
+                                    and abs(z_local.Y) < 1e-9
+                                    and abs(z_local.Z) < 1e-9
+                                ):
                                     z_local = AllplanGeo.Vector3D(0.0, 0.0, 1.0)
 
                                 y_local = _norm(_cross(z_local, x_local))
-                                if abs(y_local.X) < 1e-9 and abs(y_local.Y) < 1e-9 and abs(y_local.Z) < 1e-9:
+                                if (
+                                    abs(y_local.X) < 1e-9
+                                    and abs(y_local.Y) < 1e-9
+                                    and abs(y_local.Z) < 1e-9
+                                ):
                                     y_local = AllplanGeo.Vector3D(1.0, 0.0, 0.0)
 
                                 if turn_fitting_type == "codo_90":
@@ -10193,10 +10351,12 @@ class PipelineProcessor:
                                 extra_x_mm=0.0,
                             ):
                                 nonlocal element_index
-                                dyn_part_models = self._get_manguito_models_for_diameters(
-                                    part_d1,
-                                    part_d2,
-                                    distribution_type=dist_type,
+                                dyn_part_models = (
+                                    self._get_manguito_models_for_diameters(
+                                        part_d1,
+                                        part_d2,
+                                        distribution_type=dist_type,
+                                    )
                                 )
                                 if not dyn_part_models:
                                     print(
@@ -10336,7 +10496,9 @@ class PipelineProcessor:
                             distribution_type=dist_type,
                         )
                         manguito_outer_model = (
-                            dyn_models[0] if dyn_models else self.templates.get("manguito")
+                            dyn_models[0]
+                            if dyn_models
+                            else self.templates.get("manguito")
                         )
                         if manguito_outer_model is None:
                             print(
@@ -10410,6 +10572,8 @@ class PipelineProcessor:
                                 elif pair_m == {40, 110}:
                                     rx, ry, rz = _reduct_110_40_offsets_mm()
                                     off_x = -rx if need_mirror_x else rx
+                                    if di1 == 40 and di2 == 110:
+                                        off_x += DIRECT_FECAL_40_110_REDUCER_OFFSET_X_MM
                                     pos_manguito = _manguito_bisector_offset_point(
                                         pos_nodo,
                                         seg,
@@ -10492,7 +10656,10 @@ class PipelineProcessor:
                     other_pt = cp_info.get("other_point")
                     if not node_key_cp or not other_pt:
                         continue
-                    if node_key_cp in te_nodes or node_key_cp in inserted_cross_path_elbows:
+                    if (
+                        node_key_cp in te_nodes
+                        or node_key_cp in inserted_cross_path_elbows
+                    ):
                         continue
 
                     if at_start:
@@ -10581,7 +10748,11 @@ class PipelineProcessor:
                     def _get_seg_diam(_seg_item):
                         try:
                             info = getattr(_seg_item, "info", None)
-                            d = getattr(info, "diameter", None) if info is not None else None
+                            d = (
+                                getattr(info, "diameter", None)
+                                if info is not None
+                                else None
+                            )
                             if isinstance(d, (list, tuple)) and d:
                                 return float(d[0])
                             if d is None:
@@ -10807,6 +10978,8 @@ class PipelineProcessor:
                             elif pair_m == {40, 110}:
                                 rx, ry, rz = _reduct_110_40_offsets_mm()
                                 off_x = -rx if need_mirror_x else rx
+                                if di1 == 40 and di2 == 110:
+                                    off_x += DIRECT_FECAL_40_110_REDUCER_OFFSET_X_MM
                                 pos_manguito = _manguito_bisector_offset_point(
                                     node_pt,
                                     seg_for_conn,
@@ -10835,7 +11008,9 @@ class PipelineProcessor:
                         {
                             "element": element_manguito,
                             "element_type": (
-                                "manguito_inner" if is_inner_only_reducer else "manguito"
+                                "manguito_inner"
+                                if is_inner_only_reducer
+                                else "manguito"
                             ),
                             "index": element_index,
                         }
@@ -10878,6 +11053,7 @@ class PipelineProcessor:
         # TE nunca es interior → la sección 3.A no lo cubre.
         # -------------------------------------------------------
         if "te" in self.templates and segments and te_nodes:
+
             def _try_te_endpoint(pt, seg_obj):
                 nonlocal element_index
                 if pt is None:
@@ -10888,10 +11064,7 @@ class PipelineProcessor:
                     return
                 inserted_te_keys.add(nk)
                 center_pt_raw = te_info.get("center_pt")
-                if (
-                    isinstance(center_pt_raw, (tuple, list))
-                    and len(center_pt_raw) == 3
-                ):
+                if isinstance(center_pt_raw, (tuple, list)) and len(center_pt_raw) == 3:
                     pos_nodo = AllplanGeo.Point3D(
                         float(center_pt_raw[0]),
                         float(center_pt_raw[1]),
@@ -10993,12 +11166,8 @@ class PipelineProcessor:
                     )
                     element_index += 1
 
-            _try_te_endpoint(
-                getattr(segments[0].data, "start", None), segments[0]
-            )
-            _try_te_endpoint(
-                getattr(segments[-1].data, "end", None), segments[-1]
-            )
+            _try_te_endpoint(getattr(segments[0].data, "start", None), segments[0])
+            _try_te_endpoint(getattr(segments[-1].data, "end", None), segments[-1])
 
         if _SANEAMIENTO_PERF_DEBUG:
             total_ms = (time.perf_counter() - t_total_start) * 1000.0

@@ -517,6 +517,7 @@ def register_cross_path_manguito_cuts_into(
         if asymmetric_pair:
             try:
                 from .trim_config import (
+                    DIRECT_FECAL_40_110_FIRST_SEGMENT_CUT_DELTA_MM,
                     REDUCT_110_40_TRIM_IN_MM,
                     REDUCT_110_40_TRIM_OUT_MM,
                     SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM,
@@ -534,7 +535,8 @@ def register_cross_path_manguito_cuts_into(
         elif asymmetric_pair and k_sorted == (40, 110):
             trim_by_d = {
                 110: float(REDUCT_110_40_TRIM_IN_MM),
-                40: float(REDUCT_110_40_TRIM_OUT_MM),
+                40: float(REDUCT_110_40_TRIM_OUT_MM)
+                + float(DIRECT_FECAL_40_110_FIRST_SEGMENT_CUT_DELTA_MM),
             }
         elif asymmetric_pair and k_sorted == (25, 110):
             trim_by_d = {

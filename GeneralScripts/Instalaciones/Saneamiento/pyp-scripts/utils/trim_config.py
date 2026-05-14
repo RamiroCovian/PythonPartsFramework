@@ -41,6 +41,7 @@ TAPRED_40_25_TRIM_OUT_MM = 3.0
 REDUCT_110_40_TRIM_IN_MM = 50.0
 REDUCT_110_40_TRIM_OUT_MM = 100.0
 SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM = 109.25
+DIRECT_FECAL_40_110_FIRST_SEGMENT_CUT_DELTA_MM = -60.0
 
 
 def manguito_asymmetric_trim_mm(d_prev: int, d_next: int, d_segment: int) -> float | None:
@@ -76,6 +77,7 @@ def manguito_asymmetric_trim_mm(d_prev: int, d_next: int, d_segment: int) -> flo
     if (d_prev, d_next) == (40, 110):
         return (
             float(REDUCT_110_40_TRIM_OUT_MM)
+            + float(DIRECT_FECAL_40_110_FIRST_SEGMENT_CUT_DELTA_MM)
             if d_segment == 40
             else float(REDUCT_110_40_TRIM_IN_MM)
         )
