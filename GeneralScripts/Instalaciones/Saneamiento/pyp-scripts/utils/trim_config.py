@@ -40,7 +40,7 @@ TAPRED_40_25_TRIM_IN_MM = 3.0
 TAPRED_40_25_TRIM_OUT_MM = 3.0
 REDUCT_110_40_TRIM_IN_MM = 50.0
 REDUCT_110_40_TRIM_OUT_MM = 100.0
-SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM = 129.0
+SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM = 109.25
 
 
 def manguito_asymmetric_trim_mm(d_prev: int, d_next: int, d_segment: int) -> float | None:
