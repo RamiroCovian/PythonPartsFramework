@@ -2342,11 +2342,11 @@ def create_edge_angulars_group(
 
         origin = move_point(guide_start, x_dir, 0.0)
         origin = move_point(origin, z_dir, thickness)
-        origin = move_point(origin, y_dir, thickness)
+        origin = move_point(origin, y_dir, 0.0)
 
         final = move_point(guide_end, x_dir, 0.0)
         final = move_point(final, z_dir, thickness)
-        final = move_point(final, y_dir, thickness)
+        final = move_point(final, y_dir, 0.0)
     else:
         guide_start = start_point
         guide_end = move_point(start_point, x_dir, piece_length)
