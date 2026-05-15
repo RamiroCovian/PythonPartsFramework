@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Element>
     <Script>
-        <Name>FG_AUTOMAT\NEOPRENO\pyp-scripts\Neoprenos.py</Name>
+        <Name>Instalaciones\FG_AUTOMAT\NEOPRENOS\pyp-scripts\Neoprenos.py</Name>
         <Title>Neopreno</Title>
         <Version>1.0</Version>
         <ReadLastInput>True</ReadLastInput>
@@ -405,7 +405,7 @@
         <Parameter>
             <Name>MuroConnection</Name>
             <Text>Conexión al Muro</Text>
-            <TextId>e_NEO_PP_350</TextId>
+            <TextId>e_NEO_PP_346</TextId>
             <Value></Value>
             <ValueType>TimeStampConnection</ValueType>
             <Visible>False</Visible>
@@ -416,7 +416,7 @@
         <Parameter>
             <Name>MuroGUID</Name>
             <Text>GUID del Muro (backup)</Text>
-            <TextId>e_NEO_PP_351</TextId>
+            <TextId>e_NEO_PP_347</TextId>
             <Value></Value>
             <ValueType>String</ValueType>
             <Visible>False</Visible>
@@ -430,7 +430,7 @@
         <Parameter>
             <Name>Color</Name>
             <Text>Color</Text>
-            <TextId>e_NEO_PP_346</TextId>
+            <TextId>e_NEO_PP_348</TextId>
             <Value>15</Value>
             <ValueType>Color</ValueType>
             <Visible>False</Visible>
@@ -439,7 +439,7 @@
         <Parameter>
             <Name>Pen</Name>
             <Text>Grosor de pluma</Text>
-            <TextId>e_NEO_PP_347</TextId>
+            <TextId>e_NEO_PP_349</TextId>
             <Value>1</Value>
             <ValueType>Pen</ValueType>
             <Visible>False</Visible>
@@ -448,7 +448,7 @@
         <Parameter>
             <Name>Stroke</Name>
             <Text>Tipo de línea</Text>
-            <TextId>e_NEO_PP_348</TextId>
+            <TextId>e_NEO_PP_350</TextId>
             <Value>1</Value>
             <ValueType>Stroke</ValueType>
             <Visible>False</Visible>
@@ -457,7 +457,7 @@
         <Parameter>
             <Name>Layer</Name>
             <Text>Capa</Text>
-            <TextId>e_NEO_PP_349</TextId>
+            <TextId>e_NEO_PP_351</TextId>
             <Value>-1</Value>
             <ValueType>Layer</ValueType>
             <Visible>False</Visible>

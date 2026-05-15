@@ -26,7 +26,7 @@ from HandleParameterData import HandleParameterData
 from HandleParameterType import HandleParameterType
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
 from PythonPartUtil import PythonPartUtil
-from PythonPartTransaction import ConnectToElements
+from PythonPartTransaction import ConnectToElements, PythonPartTransaction
 from ScriptObjectInteractors.BaseScriptObjectInteractor import BaseScriptObjectInteractor
 from ScriptObjectInteractors.LineInteractor import LineInteractor, LineInteractorResult
 from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResult
@@ -48,6 +48,16 @@ MAX_HANDLE_DISTANCE = 100000.0
 
 NEO_LAYER = "PMP_NEOPRENS"
 
+
+def neo_log(message: str) -> None:
+    """Log estable para depurar el flujo multi-colocacion en Allplan."""
+    try:
+        print(f"[NEOPRENOS_MULTI] {message}")
+    except Exception:
+        pass
+
+
+neo_log(f"module loaded: {__file__}")
 
 
 def build_saved_state_dict(
@@ -2358,6 +2368,11 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def start_input(self):
         """Inicia el input del script."""
+        neo_log(
+            "start_input: "
+            f"editing={self.is_editing_existing} "
+            f"saved_state={bool(getattr(getattr(self.build_ele, 'SavedState', None), 'value', ''))}"
+        )
 
         if self.is_editing_existing:
             self.is_free_mode = self._get_free_mode()
@@ -2370,6 +2385,20 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.interactor_state = STOPPED
             self.script_object_interactor = None
             return
+
+        self.line_result = LineInteractorResult()
+        self.wall_select_result = WallSelectResult()
+        self.face_select_result = SolidFaceSelectResult()
+        self.solid_info = None
+        self.detected_wall = None
+        self.detected_wall_guid = None
+        self.wall_ifc_id = None
+        self.parent_element = None
+        self.face_point = None
+        self.face_normal = None
+        self.face_polygon = None
+        self.ref_face_element = None
+        self.ref_face_polygon = None
 
         if hasattr(self.build_ele, 'neopreno_libre'):
             val = self.build_ele.neopreno_libre.value
@@ -2387,9 +2416,12 @@ class NeoprenosScriptObject(BaseScriptObject):
         if hasattr(self.build_ele, 'neopreno_libre'):
             self.build_ele.neopreno_libre.value = bool(self.is_free_mode)
 
+        neo_log(f"start_input: modo={'libre/muro' if self.is_free_mode else 'solido/cara'}")
+
         if self.is_free_mode:
             self.wall_select_result = WallSelectResult()
             self.interactor_state = SELECTING_WALL
+            neo_log("start_input: esperando seleccion de muro")
             self.script_object_interactor = WallSelectInteractor(
                 self.wall_select_result,
                 "Seleccione el muro",
@@ -2400,6 +2432,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self.script_object_interactor.start_input(coord_input_to_use)
         else:
             self.interactor_state = SELECTING_SOLID
+            neo_log("start_input: esperando seleccion de solido/cara")
             self.script_object_interactor = SolidFaceSelectInteractor(
                 self.face_select_result,
             )
@@ -2409,36 +2442,141 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def start_next_input(self):
         """Gestiona la transicion entre interactors."""
+        neo_log(f"start_next_input: estado={self.interactor_state}")
         if self.interactor_state == SELECTING_WALL:
             if self.wall_select_result.is_selected:
+                neo_log("start_next_input: muro seleccionado")
                 self._process_wall_selection()
                 self.interactor_state = SELECTING_LINE
                 self._start_line_input()
             else:
+                neo_log("start_next_input: muro no seleccionado, STOPPED")
                 self.interactor_state = STOPPED
                 self.script_object_interactor = None
 
         elif self.interactor_state == SELECTING_SOLID:
             if self.face_select_result.is_selected:
+                neo_log("start_next_input: solido/cara seleccionado")
                 self._process_solid_selection()
                 self.interactor_state = SELECTING_LINE
                 self._start_line_input()
             else:
+                neo_log("start_next_input: solido/cara no seleccionado, STOPPED")
                 self.interactor_state = STOPPED
                 self.script_object_interactor = None
 
         elif self.interactor_state == SELECTING_LINE:
             if self.line_result.input_line:
+                line = self.line_result.input_line
+                neo_log(
+                    "start_next_input: linea recibida "
+                    f"p0=({line.StartPoint.X:.2f},{line.StartPoint.Y:.2f},{line.StartPoint.Z:.2f}) "
+                    f"p1=({line.EndPoint.X:.2f},{line.EndPoint.Y:.2f},{line.EndPoint.Z:.2f})"
+                )
                 if self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
                     self._saved_coord_input = self.script_object_interactor.coord_input
                 self._process_line_input()
+                if not self.is_editing_existing:
+                    if self._create_current_neopreno_directly():
+                        self._prepare_next_create_interactor()
+                        return
+            else:
+                neo_log("start_next_input: SELECTING_LINE sin input_line")
 
-            self.interactor_state = STOPPED
+            # Fallback: si la creacion directa falla, dejamos que el framework
+            # ejecute el PythonPart con el flujo estandar.
             self.script_object_interactor = None
+            neo_log("start_next_input: linea procesada, fallback execute/framework")
+
+    def _prepare_next_create_interactor(self):
+        """Prepara la siguiente colocacion sin depender del multi_placement del framework."""
+        neo_log("_prepare_next_create_interactor: reiniciando ciclo de creacion")
+
+        self.line_result = LineInteractorResult()
+        self.wall_select_result = WallSelectResult()
+        self.face_select_result = SolidFaceSelectResult()
+        self.handles = []
+
+        self.solid_info = None
+        self.detected_wall = None
+        self.detected_wall_guid = None
+        self.wall_ifc_id = None
+        self.parent_element = None
+        self.face_point = None
+        self.face_normal = None
+        self.face_polygon = None
+        self.ref_face_element = None
+        self.ref_face_polygon = None
+        self.elements = []
+
+        if hasattr(self.build_ele, "z_unique") and hasattr(self.build_ele.z_unique, "value"):
+            self.build_ele.z_unique.value = 0.0
+        if hasattr(self.build_ele, "PythonPartUUID") and hasattr(self.build_ele.PythonPartUUID, "value"):
+            self.build_ele.PythonPartUUID.value = ""
+        if hasattr(self.build_ele, "SavedState") and hasattr(self.build_ele.SavedState, "value"):
+            self.build_ele.SavedState.value = ""
+
+        self.is_free_mode = self._get_free_mode()
+        if hasattr(self.build_ele, 'neopreno_libre'):
+            self.build_ele.neopreno_libre.value = bool(self.is_free_mode)
+
+        if self.is_free_mode:
+            self.interactor_state = SELECTING_WALL
+            self.wall_select_result = WallSelectResult()
+            self.script_object_interactor = WallSelectInteractor(
+                self.wall_select_result,
+                "Seleccione el muro",
+                script_object=self
+            )
+            neo_log("_prepare_next_create_interactor: siguiente input=muro")
+        else:
+            self.interactor_state = SELECTING_SOLID
+            self.face_select_result = SolidFaceSelectResult()
+            self.script_object_interactor = SolidFaceSelectInteractor(
+                self.face_select_result,
+            )
+            neo_log("_prepare_next_create_interactor: siguiente input=solido/cara")
+
+    def _create_current_neopreno_directly(self) -> bool:
+        """Crea el neopreno actual y mantiene vivo el flujo de entrada."""
+        neo_log("_create_current_neopreno_directly: inicio")
+        try:
+            result = self._execute_create()
+            if not result or not result.elements:
+                neo_log("_create_current_neopreno_directly: resultado vacio")
+                return False
+
+            transaction = PythonPartTransaction(
+                self.document,
+                connect_to_ele=result.connect_to_ele
+            )
+            created = transaction.execute(
+                AllplanGeo.Matrix3D(),
+                self.coord_input.GetViewWorldProjection(),
+                result.elements,
+                self.modification_ele_list,
+                result.reinf_rearrange,
+                True,
+                None,
+                uuid_parameter_name=result.uuid_parameter_name,
+                elements_to_delete=result.elements_to_delete
+            )
+            neo_log(
+                "_create_current_neopreno_directly: creado "
+                f"result_elements={len(result.elements)} "
+                f"created={len(created) if created else 0}"
+            )
+            return True
+        except Exception as e:
+            import traceback
+            neo_log(f"_create_current_neopreno_directly: EXCEPTION {e}")
+            traceback.print_exc()
+            return False
 
     def _process_wall_selection(self):
         element_guid_str = self.wall_select_result.element_guid
         selected_element = self.wall_select_result.element
+        neo_log(f"_process_wall_selection: guid={element_guid_str}")
 
         self.detected_wall = selected_element
         real_wall_guid = str(selected_element.GetModelElementUUID())
@@ -2466,6 +2604,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         element_guid_str = self.face_select_result.element_guid
         selected_element = self.face_select_result.element
+        neo_log(f"_process_solid_selection: guid={element_guid_str}")
 
         self.ref_face_element = selected_element
         self.ref_face_polygon = self.face_polygon
@@ -2542,6 +2681,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def _start_line_input(self):
         prompt_msg = "Defina la linea para el neopreno - Posicionamiento libre" if self.is_free_mode else "Defina la linea para el neopreno (punto inicial)"
+        neo_log(f"_start_line_input: {prompt_msg}")
 
         coord_input_to_use = self._saved_coord_input if self._saved_coord_input else self.coord_input
 
@@ -2570,7 +2710,13 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def _process_line_input(self):
         if not (line := self.line_result.input_line):
+            neo_log("_process_line_input: sin linea")
             return
+        neo_log(
+            "_process_line_input: inicio "
+            f"len={AllplanGeo.CalcLength(line):.2f} "
+            f"free={self.is_free_mode}"
+        )
 
         if getattr(self, "_restored_from_saved_state", False):
             if hasattr(self.build_ele, "PuntoInicial") and hasattr(self.build_ele, "PuntoFinal"):
@@ -2655,6 +2801,10 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self.build_ele.AxisV_Z.value = axis_v.Z
 
         self.line_result.input_line = line_to_process
+        neo_log(
+            "_process_line_input: linea procesada "
+            f"len={AllplanGeo.CalcLength(line_to_process):.2f}"
+        )
 
         coord_input = None
         if self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
@@ -2810,6 +2960,12 @@ class NeoprenosScriptObject(BaseScriptObject):
 
 
         self.is_editing_existing = is_modify
+        neo_log(
+            "execute: "
+            f"mode={'MODIFY' if is_modify else 'CREATE'} "
+            f"state={self.interactor_state} "
+            f"has_line={bool(self.line_result and self.line_result.input_line)}"
+        )
 
         if is_modify:
             return self._execute_modify()
@@ -2817,6 +2973,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             return self._execute_create()
 
     def _execute_create(self) -> CreateElementResult:
+        neo_log("_execute_create: inicio")
         """Lógica completa de CREACIÓN: detecta muro, calcula PMP_PARE, genera z_unique, crea geometrías."""
 
         if not self.line_result or not self.line_result.input_line:
@@ -2828,9 +2985,12 @@ class NeoprenosScriptObject(BaseScriptObject):
                         from ScriptObjectInteractors.LineInteractor import LineInteractorResult
                         self.line_result = LineInteractorResult()
                     self.line_result.input_line = AllplanGeo.Line3D(punto_inicial.value, punto_final.value)
+                    neo_log("_execute_create: linea recuperada desde build_ele")
                 else:
+                    neo_log("_execute_create: sin linea y puntos vacios -> CreateElementResult([])")
                     return CreateElementResult([])
             else:
+                neo_log("_execute_create: sin linea ni parametros PuntoInicial/PuntoFinal -> CreateElementResult([])")
                 return CreateElementResult([])
 
         line = self.line_result.input_line
@@ -2928,8 +3088,10 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, "PMP_WALL_ID")
 
         self.elements = self._create_neopreno_elements(pmp_pare=wall_pare)
+        neo_log(f"_execute_create: elementos geometria={len(self.elements) if self.elements else 0} wall_pare={wall_pare}")
 
         if not self.elements:
+            neo_log("_execute_create: no se crearon elementos geometria -> CreateElementResult([])")
             return CreateElementResult([])
 
         individual_pythonparts = self.create_individual_pythonparts_from_elements(
@@ -2939,6 +3101,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         )
 
         if not individual_pythonparts:
+            neo_log("_execute_create: no se crearon PythonParts individuales -> CreateElementResult([])")
             return CreateElementResult([])
 
 
@@ -2999,8 +3162,10 @@ class NeoprenosScriptObject(BaseScriptObject):
         )
 
         model_elem_list = pythonpart_group.create()
+        neo_log(f"_execute_create: PythonPartGroup elementos={len(model_elem_list) if model_elem_list else 0}")
 
         if not model_elem_list or len(model_elem_list) == 0:
+            neo_log("_execute_create: PythonPartGroup vacio -> CreateElementResult([])")
             return CreateElementResult([])
 
 
@@ -3112,6 +3277,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                     connect_to_ele.connection_elements.append(guid_str)
 
         if len(connect_to_ele.connection_elements) == 0:
+            neo_log("_execute_create: sin conexion a muro/solido -> mensaje y CreateElementResult([])")
             AllplanUtil.ShowMessageBox(
                 "Error: No se pudo establecer conexion con el elemento.\n\n"
                 "El neopreno necesita estar conectado a un muro o solido para guardarse correctamente.",
@@ -3120,13 +3286,28 @@ class NeoprenosScriptObject(BaseScriptObject):
             return CreateElementResult([])
 
         self._save_state_to_build_ele()
+        try:
+            from DocumentManager import DocumentManager
+            doc_manager = DocumentManager.get_instance()
+            was_pyp_null = doc_manager.pythonpart_element.IsNull()
+            doc_manager.clear_pythonpart_element()
+            neo_log(f"_execute_create: DocumentManager.pythonpart_element cleared was_null={was_pyp_null}")
+        except Exception as e:
+            neo_log(f"_execute_create: no se pudo limpiar DocumentManager.pythonpart_element: {e}")
+        neo_log(
+            "_execute_create: return "
+            f"model_elems={len(model_elem_list)} "
+            f"connect={len(connect_to_ele.connection_elements)} "
+            "handles=0 multi_placement=True"
+        )
 
         return CreateElementResult(
             elements=model_elem_list,
-            handles=handles,
+            handles=[],
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
             connect_to_ele=connect_to_ele,
-            uuid_parameter_name="PythonPartUUID"
+            uuid_parameter_name="PythonPartUUID",
+            multi_placement=True
         )
 
     def _execute_modify(self) -> CreateElementResult:
@@ -3369,7 +3550,8 @@ class NeoprenosScriptObject(BaseScriptObject):
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
-            uuid_parameter_name="PythonPartUUID"
+            uuid_parameter_name="PythonPartUUID",
+            multi_placement=False
         )
 
     def move_handle(self,
