@@ -10,10 +10,10 @@ import NemAll_Python_Utility as PythonUtility
 from typing import Any, List, Optional, Type
 
 from .trim_config import (
-    REDUCT_110_40_TRIM_IN_MM,
-    REDUCT_110_40_TRIM_OUT_MM,
-    TAPRED_40_25_TRIM_IN_MM,
-    TAPRED_40_25_TRIM_OUT_MM,
+    REDUCT_110_40_TRIM_IN_MM as _TRIMCFG_REDUCT_110_40_TRIM_IN_MM,
+    REDUCT_110_40_TRIM_OUT_MM as _TRIMCFG_REDUCT_110_40_TRIM_OUT_MM,
+    TAPRED_40_25_TRIM_IN_MM as _TRIMCFG_TAPRED_40_25_TRIM_IN_MM,
+    TAPRED_40_25_TRIM_OUT_MM as _TRIMCFG_TAPRED_40_25_TRIM_OUT_MM,
 )
 
 _SANEAMIENTO_DEBUG_VERTICES = str(
@@ -35,6 +35,153 @@ def _debug_te_y110_40_enabled() -> bool:
         "yes",
         "on",
     )
+
+
+def _san_rotate_vec_rx_deg(
+    x: float, y: float, z: float, deg: float
+) -> tuple[float, float, float]:
+    r = math.radians(deg)
+    c, s = math.cos(r), math.sin(r)
+    return x, c * y - s * z, s * y + c * z
+
+
+def _san_rotate_vec_ry_deg(
+    x: float, y: float, z: float, deg: float
+) -> tuple[float, float, float]:
+    r = math.radians(deg)
+    c, s = math.cos(r), math.sin(r)
+    return c * x + s * z, y, -s * x + c * z
+
+
+def _san_rotate_vec_rz_deg(
+    x: float, y: float, z: float, deg: float
+) -> tuple[float, float, float]:
+    r = math.radians(deg)
+    c, s = math.cos(r), math.sin(r)
+    return c * x - s * y, s * x + c * y, z
+
+
+def _san_flecha_sticker_normal_world(
+    did_z_to_x: bool,
+    roll_deg: float,
+    pitch_deg: float,
+    yaw_deg: float,
+) -> tuple[float, float, float]:
+    """
+    Unitario en la dirección de local +Z tras la misma cadena LINEAL que el BRep en
+    _aplicar_transformacion antes del traslado al nodo: Z→X+flip, Rx(roll), Ry(-pitch), Rz(yaw).
+    """
+    x, y, z = 0.0, 0.0, 1.0
+    if did_z_to_x:
+        x, y, z = _san_rotate_vec_ry_deg(x, y, z, 90.0)
+        x = -x
+    x, y, z = _san_rotate_vec_rx_deg(x, y, z, roll_deg)
+    x, y, z = _san_rotate_vec_ry_deg(x, y, z, -pitch_deg)
+    x, y, z = _san_rotate_vec_rz_deg(x, y, z, yaw_deg)
+    n = math.sqrt(x * x + y * y + z * z)
+    if n < 1e-12:
+        return 0.0, 0.0, 1.0
+    return x / n, y / n, z / n
+
+
+def _te_rodrigues_rotate_vec(
+    kx: float,
+    ky: float,
+    kz: float,
+    theta: float,
+    vx: float,
+    vy: float,
+    vz: float,
+) -> tuple[float, float, float]:
+    """Gira el vector v alrededor del eje unitario (kx,ky,kz) un ángulo θ."""
+    c = math.cos(theta)
+    s = math.sin(theta)
+    t = 1.0 - c
+    cx = ky * vz - kz * vy
+    cy = kz * vx - kx * vz
+    cz = kx * vy - ky * vx
+    adot = kx * vx + ky * vy + kz * vz
+    return (
+        vx * c + cx * s + kx * adot * t,
+        vy * c + cy * s + ky * adot * t,
+        vz * c + cz * s + kz * adot * t,
+    )
+
+
+def _te_mat_rotate_unit_to_unit(
+    ux: float,
+    uy: float,
+    uz: float,
+    vx: float,
+    vy: float,
+    vz: float,
+) -> AllplanGeo.Matrix3D:
+    """Matriz de rotación ortogonal que lleva el vector unitario u al vector unitario v."""
+    cx = uy * vz - uz * vy
+    cy = uz * vx - ux * vz
+    cz = ux * vy - uy * vx
+    clen = math.sqrt(cx * cx + cy * cy + cz * cz)
+    dotp = ux * vx + uy * vy + uz * vz
+    m = AllplanGeo.Matrix3D()
+    if clen < 1e-12:
+        if dotp > 0.0:
+            return m
+        # u ≈ −v : 180° alrededor de un eje perpendicular a u
+        if abs(ux) < 0.9:
+            px, py, pz = 1.0, 0.0, 0.0
+        else:
+            px, py, pz = 0.0, 1.0, 0.0
+        ax = uy * pz - uz * py
+        ay = uz * px - ux * pz
+        az = ux * py - uy * px
+        an = math.sqrt(ax * ax + ay * ay + az * az)
+        if an < 1e-12:
+            return m
+        ax /= an
+        ay /= an
+        az /= an
+        axis = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, 0, 0),
+            AllplanGeo.Point3D(ax, ay, az),
+        )
+        m.SetRotation(axis, AllplanGeo.Angle(math.pi))
+        return m
+    cx /= clen
+    cy /= clen
+    cz /= clen
+    ang = math.atan2(clen, dotp)
+    axis = AllplanGeo.Line3D(
+        AllplanGeo.Point3D(0, 0, 0),
+        AllplanGeo.Point3D(cx, cy, cz),
+    )
+    m.SetRotation(axis, AllplanGeo.Angle(ang))
+    return m
+
+
+def _te_rotate_vec_u_to_v(
+    ux: float,
+    uy: float,
+    uz: float,
+    vx: float,
+    vy: float,
+    vz: float,
+    bx: float,
+    by: float,
+    bz: float,
+) -> tuple[float, float, float]:
+    """Aplica la misma rotación que lleva u→v al vector (bx,by,bz)."""
+    cx = uy * vz - uz * vy
+    cy = uz * vx - ux * vz
+    cz = ux * vy - uy * vx
+    clen = math.sqrt(cx * cx + cy * cy + cz * cz)
+    dotp = ux * vx + uy * vy + uz * vz
+    if clen < 1e-12:
+        if dotp > 0.0:
+            return bx, by, bz
+        return -bx, -by, -bz
+    kx, ky, kz = cx / clen, cy / clen, cz / clen
+    ang = math.atan2(clen, dotp)
+    return _te_rodrigues_rotate_vec(kx, ky, kz, ang, bx, by, bz)
 
 
 # ---------------------------------------------------
@@ -61,70 +208,71 @@ CODO45_25_OFFSET_Z_MM = 0.0
 # SANEAMIENTO 90° = 2x45° (40 mm) — ajustes globales
 # ---------------------------------------------------
 DOUBLE45_40_AUTO_SEP_MM = 0.0
-DOUBLE45_40_CODO1_OFFSET_X_MM = -45.0
-DOUBLE45_40_CODO1_OFFSET_Y_MM = 30.0
+DOUBLE45_40_CODO1_OFFSET_X_MM = -50.0
+DOUBLE45_40_CODO1_OFFSET_Y_MM = 28.5
 DOUBLE45_40_CODO1_OFFSET_Z_MM = 0.0
-DOUBLE45_40_CODO2_OFFSET_X_MM = 55.0
-DOUBLE45_40_CODO2_OFFSET_Y_MM = 30.0
+DOUBLE45_40_CODO2_OFFSET_X_MM = 41.0
+DOUBLE45_40_CODO2_OFFSET_Y_MM = 29.0
 DOUBLE45_40_CODO2_OFFSET_Z_MM = 0.0
 # Ajuste global para codo 90° de 40 mm (outer + inner).
-CODO90_40_OFFSET_X_MM = -12.0
+CODO90_40_OFFSET_X_MM = -27.0
 CODO90_40_OFFSET_Y_MM = -15.0
-CODO90_40_OFFSET_Z_MM = 17.0
+CODO90_40_OFFSET_Z_MM = 40.0
 # Ajuste global para codo 45° individual de 40 mm (outer + inner).
-CODO45_40_OFFSET_X_MM = 5.0
+CODO45_40_OFFSET_X_MM = -5.0
 CODO45_40_OFFSET_Y_MM = 10.0
 CODO45_40_OFFSET_Z_MM = 0.0
 # Bifurcación Y45 Ø40 (TE 40-40-40, colocación BIF40 / Saneamiento_old): traslación extra en mm (ejes mundo).
 BIF_Y40_PLACEMENT_OFFSET_X_MM = 0.0
 BIF_Y40_PLACEMENT_OFFSET_Y_MM = 0.0
-BIF_Y40_PLACEMENT_OFFSET_Z_MM = -40.0
+BIF_Y40_PLACEMENT_OFFSET_Z_MM = 40.0
 # Recortes de tubo en nudo TE Y45 Ø40 (40-40-40), en mm (portado de Saneamiento_old BIF40_*).
 # Se aplican a los tres brazos: troncal “entrada”, rama, troncal “salida” (ver vertex_utils.register_te_cuts_into).
-BIF_Y40_TE_TRIM_MAIN_IN_MM = 30.0
-BIF_Y40_TE_TRIM_MAIN_OUT_MM = 65.0
-BIF_Y40_TE_TRIM_BRANCH_MM = 70.6
-# Bifurcación Y Ø110 pluvial (TE 110-110-110, Derivacion110m_f_script + colocación D110-D110).
+BIF_Y40_TE_TRIM_MAIN_IN_MM = 60.0
+BIF_Y40_TE_TRIM_MAIN_OUT_MM = 60.0
+BIF_Y40_TE_TRIM_BRANCH_MM = 62.0
+# Bifurcación Y Ø110 (TE 110-110-110): modelo fecal `Derivacion110m_f_script.py`,
+# modelo pluvial `Derivacion110m_p_script.py` (según `y110_bif_script_variant` en te_nodes).
 BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM = 0.0
 BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM = 0.0
 BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM = 0.0
 # Bifurcación TE 110-110-40 (Bif_Reduc_110_50): mm en el mismo marco local que
 # BIF110_D110_OFFSET_* (se combinan vía _rotate_offset_like_old con Rx,Ry,Rz del nodo).
 BIF_Y110_40_PLACEMENT_OFFSET_X_MM = 0.0
-BIF_Y110_40_PLACEMENT_OFFSET_Y_MM = -40.0
+BIF_Y110_40_PLACEMENT_OFFSET_Y_MM = 0.0
 BIF_Y110_40_PLACEMENT_OFFSET_Z_MM = 0.0
-# Recortes nudo TE 110-110-110 solo pluvial (editar; fecal usa TE_TRIMS / otro script).
-BIF_Y110_PLUVIAL_TE_TRIM_MAIN_IN_MM = 50.0
-BIF_Y110_PLUVIAL_TE_TRIM_MAIN_OUT_MM = 147.0
-BIF_Y110_PLUVIAL_TE_TRIM_BRANCH_MM = 148.0
+# Recortes nudo TE 110-110-110 compartidos (pluvial/fecal).
+BIF_Y110_PLUVIAL_TE_TRIM_MAIN_IN_MM = 94.0
+BIF_Y110_PLUVIAL_TE_TRIM_MAIN_OUT_MM = 132.0
+BIF_Y110_PLUVIAL_TE_TRIM_BRANCH_MM = 140.86
 # TE 110-110-40 (Bif_Reduc_110_50_script): recortes por tramo; afinar en obra si hace falta.
-BIF_Y110_40_TE_TRIM_MAIN_IN_MM = 10.0
+BIF_Y110_40_TE_TRIM_MAIN_IN_MM = 15.0
 BIF_Y110_40_TE_TRIM_MAIN_OUT_MM = 110.0
 BIF_Y110_40_TE_TRIM_BRANCH_MM = 190.0
 # ---------------------------------------------------
 # SANEAMIENTO 90° = 2x45° (110 mm) — ajustes globales
 # ---------------------------------------------------
 DOUBLE45_110_AUTO_SEP_MM = 0.0
-DOUBLE45_110_CODO1_OFFSET_X_MM = -110.0
+DOUBLE45_110_CODO1_OFFSET_X_MM = -250.0
 DOUBLE45_110_CODO1_OFFSET_Y_MM = 60.0
-DOUBLE45_110_CODO1_OFFSET_Z_MM = 100.0
-DOUBLE45_110_CODO2_OFFSET_X_MM = 80.0
+DOUBLE45_110_CODO1_OFFSET_Z_MM = 50.0
+DOUBLE45_110_CODO2_OFFSET_X_MM = -70.0
 DOUBLE45_110_CODO2_OFFSET_Y_MM = 60.0
-DOUBLE45_110_CODO2_OFFSET_Z_MM = 100.0
+DOUBLE45_110_CODO2_OFFSET_Z_MM = 50.0
 # Ajuste global para codo 90° de 110 mm (outer + inner).
 # Portado de Saneamiento_old (L1000_D87) para el codo 110/90-87.
-CODO90_110_OFFSET_X_MM = 183.0
-CODO90_110_OFFSET_Y_MM = 68.0
-CODO90_110_OFFSET_Z_MM = 0.0
+CODO90_110_OFFSET_X_MM = -370.0
+CODO90_110_OFFSET_Y_MM = 65.0
+CODO90_110_OFFSET_Z_MM = 300.0
 # Codo 110mm 90° fecal (cambio de plano): copia explícita de offsets.
 # Se mantiene independiente por nombre para separar fecal/pluvial.
 CODO90_110_FECAL_OFFSET_X_MM = CODO90_110_OFFSET_X_MM
 CODO90_110_FECAL_OFFSET_Y_MM = CODO90_110_OFFSET_Y_MM
 CODO90_110_FECAL_OFFSET_Z_MM = CODO90_110_OFFSET_Z_MM
 # Ajuste global para codo 45° individual de 110 mm (outer + inner).
-CODO45_110_OFFSET_X_MM = -15.0
-CODO45_110_OFFSET_Y_MM = 22.0
-CODO45_110_OFFSET_Z_MM = 100.0
+CODO45_110_OFFSET_X_MM = -160.0
+CODO45_110_OFFSET_Y_MM = 22.5
+CODO45_110_OFFSET_Z_MM = 50.0
 # Ajuste global para Tap reductor 40<->25 (outer + inner), en eje local del fitting.
 TAPRED_40_25_OFFSET_X_MM = 0.0
 TAPRED_40_25_OFFSET_Y_MM = 0.0
@@ -136,11 +284,17 @@ TAPRED_40_25_OFFSET_Z_MM = 0.0
 REDUCT_110_40_OFFSET_X_MM = 0.0
 REDUCT_110_40_OFFSET_Y_MM = 0.0
 REDUCT_110_40_OFFSET_Z_MM = 0.0
+# Ajuste axial adicional para el ultimo reductor en cadena fecal 25<->110.
+SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM = 109.25
+# Ajuste directo para transicion fecal 40->110 sin reductor intermedio 25->40.
+DIRECT_FECAL_40_110_REDUCER_OFFSET_X_MM = 60.0
 
 _DERIV_Y45_D40_CLASS: Any = None
 _DERIV_Y45_D40_LOAD_FAILED = False
-_DERIV_Y110_D110_CLASS: Any = None
-_DERIV_Y110_D110_LOAD_FAILED = False
+_DERIV_Y110_FECAL_CLASS: Any = None
+_DERIV_Y110_FECAL_LOAD_FAILED = False
+_DERIV_Y110_PLUVIAL_CLASS: Any = None
+_DERIV_Y110_PLUVIAL_LOAD_FAILED = False
 _BIF_REDUC_110_50_CLASS: Any = None
 _BIF_REDUC_110_50_LOAD_FAILED = False
 
@@ -178,36 +332,71 @@ def _get_derivacion_y45_d40_model_class() -> Optional[Type[Any]]:
         return None
 
 
-def _get_derivacion_y110_d110_model_class() -> Optional[Type[Any]]:
-    """Carga perezosa de DerivacionY110D110 (pluvial) para TE 110-110-110 en el pipeline."""
-    global _DERIV_Y110_D110_CLASS, _DERIV_Y110_D110_LOAD_FAILED
-    if _DERIV_Y110_D110_CLASS is not None:
-        return _DERIV_Y110_D110_CLASS
-    if _DERIV_Y110_D110_LOAD_FAILED:
-        return None
+def _get_derivacion_y110_model_class(variant: str = "pluvial") -> Optional[Type[Any]]:
+    """
+    Carga perezosa del modelo TE 110-110-110.
+    variant: 'fecal' -> Derivacion110m_f_script (BifurcacionY110Fecal110mm),
+             'pluvial' -> Derivacion110m_p_script (BifurcacionY110Pluvial110mm).
+    """
+    global _DERIV_Y110_FECAL_CLASS, _DERIV_Y110_FECAL_LOAD_FAILED
+    global _DERIV_Y110_PLUVIAL_CLASS, _DERIV_Y110_PLUVIAL_LOAD_FAILED
+    v = str(variant or "pluvial").strip().lower()
+    if v == "fecal":
+        if _DERIV_Y110_FECAL_CLASS is not None:
+            return _DERIV_Y110_FECAL_CLASS
+        if _DERIV_Y110_FECAL_LOAD_FAILED:
+            return None
+        rel_name = "Derivacion110m_f_script.py"
+        mod_tag = "saneamiento_derivacion_y110_fecal_runtime"
+        class_names = ("BifurcacionY110Fecal110mm", "DerivacionY110D110")
+    else:
+        if _DERIV_Y110_PLUVIAL_CLASS is not None:
+            return _DERIV_Y110_PLUVIAL_CLASS
+        if _DERIV_Y110_PLUVIAL_LOAD_FAILED:
+            return None
+        rel_name = "Derivacion110m_p_script.py"
+        mod_tag = "saneamiento_derivacion_y110_pluvial_runtime"
+        class_names = ("BifurcacionY110Pluvial110mm", "DerivacionY110D110")
     try:
         pyp_dir = os.path.dirname(os.path.dirname(__file__))
-        path = os.path.join(pyp_dir, "Derivacion110m_f_script.py")
+        path = os.path.join(pyp_dir, rel_name)
         if not os.path.isfile(path):
-            _DERIV_Y110_D110_LOAD_FAILED = True
+            if v == "fecal":
+                _DERIV_Y110_FECAL_LOAD_FAILED = True
+            else:
+                _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
             return None
-        spec = importlib.util.spec_from_file_location(
-            "saneamiento_derivacion_y110_pluvial_runtime", path
-        )
+        spec = importlib.util.spec_from_file_location(mod_tag, path)
         if not spec or not spec.loader:
-            _DERIV_Y110_D110_LOAD_FAILED = True
+            if v == "fecal":
+                _DERIV_Y110_FECAL_LOAD_FAILED = True
+            else:
+                _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
             return None
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        cls = getattr(mod, "DerivacionY110D110", None)
+        cls = None
+        for name in class_names:
+            cls = getattr(mod, name, None)
+            if cls is not None:
+                break
         if cls is None:
-            _DERIV_Y110_D110_LOAD_FAILED = True
+            if v == "fecal":
+                _DERIV_Y110_FECAL_LOAD_FAILED = True
+            else:
+                _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
             return None
-        _DERIV_Y110_D110_CLASS = cls
+        if v == "fecal":
+            _DERIV_Y110_FECAL_CLASS = cls
+        else:
+            _DERIV_Y110_PLUVIAL_CLASS = cls
         return cls
     except Exception as ex:
-        print(f"[SANEAMIENTO][TE-Y110-P] Error cargando Derivacion110m_f_script: {ex}")
-        _DERIV_Y110_D110_LOAD_FAILED = True
+        print(f"[SANEAMIENTO][TE-Y110] Error cargando {rel_name}: {ex}")
+        if v == "fecal":
+            _DERIV_Y110_FECAL_LOAD_FAILED = True
+        else:
+            _DERIV_Y110_PLUVIAL_LOAD_FAILED = True
         return None
 
 
@@ -258,8 +447,8 @@ CODO45_25_TRIM_OUT_MM = 20.0
 # Recortes extra para codo_45 individual (40 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_45
 # - TRIM_OUT: recorta el tramo saliente del codo_45
-CODO45_40_TRIM_IN_MM = 30.0
-CODO45_40_TRIM_OUT_MM = 20.0
+CODO45_40_TRIM_IN_MM = 19.60
+CODO45_40_TRIM_OUT_MM = 16.13
 # Recortes extra para codo_90 real (25 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_90
 # - TRIM_OUT: recorta el tramo saliente del codo_90
@@ -268,19 +457,19 @@ CODO90_25_TRIM_OUT_MM = 30.0
 # Recortes extra para codo_90 real (40 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_90
 # - TRIM_OUT: recorta el tramo saliente del codo_90
-CODO90_40_TRIM_IN_MM = 30.0
-CODO90_40_TRIM_OUT_MM = 45.0
+CODO90_40_TRIM_IN_MM = 42.70
+CODO90_40_TRIM_OUT_MM = 22.80
 # Recortes extra para codo_45 individual (110 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_45
 # - TRIM_OUT: recorta el tramo saliente del codo_45
-CODO45_110_TRIM_IN_MM = 40.0
-CODO45_110_TRIM_OUT_MM = 50.0
+CODO45_110_TRIM_IN_MM = 33.80
+CODO45_110_TRIM_OUT_MM = 32.82
 # Recortes extra para codo_90 real (110 mm):
 # - TRIM_IN: recorta el tramo entrante al codo_90
 # - TRIM_OUT: recorta el tramo saliente del codo_90
 # Valores de Saneamiento_old para codo rígido 110mm/90° (L1000_D87).
-CODO90_110_TRIM_IN_MM = 82.0
-CODO90_110_TRIM_OUT_MM = 150.0
+CODO90_110_TRIM_IN_MM = 134.20
+CODO90_110_TRIM_OUT_MM = 75.40
 # Codo 110mm 90° fecal (cambio de plano): copia explícita de trims.
 # Se mantiene independiente por nombre para separar fecal/pluvial.
 CODO90_110_FECAL_TRIM_IN_MM = CODO90_110_TRIM_IN_MM
@@ -293,13 +482,23 @@ DOUBLE45_TRIM_OUT_MM = 50.0
 # Recortes extra para 2x45 (40 mm):
 # - TRIM_IN: acorta la entrada al primer codo
 # - TRIM_OUT: acorta la salida del segundo codo
-DOUBLE45_40_TRIM_IN_MM = 70.0
-DOUBLE45_40_TRIM_OUT_MM = 70.0
+DOUBLE45_40_TRIM_IN_MM = 64.95
+DOUBLE45_40_TRIM_OUT_MM = 65.90
 # Recortes extra para 2x45 (110 mm):
 # - TRIM_IN: acorta la entrada al primer codo
 # - TRIM_OUT: acorta la salida del segundo codo
-DOUBLE45_110_TRIM_IN_MM = 150.0
-DOUBLE45_110_TRIM_OUT_MM = 150.0
+DOUBLE45_110_TRIM_IN_MM = 131.30
+DOUBLE45_110_TRIM_OUT_MM = 130.32
+# Recortes extra para Tap reductor 40<->25:
+# - TRIM_IN: recorta el tramo del lado 25
+# - TRIM_OUT: recorta el tramo del lado 40
+TAPRED_40_25_TRIM_IN_MM = _TRIMCFG_TAPRED_40_25_TRIM_IN_MM
+TAPRED_40_25_TRIM_OUT_MM = _TRIMCFG_TAPRED_40_25_TRIM_OUT_MM
+# Recortes extra para Reductor 110<->40:
+# - TRIM_IN: recorta el tramo del lado 110
+# - TRIM_OUT: recorta el tramo del lado 40
+REDUCT_110_40_TRIM_IN_MM = _TRIMCFG_REDUCT_110_40_TRIM_IN_MM
+REDUCT_110_40_TRIM_OUT_MM = _TRIMCFG_REDUCT_110_40_TRIM_OUT_MM
 
 
 def _reduct_110_40_offsets_mm():
@@ -316,7 +515,9 @@ def _reduct_110_40_offsets_mm():
     )
 
 
-def _manguito_bisector_offset_point(pos_base, seg, next_seg, off_x_mm, off_y_mm, off_z_mm):
+def _manguito_bisector_offset_point(
+    pos_base, seg, next_seg, off_x_mm, off_y_mm, off_z_mm
+):
     """
     Punto desplazado desde pos_base según offsets en marco local al nudo:
     X ~ bisectriz de las direcciones de tramo, Y/Z ~ referencia cruzada (igual que Tap 40-25).
@@ -337,7 +538,9 @@ def _manguito_bisector_offset_point(pos_base, seg, next_seg, off_x_mm, off_y_mm,
             a.X * b.Y - a.Y * b.X,
         )
 
-    x_local = _norm(AllplanGeo.Vector3D(v_in.X + v_out.X, v_in.Y + v_out.Y, v_in.Z + v_out.Z))
+    x_local = _norm(
+        AllplanGeo.Vector3D(v_in.X + v_out.X, v_in.Y + v_out.Y, v_in.Z + v_out.Z)
+    )
     if abs(x_local.X) < 1e-9 and abs(x_local.Y) < 1e-9 and abs(x_local.Z) < 1e-9:
         x_local = _norm(v_out)
     z_local = _norm(_cross(v_in, v_out))
@@ -361,6 +564,43 @@ def _manguito_bisector_offset_point(pos_base, seg, next_seg, off_x_mm, off_y_mm,
         + (y_local.Z * off_y_mm)
         + (z_local.Z * off_z_mm),
     )
+
+
+def _split_reducer_fallback_length_mm(d1, d2) -> float:
+    """Longitud axial aproximada para encadenar reductores cuando no hay vertices."""
+    try:
+        pair = {int(round(float(d1))), int(round(float(d2)))}
+    except Exception:
+        return 0.0
+    if pair == {25, 40}:
+        # Reduct_40_25_script: LARGO_PRINCIPAL + LARGO_ANILLO.
+        return 60.0
+    if pair == {40, 110}:
+        # Reduct_110_50_40_script: valor conservador si no se puede medir el BRep.
+        return 150.0
+    return 0.0
+
+
+def _split_reducer_axis_length_mm(model_list, d1, d2) -> float:
+    """
+    Mide la longitud local X del primer modelo del reductor.
+    El transformador alinea +X local con el tramo, asi que sirve como avance
+    para colocar el siguiente reductor inmediatamente despues.
+    """
+    fallback = _split_reducer_fallback_length_mm(d1, d2)
+    try:
+        if not model_list:
+            return fallback
+        geom = model_list[0].GetGeometryObject()
+        err, verts = geom.GetVertices()
+        if err == 0 and verts:
+            xs = [float(v.X) for v in verts]
+            length = max(xs) - min(xs)
+            if length > 1.0:
+                return float(length)
+    except Exception:
+        pass
+    return fallback
 
 
 class GeometryHandler:
@@ -6425,6 +6665,202 @@ class PipelineProcessor:
         self._te_invalid_warning_cache = set()
         # Orientación global capturada por PolyLib (start_orientation_capture).
         self.reference_orientation_angle = None
+        # Si el usuario cancela una correccion de diametro en codo, se aborta
+        # esa generacion para no insertar reductores en un nodo angular.
+        self.cancelled_by_elbow_diameter_conflict = False
+
+    @staticmethod
+    def _segment_diameter(seg_item, default=25.0) -> float:
+        try:
+            info = getattr(seg_item, "info", None)
+            d = getattr(info, "diameter", None) if info is not None else None
+            if isinstance(d, (list, tuple)) and d:
+                d = d[0]
+            if d is None:
+                return float(default)
+            return float(d)
+        except Exception:
+            return float(default)
+
+    @staticmethod
+    def _format_segment_label(diameter_mm: int, system: str = "") -> str:
+        try:
+            suffix = str(system or "").strip()[0].upper()
+        except Exception:
+            suffix = ""
+        if not suffix:
+            suffix = "F"
+        return f"D{int(diameter_mm)} {suffix}"
+
+    def _set_segment_diameter(self, seg_item, diameter_mm: int) -> bool:
+        info = getattr(seg_item, "info", None)
+        if info is None:
+            return False
+        try:
+            old_diam = getattr(info, "diameter", None)
+            info.diameter = int(diameter_mm)
+            info.section_type = f"{int(diameter_mm)} mm"
+            info.label = self._format_segment_label(
+                int(diameter_mm), getattr(info, "system", "")
+            )
+            print(
+                f"[SANEAMIENTO][ELBOW][DIAM] segmento actualizado "
+                f"{old_diam}mm -> {int(diameter_mm)}mm"
+            )
+            return True
+        except Exception as ex:
+            print(f"[SANEAMIENTO][ELBOW][DIAM] No se pudo actualizar segmento: {ex}")
+            return False
+
+    @staticmethod
+    def _is_elbow_turn_for_diameter_conflict(p_prev, p_curr, p_next) -> bool:
+        if not (p_prev and p_curr and p_next):
+            return False
+        try:
+            v1 = (
+                p_curr.X - p_prev.X,
+                p_curr.Y - p_prev.Y,
+                p_curr.Z - p_prev.Z,
+            )
+            v2 = (
+                p_next.X - p_curr.X,
+                p_next.Y - p_curr.Y,
+                p_next.Z - p_curr.Z,
+            )
+            n1 = math.sqrt(v1[0] * v1[0] + v1[1] * v1[1] + v1[2] * v1[2])
+            n2 = math.sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2])
+            if n1 < 1e-9 or n2 < 1e-9:
+                return False
+            dot = (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]) / (n1 * n2)
+            dot = max(-1.0, min(1.0, dot))
+            angle_deg = math.degrees(math.acos(dot))
+            if abs(angle_deg) <= 1.0 or abs(angle_deg - 180.0) <= 1.0:
+                return False
+            return (
+                abs(angle_deg - 45.0) <= 7.5
+                or abs(angle_deg - 90.0) <= 10.0
+                or abs(angle_deg - 135.0) <= 7.5
+            )
+        except Exception:
+            return False
+
+    def _ask_elbow_diameter(self, d_prev: float, d_next: float):
+        di_prev = int(round(float(d_prev)))
+        di_next = int(round(float(d_next)))
+        requested = None
+        try:
+            explicit_requested = getattr(self, "requested_diameter", None)
+            if explicit_requested is not None:
+                requested = int(round(float(explicit_requested)))
+        except Exception:
+            requested = None
+        for attr_name in ("DiameterType", "DiametroAplicar"):
+            if requested is not None:
+                break
+            try:
+                attr = getattr(self.build_ele, attr_name, None)
+                raw = getattr(attr, "value", attr)
+                if isinstance(raw, (list, tuple)) and raw:
+                    raw = raw[0]
+                if raw is not None:
+                    requested = int(round(float(raw)))
+                    break
+            except Exception:
+                continue
+        if requested == di_prev:
+            original = di_next
+        elif requested == di_next:
+            original = di_prev
+        else:
+            requested = di_next
+            original = di_prev
+        warning_message = (
+            "ADVERTENCIA: Cambio de diametro detectado junto a un codo\n\n"
+            f"Diametro actual del tramo anterior: {di_prev}mm\n"
+            f"Diametro actual del tramo siguiente: {di_next}mm\n"
+            f"Nuevo diametro seleccionado: {requested}mm\n\n"
+            "Los codos no admiten dos diametros distintos.\n\n"
+            f"Aceptar: aplicar {requested}mm a ambos tramos del codo.\n"
+            f"Cancelar: descartar el cambio y volver a {original}mm."
+        )
+
+        try:
+            if hasattr(PythonUtility, "MB_OKCANCEL"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_OKCANCEL
+                )
+            elif hasattr(PythonUtility, "MB_YESNO"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_YESNO
+                )
+            else:
+                PythonUtility.ShowMessageBox(warning_message, PythonUtility.MB_OK)
+                response = getattr(PythonUtility, "IDCANCEL", None)
+        except Exception as ex:
+            print(f"[SANEAMIENTO][ELBOW][DIAM] Error mostrando advertencia: {ex}")
+            response = getattr(PythonUtility, "IDCANCEL", None)
+
+        if response in (
+            getattr(PythonUtility, "IDOK", None),
+            getattr(PythonUtility, "IDYES", None),
+        ):
+            print(
+                f"[SANEAMIENTO][ELBOW][DIAM] cambio aceptado: aplicar {requested}mm "
+                "a ambos tramos del codo"
+            )
+            return requested
+
+        print(
+            f"[SANEAMIENTO][ELBOW][DIAM] cambio cancelado: restaurar ambos tramos "
+            f"a {original}mm"
+        )
+        return original
+
+    def resolve_elbow_diameter_conflicts(self, segments: list) -> bool:
+        """
+        Un codo de saneamiento se selecciona por el giro entre los vectores:
+        v_prev = p_curr - p_prev y v_next = p_next - p_curr. Para 90 grados
+        o 45/135 grados legacy, el fitting tiene un diametro nominal unico.
+        Si los dos tramos difieren, se pregunta al usuario y se actualiza la
+        metadata antes de recortes, codos y reductores.
+        """
+        self.cancelled_by_elbow_diameter_conflict = False
+        for idx in range(1, len(segments)):
+            seg_prev = segments[idx - 1]
+            seg_curr = segments[idx]
+            p_prev = getattr(getattr(seg_prev, "data", None), "start", None)
+            p_curr = getattr(getattr(seg_prev, "data", None), "end", None)
+            p_next = getattr(getattr(seg_curr, "data", None), "end", None)
+            if not self._is_elbow_turn_for_diameter_conflict(p_prev, p_curr, p_next):
+                continue
+
+            d_prev = self._segment_diameter(seg_prev)
+            d_next = self._segment_diameter(seg_curr)
+            di_prev = int(round(float(d_prev)))
+            di_next = int(round(float(d_next)))
+            if di_prev == di_next:
+                continue
+
+            print(
+                "[SANEAMIENTO][ELBOW][DIAM] conflicto en codo idx=%s "
+                "d_prev=%s d_next=%s node=(%.3f,%.3f,%.3f)"
+                % (idx, di_prev, di_next, p_curr.X, p_curr.Y, p_curr.Z)
+            )
+            selected = self._ask_elbow_diameter(d_prev, d_next)
+            if selected is None:
+                self.cancelled_by_elbow_diameter_conflict = True
+                print(
+                    "[SANEAMIENTO][ELBOW][DIAM] generacion cancelada por "
+                    f"conflicto de diametro en codo idx={idx}"
+                )
+                return False
+
+            if di_prev != selected:
+                self._set_segment_diameter(seg_prev, selected)
+            if di_next != selected:
+                self._set_segment_diameter(seg_curr, selected)
+
+        return True
 
     def logic_layers_copias(self, seg_info) -> bool:
         """
@@ -6477,9 +6913,7 @@ class PipelineProcessor:
         prev_dx = p_mid.X - p_prev.X
         prev_dy = p_mid.Y - p_prev.Y
         prev_dz = p_mid.Z - p_prev.Z
-        prev_len = math.sqrt(
-            prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz
-        )
+        prev_len = math.sqrt(prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz)
 
         if prev_len > 1e-6 and abs(prev_dz) < 1e-6:
             return math.atan2(prev_dy, prev_dx)
@@ -6864,6 +7298,7 @@ class PipelineProcessor:
         d_branch,
         distribution_type="IS",
         mirror_model_x: bool = False,
+        y110_script_variant: str = "pluvial",
     ):
         """
         Devuelve [outer, inner?] de TE para el nodo según diámetros reales
@@ -6913,7 +7348,12 @@ class PipelineProcessor:
             )
             return []
 
-        cache_key = (dist, di_in, di_out, di_branch, bool(mirror_model_x))
+        y110_var = (
+            str(y110_script_variant or "pluvial").strip().lower()
+            if di_in == di_out == di_branch == 110
+            else ""
+        )
+        cache_key = (dist, di_in, di_out, di_branch, bool(mirror_model_x), y110_var)
         cached = self._te_model_cache.get(cache_key)
         if cached is not None:
             print(
@@ -6999,35 +7439,34 @@ class PipelineProcessor:
                 return model_list_110_40
 
             if di_in == di_out == di_branch == 110:
-                if getattr(self, "saneamiento_fecal_tricapa_install", False):
-                    # TE Y110 pluvial (Derivacion110m_f_script) no aplica a tricapa fecal.
-                    pass
-                else:
-                    ModelCls110 = _get_derivacion_y110_d110_model_class()
-                    if ModelCls110 is None:
-                        self._te_model_cache[cache_key] = []
-                        print(
-                            f"[SANEAMIENTO][TE-Y110-P] clase no disponible dist={dist} "
-                            f"di={di_in}/{di_out}/{di_branch}"
-                        )
-                        return []
-                    try:
-                        te_obj_110 = ModelCls110(self.build_ele, self.doc)
-                        if hasattr(te_obj_110, "set_diameters"):
-                            if mirror_model_x:
-                                te_obj_110.set_diameters(di_out, di_branch, di_in)
-                            else:
-                                te_obj_110.set_diameters(di_in, di_branch, di_out)
-                        model_list_110 = list(te_obj_110.build() or [])
-                    except Exception as ex:
-                        print(f"[SANEAMIENTO][TE-Y110-P] build error: {ex}")
-                        model_list_110 = []
-                    self._te_model_cache[cache_key] = model_list_110
+                ModelCls110 = _get_derivacion_y110_model_class(
+                    "fecal" if y110_var == "fecal" else "pluvial"
+                )
+                if ModelCls110 is None:
+                    self._te_model_cache[cache_key] = []
                     print(
-                        f"[SANEAMIENTO][TE-Y110-P] build dist={dist} di_in={di_in} di_out={di_out} "
-                        f"di_branch={di_branch} elems={len(model_list_110)}"
+                        f"[SANEAMIENTO][TE-Y110] clase no disponible dist={dist} "
+                        f"di={di_in}/{di_out}/{di_branch}"
                     )
-                    return model_list_110
+                    return []
+                try:
+                    te_obj_110 = ModelCls110(self.build_ele, self.doc)
+                    if hasattr(te_obj_110, "set_diameters"):
+                        if mirror_model_x:
+                            te_obj_110.set_diameters(di_out, di_branch, di_in)
+                        else:
+                            te_obj_110.set_diameters(di_in, di_branch, di_out)
+                    model_list_110 = list(te_obj_110.build() or [])
+                except Exception as ex:
+                    print(f"[SANEAMIENTO][TE-Y110] build error: {ex}")
+                    model_list_110 = []
+                self._te_model_cache[cache_key] = model_list_110
+                print(
+                    f"[SANEAMIENTO][TE-Y110] build dist={dist} di_in={di_in} di_out={di_out} "
+                    f"di_branch={di_branch} y110_variant={y110_var or '-'} "
+                    f"elems={len(model_list_110)}"
+                )
+                return model_list_110
 
         classes = self._load_te_classes()
         ModelClass = classes.get(dist) if classes else None
@@ -7184,6 +7623,7 @@ class PipelineProcessor:
         Calcula el centro geométrico promediando todos los vértices del BRep3D.
         Soluciona el error de firma de MinMax3D.
         """
+
         def _extract_vertices_debug(_brep, _tag="center"):
             """Compatibilidad con firmas distintas de GetVertices según runtime."""
             try:
@@ -7310,6 +7750,26 @@ class PipelineProcessor:
         except Exception:
             return model_element
 
+    @staticmethod
+    def _saneamiento_effective_roll_deg(segment_data) -> float:
+        """
+        Misma idea que el doc interno del transform 2D: roll ≈ angulo_rotacion + 90° en XZ/YZ.
+        El término adjacent_xy_roll no está en el segmento .data; se omite aquí.
+        """
+        try:
+            ar = float(getattr(segment_data, "angulo_rotacion", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            ar = 0.0
+        if str(os.getenv("SANEAMIENTO_DISABLE_VIEW_ROLL_EXTRA", "0")).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            return ar
+        vm = str(getattr(segment_data, "view_mode", "XY") or "XY").upper()
+        extra = 90.0 if vm in ("XZ", "YZ") else 0.0
+        return ar + extra
+
     def obtener_rotacion_codo(self, v_salida, eps=1e-6):
         """
         Devuelve el ángulo de rotación del codo en grados
@@ -7342,11 +7802,18 @@ class PipelineProcessor:
         custom_yaw_deg: float | None = None,
         custom_mirror_x_local: bool = False,
         preserve_local_offset: bool = False,
+        flecha_diameter_mm: float | None = None,
     ) -> AllplanBasisElements.ModelElement3D:
         """
         Aplica transformaciones separando lógica horizontal (XY) y vertical (ZX/Pitch).
+
+        `preserve_local_offset=True` conserva el origen local del BRep (p. ej. flecha en
+        tubo saneamiento). Para `elem_type="flecha"`, `flecha_diameter_mm` debe pasar
+        el Ø del tramo cuando `segment_data` es solo `.data` sin `.info`.
         """
-        debug_arrow = str(os.getenv("SANEAMIENTO_DEBUG_ARROW", "0")).strip().lower() in (
+        debug_arrow = str(
+            os.getenv("SANEAMIENTO_DEBUG_ARROW", "0")
+        ).strip().lower() in (
             "1",
             "true",
             "yes",
@@ -7396,6 +7863,7 @@ class PipelineProcessor:
         # tub_pvc_tricapa_f_40 (Fecal Ø40): el tramo largo va en Z local. El resto del
         # conducto asume eje largo en X antes del yaw (Rot Z = angulo_xy).
         # tub_pvc_tricapa_p_110 / tricapa_v / tub_pvc_basic_f_25 ya dejan el eje en X.
+        san_z_to_x_applied = False
         if getattr(self, "element_type_core", None) == "tubo_saneamiento":
             try:
                 err_v, verts = brep.GetVertices()
@@ -7409,6 +7877,7 @@ class PipelineProcessor:
                     _extents = ((dx, 0), (dy, 1), (dz, 2))
                     _longest, _axis_idx = max(_extents, key=lambda t: t[0])
                     if _axis_idx == 2 and _longest > 1e-3:
+                        san_z_to_x_applied = True
                         # Igual que tub_pvc_tricapa_v._build_tube: +90° Y lleva el eje Z del
                         # prisma al eje +X (donde el yaw en Z alinea con la polilínea).
                         axis_y = AllplanGeo.Line3D(
@@ -7457,9 +7926,10 @@ class PipelineProcessor:
         # PARTE 2a: TE saneamiento Y45/Y110 — orientación Saneamiento_old (BIF40 / D110-D110).
         # (Sin mirrors/planos de fontanería/te_orientation.)
         # ==========================================
-        if elem_type == "te" and getattr(
-            self, "element_type_core", None
-        ) == "tubo_saneamiento":
+        if (
+            elem_type == "te"
+            and getattr(self, "element_type_core", None) == "tubo_saneamiento"
+        ):
             te_key_old = (
                 round(p_destino.X, 3),
                 round(p_destino.Y, 3),
@@ -7514,56 +7984,95 @@ class PipelineProcessor:
                             try_apply_old_d110_d110_bif_transform,
                         )
 
-                        if use_y110_40:
-                            _bif110_extra_dx = BIF_Y110_40_PLACEMENT_OFFSET_X_MM
-                            _bif110_extra_dy = BIF_Y110_40_PLACEMENT_OFFSET_Y_MM
-                            _bif110_extra_dz = BIF_Y110_40_PLACEMENT_OFFSET_Z_MM
+                        # Por defecto, preferimos la orientación nueva (te_orientation + mirrors locales)
+                        # porque es la única que decide mirrors de forma robusta en cualquier plano/ángulo.
+                        # El modo "old" queda disponible solo para compatibilidad/diagnóstico.
+                        use_old_y110 = str(
+                            os.getenv("SANEAMIENTO_USE_OLD_TE_ORIENTATION", "0")
+                        ).strip().lower() in ("1", "true", "yes", "on")
+                        if not use_old_y110:
+                            # No aplicar ni retornar: dejar que el bloque TE moderno (Parte 2) oriente el modelo.
+                            if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
+                                "",
+                                "0",
+                                "false",
+                                "False",
+                            ):
+                                print(
+                                    "[DBG TE] skip old D110 orientation (SANEAMIENTO_USE_OLD_TE_ORIENTATION=0)"
+                                )
                         else:
-                            _bif110_extra_dx = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM
-                            _bif110_extra_dy = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM
-                            _bif110_extra_dz = BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM
+                            if use_y110_40:
+                                _bif110_extra_dx = BIF_Y110_40_PLACEMENT_OFFSET_X_MM
+                                _bif110_extra_dy = BIF_Y110_40_PLACEMENT_OFFSET_Y_MM
+                                _bif110_extra_dz = BIF_Y110_40_PLACEMENT_OFFSET_Z_MM
+                            else:
+                                _bif110_extra_dx = (
+                                    BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_X_MM
+                                )
+                                _bif110_extra_dy = (
+                                    BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Y_MM
+                                )
+                                _bif110_extra_dz = (
+                                    BIF_Y110_PLUVIAL_PLACEMENT_OFFSET_Z_MM
+                                )
 
-                        if _debug_te_y110_40_enabled() and use_y110_40:
-                            print(
-                                "[SANEAMIENTO][TE-Y110-40][DEBUG] _aplicar_transformacion "
-                                f"orientación D110 nodo=({p_destino.X:.3f},{p_destino.Y:.3f},"
-                                f"{p_destino.Z:.3f}) main_dir={mv} branch_dir={bv} "
-                                f"extra_offset=({_bif110_extra_dx},{_bif110_extra_dy},"
-                                f"{_bif110_extra_dz})"
+                            if _debug_te_y110_40_enabled() and use_y110_40:
+                                print(
+                                    "[SANEAMIENTO][TE-Y110-40][DEBUG] _aplicar_transformacion "
+                                    f"orientación D110 nodo=({p_destino.X:.3f},{p_destino.Y:.3f},"
+                                    f"{p_destino.Z:.3f}) main_dir={mv} branch_dir={bv} "
+                                    f"extra_offset=({_bif110_extra_dx},{_bif110_extra_dy},"
+                                    f"{_bif110_extra_dz})"
+                                )
+                            brep_110 = try_apply_old_d110_d110_bif_transform(
+                                brep,
+                                p_destino.X,
+                                p_destino.Y,
+                                p_destino.Z,
+                                mv,
+                                bv,
+                                extra_dx=_bif110_extra_dx,
+                                extra_dy=_bif110_extra_dy,
+                                extra_dz=_bif110_extra_dz,
                             )
-                        brep_110 = try_apply_old_d110_d110_bif_transform(
-                            brep,
-                            p_destino.X,
-                            p_destino.Y,
-                            p_destino.Z,
-                            mv,
-                            bv,
-                            extra_dx=_bif110_extra_dx,
-                            extra_dy=_bif110_extra_dy,
-                            extra_dz=_bif110_extra_dz,
-                        )
-                        if brep_110 is not None:
+                            if brep_110 is not None:
+                                if _debug_te_y110_40_enabled() and use_y110_40:
+                                    print(
+                                        "[SANEAMIENTO][TE-Y110-40][DEBUG] "
+                                        "try_apply_old_d110_d110_bif_transform -> BRep OK"
+                                    )
+                                return _build_model_with_source_attrs(brep_110)
                             if _debug_te_y110_40_enabled() and use_y110_40:
                                 print(
                                     "[SANEAMIENTO][TE-Y110-40][DEBUG] "
-                                    "try_apply_old_d110_d110_bif_transform -> BRep OK"
+                                    "try_apply_old_d110_d110_bif_transform -> None (sin cambio)"
                                 )
-                            return _build_model_with_source_attrs(brep_110)
-                        if _debug_te_y110_40_enabled() and use_y110_40:
-                            print(
-                                "[SANEAMIENTO][TE-Y110-40][DEBUG] "
-                                "try_apply_old_d110_d110_bif_transform -> None (sin cambio)"
-                            )
 
         # ==========================================
         # PARTE 2: LÓGICA VERTICAL (PITCH / ZX)
         # ==========================================
-        # TE: aplicar mirrors/rotación/elevación como en fontaneria.py
-        if elem_type == "te" and custom_yaw_deg is not None:
-            te_params = getattr(self, "te_nodes", {}).get(
-                (round(p_destino.X, 3), round(p_destino.Y, 3), round(p_destino.Z, 3)),
-                None,
+        # TE: aplicar mirrors/rotación/elevación como en fontaneria.py.
+        # Importante: la TE no depende del yaw del tramo; si hay parámetros en self.te_nodes
+        # para el nodo, se deben aplicar siempre (aunque custom_yaw_deg sea None).
+        if elem_type == "te":
+            te_key = (
+                round(p_destino.X, 3),
+                round(p_destino.Y, 3),
+                round(p_destino.Z, 3),
             )
+            te_map = getattr(self, "te_nodes", {}) or {}
+            te_params = te_map.get(te_key, None)
+            if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
+                "",
+                "0",
+                "false",
+                "False",
+            ):
+                print(
+                    "[DBG TE APPLY_LOOKUP] key=%s found=%s te_nodes_len=%s"
+                    % (str(te_key), str(bool(te_params)), str(len(te_map)))
+                )
             if te_params:
                 # Debug TE: por defecto ON (hasta estabilizar orientación XZ/YZ)
                 debug_te = str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
@@ -7613,6 +8122,60 @@ class PipelineProcessor:
 
                 if debug_te_pos:
                     try:
+                        print(
+                            "[DBG TE ORIENT] node=(%.3f,%.3f,%.3f) plane=%s ang=%.1f° "
+                            "need_mx=%s need_my=%s need_mz=%s elevated=%s "
+                            "main_dir_3d=(%.3f,%.3f,%.3f) branch_dir_3d=(%.3f,%.3f,%.3f) "
+                            "offset_perp_local=%.2f"
+                            % (
+                                p_destino.X,
+                                p_destino.Y,
+                                p_destino.Z,
+                                plane,
+                                math.degrees(ang),
+                                str(need_mx),
+                                str(need_my),
+                                str(need_mz),
+                                str(branch_elevated),
+                                (
+                                    float(main_dir_3d[0])
+                                    if isinstance(main_dir_3d, (list, tuple))
+                                    and len(main_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(main_dir_3d[1])
+                                    if isinstance(main_dir_3d, (list, tuple))
+                                    and len(main_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(main_dir_3d[2])
+                                    if isinstance(main_dir_3d, (list, tuple))
+                                    and len(main_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(branch_dir_3d[0])
+                                    if isinstance(branch_dir_3d, (list, tuple))
+                                    and len(branch_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(branch_dir_3d[1])
+                                    if isinstance(branch_dir_3d, (list, tuple))
+                                    and len(branch_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                (
+                                    float(branch_dir_3d[2])
+                                    if isinstance(branch_dir_3d, (list, tuple))
+                                    and len(branch_dir_3d) == 3
+                                    else 0.0
+                                ),
+                                offset_perp_local,
+                            )
+                        )
                         _e, _verts = brep.GetVertices()
                         if _verts:
                             minx = min(v.X for v in _verts)
@@ -7662,14 +8225,21 @@ class PipelineProcessor:
                     )
 
                 mat = AllplanGeo.Matrix3D()
-                # Mirrors locales como en fontaneria: SIEMPRE antes de rotaciones (independiente del plano)
+                # Mirrors locales puros por eje (SIEMPRE antes de rotaciones, independiente del plano):
+                # Nota: los flags (need_mirror_x_local / need_mirror_y_local) están definidos en
+                # coordenadas del modelo TE, donde históricamente el eje "x" del flag corresponde
+                # al espejo en Y local. Por eso se permutan los scaling.
+                # - need_mirror_x_local: espejo en Y local  -> scale( 1, -1, 1)
+                # - need_mirror_y_local: espejo en X local  -> scale(-1,  1, 1)
+                # Nota: antes need_mirror_y_local usaba (-1,-1,1), que equivale a un giro 180° en XY
+                # y producía casos correctos "por casualidad" según cuadrante/plano.
                 if need_mx:
                     mirror_mat = AllplanGeo.Matrix3D()
                     mirror_mat.SetScaling(1, -1, 1)
                     mat = mat * mirror_mat
                 if need_my:
                     mirror_mat = AllplanGeo.Matrix3D()
-                    mirror_mat.SetScaling(-1, -1, 1)
+                    mirror_mat.SetScaling(-1, 1, 1)
                     mat = mat * mirror_mat
 
                 # Desplazamiento local perpendicular al troncal (offset de centrado)
@@ -7705,8 +8275,68 @@ class PipelineProcessor:
                         if mnorm > 1e-9 and bnorm > 1e-9:
                             mx, my, mz = mx / mnorm, my / mnorm, mz / mnorm
                             bx, by, bz = bx / bnorm, by / bnorm, bz / bnorm
+                            omx, omy, omz = mx, my, mz
 
-                            if abs(mx) < 0.05 and abs(my) < 0.05 and abs(mz) > 0.95:
+                            trunk_yz = abs(omx) < 0.05 and math.hypot(omy, omz) > 0.99
+                            trunk_wz = abs(omy) < 0.05 and abs(omz) > 0.95
+                            trunk_steep_yz = trunk_yz and abs(omz) >= 0.5
+                            # Troncal en plano YZ (sin X): ±main es la misma recta — al invertir caudal
+                            # debe quedar el mismo semieje para canon/ref_z/mz<0 (como trunk_wz con 0,0,-1).
+                            tmx, tmy, tmz = omx, omy, omz
+                            if (
+                                (trunk_steep_yz and not trunk_wz)
+                                and abs(omx) < 0.12
+                                and tmz > 0.0
+                            ):
+                                tmx, tmy, tmz = -tmx, -tmy, -tmz
+                            if trunk_wz or trunk_steep_yz:
+                                # Troncal ~ eje Z mundo: +Z y −Z son la misma recta geométrica.
+                                # Al "invertir cabal" solo cambia el sentido del vector troncal;
+                                # la pose del modelo TE no debe girar (solo tubos/codos siguen el caudal).
+                                if trunk_wz:
+                                    mx, my, mz = 0.0, 0.0, -1.0
+                                    mx0, my0, mz0 = omx, omy, omz
+                                else:
+                                    mx, my, mz = tmx, tmy, tmz
+                                    mx0, my0, mz0 = tmx, tmy, tmz
+                                bx0, by0, bz0 = bx, by, bz
+                                mat_back = None
+                                # Troncal en plano YZ pero no eje Z mundo: misma lógica que −Z
+                                # en marco girado (canon), luego R_back * mat al volver a mundo.
+                                if trunk_steep_yz and not trunk_wz:
+                                    ref_z = -1.0 if mz0 < 0.0 else 1.0
+                                    ref_x, ref_y = 0.0, 0.0
+                                    bx, by, bz = _te_rotate_vec_u_to_v(
+                                        mx0,
+                                        my0,
+                                        mz0,
+                                        ref_x,
+                                        ref_y,
+                                        ref_z,
+                                        bx0,
+                                        by0,
+                                        bz0,
+                                    )
+                                    bn = math.sqrt(bx * bx + by * by + bz * bz)
+                                    if bn > 1e-9:
+                                        bx, by, bz = bx / bn, by / bn, bz / bn
+                                    mx, my, mz = 0.0, 0.0, ref_z
+                                    mat_back = _te_mat_rotate_unit_to_unit(
+                                        ref_x,
+                                        ref_y,
+                                        ref_z,
+                                        mx0,
+                                        my0,
+                                        mz0,
+                                    )
+                                    if debug_te:
+                                        print(
+                                            "[DBG TE] SPECIAL_VERTICAL YZ inclinado: "
+                                            "canon main=(0,0,%.1f) branch_canon=(%.3f,%.3f,%.3f) "
+                                            "→ vuelta a mundo con R(ref→main)"
+                                            % (ref_z, bx, by, bz)
+                                        )
+
                                 if debug_te:
                                     print(
                                         "[DBG TE] SPECIAL_VERTICAL main=(%.3f,%.3f,%.3f) branch=(%.3f,%.3f,%.3f)"
@@ -7737,6 +8367,9 @@ class PipelineProcessor:
                                 # 1) tomar ángulo de la rama en XY respecto al eje X
                                 #    (atan2(by, bx)),
                                 # 2) aplicar desfase local de -90° del modelo TE.
+                                # Rama en YZ con bz<0 usa el mismo yaw que la simétrica “hacia
+                                # arriba” (arriba izq/dcha); el desvío hacia abajo se corrige
+                                # después con espejo (mirror), no con pitch en X.
                                 if abs(bx) + abs(by) > 1e-9:
                                     ref_orientation = getattr(
                                         self, "reference_orientation_angle", None
@@ -7758,7 +8391,7 @@ class PipelineProcessor:
                                     theta = theta_base - (math.pi / 2.0)
                                     if debug_te:
                                         print(
-                                            "[DBG TE] SPECIAL_VERTICAL theta=%.1f° (base=%.1f° source=%s, branch_xy=%.1f°, ref=%s, offset=-90°)"
+                                            "[DBG TE] SPECIAL_VERTICAL theta=%.1f° (base=%.1f° source=%s, branch_xy=%.1f°, ref=%s, offset=-90°, mz=%.3f)"
                                             % (
                                                 math.degrees(theta),
                                                 math.degrees(theta_base),
@@ -7772,16 +8405,60 @@ class PipelineProcessor:
                                                 )
                                                 if ref_orientation is not None
                                                 else "None",
+                                                mz,
                                             )
                                         )
                                     r_yaw = AllplanGeo.Matrix3D()
                                     r_yaw.SetRotation(axis_z, AllplanGeo.Angle(theta))
                                     mat = mat * r_yaw
 
+                                # Bajante (−Z): primero Ry(180°), luego Rz(180°) sobre el resultado (orden en sólido).
+                                if mz < 0.0:
+                                    r_correct_down_y = AllplanGeo.Matrix3D()
+                                    r_correct_down_y.SetRotation(
+                                        axis_y, AllplanGeo.Angle(math.pi)
+                                    )
+                                    r_correct_down_z = AllplanGeo.Matrix3D()
+                                    r_correct_down_z.SetRotation(
+                                        axis_z, AllplanGeo.Angle(math.pi)
+                                    )
+                                    mat = mat * r_correct_down_z * r_correct_down_y
+                                    if debug_te:
+                                        print(
+                                            "[DBG TE] SPECIAL_VERTICAL mz<0 → Ry(180°) + Rz(180°)"
+                                        )
+
+                                # YZ (bx≈0) y rama con bz<0: mismo yaw/giros que arriba; reflejar en Z
+                                # para orientar la boca hacia la rama que baja (izq./dch. sigue
+                                # viniendo del signo de by vía atan2(by,bx)).
+                                if (
+                                    abs(bx) < 0.12
+                                    and bz < -1e-6
+                                    and math.hypot(by, bz) > 1e-9
+                                ):
+                                    m_yz_down = AllplanGeo.Matrix3D()
+                                    m_yz_down.SetScaling(1, 1, -1)
+                                    mat = mat * m_yz_down
+                                    if debug_te:
+                                        print(
+                                            "[DBG TE] SPECIAL_VERTICAL YZ rama bz<0: "
+                                            "mirror Z scale(1,1,-1)"
+                                        )
+
                                 if need_mz:
                                     mirror_z_mat = AllplanGeo.Matrix3D()
                                     mirror_z_mat.SetScaling(1, 1, -1)
                                     mat = mat * mirror_z_mat
+
+                                if mat_back is not None:
+                                    # Allplan: geometry * M ; p * M1 * M2 → M1 aplica primero a p.
+                                    # Queremos primero mat_canon (cadena) y después R(ref→main):
+                                    # p * mat_canon * mat_back → mat = mat * mat_back
+                                    mat = mat * mat_back
+                                    if debug_te:
+                                        print(
+                                            "[DBG TE] SPECIAL_VERTICAL mundo: p * mat_canon * R(ref→main)"
+                                        )
 
                                 brep = AllplanGeo.Transform(brep, mat)
                                 brep = AllplanGeo.Move(
@@ -7863,6 +8540,18 @@ class PipelineProcessor:
                             mirror_z_mat.SetScaling(1, 1, -1)
                             mat = mat * mirror_z_mat
 
+                    # Misma compensación que tubos en vista XZ/YZ (+90° roll en X): el BREP de la TE
+                    # está modelado en XY; sin este giro la cruz queda desfasada respecto al tramo.
+                    axis_x_view_fix = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0),
+                        AllplanGeo.Point3D(1, 0, 0),
+                    )
+                    roll_x_view_fix = AllplanGeo.Matrix3D()
+                    roll_x_view_fix.SetRotation(
+                        axis_x_view_fix, AllplanGeo.Angle(math.pi / 2)
+                    )
+                    mat = roll_x_view_fix * mat
+
                 # --- Plano YZ: preparar XY->YZ y rotar alrededor de X ---
                 elif plane == "YZ":
                     if debug_te:
@@ -7901,7 +8590,47 @@ class PipelineProcessor:
                             mirror_z_mat.SetScaling(1, 1, -1)
                             mat = mat * mirror_z_mat
 
+                    axis_x_view_fix = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(0, 0, 0),
+                        AllplanGeo.Point3D(1, 0, 0),
+                    )
+                    roll_x_view_fix = AllplanGeo.Matrix3D()
+                    roll_x_view_fix.SetRotation(
+                        axis_x_view_fix, AllplanGeo.Angle(math.pi / 2)
+                    )
+                    mat = roll_x_view_fix * mat
+
                 brep = AllplanGeo.Transform(brep, mat)
+                if debug_te_pos:
+                    try:
+                        _e2, _verts2 = brep.GetVertices()
+                        if _verts2:
+                            minx2 = min(v.X for v in _verts2)
+                            miny2 = min(v.Y for v in _verts2)
+                            minz2 = min(v.Z for v in _verts2)
+                            maxx2 = max(v.X for v in _verts2)
+                            maxy2 = max(v.Y for v in _verts2)
+                            maxz2 = max(v.Z for v in _verts2)
+                            cx2 = (minx2 + maxx2) * 0.5
+                            cy2 = (miny2 + maxy2) * 0.5
+                            cz2 = (minz2 + maxz2) * 0.5
+                            print(
+                                "[DBG TE POS] BREP_AFTER_LOCAL_TRANS bbox_min=(%.3f,%.3f,%.3f) "
+                                "bbox_max=(%.3f,%.3f,%.3f) bbox_center=(%.3f,%.3f,%.3f)"
+                                % (
+                                    minx2,
+                                    miny2,
+                                    minz2,
+                                    maxx2,
+                                    maxy2,
+                                    maxz2,
+                                    cx2,
+                                    cy2,
+                                    cz2,
+                                )
+                            )
+                    except Exception:
+                        pass
                 brep = AllplanGeo.Move(
                     brep, AllplanGeo.Vector3D(p_destino.X, p_destino.Y, p_destino.Z)
                 )
@@ -8149,18 +8878,14 @@ class PipelineProcessor:
                 else:
                     ax, ay, az = 1.0, 0.0, 0.0
 
-                # Normal "actual" aproximada de la flecha tras yaw/pitch:
-                # partimos de normal local +Z y aplicamos las mismas rotaciones.
-                yaw_rad = math.radians(float(angulo_yaw))
-                pitch_rad = math.radians(float(angulo_pitch))
-                # Rot Y(-pitch) sobre (0,0,1)
-                nx0 = math.sin(pitch_rad)
-                ny0 = 0.0
-                nz0 = math.cos(pitch_rad)
-                # Rot Z(yaw)
-                nx = (nx0 * math.cos(yaw_rad)) - (ny0 * math.sin(yaw_rad))
-                ny = (nx0 * math.sin(yaw_rad)) + (ny0 * math.cos(yaw_rad))
-                nz = nz0
+                # Normal del plano flecha (= local +Z en el modelo) tras la MISMA cadena
+                # lineal que el BRep: Ry(90)+flip si Z→X, Rx(roll), Ry(-pitch), Rz(yaw).
+                nx, ny, nz = _san_flecha_sticker_normal_world(
+                    san_z_to_x_applied,
+                    float(rotation_angle),
+                    float(angulo_pitch),
+                    float(angulo_yaw),
+                )
 
                 # Regla robusta: solo flip 180° alrededor del eje del tramo
                 # cuando la normal queda "de espaldas" al eje de vista preferido.
@@ -8179,6 +8904,62 @@ class PipelineProcessor:
                     brep = AllplanGeo.Transform(brep, m_face)
                     theta_deg = 180.0
 
+                # Pegatina sobre la pintura: sacar la flecha del interior del tubo hacia la
+                # cara exterior, sin cambiar el anclaje a lo largo del eje (solo radial).
+                # n_plane = normal del plano de la flecha (local +Z tras yaw/pitch); si hay
+                # flip 180° alrededor del eje del tramo, rotamos esa normal igual que la geo.
+                def _normal_vec_flecha_post_face(_nx, _ny, _nz):
+                    if theta_deg <= 0.05:
+                        return (_nx, _ny, _nz)
+                    _dot = (_nx * ax) + (_ny * ay) + (_nz * az)
+                    return (
+                        (2.0 * _dot * ax) - _nx,
+                        (2.0 * _dot * ay) - _ny,
+                        (2.0 * _dot * az) - _nz,
+                    )
+
+                nx_o, ny_o, nz_o = _normal_vec_flecha_post_face(nx, ny, nz)
+                _nr = math.sqrt(nx_o * nx_o + ny_o * ny_o + nz_o * nz_o)
+                if _nr > 1e-12:
+                    nx_o, ny_o, nz_o = nx_o / _nr, ny_o / _nr, nz_o / _nr
+                _disable_radial = str(
+                    os.getenv("SANEAMIENTO_FLECHA_RADIAL_DISABLE", "0")
+                ).strip().lower() in ("1", "true", "yes")
+                if not _disable_radial:
+                    # `segment_data` suele ser solo `.data` (sin `.info`); el caller pasa
+                    # `flecha_diameter_mm` desde el SegmentItem.
+                    if flecha_diameter_mm is not None:
+                        try:
+                            _d_mm = float(flecha_diameter_mm)
+                        except (TypeError, ValueError):
+                            _d_mm = 110.0
+                    else:
+                        _info = getattr(segment_data, "info", None)
+                        _d_mm = (
+                            getattr(_info, "diameter", 110.0)
+                            if _info is not None
+                            else 110.0
+                        )
+                        if isinstance(_d_mm, (list, tuple)) and _d_mm:
+                            _d_mm = _d_mm[0]
+                        try:
+                            _d_mm = float(_d_mm)
+                        except (TypeError, ValueError):
+                            _d_mm = 110.0
+                    _skin = float(
+                        os.getenv("SANEAMIENTO_FLECHA_SURFACE_SKIN_MM", "1.0") or 1.0
+                    )
+                    _scale = float(
+                        os.getenv("SANEAMIENTO_FLECHA_RADIAL_SCALE", "1.0") or 1.0
+                    )
+                    _dist_mm = _scale * (0.5 * _d_mm + _skin)
+                    brep = AllplanGeo.Move(
+                        brep,
+                        AllplanGeo.Vector3D(
+                            nx_o * _dist_mm, ny_o * _dist_mm, nz_o * _dist_mm
+                        ),
+                    )
+
                 if debug_arrow_face:
                     seg_name = str(getattr(segment_data, "name", "seg?"))
                     seg_ang_xy = float(getattr(segment_data, "angulo_xy", 0.0) or 0.0)
@@ -8194,7 +8975,9 @@ class PipelineProcessor:
                         f"theta_face={theta_deg:.2f}"
                     )
             except Exception as ex:
-                if str(os.getenv("SANEAMIENTO_DEBUG_ARROW_FACE", "0")).strip().lower() in (
+                if str(
+                    os.getenv("SANEAMIENTO_DEBUG_ARROW_FACE", "0")
+                ).strip().lower() in (
                     "1",
                     "true",
                     "yes",
@@ -8221,7 +9004,11 @@ class PipelineProcessor:
         result_list = []
         element_index = 0
         num_seg = len(segments)
-        from .vertex_utils import compute_segment_cuts_for_path, is_90_deg_turn, is_straight_turn
+        from .vertex_utils import (
+            compute_segment_cuts_for_path,
+            is_90_deg_turn,
+            is_straight_turn,
+        )
 
         if not segment_cuts:
             segment_cuts = compute_segment_cuts_for_path(segments)
@@ -8238,7 +9025,11 @@ class PipelineProcessor:
 
         # info de TE: opcional, se puede inyectar desde fuera
         te_nodes = getattr(self, "te_nodes", {}) or {}
-        inserted_te_keys = set()
+        # _global_te_inserted: set compartido entre procesadores de distintos paths
+        # para evitar triple colocación en el mismo nodo TE (bifurcación Case-1).
+        inserted_te_keys = getattr(self, "_global_te_inserted", None)
+        if inserted_te_keys is None:
+            inserted_te_keys = set()
         cross_path_elbows = getattr(self, "cross_path_elbows", {}) or {}
         inserted_cross_path_elbows = set()
         cross_path_manguitos = getattr(self, "cross_path_manguitos", {}) or {}
@@ -8249,6 +9040,16 @@ class PipelineProcessor:
             "false",
             "False",
         )
+
+        def _vertex_key_te(pt):
+            if pt is None:
+                return None
+            return (round(pt.X, 3), round(pt.Y, 3), round(pt.Z, 3))
+
+        def _is_te_vertex_pt(pt) -> bool:
+            """True si el punto coincide con un nodo TE (misma clave que te_nodes)."""
+            k = _vertex_key_te(pt)
+            return k is not None and k in te_nodes
 
         def _build_aux_seg_data(p_start, p_end):
             """Construye un objeto mínimo compatible con _aplicar_transformacion(codo)."""
@@ -8325,14 +9126,8 @@ class PipelineProcessor:
                 p_next.Y - p_curr.Y,
                 p_next.Z - p_curr.Z,
             )
-            if (
-                abs(v1[0]) < eps
-                and abs(v1[1]) < eps
-                and abs(v1[2]) < eps
-            ) or (
-                abs(v2[0]) < eps
-                and abs(v2[1]) < eps
-                and abs(v2[2]) < eps
+            if (abs(v1[0]) < eps and abs(v1[1]) < eps and abs(v1[2]) < eps) or (
+                abs(v2[0]) < eps and abs(v2[1]) < eps and abs(v2[2]) < eps
             ):
                 return False
 
@@ -8352,8 +9147,7 @@ class PipelineProcessor:
             angle_deg = math.degrees(math.acos(dot_product))
             tolerance = 5.0
             is_45_deg = (
-                abs(angle_deg - 45.0) < tolerance
-                or abs(angle_deg - 135.0) < tolerance
+                abs(angle_deg - 45.0) < tolerance or abs(angle_deg - 135.0) < tolerance
             )
 
             def _count_non_zero_components(v):
@@ -8492,42 +9286,45 @@ class PipelineProcessor:
                 p_prev = getattr(segments[i - 1].data, "start", None)
                 p_curr = getattr(segments[i - 1].data, "end", None)
                 p_next = getattr(seg, "end", None)
-                if _get_turn_fitting_type(p_prev, p_curr, p_next):
-                    offset_inicio = self.offset_codo
-                # trim_out para 2x45: recorta el arranque del tramo saliente del vértice.
-                if _is_double45_vertex(p_prev, p_curr, p_next):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    diam = _segment_diameter_int(i)
-                    cuts["start"] = float(cuts.get("start", 0.0)) + (
-                        DOUBLE45_110_TRIM_OUT_MM
-                        if diam == 110
-                        else (DOUBLE45_40_TRIM_OUT_MM if diam == 40 else DOUBLE45_TRIM_OUT_MM)
-                    )
-                # trim_out para codo_90 real Ø25/Ø40.
-                if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 25):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO90_25_TRIM_OUT_MM
-                if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 40):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO90_40_TRIM_OUT_MM
-                if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 110):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    trim_out_110 = (
-                        CODO90_110_FECAL_TRIM_OUT_MM
-                        if _segment_is_fecal(i)
-                        else CODO90_110_TRIM_OUT_MM
-                    )
-                    cuts["start"] = float(cuts.get("start", 0.0)) + trim_out_110
-                # trim_out para codo_45 individual Ø25/Ø40.
-                if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 25):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_25_TRIM_OUT_MM
-                if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 40):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_40_TRIM_OUT_MM
-                if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 110):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_110_TRIM_OUT_MM
+                # En nodo TE los recortes vienen de register_te_cuts_into; no sumar codos 45/90 aquí
+                # (evita doble recorte si el troncal tenía aspecto de codo antes de completar la rama).
+                if not _is_te_vertex_pt(p_curr):
+                    if _get_turn_fitting_type(p_prev, p_curr, p_next):
+                        offset_inicio = self.offset_codo
+                    # trim_out para 2x45: recorta el arranque del tramo saliente del vértice.
+                    if _is_double45_vertex(p_prev, p_curr, p_next):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        diam = _segment_diameter_int(i)
+                        cuts["start"] = float(cuts.get("start", 0.0)) + (
+                            DOUBLE45_110_TRIM_OUT_MM
+                            if diam == 110
+                            else (DOUBLE45_40_TRIM_OUT_MM if diam == 40 else DOUBLE45_TRIM_OUT_MM)
+                        )
+                    # trim_out para codo_90 real Ø25/Ø40.
+                    if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 25):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["start"] = float(cuts.get("start", 0.0)) + CODO90_25_TRIM_OUT_MM
+                    if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 40):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["start"] = float(cuts.get("start", 0.0)) + CODO90_40_TRIM_OUT_MM
+                    if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 110):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        trim_out_110 = (
+                            CODO90_110_FECAL_TRIM_OUT_MM
+                            if _segment_is_fecal(i)
+                            else CODO90_110_TRIM_OUT_MM
+                        )
+                        cuts["start"] = float(cuts.get("start", 0.0)) + trim_out_110
+                    # trim_out para codo_45 individual Ø25/Ø40.
+                    if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 25):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_25_TRIM_OUT_MM
+                    if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 40):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_40_TRIM_OUT_MM
+                    if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 110):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["start"] = float(cuts.get("start", 0.0)) + CODO45_110_TRIM_OUT_MM
 
             if i < num_seg - 1:
                 # offset final si en el vértice end del segmento actual hay codo
@@ -8535,42 +9332,43 @@ class PipelineProcessor:
                 p_prev = getattr(seg, "start", None)
                 p_curr = getattr(seg, "end", None)
                 p_next = getattr(next_seg, "end", None)
-                if _get_turn_fitting_type(p_prev, p_curr, p_next):
-                    offset_final = self.offset_codo
-                # trim_in para 2x45: recorta el final del tramo entrante al vértice.
-                if _is_double45_vertex(p_prev, p_curr, p_next):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    diam = _segment_diameter_int(i)
-                    cuts["end"] = float(cuts.get("end", 0.0)) + (
-                        DOUBLE45_110_TRIM_IN_MM
-                        if diam == 110
-                        else (DOUBLE45_40_TRIM_IN_MM if diam == 40 else DOUBLE45_TRIM_IN_MM)
-                    )
-                # trim_in para codo_90 real Ø25/Ø40.
-                if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 25):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["end"] = float(cuts.get("end", 0.0)) + CODO90_25_TRIM_IN_MM
-                if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 40):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["end"] = float(cuts.get("end", 0.0)) + CODO90_40_TRIM_IN_MM
-                if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 110):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    trim_in_110 = (
-                        CODO90_110_FECAL_TRIM_IN_MM
-                        if _segment_is_fecal(i)
-                        else CODO90_110_TRIM_IN_MM
-                    )
-                    cuts["end"] = float(cuts.get("end", 0.0)) + trim_in_110
-                # trim_in para codo_45 individual Ø25/Ø40.
-                if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 25):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["end"] = float(cuts.get("end", 0.0)) + CODO45_25_TRIM_IN_MM
-                if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 40):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["end"] = float(cuts.get("end", 0.0)) + CODO45_40_TRIM_IN_MM
-                if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 110):
-                    cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
-                    cuts["end"] = float(cuts.get("end", 0.0)) + CODO45_110_TRIM_IN_MM
+                if not _is_te_vertex_pt(p_curr):
+                    if _get_turn_fitting_type(p_prev, p_curr, p_next):
+                        offset_final = self.offset_codo
+                    # trim_in para 2x45: recorta el final del tramo entrante al vértice.
+                    if _is_double45_vertex(p_prev, p_curr, p_next):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        diam = _segment_diameter_int(i)
+                        cuts["end"] = float(cuts.get("end", 0.0)) + (
+                            DOUBLE45_110_TRIM_IN_MM
+                            if diam == 110
+                            else (DOUBLE45_40_TRIM_IN_MM if diam == 40 else DOUBLE45_TRIM_IN_MM)
+                        )
+                    # trim_in para codo_90 real Ø25/Ø40.
+                    if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 25):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["end"] = float(cuts.get("end", 0.0)) + CODO90_25_TRIM_IN_MM
+                    if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 40):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["end"] = float(cuts.get("end", 0.0)) + CODO90_40_TRIM_IN_MM
+                    if _is_single_codo90_vertex(p_prev, p_curr, p_next, i, 110):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        trim_in_110 = (
+                            CODO90_110_FECAL_TRIM_IN_MM
+                            if _segment_is_fecal(i)
+                            else CODO90_110_TRIM_IN_MM
+                        )
+                        cuts["end"] = float(cuts.get("end", 0.0)) + trim_in_110
+                    # trim_in para codo_45 individual Ø25/Ø40.
+                    if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 25):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["end"] = float(cuts.get("end", 0.0)) + CODO45_25_TRIM_IN_MM
+                    if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 40):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["end"] = float(cuts.get("end", 0.0)) + CODO45_40_TRIM_IN_MM
+                    if _is_single_codo45_vertex(p_prev, p_curr, p_next, i, 110):
+                        cuts = segment_cuts.setdefault(i, {"start": 0.0, "end": 0.0})
+                        cuts["end"] = float(cuts.get("end", 0.0)) + CODO45_110_TRIM_IN_MM
 
             cuts = segment_cuts.get(i, {"start": 0.0, "end": 0.0})
             cut_start = float(cuts.get("start", 0.0))
@@ -8613,7 +9411,9 @@ class PipelineProcessor:
                         else None
                     )
                     seg_system = (
-                        getattr(seg_info, "system", None) if seg_info is not None else None
+                        getattr(seg_info, "system", None)
+                        if seg_info is not None
+                        else None
                     )
                     seg_dist = "TD" if str(seg_dist).upper() == "TD" else "IS"
 
@@ -8662,7 +9462,9 @@ class PipelineProcessor:
                             rebuilt_models = self.saneamiento_tube_rebuild(
                                 longitud_recortada
                             )
-                        perf_rebuild_ms += (time.perf_counter() - t_rebuild_start) * 1000.0
+                        perf_rebuild_ms += (
+                            time.perf_counter() - t_rebuild_start
+                        ) * 1000.0
                         if isinstance(rebuilt_models, (list, tuple)):
                             model_cond = rebuilt_models[0] if rebuilt_models else None
                             # tub_pvc_basic_f_25 no consume LargoTramoMm; su modelo base
@@ -8676,7 +9478,9 @@ class PipelineProcessor:
                                     model_cond = self.modificar_dimensiones_brep(
                                         model_cond, longitud_recortada
                                     )
-                                    perf_brep_scale_ms += (time.perf_counter() - t_scale) * 1000.0
+                                    perf_brep_scale_ms += (
+                                        time.perf_counter() - t_scale
+                                    ) * 1000.0
                             except Exception:
                                 pass
                         else:
@@ -8686,7 +9490,9 @@ class PipelineProcessor:
                             model_cond = self.modificar_dimensiones_brep(
                                 tube_outer_tpl, longitud_recortada
                             )
-                            perf_brep_scale_ms += (time.perf_counter() - t_scale) * 1000.0
+                            perf_brep_scale_ms += (
+                                time.perf_counter() - t_scale
+                            ) * 1000.0
                     else:
                         t_scale = time.perf_counter()
                         model_cond = self.modificar_dimensiones_brep(
@@ -8694,10 +9500,16 @@ class PipelineProcessor:
                         )
                         perf_brep_scale_ms += (time.perf_counter() - t_scale) * 1000.0
                     prev_seg_data = segments[i - 1].data if i > 0 else None
+                    _san_roll = (
+                        self._saneamiento_effective_roll_deg(seg)
+                        if self.element_type_core == "tubo_saneamiento"
+                        else 0.0
+                    )
                     t_tr = time.perf_counter()
                     element = self._aplicar_transformacion(
                         model_cond,
                         seg,
+                        rotation_angle=_san_roll,
                         custom_position=p_centro,
                         prev_seg=prev_seg_data,
                     )
@@ -8744,16 +9556,22 @@ class PipelineProcessor:
                                 element_extra = self._aplicar_transformacion(
                                     model_extra,
                                     seg,
+                                    rotation_angle=_san_roll,
                                     custom_position=p_centro,
                                     prev_seg=prev_seg_data,
                                 )
                                 p_line_start = AllplanGeo.Point3D(
-                                    seg.start.X + v_unit.X * (cut_start + offset_inicio),
-                                    seg.start.Y + v_unit.Y * (cut_start + offset_inicio),
-                                    seg.start.Z + v_unit.Z * (cut_start + offset_inicio),
+                                    seg.start.X
+                                    + v_unit.X * (cut_start + offset_inicio),
+                                    seg.start.Y
+                                    + v_unit.Y * (cut_start + offset_inicio),
+                                    seg.start.Z
+                                    + v_unit.Z * (cut_start + offset_inicio),
                                 )
-                                element_extra = self._align_saneamiento_tube_along_segment(
-                                    element_extra, p_line_start, v_unit
+                                element_extra = (
+                                    self._align_saneamiento_tube_along_segment(
+                                        element_extra, p_line_start, v_unit
+                                    )
                                 )
                                 if abs(self.saneamiento_extra_world_offset_z_mm) > 1e-9:
                                     try:
@@ -8762,11 +9580,16 @@ class PipelineProcessor:
                                         geo_extra = AllplanGeo.Move(
                                             geo_extra,
                                             AllplanGeo.Vector3D(
-                                                0.0, 0.0, self.saneamiento_extra_world_offset_z_mm
+                                                0.0,
+                                                0.0,
+                                                self.saneamiento_extra_world_offset_z_mm,
                                             ),
                                         )
-                                        element_extra = AllplanBasisElements.ModelElement3D(
-                                            prev_extra.GetCommonProperties(), geo_extra
+                                        element_extra = (
+                                            AllplanBasisElements.ModelElement3D(
+                                                prev_extra.GetCommonProperties(),
+                                                geo_extra,
+                                            )
                                         )
                                         try:
                                             src_attrs = (
@@ -8835,15 +9658,22 @@ class PipelineProcessor:
                                                 f"rot={float(getattr(seg, 'angulo_rotacion', 0.0) or 0.0):.2f}"
                                             )
                                         except Exception as _ex:
-                                            print(f"[SANEAMIENTO][ARROW][PIPE][ERROR] {_ex}")
+                                            print(
+                                                f"[SANEAMIENTO][ARROW][PIPE][ERROR] {_ex}"
+                                            )
                                     element_arrow = self._aplicar_transformacion(
                                         extra_model,
                                         seg,
+                                        rotation_angle=_san_roll,
                                         elem_type="flecha",
                                         custom_position=p_centro,
                                         prev_seg=prev_seg_data,
                                         preserve_local_offset=True,
+                                        flecha_diameter_mm=float(seg_diameter),
                                     )
+                                    # Sin _align_saneamiento_tube_along_segment: ese desplazamiento
+                                    # axial alinea el prisma largo al inicio de la polilínea; en la
+                                    # flecha (geometría corta) arrastra el símbolo hacia el anillo.
                                     result_list.append(
                                         {
                                             "element": element_arrow,
@@ -8862,24 +9692,34 @@ class PipelineProcessor:
                                 model_extra = self.modificar_dimensiones_brep(
                                     extra_model, longitud_recortada
                                 )
-                                perf_brep_scale_ms += (time.perf_counter() - t_scale) * 1000.0
+                                perf_brep_scale_ms += (
+                                    time.perf_counter() - t_scale
+                                ) * 1000.0
                                 element_extra = self._aplicar_transformacion(
                                     model_extra,
                                     seg,
+                                    rotation_angle=_san_roll,
                                     custom_position=p_centro,
                                     prev_seg=prev_seg_data,
                                 )
                                 if self.element_type_core == "tubo_saneamiento":
                                     t_al = time.perf_counter()
                                     p_line_start = AllplanGeo.Point3D(
-                                        seg.start.X + v_unit.X * (cut_start + offset_inicio),
-                                        seg.start.Y + v_unit.Y * (cut_start + offset_inicio),
-                                        seg.start.Z + v_unit.Z * (cut_start + offset_inicio),
+                                        seg.start.X
+                                        + v_unit.X * (cut_start + offset_inicio),
+                                        seg.start.Y
+                                        + v_unit.Y * (cut_start + offset_inicio),
+                                        seg.start.Z
+                                        + v_unit.Z * (cut_start + offset_inicio),
                                     )
-                                    element_extra = self._align_saneamiento_tube_along_segment(
-                                        element_extra, p_line_start, v_unit
+                                    element_extra = (
+                                        self._align_saneamiento_tube_along_segment(
+                                            element_extra, p_line_start, v_unit
+                                        )
                                     )
-                                    perf_align_ms += (time.perf_counter() - t_al) * 1000.0
+                                    perf_align_ms += (
+                                        time.perf_counter() - t_al
+                                    ) * 1000.0
                                 result_list.append(
                                     {
                                         "element": element_extra,
@@ -8902,6 +9742,7 @@ class PipelineProcessor:
                         element_inner = self._aplicar_transformacion(
                             model_inner,
                             seg,
+                            rotation_angle=_san_roll,
                             custom_position=p_centro,
                             prev_seg=prev_seg_data,
                         )
@@ -8994,12 +9835,23 @@ class PipelineProcessor:
                             )
                         )
 
+                        y110_sv = (
+                            str(
+                                te_info_at_node.get(
+                                    "y110_bif_script_variant", "pluvial"
+                                )
+                                or "pluvial"
+                            )
+                            .strip()
+                            .lower()
+                        )
                         dyn_te_models = self._get_te_models_for_diameters(
                             d_main_in,
                             d_main_out,
                             d_branch,
                             distribution_type=te_dist,
                             mirror_model_x=mirror_model_x,
+                            y110_script_variant=y110_sv,
                         )
                         te_outer_model = (
                             dyn_te_models[0] if dyn_te_models else self.templates["te"]
@@ -9072,6 +9924,38 @@ class PipelineProcessor:
                                         v_unit.Z,
                                         float(cut_start),
                                         float(cut_end),
+                                    )
+                                )
+                            except Exception:
+                                pass
+                        if str(os.getenv("AGUA_DEBUG_TE", "1")).strip() not in (
+                            "",
+                            "0",
+                            "false",
+                            "False",
+                        ):
+                            try:
+                                print(
+                                    "[DBG TE CALL] geo_handler=%s node_key=%s pos_nodo=(%.3f,%.3f,%.3f) yaw=%.2f te_nodes_has=%s"
+                                    % (
+                                        __file__,
+                                        str(node_key),
+                                        pos_nodo.X,
+                                        pos_nodo.Y,
+                                        pos_nodo.Z,
+                                        float(yaw),
+                                        str(
+                                            bool(
+                                                getattr(self, "te_nodes", {}).get(
+                                                    (
+                                                        round(pos_nodo.X, 3),
+                                                        round(pos_nodo.Y, 3),
+                                                        round(pos_nodo.Z, 3),
+                                                    ),
+                                                    None,
+                                                )
+                                            )
+                                        ),
                                     )
                                 )
                             except Exception:
@@ -9176,8 +10060,12 @@ class PipelineProcessor:
                             n1 = math.sqrt(v1.X * v1.X + v1.Y * v1.Y + v1.Z * v1.Z)
                             n2 = math.sqrt(v2.X * v2.X + v2.Y * v2.Y + v2.Z * v2.Z)
                             if n1 > 1e-9 and n2 > 1e-9:
-                                v1u = AllplanGeo.Vector3D(v1.X / n1, v1.Y / n1, v1.Z / n1)
-                                v2u = AllplanGeo.Vector3D(v2.X / n2, v2.Y / n2, v2.Z / n2)
+                                v1u = AllplanGeo.Vector3D(
+                                    v1.X / n1, v1.Y / n1, v1.Z / n1
+                                )
+                                v2u = AllplanGeo.Vector3D(
+                                    v2.X / n2, v2.Y / n2, v2.Z / n2
+                                )
                                 vm = AllplanGeo.Vector3D(
                                     v1u.X + v2u.X,
                                     v1u.Y + v2u.Y,
@@ -9203,10 +10091,14 @@ class PipelineProcessor:
                                     )
 
                                     def _normalize(v):
-                                        nv = math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z)
+                                        nv = math.sqrt(
+                                            v.X * v.X + v.Y * v.Y + v.Z * v.Z
+                                        )
                                         if nv <= 1e-9:
                                             return AllplanGeo.Vector3D(0.0, 0.0, 0.0)
-                                        return AllplanGeo.Vector3D(v.X / nv, v.Y / nv, v.Z / nv)
+                                        return AllplanGeo.Vector3D(
+                                            v.X / nv, v.Y / nv, v.Z / nv
+                                        )
 
                                     def _cross(a, b):
                                         return AllplanGeo.Vector3D(
@@ -9215,7 +10107,9 @@ class PipelineProcessor:
                                             a.X * b.Y - a.Y * b.X,
                                         )
 
-                                    def _build_local_offset_point(base_pt, a_u, b_u, off_x, off_y, off_z):
+                                    def _build_local_offset_point(
+                                        base_pt, a_u, b_u, off_x, off_y, off_z
+                                    ):
                                         # Ejes locales del codo:
                                         # X_local -> bisectriz del giro, Y_local -> lateral, Z_local -> normal del plano del giro.
                                         x_local = _normalize(
@@ -9269,7 +10163,10 @@ class PipelineProcessor:
                                         if info_curr is not None
                                         else None
                                     )
-                                    if isinstance(turn_diam, (list, tuple)) and turn_diam:
+                                    if (
+                                        isinstance(turn_diam, (list, tuple))
+                                        and turn_diam
+                                    ):
                                         turn_diam = turn_diam[0]
                                     try:
                                         turn_diam = int(round(float(turn_diam)))
@@ -9331,10 +10228,20 @@ class PipelineProcessor:
                                     )
 
                                     pos_codo_1 = _build_local_offset_point(
-                                        base_codo_1, v1u, vmu, c1_off[0], c1_off[1], c1_off[2]
+                                        base_codo_1,
+                                        v1u,
+                                        vmu,
+                                        c1_off[0],
+                                        c1_off[1],
+                                        c1_off[2],
                                     )
                                     pos_codo_2 = _build_local_offset_point(
-                                        base_codo_2, vmu, v2u, c2_off[0], c2_off[1], c2_off[2]
+                                        base_codo_2,
+                                        vmu,
+                                        v2u,
+                                        c2_off[0],
+                                        c2_off[1],
+                                        c2_off[2],
                                     )
 
                                     # Recortes dedicados para composición 90° = 2x45°
@@ -9350,7 +10257,9 @@ class PipelineProcessor:
                                         p_next.Z - (v2u.Z * trim_out),
                                     )
 
-                                    seg_codo_1 = _build_aux_seg_data(p_prev_trim, p_curr)
+                                    seg_codo_1 = _build_aux_seg_data(
+                                        p_prev_trim, p_curr
+                                    )
                                     next_codo_1 = _build_aux_seg_data(p_curr, p_after)
                                     e1_outer = self._aplicar_transformacion(
                                         self.templates["codo_45"],
@@ -9369,7 +10278,9 @@ class PipelineProcessor:
                                     element_index += 1
 
                                     seg_codo_2 = _build_aux_seg_data(p_before, p_curr)
-                                    next_codo_2 = _build_aux_seg_data(p_curr, p_next_trim)
+                                    next_codo_2 = _build_aux_seg_data(
+                                        p_curr, p_next_trim
+                                    )
                                     e2_outer = self._aplicar_transformacion(
                                         self.templates["codo_45"],
                                         seg_codo_2,
@@ -9388,7 +10299,10 @@ class PipelineProcessor:
                                     inserted_double_45 = True
 
                                     # Copias opcionales de codo_45 (inner) para ambos.
-                                    if allow_codo_copies and "codo_45_inner" in self.templates:
+                                    if (
+                                        allow_codo_copies
+                                        and "codo_45_inner" in self.templates
+                                    ):
                                         e1_in = self._aplicar_transformacion(
                                             self.templates["codo_45_inner"],
                                             seg_codo_1,
@@ -9420,7 +10334,10 @@ class PipelineProcessor:
                                         )
                                         element_index += 1
 
-                                    if allow_codo_copies and "codo_45_inner_2" in self.templates:
+                                    if (
+                                        allow_codo_copies
+                                        and "codo_45_inner_2" in self.templates
+                                    ):
                                         e1_in2 = self._aplicar_transformacion(
                                             self.templates["codo_45_inner_2"],
                                             seg_codo_1,
@@ -9459,7 +10376,9 @@ class PipelineProcessor:
 
                         if inserted_double_45:
                             if _SANEAMIENTO_DEBUG_VERTICES:
-                                print("[SANEAMIENTO][2x45] aplicado (90° sin cambio de plano)")
+                                print(
+                                    "[SANEAMIENTO][2x45] aplicado (90° sin cambio de plano)"
+                                )
                             continue
 
                     # Codo exterior (outer)
@@ -9474,14 +10393,20 @@ class PipelineProcessor:
                             )
                             if isinstance(diam, (list, tuple)) and diam:
                                 diam = diam[0]
-                            if diam is not None and int(round(float(diam))) in (25, 40, 110):
+                            if diam is not None and int(round(float(diam))) in (
+                                25,
+                                40,
+                                110,
+                            ):
                                 # Offsets de codos Ø25/Ø40/Ø110 aplicados en marco local del giro
                                 # para que el ajuste se mantenga en todos los vértices.
                                 def _norm(v):
                                     n = math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z)
                                     if n <= 1e-9:
                                         return AllplanGeo.Vector3D(0.0, 0.0, 0.0)
-                                    return AllplanGeo.Vector3D(v.X / n, v.Y / n, v.Z / n)
+                                    return AllplanGeo.Vector3D(
+                                        v.X / n, v.Y / n, v.Z / n
+                                    )
 
                                 def _cross(a, b):
                                     return AllplanGeo.Vector3D(
@@ -9490,8 +10415,16 @@ class PipelineProcessor:
                                         a.X * b.Y - a.Y * b.X,
                                     )
 
-                                v_in = getattr(seg, "vector_normalizado", AllplanGeo.Vector3D(0.0, 0.0, 0.0))
-                                v_out = getattr(next_seg, "vector_normalizado", AllplanGeo.Vector3D(0.0, 0.0, 0.0))
+                                v_in = getattr(
+                                    seg,
+                                    "vector_normalizado",
+                                    AllplanGeo.Vector3D(0.0, 0.0, 0.0),
+                                )
+                                v_out = getattr(
+                                    next_seg,
+                                    "vector_normalizado",
+                                    AllplanGeo.Vector3D(0.0, 0.0, 0.0),
+                                )
                                 x_local = _norm(
                                     AllplanGeo.Vector3D(
                                         v_in.X + v_out.X,
@@ -9499,15 +10432,27 @@ class PipelineProcessor:
                                         v_in.Z + v_out.Z,
                                     )
                                 )
-                                if abs(x_local.X) < 1e-9 and abs(x_local.Y) < 1e-9 and abs(x_local.Z) < 1e-9:
+                                if (
+                                    abs(x_local.X) < 1e-9
+                                    and abs(x_local.Y) < 1e-9
+                                    and abs(x_local.Z) < 1e-9
+                                ):
                                     x_local = _norm(v_out)
 
                                 z_local = _norm(_cross(v_in, v_out))
-                                if abs(z_local.X) < 1e-9 and abs(z_local.Y) < 1e-9 and abs(z_local.Z) < 1e-9:
+                                if (
+                                    abs(z_local.X) < 1e-9
+                                    and abs(z_local.Y) < 1e-9
+                                    and abs(z_local.Z) < 1e-9
+                                ):
                                     z_local = AllplanGeo.Vector3D(0.0, 0.0, 1.0)
 
                                 y_local = _norm(_cross(z_local, x_local))
-                                if abs(y_local.X) < 1e-9 and abs(y_local.Y) < 1e-9 and abs(y_local.Z) < 1e-9:
+                                if (
+                                    abs(y_local.X) < 1e-9
+                                    and abs(y_local.Y) < 1e-9
+                                    and abs(y_local.Z) < 1e-9
+                                ):
                                     y_local = AllplanGeo.Vector3D(1.0, 0.0, 0.0)
 
                                 if turn_fitting_type == "codo_90":
@@ -9658,17 +10603,15 @@ class PipelineProcessor:
                         )
                         element_index += 1
 
-                # Manguito en vértice colineal (0° o 180°)
-                # En fontaneria se crea siempre en tramos rectos, incluso si no hay cambio de diámetro.
+                # Manguito / reductor sólo en tramo recto (vectores ± colineales).
+                # Cambio de diámetro tras codo, TE u otra desviación angular: no insertar
+                # reductor aquí — el modelo de unión (codo/tapón/TE…) ya lleva solape.
                 if True:
                     # Si este nodo es una TE, NO crear manguito (se muestra la TE).
                     if p_curr:
                         if node_key in te_nodes:
                             continue
 
-                    # Regla:
-                    # - Crear si el tramo es colineal (dot ~ ±1)
-                    # - O si hay cambio de diámetro entre segmentos consecutivos (aunque el dot no sea perfecto por pendientes/ruido)
                     def _get_seg_diam(_seg_item):
                         try:
                             info = getattr(_seg_item, "info", None)
@@ -9696,10 +10639,16 @@ class PipelineProcessor:
                     v1 = seg.vector_normalizado
                     v2 = next_seg.vector_normalizado
                     dot = AllplanGeo.Vector3D.DotProduct(v1, v2)
-                    # colineal si dot ~ 1 (mismo sentido) o dot ~ -1 (sentido opuesto)
                     is_colinear = abs(abs(dot) - 1.0) < 0.01
 
-                    if is_colinear or diam_change:
+                    if diam_change and not is_colinear:
+                        print(
+                            "[AGUA][MANGUITO] omitido Ø distinto en vértice no colineal "
+                            f"(dot={float(dot):.4f}); sin reductor en curva/te— "
+                            f"d_curr={d_curr} d_next={d_next}"
+                        )
+
+                    if is_colinear:
                         pos_nodo = seg.end
                         # Distribución local del nodo (IS/TD): tomar del tramo actual;
                         # si falta, usar el siguiente; fallback IS.
@@ -9739,13 +10688,184 @@ class PipelineProcessor:
                         )
 
                         # Elegir modelo de manguito por PAR DE DIÁMETROS (port de fontaneria).
+                        try:
+                            di_curr = int(round(float(d_curr)))
+                            di_next = int(round(float(d_next)))
+                        except Exception:
+                            di_curr = None
+                            di_next = None
+
+                        split_fecal_25_110 = (
+                            di_curr is not None
+                            and di_next is not None
+                            and {di_curr, di_next} == {25, 110}
+                            and _segment_is_fecal(i)
+                            and _segment_is_fecal(i + 1)
+                        )
+
+                        if split_fecal_25_110:
+                            print(
+                                "[AGUA][MANGUITO] fecal 25<->110 detectado: "
+                                "creando reductores 25<->40 y 40<->110"
+                            )
+
+                            split_chain_offset_mm = 0.0
+
+                            def _append_split_reducer(
+                                part_d1,
+                                part_d2,
+                                chain_offset_mm,
+                                extra_x_mm=0.0,
+                            ):
+                                nonlocal element_index
+                                dyn_part_models = (
+                                    self._get_manguito_models_for_diameters(
+                                        part_d1,
+                                        part_d2,
+                                        distribution_type=dist_type,
+                                    )
+                                )
+                                if not dyn_part_models:
+                                    print(
+                                        "[AGUA][MANGUITO] sin modelo para reductor "
+                                        f"compuesto {part_d1}->{part_d2}"
+                                    )
+                                    return 0.0
+
+                                is_inner_only_part = (
+                                    dist_type == "TD"
+                                    and len(dyn_part_models) == 1
+                                    and int(round(float(part_d1)))
+                                    != int(round(float(part_d2)))
+                                )
+
+                                need_mirror_part = False
+                                try:
+                                    p1 = int(round(float(part_d1)))
+                                    p2 = int(round(float(part_d2)))
+                                    if {p1, p2} == {20, 25} and p1 > p2:
+                                        need_mirror_part = True
+                                    if {p1, p2} == {25, 40} and p1 < p2:
+                                        need_mirror_part = True
+                                    if {p1, p2} == {40, 110} and p1 < p2:
+                                        need_mirror_part = True
+                                except Exception:
+                                    need_mirror_part = False
+
+                                pos_part = pos_nodo
+                                try:
+                                    pair_part = {
+                                        int(round(float(part_d1))),
+                                        int(round(float(part_d2))),
+                                    }
+                                    if pair_part == {25, 40}:
+                                        off_x = (
+                                            -TAPRED_40_25_OFFSET_X_MM
+                                            if need_mirror_part
+                                            else TAPRED_40_25_OFFSET_X_MM
+                                        )
+                                        pos_part = _manguito_bisector_offset_point(
+                                            pos_nodo,
+                                            seg,
+                                            next_seg,
+                                            chain_offset_mm + extra_x_mm + off_x,
+                                            TAPRED_40_25_OFFSET_Y_MM,
+                                            TAPRED_40_25_OFFSET_Z_MM,
+                                        )
+                                    elif pair_part == {40, 110}:
+                                        rx, ry, rz = _reduct_110_40_offsets_mm()
+                                        off_x = -rx if need_mirror_part else rx
+                                        pos_part = _manguito_bisector_offset_point(
+                                            pos_nodo,
+                                            seg,
+                                            next_seg,
+                                            chain_offset_mm + extra_x_mm + off_x,
+                                            ry,
+                                            rz,
+                                        )
+                                        print(
+                                            "[AGUA][MANGUITO] offset reductor 110<->40 "
+                                            f"local_xyz=({chain_offset_mm + extra_x_mm + off_x:.2f},{ry:.2f},{rz:.2f}) "
+                                            f"chain_offset={chain_offset_mm:.2f} "
+                                            f"extra_x={extra_x_mm:.2f} "
+                                            f"mirror_x={need_mirror_part}"
+                                        )
+                                except Exception:
+                                    pos_part = pos_nodo
+
+                                element_part = self._aplicar_transformacion(
+                                    dyn_part_models[0],
+                                    seg,
+                                    elem_type="manguito",
+                                    custom_position=pos_part,
+                                    next_seg=next_seg,
+                                    custom_mirror_x_local=need_mirror_part,
+                                )
+                                result_list.append(
+                                    {
+                                        "element": element_part,
+                                        "element_type": (
+                                            "manguito_inner"
+                                            if is_inner_only_part
+                                            else "manguito"
+                                        ),
+                                        "index": element_index,
+                                    }
+                                )
+                                element_index += 1
+
+                                if is_inner_only_part:
+                                    return _split_reducer_axis_length_mm(
+                                        dyn_part_models,
+                                        part_d1,
+                                        part_d2,
+                                    )
+                                for extra_model in dyn_part_models[1:]:
+                                    element_extra = self._aplicar_transformacion(
+                                        extra_model,
+                                        seg,
+                                        elem_type="manguito",
+                                        custom_position=pos_part,
+                                        next_seg=next_seg,
+                                        custom_mirror_x_local=need_mirror_part,
+                                    )
+                                    result_list.append(
+                                        {
+                                            "element": element_extra,
+                                            "element_type": "manguito_inner",
+                                            "index": element_index,
+                                        }
+                                    )
+                                    element_index += 1
+
+                                return _split_reducer_axis_length_mm(
+                                    dyn_part_models,
+                                    part_d1,
+                                    part_d2,
+                                )
+
+                            split_chain_offset_mm += _append_split_reducer(
+                                di_curr,
+                                40,
+                                split_chain_offset_mm,
+                            )
+                            split_chain_offset_mm += _append_split_reducer(
+                                40,
+                                di_next,
+                                split_chain_offset_mm,
+                                SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM,
+                            )
+                            continue
+
                         dyn_models = self._get_manguito_models_for_diameters(
                             d_curr if d_curr is not None else 20.0,
                             d_next if d_next is not None else 20.0,
                             distribution_type=dist_type,
                         )
                         manguito_outer_model = (
-                            dyn_models[0] if dyn_models else self.templates.get("manguito")
+                            dyn_models[0]
+                            if dyn_models
+                            else self.templates.get("manguito")
                         )
                         if manguito_outer_model is None:
                             print(
@@ -9819,6 +10939,8 @@ class PipelineProcessor:
                                 elif pair_m == {40, 110}:
                                     rx, ry, rz = _reduct_110_40_offsets_mm()
                                     off_x = -rx if need_mirror_x else rx
+                                    if di1 == 40 and di2 == 110:
+                                        off_x += DIRECT_FECAL_40_110_REDUCER_OFFSET_X_MM
                                     pos_manguito = _manguito_bisector_offset_point(
                                         pos_nodo,
                                         seg,
@@ -9856,36 +10978,38 @@ class PipelineProcessor:
                         )
                         element_index += 1
 
-                        # TD opcional: manguito inner (si existe en modelo dinámico o templates)
-                        manguito_inner_model = None
-                        if is_inner_only_reducer:
-                            manguito_inner_model = None
-                        elif len(dyn_models) > 1:
-                            manguito_inner_model = dyn_models[1]
-                        elif "manguito_inner" in self.templates:
-                            manguito_inner_model = self.templates["manguito_inner"]
+                        # TD opcional: añadir TODOS los modelos adicionales devueltos por dinámico.
+                        # Antes solo se añadía dyn_models[1] y se perdían dyn_models[2:], p.ej. reductores complejos.
+                        extra_models = []
+                        if not is_inner_only_reducer:
+                            if len(dyn_models) > 1:
+                                extra_models = list(dyn_models[1:])
+                            elif "manguito_inner" in self.templates:
+                                extra_models = [self.templates["manguito_inner"]]
 
-                        if manguito_inner_model is not None:
+                        if extra_models:
                             print(
-                                "[AGUA][MANGUITO] creando inner "
-                                f"(fuente={'dinamico' if len(dyn_models) > 1 else 'template'})"
+                                "[AGUA][MANGUITO] creando extras "
+                                f"(fuente={'dinamico' if len(dyn_models) > 1 else 'template'}) "
+                                f"count={len(extra_models)}"
                             )
-                            element_manguito_inner = self._aplicar_transformacion(
-                                manguito_inner_model,
-                                seg,
-                                elem_type="manguito",
-                                custom_position=pos_manguito,
-                                next_seg=next_seg,
-                                custom_mirror_x_local=need_mirror_x,
-                            )
-                            result_list.append(
-                                {
-                                    "element": element_manguito_inner,
-                                    "element_type": "manguito_inner",
-                                    "index": element_index,
-                                }
-                            )
-                            element_index += 1
+                            for extra_model in extra_models:
+                                element_manguito_inner = self._aplicar_transformacion(
+                                    extra_model,
+                                    seg,
+                                    elem_type="manguito",
+                                    custom_position=pos_manguito,
+                                    next_seg=next_seg,
+                                    custom_mirror_x_local=need_mirror_x,
+                                )
+                                result_list.append(
+                                    {
+                                        "element": element_manguito_inner,
+                                        "element_type": "manguito_inner",
+                                        "index": element_index,
+                                    }
+                                )
+                                element_index += 1
 
             # -------------------------------------------------------
             # 3.C CODO EN NODO COMPARTIDO ENTRE PATHS (grado=2)
@@ -9899,7 +11023,10 @@ class PipelineProcessor:
                     other_pt = cp_info.get("other_point")
                     if not node_key_cp or not other_pt:
                         continue
-                    if node_key_cp in te_nodes or node_key_cp in inserted_cross_path_elbows:
+                    if (
+                        node_key_cp in te_nodes
+                        or node_key_cp in inserted_cross_path_elbows
+                    ):
                         continue
 
                     if at_start:
@@ -9988,7 +11115,11 @@ class PipelineProcessor:
                     def _get_seg_diam(_seg_item):
                         try:
                             info = getattr(_seg_item, "info", None)
-                            d = getattr(info, "diameter", None) if info is not None else None
+                            d = (
+                                getattr(info, "diameter", None)
+                                if info is not None
+                                else None
+                            )
                             if isinstance(d, (list, tuple)) and d:
                                 return float(d[0])
                             if d is None:
@@ -10010,6 +11141,156 @@ class PipelineProcessor:
                         dist_type = "TD" if str(dist_raw).upper() == "TD" else "IS"
                     except Exception:
                         dist_type = "IS"
+
+                    try:
+                        di_curr = int(round(float(d_curr)))
+                        di_next = int(round(float(d_next)))
+                    except Exception:
+                        di_curr = None
+                        di_next = None
+
+                    split_fecal_25_110 = (
+                        di_curr is not None
+                        and di_next is not None
+                        and {di_curr, di_next} == {25, 110}
+                        and _segment_is_fecal(i)
+                    )
+
+                    if split_fecal_25_110:
+                        print(
+                            "[AGUA][MANGUITO] fecal 25<->110 cross-path detectado: "
+                            "creando reductores 25<->40 y 40<->110"
+                        )
+
+                        cross_split_chain_offset_mm = 0.0
+
+                        def _append_cross_split_reducer(
+                            part_d1,
+                            part_d2,
+                            chain_offset_mm,
+                            extra_x_mm=0.0,
+                        ):
+                            nonlocal element_index
+                            dyn_part_models = self._get_manguito_models_for_diameters(
+                                part_d1,
+                                part_d2,
+                                distribution_type=dist_type,
+                            )
+                            if not dyn_part_models:
+                                print(
+                                    "[AGUA][MANGUITO] sin modelo cross para reductor "
+                                    f"compuesto {part_d1}->{part_d2}"
+                                )
+                                return 0.0
+
+                            need_mirror_part = False
+                            try:
+                                p1 = int(round(float(part_d1)))
+                                p2 = int(round(float(part_d2)))
+                                if {p1, p2} == {20, 25} and p1 > p2:
+                                    need_mirror_part = True
+                                if {p1, p2} == {25, 40} and p1 < p2:
+                                    need_mirror_part = True
+                                if {p1, p2} == {40, 110} and p1 < p2:
+                                    need_mirror_part = True
+                            except Exception:
+                                need_mirror_part = False
+
+                            pos_part = node_pt
+                            try:
+                                pair_part = {
+                                    int(round(float(part_d1))),
+                                    int(round(float(part_d2))),
+                                }
+                                if pair_part == {25, 40}:
+                                    off_x = (
+                                        -TAPRED_40_25_OFFSET_X_MM
+                                        if need_mirror_part
+                                        else TAPRED_40_25_OFFSET_X_MM
+                                    )
+                                    pos_part = _manguito_bisector_offset_point(
+                                        node_pt,
+                                        seg_for_conn,
+                                        next_for_conn,
+                                        chain_offset_mm + extra_x_mm + off_x,
+                                        TAPRED_40_25_OFFSET_Y_MM,
+                                        TAPRED_40_25_OFFSET_Z_MM,
+                                    )
+                                elif pair_part == {40, 110}:
+                                    rx, ry, rz = _reduct_110_40_offsets_mm()
+                                    off_x = -rx if need_mirror_part else rx
+                                    pos_part = _manguito_bisector_offset_point(
+                                        node_pt,
+                                        seg_for_conn,
+                                        next_for_conn,
+                                        chain_offset_mm + extra_x_mm + off_x,
+                                        ry,
+                                        rz,
+                                    )
+                                    print(
+                                        "[AGUA][MANGUITO] offset reductor 110<->40 (cross) "
+                                        f"local_xyz=({chain_offset_mm + extra_x_mm + off_x:.2f},{ry:.2f},{rz:.2f}) "
+                                        f"chain_offset={chain_offset_mm:.2f} "
+                                        f"extra_x={extra_x_mm:.2f} "
+                                        f"mirror_x={need_mirror_part}"
+                                    )
+                            except Exception:
+                                pos_part = node_pt
+
+                            element_part = self._aplicar_transformacion(
+                                dyn_part_models[0],
+                                seg_for_conn,
+                                elem_type="manguito",
+                                custom_position=pos_part,
+                                next_seg=next_for_conn,
+                                custom_mirror_x_local=need_mirror_part,
+                            )
+                            result_list.append(
+                                {
+                                    "element": element_part,
+                                    "element_type": "manguito",
+                                    "index": element_index,
+                                }
+                            )
+                            element_index += 1
+
+                            for extra_model in dyn_part_models[1:]:
+                                element_extra = self._aplicar_transformacion(
+                                    extra_model,
+                                    seg_for_conn,
+                                    elem_type="manguito",
+                                    custom_position=pos_part,
+                                    next_seg=next_for_conn,
+                                    custom_mirror_x_local=need_mirror_part,
+                                )
+                                result_list.append(
+                                    {
+                                        "element": element_extra,
+                                        "element_type": "manguito_inner",
+                                        "index": element_index,
+                                    }
+                                )
+                                element_index += 1
+
+                            return _split_reducer_axis_length_mm(
+                                dyn_part_models,
+                                part_d1,
+                                part_d2,
+                            )
+
+                        cross_split_chain_offset_mm += _append_cross_split_reducer(
+                            di_curr,
+                            40,
+                            cross_split_chain_offset_mm,
+                        )
+                        cross_split_chain_offset_mm += _append_cross_split_reducer(
+                            40,
+                            di_next,
+                            cross_split_chain_offset_mm,
+                            SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM,
+                        )
+                        inserted_cross_path_manguitos.add(node_key_cp)
+                        break
 
                     dyn_models = self._get_manguito_models_for_diameters(
                         d_curr if d_curr is not None else 20.0,
@@ -10064,6 +11345,8 @@ class PipelineProcessor:
                             elif pair_m == {40, 110}:
                                 rx, ry, rz = _reduct_110_40_offsets_mm()
                                 off_x = -rx if need_mirror_x else rx
+                                if di1 == 40 and di2 == 110:
+                                    off_x += DIRECT_FECAL_40_110_REDUCER_OFFSET_X_MM
                                 pos_manguito = _manguito_bisector_offset_point(
                                     node_pt,
                                     seg_for_conn,
@@ -10092,22 +11375,25 @@ class PipelineProcessor:
                         {
                             "element": element_manguito,
                             "element_type": (
-                                "manguito_inner" if is_inner_only_reducer else "manguito"
+                                "manguito_inner"
+                                if is_inner_only_reducer
+                                else "manguito"
                             ),
                             "index": element_index,
                         }
                     )
                     element_index += 1
 
-                    manguito_inner_model = None
+                    # Cross-path: añadir TODOS los modelos adicionales del dinámico.
+                    extra_models = []
                     if len(dyn_models) > 1:
-                        manguito_inner_model = dyn_models[1]
+                        extra_models = list(dyn_models[1:])
                     elif "manguito_inner" in self.templates:
-                        manguito_inner_model = self.templates["manguito_inner"]
+                        extra_models = [self.templates["manguito_inner"]]
 
-                    if manguito_inner_model is not None:
+                    for extra_model in extra_models:
                         element_manguito_inner = self._aplicar_transformacion(
-                            manguito_inner_model,
+                            extra_model,
                             seg_for_conn,
                             elem_type="manguito",
                             custom_position=pos_manguito,
@@ -10127,6 +11413,128 @@ class PipelineProcessor:
                     break
 
             perf_seg_total_ms += (time.perf_counter() - t_seg_start) * 1000.0
+
+        # -------------------------------------------------------
+        # POST-LOOP: TE en extremos del path (Case-1 bifurcación)
+        # Cuando los tres caminos son de un solo segmento, el nodo
+        # TE nunca es interior → la sección 3.A no lo cubre.
+        # -------------------------------------------------------
+        if "te" in self.templates and segments and te_nodes:
+
+            def _try_te_endpoint(pt, seg_obj):
+                nonlocal element_index
+                if pt is None:
+                    return
+                nk = (round(pt.X, 3), round(pt.Y, 3), round(pt.Z, 3))
+                te_info = te_nodes.get(nk)
+                if not te_info or nk in inserted_te_keys:
+                    return
+                inserted_te_keys.add(nk)
+                center_pt_raw = te_info.get("center_pt")
+                if isinstance(center_pt_raw, (tuple, list)) and len(center_pt_raw) == 3:
+                    pos_nodo = AllplanGeo.Point3D(
+                        float(center_pt_raw[0]),
+                        float(center_pt_raw[1]),
+                        float(center_pt_raw[2]),
+                    )
+                else:
+                    pos_nodo = pt
+                yaw = float(te_info.get("yaw_deg", 0.0) or 0.0)
+                te_dist = str(te_info.get("distribution_type", "IS") or "IS")
+                te_dist = "TD" if te_dist.upper() == "TD" else "IS"
+                d_main_in = te_info.get("d_main_in", None)
+                d_main_out = te_info.get("d_main_out", None)
+                d_branch = te_info.get("d_branch", None)
+                if d_main_in is None or d_main_out is None or d_branch is None:
+                    try:
+                        info_seg = getattr(seg_obj, "info", None)
+                        d_fallback = getattr(info_seg, "diameter", 20.0)
+                        d_main_in = d_main_out = d_branch = d_fallback
+                    except Exception:
+                        d_main_in = d_main_out = d_branch = 20.0
+                mirror_model_x = bool(
+                    te_info.get("model_mirror_x", False)
+                    or (
+                        d_main_in is not None
+                        and d_main_out is not None
+                        and int(round(float(d_main_in))) < int(round(float(d_main_out)))
+                    )
+                )
+                y110_sv = (
+                    str(te_info.get("y110_bif_script_variant", "pluvial") or "pluvial")
+                    .strip()
+                    .lower()
+                )
+                dyn_te_models = self._get_te_models_for_diameters(
+                    d_main_in,
+                    d_main_out,
+                    d_branch,
+                    distribution_type=te_dist,
+                    mirror_model_x=mirror_model_x,
+                    y110_script_variant=y110_sv,
+                )
+                te_outer_model = (
+                    dyn_te_models[0] if dyn_te_models else self.templates["te"]
+                )
+                is_inner_only_te = False
+                try:
+                    diam_set = {
+                        int(round(float(d_main_in))),
+                        int(round(float(d_main_out))),
+                        int(round(float(d_branch))),
+                    }
+                    is_inner_only_te = (
+                        te_dist == "TD"
+                        and len(dyn_te_models) == 1
+                        and len(diam_set) > 1
+                    )
+                except Exception:
+                    is_inner_only_te = False
+                te_inner_model = (
+                    dyn_te_models[1]
+                    if len(dyn_te_models) > 1
+                    else self.templates.get("te_inner")
+                )
+                print(
+                    "[AGUA][TE][ENDPOINT] node=%s dist=%s di_in=%s di_out=%s di_branch=%s"
+                    % (str(nk), te_dist, str(d_main_in), str(d_main_out), str(d_branch))
+                )
+                element_te = self._aplicar_transformacion(
+                    te_outer_model,
+                    seg_obj,
+                    elem_type="te",
+                    custom_position=pos_nodo,
+                    custom_yaw_deg=yaw,
+                )
+                result_list.append(
+                    {
+                        "element": element_te,
+                        "element_type": "te_inner" if is_inner_only_te else "te",
+                        "index": element_index,
+                    }
+                )
+                element_index += 1
+                if is_inner_only_te:
+                    te_inner_model = None
+                if te_inner_model is not None:
+                    element_te_inner = self._aplicar_transformacion(
+                        te_inner_model,
+                        seg_obj,
+                        elem_type="te",
+                        custom_position=pos_nodo,
+                        custom_yaw_deg=yaw,
+                    )
+                    result_list.append(
+                        {
+                            "element": element_te_inner,
+                            "element_type": "te_inner",
+                            "index": element_index,
+                        }
+                    )
+                    element_index += 1
+
+            _try_te_endpoint(getattr(segments[0].data, "start", None), segments[0])
+            _try_te_endpoint(getattr(segments[-1].data, "end", None), segments[-1])
 
         if _SANEAMIENTO_PERF_DEBUG:
             total_ms = (time.perf_counter() - t_total_start) * 1000.0

@@ -70,13 +70,13 @@ class PolylineStorage:
             base_path = self.find_file()
 
             # Carpeta base del proyecto
-            num_dir = os.path.join(base_path, "Allplan_NumTD", self.storage_name.lower())
+            num_dir = os.path.join(base_path, "AbsEnum\\instalaciones", self.storage_name.lower())
 
             # Crear directorio si no existe
             os.makedirs(num_dir, exist_ok=True)
 
             # Ruta completa al archivo
-            filename = f"NumTD_{element_type}.txt"
+            filename = f"{element_type}.txt"
             num_file = os.path.join(num_dir, filename)
 
             # 👉 CREAR EL ARCHIVO SI NO EXISTE

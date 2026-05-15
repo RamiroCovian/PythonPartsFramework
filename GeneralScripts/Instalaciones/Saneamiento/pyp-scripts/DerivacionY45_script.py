@@ -21,10 +21,16 @@ class DerivacionY45D40:
     type_te = "SAN_Y40"
     LAYER = 40148
     COLOR = 70
-    ROT_X_D40 = 0.0
-    ROT_Y_D40 = 90.0
-    ROT_Z_D40 = 180.0
-    ROTAR_FINAL_Y_GRADOS = 0.0
+    # Mismo convenio que BifurcacionY110Fecal110mm / BifurcacionY110Pluvial110mm para que
+    # `te_orientation` + Parte 2 TE en geo_handler orienten igual (Rx/Ry/Rz + traslación).
+    ROT_X_D40 = -90.0
+    ROT_Y_D40 = -180.0
+    ROT_Z_D40 = 0.0
+    ROTAR_FINAL_Y_GRADOS = 270.0
+    # Traslación post-rotación: mismos mm que Ø110 escalados a Ø40 (40/110).
+    TRANS_X_D40 = -100.0
+    TRANS_Y_D40 = -20.0 
+    TRANS_Z_D40 = 20.0 
     MAINTAIN_PROPORTIONS = True
     REF_DIAM_PROPORTION = 110.0
     RAMA_OFFSET_Z = 42.0
@@ -34,8 +40,8 @@ class DerivacionY45D40:
         "LARGO_RAMA_40MM": 270.0,
         "DIAMETRO_RAMA_40MM": 40.0,
         "LARGO_ANILLO_40MM": 109.0,
-        "SOBRESALE_ANILLO_40MM": 15.0,
-        "OFFSET_RAMA_40MM": 6.0,
+        "SOBRESALE_ANILLO_40MM": 14.0,
+        "OFFSET_RAMA_40MM": 7.0,
     }
 
     def __init__(self, build_ele: BuildingElement, doc=None):
@@ -112,7 +118,7 @@ class DerivacionY45D40:
             id_pes = get_id(doc, "pmp_pes_unitari")
             id_sec = get_id(doc, "pmp_seccio")
             if id6 and id6 > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(id6, ""))
+                attr_list.append(AllplanBaseElements.AttributeString(id6, "IS"))
             if id_cart and id_cart > 0:
                 attr_list.append(
                     AllplanBaseElements.AttributeString(id_cart, "KN07_008_001")
@@ -216,16 +222,24 @@ class DerivacionY45D40:
         )
 
         brep_ext = self._make_union(cubo1, cubo2, anillo1, anillo_rama)
-        # Espejo en Y local antes de cualquier rotación del modelo.
-        mirror_y = AllplanGeo.Matrix3D()
-        mirror_y.SetScaling(1.0, -1.0, 1.0)
-        brep_ext = AllplanGeo.Transform(brep_ext, mirror_y)
         brep_ext = self._apply_rotations(
             brep_ext,
-            rx=270.0 + self.ROT_X_D40,
+            rx=90.0 + self.ROT_X_D40,
             ry=self.ROTAR_FINAL_Y_GRADOS + self.ROT_Y_D40,
             rz=self.ROT_Z_D40,
         )
+        if (
+            abs(self.TRANS_X_D40) > 1e-6
+            or abs(self.TRANS_Y_D40) > 1e-6
+            or abs(self.TRANS_Z_D40) > 1e-6
+        ):
+            mat_trans = AllplanGeo.Matrix3D()
+            mat_trans.SetTranslation(
+                AllplanGeo.Vector3D(
+                    self.TRANS_X_D40, self.TRANS_Y_D40, self.TRANS_Z_D40
+                )
+            )
+            brep_ext = AllplanGeo.Transform(brep_ext, mat_trans)
 
         props = self._props(self.COLOR)
         props.Layer = self.LAYER

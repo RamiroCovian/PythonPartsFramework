@@ -129,25 +129,9 @@ class RejibandUScript(BaseScriptObject):
             height = self._get_height()
             area = width * height
 
-            id_attr02 = AttributeService.GetAttributeID(
-                self.doc, "Atributo personalizado 02"
-            )
-            if id_attr02 and id_attr02 > 0:
-                attr_list.append(
-                    AllplanBaseElements.AttributeString(id_attr02, f"{int(width)}x{int(height)}")
-                )
-
-            id_attr09 = AttributeService.GetAttributeID(
-                self.doc, "Atributo personalizado 09"
-            )
-            if id_attr09 and id_attr09 > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(id_attr09, str(int(area))))
-
-            id_attr11 = AttributeService.GetAttributeID(
-                self.doc, "Atributo personalizado 11"
-            )
-            if id_attr11 and id_attr11 > 0:
-                attr_list.append(AllplanBaseElements.AttributeDouble(id_attr11, width))
+            attr_list.append(AllplanBaseElements.AttributeString(1084, f"{int(width)}x{int(height)}"))
+            attr_list.append(AllplanBaseElements.AttributeString(1898, str(int(area))))
+            attr_list.append(AllplanBaseElements.AttributeDouble(1900, width))
 
         except Exception as e:
             print(f"[RejibandU] Error en get_attributes_custom: {e}")

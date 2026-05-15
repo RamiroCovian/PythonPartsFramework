@@ -28,14 +28,24 @@ def _debug_te_y110_40() -> bool:
 
 
 class BifurcacionReduc11050:
-    """Bifurcación fija con doble rama (DER. Y 110-50 45°).
+    """Bifurcación/reductora TE 110-110-40 (rama Ø40 adaptada).
 
-    Orientación local final alineada con ``DerivacionY110D110`` (misma secuencia
-    rx=90°, ry=270°, rz=0° alrededor del origen) para que el pipeline aplique
-    ``try_apply_old_d110_d110_bif_transform`` igual que en la TE 110-110-110.
+    Mismo convenio local que ``BifurcacionY110Pluvial110mm`` / ``BifurcacionY110Fecal110mm``:
+    ``rx = 90 + ROT_X``, ``ry = ROTAR_FINAL_Y + ROT_Y``, ``rz = ROT_Z``, traslación mm
+    post-rotación. El pipeline TE (``te_orientation`` + Parte 2 en ``geo_handler``)
+    aplica mirrors/sentido igual que en las bifurcaciones Ø110 / Ø40.
     """
 
     type_te = "SAN_Y110_40"
+
+    # Igual que Derivacion110m_p_script / Derivacion110m_f_script (troncal Ø110).
+    ROT_X_D110 = -90.0
+    ROT_Y_D110 = -180.0
+    ROT_Z_D110 = 0.0
+    ROTAR_FINAL_Y_GRADOS = 270.0
+    TRANS_X_D110 = -128.5
+    TRANS_Y_D110 = -55.0
+    TRANS_Z_D110 = 55.0
 
     DIAMETRO_RAMA3: float = 40.0
     DIAMETRO_ANILLO_RAMA3: float = 30.0
@@ -64,7 +74,7 @@ class BifurcacionReduc11050:
         'LARGO_RAMA3': 105.0,
         'ANGULO': 90.0,
         'ANGULO_RAMA2': -45.0,
-        'LARGO_ANILLO': 75.0,
+        'LARGO_ANILLO': 73.0,
         'SOBRESALE_ANILLO': 10.0,
         'COLOR': 70,
         'CLEARANCE_RAMA': 45.0,
@@ -140,7 +150,7 @@ class BifurcacionReduc11050:
 
     @staticmethod
     def _apply_rotations_origin(solid, rx=0.0, ry=0.0, rz=0.0):
-        """Igual que ``DerivacionY110D110._apply_rotations`` (ejes por el origen)."""
+        """Misma secuencia que ``BifurcacionY110Pluvial110mm._apply_rotations`` (ejes por el origen)."""
         for angle, axis in zip([rx, ry, rz], ["x", "y", "z"]):
             if abs(angle) > 1e-6:
                 mat = AllplanGeo.Matrix3D()
@@ -165,7 +175,7 @@ class BifurcacionReduc11050:
             attr_pmp_seccio_id = AllplanBaseElements.AttributeService.GetAttributeID(self.doc, "pmp_seccio")
 
             if attr_6_cc_is_id and attr_6_cc_is_id > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(attr_6_cc_is_id, ""))
+                attr_list.append(AllplanBaseElements.AttributeString(attr_6_cc_is_id, "IS"))
             if attr_pmp_carticulo_id and attr_pmp_carticulo_id > 0:
                 attr_list.append(AllplanBaseElements.AttributeString(attr_pmp_carticulo_id, "KN07_008_003"))
             if attr_pmp_nom_id and attr_pmp_nom_id > 0:
@@ -279,8 +289,24 @@ class BifurcacionReduc11050:
             )
 
         brep_final = self._make_union(brep_cuerpo, brep_ramas)
-        # Misma orientación base que DerivacionY110D110 (rx=90+0, ry=270+0, rz=0).
-        brep_final = self._apply_rotations_origin(brep_final, 90.0, 270.0, 0.0)
+        brep_final = self._apply_rotations_origin(
+            brep_final,
+            90.0 + self.ROT_X_D110,
+            self.ROTAR_FINAL_Y_GRADOS + self.ROT_Y_D110,
+            self.ROT_Z_D110,
+        )
+        if (
+            abs(self.TRANS_X_D110) > 1e-6
+            or abs(self.TRANS_Y_D110) > 1e-6
+            or abs(self.TRANS_Z_D110) > 1e-6
+        ):
+            mat_trans = AllplanGeo.Matrix3D()
+            mat_trans.SetTranslation(
+                AllplanGeo.Vector3D(
+                    self.TRANS_X_D110, self.TRANS_Y_D110, self.TRANS_Z_D110
+                )
+            )
+            brep_final = AllplanGeo.Transform(brep_final, mat_trans)
         model_element = AllplanBasisElements.ModelElement3D(props, brep_final)
 
         attr_list = []

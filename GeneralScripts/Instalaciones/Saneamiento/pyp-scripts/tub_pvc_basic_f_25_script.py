@@ -140,7 +140,7 @@ class TuboPVCBasico:
 
             # 6_CC_IS: "IS"
             if attr_6_cc_is_id and attr_6_cc_is_id > 0:
-                attr_list.append(AllplanBaseElements.AttributeString(attr_6_cc_is_id, ""))
+                attr_list.append(AllplanBaseElements.AttributeString(attr_6_cc_is_id, "IS"))
 
             # pmp_CARTICULO: "KN07_002_001"
             if attr_pmp_carticulo_id and attr_pmp_carticulo_id > 0:

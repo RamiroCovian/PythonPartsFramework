@@ -24,9 +24,9 @@ class CodoRigido110mF90:
     COLOR = 4
 
     # Rotaciones hardcodeadas del modelo 110mm 87° (TipoColze==5)
-    ROT_X_110MM_87 = -90.0
+    ROT_X_110MM_87 = 90.0
     ROT_Y_110MM_87 = 180.0
-    ROT_Z_110MM_87 = -45.0
+    ROT_Z_110MM_87 = 45.0
 
     # Geometria del codo 110mm 87° (L1000_D87)
     DIAMETRO = 110.0

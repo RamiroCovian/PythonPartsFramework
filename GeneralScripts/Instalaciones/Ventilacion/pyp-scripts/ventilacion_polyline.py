@@ -12,6 +12,7 @@ import importlib
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
+import NemAll_Python_AllplanSettings as AllplanSettings
 
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
@@ -29,11 +30,11 @@ from .utils.segments import (
 
 from NemAll_Python_BaseElements import LayerService
 
-# ---------------- CUSTOM NUM_TD PATH ----------------
+# ---------------- CUSTOM ABSOLUTE ENUM PATH ----------------
 project_name, host_name = AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
 error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, host_name)
 if error != 0:
-    error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, "")
+    base_path = AllplanSettings.AllplanPaths.GetCurPrjPath()
 
 # ---------------- ENABLE - SHOW PARAMS ----------------
 profile = Ventilacion.profile()
@@ -86,13 +87,11 @@ def _create_elements_for_segment_group(segments, so: PBL.script_object.PolylineS
     Genera la geometría 3D de los elementos sin crear PythonParts.
     Devuelve una lista de elementos generados para un grupo de segmentos.
     """
-    # print("################################## so.saved_segments: ", segments)
     base_color = 0
     diameter = 0
     _model_conduct = None
     element_type_core = None
     elements_generated = []
-    # new_elements_generated = []
 
     builder = DynamicSegmentBuilder()
     geo_handler = GeometryHandler()
@@ -162,7 +161,7 @@ def _create_elements_for_segment_group(segments, so: PBL.script_object.PolylineS
             data_list=segment_group_parse,
             conducto_width=diameter,
             color=base_color,
-            debug=True
+            debug=False
         )
 
     # ------------------------------------------------------------------
@@ -258,18 +257,22 @@ def _create_elements_with_layers_attrs(elements_generated, path_idx: int, so: PB
         base_attrs = None
         cached_attrs = so.applied_default_attributes.get(key_individual)
 
-        # VALIDACIÓN CRÍTICA:
-        # Solo usamos el caché si el atributo "TV" coincide con la naturaleza del elemento actual.
-        # Si el caché tiene un "TV-X" pero el elemento actual NO es core, lo ignoramos.
-        if cached_attrs:
+        # Para tipos multi-diámetro se omite el caché: podría tener un diámetro distinto al actual.
+        # Para tipos de diámetro único se mantiene la validación original basada en TV.
+        if cached_attrs and not so.diameter_list:
             has_tv_attr = any(hasattr(a, "Id") and a.Id == 1083 for a in cached_attrs)
             if (element_type == so.element_type_core and has_tv_attr) or \
                (element_type != so.element_type_core and not has_tv_attr):
                 base_attrs = cached_attrs
 
-        # Si no hubo coincidencia en el caché (porque el tipo cambió), usamos los default limpios
         if not base_attrs:
-            base_attrs = so.default_attributes.get(element_type, [])
+            # Para multi-diámetro busca primero con clave compuesta (element_type_diameter_type)
+            diameter_key = (
+                f"{element_type}_{so.diameter_type}"
+                if so.diameter_list and so.diameter_type
+                else element_type
+            )
+            base_attrs = so.default_attributes.get(diameter_key) or so.default_attributes.get(element_type, [])
 
         # --- 3. MEZCLA Y PROCESAMIENTO ---
         elem_attrs = so.applied_attributes.get(storage_key, [])
@@ -585,17 +588,26 @@ def _apply_layer_to_element(model_elem: AllplanBasisElements.ModelElement3D,
 def _get_layer_id(key_applied_layer_attr: str, so: PBL.script_object.PolylineScriptObject):
         """
         Obtiene el ID del layer apropiado para un elemento.
-        Prioriza layers específicos guardados sobre el layer por defecto.
+        Prioridad: global default → default por subtipo → layer específico guardado.
         """
         doc = so.coord_input.GetInputViewDocument()
         layer_id = 0
-        # Obtener ID del layer por defecto
+
+        # 1. Default global de la instalación
         if so.default_layers:
             default_id = LayerService.GetIDByShortName(so.default_layers.get("default", ""), doc) # type: ignore
             if default_id:
                 layer_id = default_id
 
-        # Priorizar layer específico guardado
+        # 2. Default por subtipo (installation_types[i]["default_layer"])
+        if so.current_inst_config:
+            type_layer = so.current_inst_config.get("default_layer", "")
+            if type_layer:
+                type_id = LayerService.GetIDByShortName(type_layer, doc) # type: ignore
+                if type_id:
+                    layer_id = type_id
+
+        # 3. Layer específico guardado por el usuario (mayor prioridad)
         if hasattr(so, "applied_layers") and so.applied_layers:
             layer_data = so.applied_layers.get(key_applied_layer_attr, None)
             if layer_data and isinstance(layer_data, dict):

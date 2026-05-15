@@ -36,10 +36,12 @@ TE_TRIMS: dict[tuple[int, int, int], tuple[float, float, float]] = {
 # Manguitos asimétricos. Tap 40↔25: IN en Ø25, OUT en Ø40.
 # Reductor 110↔40: IN en Ø110, OUT en Ø40 (ambos sentidos 110→40 y 40→110).
 # Valores reexportados desde geo_handler; hot-reload: utils.trim_config en saneamiento_polyline.
-TAPRED_40_25_TRIM_IN_MM = 30.0
-TAPRED_40_25_TRIM_OUT_MM = 20.0
+TAPRED_40_25_TRIM_IN_MM = 3.0
+TAPRED_40_25_TRIM_OUT_MM = 3.0
 REDUCT_110_40_TRIM_IN_MM = 50.0
 REDUCT_110_40_TRIM_OUT_MM = 100.0
+SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM = 109.25
+DIRECT_FECAL_40_110_FIRST_SEGMENT_CUT_DELTA_MM = -60.0
 
 
 def manguito_asymmetric_trim_mm(d_prev: int, d_next: int, d_segment: int) -> float | None:
@@ -75,7 +77,22 @@ def manguito_asymmetric_trim_mm(d_prev: int, d_next: int, d_segment: int) -> flo
     if (d_prev, d_next) == (40, 110):
         return (
             float(REDUCT_110_40_TRIM_OUT_MM)
+            + float(DIRECT_FECAL_40_110_FIRST_SEGMENT_CUT_DELTA_MM)
             if d_segment == 40
             else float(REDUCT_110_40_TRIM_IN_MM)
+        )
+    if (d_prev, d_next) == (25, 110):
+        return (
+            float(TAPRED_40_25_TRIM_IN_MM)
+            if d_segment == 25
+            else float(REDUCT_110_40_TRIM_IN_MM)
+            + float(SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM)
+        )
+    if (d_prev, d_next) == (110, 25):
+        return (
+            float(REDUCT_110_40_TRIM_IN_MM)
+            + float(SPLIT_FECAL_25_110_LAST_REDUCER_EXTRA_X_MM)
+            if d_segment == 110
+            else float(TAPRED_40_25_TRIM_IN_MM)
         )
     return None

@@ -100,4 +100,29 @@
     <Item><TextId>2081</TextId><Text>Acción</Text></Item>
     <Item><TextId>2082</TextId><Text>Añadir punto</Text></Item>
     <Item><TextId>2083</TextId><Text>Finalizar</Text></Item>
+    <Item><TextId>2084</TextId><Text>Invertir caval</Text></Item>
+    <Item><TextId>2085</TextId><Text>Soportes</Text></Item>
+    <Item><TextId>2086</TextId><Text>Tipo de soporte</Text></Item>
+    <Item><TextId>2087</TextId><Text>Subtipo instalación</Text></Item>
+    <Item><TextId>2088</TextId><Text>Superficie</Text></Item>
+    <Item><TextId>2089</TextId><Text>Cota A (mm)</Text></Item>
+    <Item><TextId>2090</TextId><Text>Cota B (mm)</Text></Item>
+    <Item><TextId>2091</TextId><Text>Ángulo inclinación (°)</Text></Item>
+    <Item><TextId>2092</TextId><Text>Insertar</Text></Item>
+    <Item><TextId>2093</TextId><Text>Insertar soporte</Text></Item>
+    <Item><TextId>2094</TextId><Text>Crear</Text></Item>
+    <Item><TextId>2095</TextId><Text>Crear Soporte</Text></Item>
+    <Item><TextId>2096</TextId><Text>Soportes</Text></Item>
+    <Item><TextId>2097</TextId><Text>Estado</Text></Item>
+    <Item><TextId>2098</TextId><Text>Modo edición</Text></Item>
+    <Item><TextId>2099</TextId><Text>Desactivado</Text></Item>
+    <Item><TextId>2100</TextId><Text>Edición</Text></Item>
+    <Item><TextId>2101</TextId><Text>Edición Mover</Text></Item>
+    <Item><TextId>2102</TextId><Text>Borrar Soporte</Text></Item>
+    <Item><TextId>2103</TextId><Text>Borrar sel.</Text></Item>
+    <Item><TextId>2104</TextId><Text>Atributo de soporte</Text></Item>
+    <Item><TextId>2105</TextId><Text>Valor atributo</Text></Item>
+    <Item><TextId>2106</TextId><Text>Aplicar atributo soporte</Text></Item>
+    <Item><TextId>2107</TextId><Text>Aplicar atributo</Text></Item>
+    <Item><TextId>2108</TextId><Text>SoportesSavedState</Text></Item>
 </Element>

@@ -16,6 +16,8 @@ import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_Utility as PythonUtility
+import NemAll_Python_AllplanSettings as AllplanSettings
+
 
 import Instalaciones.PolyLib as PBL
 from Instalaciones.PolyLib import script_object as PBL_object
@@ -31,6 +33,7 @@ from .utils.vertex_utils import (
     detect_bifurcations,
     detect_cross_path_elbows,
     detect_cross_path_manguitos,
+    is_90_deg_turn,
 )
 from .utils.te_orientation import build_te_params
 from .utils.attributes_utils import (
@@ -47,9 +50,6 @@ from .clau_de_pas_006 import ClauDePasModel
 from .colze_base_002 import ColzeBaseModel
 from .taps_010 import TapsModel
 from .te_sortida_004 import TeSortidaModel
-from Instalaciones.MacroCore import manager as _macrocore_manager_module
-from .macros import macro_manager as _macro_manager_module
-from .macros.macro_manager import AguaMacroManager
 from Instalaciones.ElementosDefinidos import (
     CallbackDefinedElement,
     DefinedElementsFacadeConfig as ED_FacadeConfig,
@@ -94,17 +94,11 @@ from Instalaciones.ElementosNoDefinidos import (
 
 print(f"[AGUA] Loaded agua_polyline.py from: {__file__}")
 
-# ---------------- CUSTOM NUM_TD PATH ----------------
-project_name, host_name = (
-    AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
-)
-error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(
-    project_name, host_name
-)
+# ---------------- CUSTOM ABSOLUTE ENUM PATH ----------------
+project_name, host_name = AllplanBaseElements.ProjectService.GetCurrentProjectNameAndHost()
+error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(project_name, host_name)
 if error != 0:
-    error, base_path = AllplanBaseElements.ProjectService.GetProjectPath(
-        project_name, ""
-    )
+    base_path = AllplanSettings.AllplanPaths.GetCurPrjPath()
 
 # ---------------- ENABLE - SHOW PARAMS ----------------
 profile = Agua.profile()
@@ -118,7 +112,6 @@ CONFIG = PBL.script_object.PolylineBaseConfig(
     num_td_path=base_path,
     limit_angles=True,
     allowed_angles=[0.0, 45.0, 90.0, 135.0, 180.0, -45.0, -90.0, -135.0],
-    marker_manager_factory=lambda so, be: AguaMacroManager(so, be),
 )
 
 # ------ MODULES LOADED FOR TEST ------
@@ -126,8 +119,6 @@ reload_module = [
     PBL,
     PBL_interactor,
     PBL_object,
-    _macrocore_manager_module,
-    _macro_manager_module,
 ]
 
 MAX_SEGMENT_LENGTH = 5000.0  # 5m (fallback)
@@ -1040,9 +1031,6 @@ def check_allplan_version(_build_ele, _version):
             importlib.reload(module)
         except Exception as e:
             print(f"Error al recargar el módulo {module.__name__}: {e}")
-    global AguaMacroManager
-    from .macros.macro_manager import AguaMacroManager as _AMM
-    AguaMacroManager = _AMM
     return True
 
 
@@ -1609,6 +1597,72 @@ def _create_elements_for_segment_group(
                 for (p_idx, seg_idx, is_start), data in cross_path_manguitos_all.items()
                 if p_idx == path_idx
             }
+
+            if not processor.resolve_elbow_diameter_conflicts(segments_to_process):
+                print(
+                    "[AGUA][ELBOW][DIAM] Preview/creación omitida: "
+                    "el usuario canceló la corrección de diámetro en codo."
+                )
+                return []
+
+            def _diam_from_segment_item(seg_item, default=20):
+                try:
+                    info = getattr(seg_item, "info", None)
+                    diam = getattr(info, "diameter", None) if info is not None else None
+                    if isinstance(diam, (list, tuple)) and diam:
+                        diam = diam[0]
+                    if diam is None:
+                        return int(default)
+                    return int(round(float(diam)))
+                except Exception:
+                    return int(default)
+
+            def _first_elbow_diameter_after_resolution():
+                try:
+                    for elbow_idx in range(1, len(segments_to_process)):
+                        seg_prev_item = segments_to_process[elbow_idx - 1]
+                        seg_next_item = segments_to_process[elbow_idx]
+                        p_prev = getattr(getattr(seg_prev_item, "data", None), "start", None)
+                        p_curr = getattr(getattr(seg_prev_item, "data", None), "end", None)
+                        p_next = getattr(getattr(seg_next_item, "data", None), "end", None)
+                        if is_90_deg_turn(p_prev, p_curr, p_next):
+                            return _diam_from_segment_item(seg_prev_item, diameter)
+                except Exception as ex:
+                    print(f"[AGUA][ELBOW][DIAM] No se pudo inferir diámetro de codo: {ex}")
+                return None
+
+            def _set_build_ele_diameter(diam_mm):
+                build_ele = getattr(so, "build_ele", None)
+                if build_ele is None or diam_mm is None:
+                    return
+                for attr_name in ("DiameterType", "DiametroAplicar"):
+                    try:
+                        attr = getattr(build_ele, attr_name, None)
+                        if attr is not None and hasattr(attr, "value"):
+                            attr.value = int(diam_mm)
+                        else:
+                            setattr(build_ele, attr_name, int(diam_mm))
+                    except Exception:
+                        continue
+
+            elbow_diam = _first_elbow_diameter_after_resolution()
+            if elbow_diam is not None and codo_selected:
+                _set_build_ele_diameter(elbow_diam)
+                refreshed_codo_model = so._get_pythonpart_installed(
+                    element_key=codo_selected[0].key,
+                    exec_kwargs={"dist_type": so.distribution_type},
+                    attr_kwargs={"dist_type": so.distribution_type},
+                )
+                if refreshed_codo_model:
+                    processor.templates["codo_90"] = refreshed_codo_model[0]
+                    if len(refreshed_codo_model) > 1:
+                        processor.templates["codo_90_inner"] = refreshed_codo_model[1]
+                    elif "codo_90_inner" in processor.templates:
+                        del processor.templates["codo_90_inner"]
+                    print(
+                        f"[AGUA][ELBOW][DIAM] template de codo refrescado "
+                        f"con diámetro {elbow_diam}mm"
+                    )
 
             all_cuts = compute_segment_cuts_for_all_paths(split_segment_groups)
             segment_cuts = {

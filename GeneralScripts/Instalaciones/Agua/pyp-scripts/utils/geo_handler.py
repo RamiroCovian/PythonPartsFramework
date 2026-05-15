@@ -6058,6 +6058,170 @@ class PipelineProcessor:
         self._te_invalid_warning_cache = set()
         # Orientación global capturada por PolyLib (start_orientation_capture).
         self.reference_orientation_angle = None
+        # Si el usuario cancela una corrección de diámetro en codo, el ciclo de
+        # generación debe abortarse para no crear reductores en un nodo angular.
+        self.cancelled_by_elbow_diameter_conflict = False
+
+    @staticmethod
+    def _segment_diameter(seg_item, default=20.0) -> float:
+        try:
+            info = getattr(seg_item, "info", None)
+            d = getattr(info, "diameter", None) if info is not None else None
+            if isinstance(d, (list, tuple)) and d:
+                d = d[0]
+            if d is None:
+                return float(default)
+            return float(d)
+        except Exception:
+            return float(default)
+
+    @staticmethod
+    def _format_segment_label(diameter_mm: int, current_label: str = "") -> str:
+        suffix = "P"
+        try:
+            parts = str(current_label or "").strip().split()
+            if len(parts) > 1 and parts[-1]:
+                suffix = parts[-1]
+        except Exception:
+            suffix = "P"
+        return f"D{int(diameter_mm)} {suffix}"
+
+    def _set_segment_diameter(self, seg_item, diameter_mm: int) -> bool:
+        info = getattr(seg_item, "info", None)
+        if info is None:
+            return False
+        try:
+            old_diam = getattr(info, "diameter", None)
+            info.diameter = int(diameter_mm)
+            info.section_type = f"{int(diameter_mm)} mm"
+            info.label = self._format_segment_label(
+                int(diameter_mm), getattr(info, "label", "")
+            )
+            print(
+                f"[AGUA][ELBOW][DIAM] segmento actualizado "
+                f"{old_diam}mm -> {int(diameter_mm)}mm"
+            )
+            return True
+        except Exception as ex:
+            print(f"[AGUA][ELBOW][DIAM] No se pudo actualizar segmento: {ex}")
+            return False
+
+    def _get_requested_palette_diameter(self):
+        for attr_name in ("DiameterType", "DiametroAplicar"):
+            try:
+                attr = getattr(self.build_ele, attr_name, None)
+                raw = getattr(attr, "value", attr)
+                if isinstance(raw, (list, tuple)) and raw:
+                    raw = raw[0]
+                if raw is None:
+                    continue
+                return int(round(float(raw)))
+            except Exception:
+                continue
+        return None
+
+    def _ask_elbow_diameter(self, d_prev: float, d_next: float):
+        di_prev = int(round(float(d_prev)))
+        di_next = int(round(float(d_next)))
+        requested = self._get_requested_palette_diameter()
+        if requested == di_prev:
+            original = di_next
+        elif requested == di_next:
+            original = di_prev
+        else:
+            requested = di_next
+            original = di_prev
+        warning_message = (
+            "ADVERTENCIA: Cambio de diametro detectado junto a un codo\n\n"
+            f"Diametro actual del tramo anterior: {di_prev}mm\n"
+            f"Diametro actual del tramo siguiente: {di_next}mm\n"
+            f"Nuevo diametro seleccionado: {requested}mm\n\n"
+            "Los codos no admiten dos diametros distintos.\n\n"
+            f"Aceptar: aplicar {requested}mm a ambos tramos del codo.\n"
+            f"Cancelar: descartar el cambio y volver a {original}mm."
+        )
+
+        try:
+            if hasattr(PythonUtility, "MB_OKCANCEL"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_OKCANCEL
+                )
+            elif hasattr(PythonUtility, "MB_YESNO"):
+                response = PythonUtility.ShowMessageBox(
+                    warning_message, PythonUtility.MB_YESNO
+                )
+            else:
+                PythonUtility.ShowMessageBox(warning_message, PythonUtility.MB_OK)
+                response = getattr(PythonUtility, "IDCANCEL", None)
+        except Exception as ex:
+            print(f"[AGUA][ELBOW][DIAM] Error mostrando advertencia: {ex}")
+            response = getattr(PythonUtility, "IDCANCEL", None)
+
+        if response in (
+            getattr(PythonUtility, "IDOK", None),
+            getattr(PythonUtility, "IDYES", None),
+        ):
+            print(
+                f"[AGUA][ELBOW][DIAM] cambio aceptado: aplicar {requested}mm "
+                "a ambos tramos del codo"
+            )
+            return requested
+
+        print(
+            f"[AGUA][ELBOW][DIAM] cambio cancelado: restaurar ambos tramos "
+            f"a {original}mm"
+        )
+        return original
+
+    def resolve_elbow_diameter_conflicts(self, segments: list) -> bool:
+        """
+        En un codo, el fitting tiene un único diámetro nominal. Si los dos
+        segmentos adyacentes difieren, se unifica antes de calcular recortes y
+        antes de decidir manguitos. La orientación se determina con los vectores:
+        prev = p_curr - p_prev, next = p_next - p_curr; si cambia el eje
+        dominante es un codo ortogonal.
+        """
+        from .vertex_utils import is_90_deg_turn
+
+        self.cancelled_by_elbow_diameter_conflict = False
+        for idx in range(1, len(segments)):
+            seg_prev = segments[idx - 1]
+            seg_curr = segments[idx]
+            p_prev = getattr(getattr(seg_prev, "data", None), "start", None)
+            p_curr = getattr(getattr(seg_prev, "data", None), "end", None)
+            p_next = getattr(getattr(seg_curr, "data", None), "end", None)
+            if not (p_prev and p_curr and p_next):
+                continue
+            if not is_90_deg_turn(p_prev, p_curr, p_next):
+                continue
+
+            d_prev = self._segment_diameter(seg_prev)
+            d_next = self._segment_diameter(seg_curr)
+            di_prev = int(round(float(d_prev)))
+            di_next = int(round(float(d_next)))
+            if di_prev == di_next:
+                continue
+
+            print(
+                "[AGUA][ELBOW][DIAM] conflicto en codo idx=%s "
+                "d_prev=%s d_next=%s node=(%.3f,%.3f,%.3f)"
+                % (idx, di_prev, di_next, p_curr.X, p_curr.Y, p_curr.Z)
+            )
+            selected = self._ask_elbow_diameter(d_prev, d_next)
+            if selected is None:
+                self.cancelled_by_elbow_diameter_conflict = True
+                print(
+                    "[AGUA][ELBOW][DIAM] generación cancelada por conflicto "
+                    f"de diámetro en codo idx={idx}"
+                )
+                return False
+
+            if di_prev != selected:
+                self._set_segment_diameter(seg_prev, selected)
+            if di_next != selected:
+                self._set_segment_diameter(seg_curr, selected)
+
+        return True
 
     def _resolve_vertical_rotation_angle(self, p_prev, p_mid) -> float:
         """
@@ -6075,9 +6239,7 @@ class PipelineProcessor:
         prev_dx = p_mid.X - p_prev.X
         prev_dy = p_mid.Y - p_prev.Y
         prev_dz = p_mid.Z - p_prev.Z
-        prev_len = math.sqrt(
-            prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz
-        )
+        prev_len = math.sqrt(prev_dx * prev_dx + prev_dy * prev_dy + prev_dz * prev_dz)
 
         if prev_len > 1e-6 and abs(prev_dz) < 1e-6:
             return math.atan2(prev_dy, prev_dx)
@@ -6835,13 +6997,15 @@ class PipelineProcessor:
                                                 theta_source,
                                                 math.degrees(theta_branch_xy),
                                                 (
-                                                    "%.1f°"
-                                                    % math.degrees(
-                                                        float(ref_orientation)
+                                                    (
+                                                        "%.1f°"
+                                                        % math.degrees(
+                                                            float(ref_orientation)
+                                                        )
                                                     )
-                                                )
-                                                if ref_orientation is not None
-                                                else "None",
+                                                    if ref_orientation is not None
+                                                    else "None"
+                                                ),
                                             )
                                         )
                                     r_yaw = AllplanGeo.Matrix3D()
@@ -7309,7 +7473,9 @@ class PipelineProcessor:
                         else None
                     )
                     seg_system = (
-                        getattr(seg_info, "system", None) if seg_info is not None else None
+                        getattr(seg_info, "system", None)
+                        if seg_info is not None
+                        else None
                     )
                     seg_dist = "TD" if str(seg_dist).upper() == "TD" else "IS"
 
@@ -7796,7 +7962,10 @@ class PipelineProcessor:
                     other_pt = cp_info.get("other_point")
                     if not node_key_cp or not other_pt:
                         continue
-                    if node_key_cp in te_nodes or node_key_cp in inserted_cross_path_elbows:
+                    if (
+                        node_key_cp in te_nodes
+                        or node_key_cp in inserted_cross_path_elbows
+                    ):
                         continue
 
                     if at_start:
@@ -7884,7 +8053,11 @@ class PipelineProcessor:
                     def _get_seg_diam(_seg_item):
                         try:
                             info = getattr(_seg_item, "info", None)
-                            d = getattr(info, "diameter", None) if info is not None else None
+                            d = (
+                                getattr(info, "diameter", None)
+                                if info is not None
+                                else None
+                            )
                             if isinstance(d, (list, tuple)) and d:
                                 return float(d[0])
                             if d is None:
@@ -7929,7 +8102,9 @@ class PipelineProcessor:
                         {
                             "element": element_manguito,
                             "element_type": (
-                                "manguito_inner" if is_inner_only_reducer else "manguito"
+                                "manguito_inner"
+                                if is_inner_only_reducer
+                                else "manguito"
                             ),
                             "index": element_index,
                         }

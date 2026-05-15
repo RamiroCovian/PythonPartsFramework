@@ -72,6 +72,13 @@ ATTR_PERSO_07_ID = 10007  # Atributo personalizado 07
 
 
 class colze_rigid_40mm_f_45:
+    """Codo Ø40 fecal 45°/90°. Ajuste de orientación del modelo 45° (mismo criterio que Colze_rigid_110m_f_45)."""
+
+    # Rotaciones opcionales alrededor del centro del sólido (tras el centrado manual en build).
+    ROT_X_40MM_45 = 180.0
+    ROT_Y_40MM_45 = 0.0
+    ROT_Z_40MM_45 = -45.0
+
     def __init__(self, build_ele, doc: AllplanElementAdapter.DocumentAdapter):
         self.doc = doc
         self.build_ele = build_ele
@@ -215,6 +222,47 @@ class colze_rigid_40mm_f_45:
 
         return union_brep
 
+    def _orient_model_40mm_45(self, brep):
+        """Aplica ROT_*_40MM_45 alrededor del centroide del BRep (solo tipo 45°)."""
+        if self.type != 0:
+            return brep
+        cx = cy = cz = 0.0
+        try:
+            err_v, verts = brep.GetVertices()
+            if err_v == 0 and verts:
+                n = float(len(verts))
+                cx = sum(v.X for v in verts) / n
+                cy = sum(v.Y for v in verts) / n
+                cz = sum(v.Z for v in verts) / n
+        except Exception:
+            pass
+
+        out = brep
+        pivot = AllplanGeometry.Point3D(cx, cy, cz)
+
+        def _do_rot(geo, axis_vec, deg):
+            if abs(deg) <= 1e-6:
+                return geo
+            ax = AllplanGeometry.Axis3D(pivot, axis_vec)
+            r = AllplanGeometry.Rotate(geo, ax, AllplanGeometry.Angle(math.radians(deg)))
+            if isinstance(r, tuple):
+                err, g = r
+                if err != 0 or g is None:
+                    return geo
+                return g
+            return r
+
+        out = _do_rot(
+            out, AllplanGeometry.Vector3D(1, 0, 0), float(self.ROT_X_40MM_45)
+        )
+        out = _do_rot(
+            out, AllplanGeometry.Vector3D(0, 1, 0), float(self.ROT_Y_40MM_45)
+        )
+        out = _do_rot(
+            out, AllplanGeometry.Vector3D(0, 0, 1), float(self.ROT_Z_40MM_45)
+        )
+        return out
+
     def _create_brep(self):
         """Metodo para crear los Colze"""
 
@@ -271,6 +319,7 @@ class colze_rigid_40mm_f_45:
         mat_center.SetTranslation(AllplanGeometry.Vector3D(-20.00, -53.35, -20.00))
 
         brep_centered = AllplanGeometry.Transform(outer_brep, mat_center)
+        brep_centered = self._orient_model_40mm_45(brep_centered)
 
         outer_model = AllplanBasisElements.ModelElement3D(
             self.common_props, brep_centered

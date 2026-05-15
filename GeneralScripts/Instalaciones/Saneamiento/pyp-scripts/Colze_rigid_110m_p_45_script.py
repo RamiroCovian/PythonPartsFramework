@@ -7,7 +7,6 @@ import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BasisElements as AllplanBasisElements
 import NemAll_Python_AllplanSettings as AllplanSettings
 import NemAll_Python_BaseElements as AllplanBaseElements
-from NemAll_Python_BaseElements import LayerService
 from CreateElementResult import CreateElementResult
 from BaseScriptObject import BaseScriptObject, BaseScriptObjectData
 from BuildingElement import BuildingElement
@@ -21,9 +20,8 @@ def check_allplan_version(_build_ele, _version) -> bool:
 class CodoRigido110mP45:
     """Codo pluvial 110mm 45° con geometría compartida con fecal 110mm 45°."""
 
-    # Independiente de fecal: aquí quedan definidos layer/atributos propios.
-    LAYER_SHORT = "KN_AIGUA"
-    LAYER_FALLBACK = 40148
+    # Misma capa que tubos/codos saneamiento fabricado (alineado con fecal Ø110 45°).
+    LAYER = 40148  # IS_CON_SANE_FAB
     COLOR = 7
     # Atributo personalizado 01 / 02 / 07 (misma numeración que en catálogo Allplan).
     ATTR_1083 = "CS45ºØ110"
@@ -39,9 +37,9 @@ class CodoRigido110mP45:
     FACTOR = 1.0
     CALCULATION_MODE = "m³"
 
-    ROT_X_110MM_45 = 180.0
+    ROT_X_110MM_45 = 0.0
     ROT_Y_110MM_45 = 0.0
-    ROT_Z_110MM_45 = 45.0
+    ROT_Z_110MM_45 = -90.0
 
     PARAM_110_45 = dict(
         DIAMETRO=110.0,
@@ -60,11 +58,7 @@ class CodoRigido110mP45:
 
     def _props(self, color: int, pen: int = 1, stroke: int = 1, layer: int = None):
         if layer is None:
-            layer = self.LAYER_FALLBACK
-            if self.doc and self.LAYER_SHORT:
-                layer_id = LayerService.GetIDByShortName(self.LAYER_SHORT, self.doc)
-                if layer_id > 0:
-                    layer = layer_id
+            layer = self.LAYER
         p = AllplanSettings.AllplanGlobalSettings.GetCurrentCommonProperties()
         p.Color = color
         p.ColorByLayer = False

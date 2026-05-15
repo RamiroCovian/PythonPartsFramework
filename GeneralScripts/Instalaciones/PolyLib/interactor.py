@@ -23,11 +23,14 @@ from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResul
 
 from .models import (
     PolylineBaseConfig, SegmentData, SegmentItem, InstallationElement,
-    AppliedLayer, ElementTypes, SegmentInfo, WaterTypes, SoporteEditModeValues
+    AppliedLayer, ElementTypes, SegmentInfo, WaterTypes, SoporteEditModeValues,
+    PathInstTypeChange, UndefinedPoint
 )
-from .parameters import ParamNames, PointModeValues, EventIds
+from .parameters import ParamNames, PointModeValues, PolyModeValues, EventIds
 from .utils import ElementSerializer, load_supports_from_json, get_default_json_path
-
+from .optimizer import PolylineOptimizer
+from .point_input import UndefinedPointInput
+from .element_selector import ElementSelector
 
 # ─────────────────── Parámetros de Interacción ───────────────────
 
@@ -73,6 +76,16 @@ COLORS = {
     "highlight_element": 7,  # amarillo - elemento seleccionado en modo preview
 }
 
+# ─────────────────── Caché trigonométrico para marcadores de vértice ────────────
+# Pre-calculado una vez al importar el módulo; nunca se recalcula en runtime.
+# 12 segmentos son visualmente indistinguibles de 36 en el tamaño de un handle.
+_MARKER_N_SEG = 12
+_MARKER_UNIT_CIRCLE = [
+    (math.cos(2.0 * math.pi * i / _MARKER_N_SEG),
+     math.sin(2.0 * math.pi * i / _MARKER_N_SEG))
+    for i in range(_MARKER_N_SEG + 1)
+]
+
 # ===== Interactor Implementation =====
 class PolylineInteractor:
     """Interactor for polyline creation and editing.
@@ -84,12 +97,11 @@ class PolylineInteractor:
         self.ctrl_prop_util = getattr(script_object, "control_props_util", None)
         # Coordinate input
         self.coord_input: Optional[AllplanIFW.CoordinateInput | None] = None
-        # self.init_storage = None
         self.doc: Any  = None
 
         self.current_installation: Optional[str] = self.config.default_installation
         self.visible_limit_angles = self.config.limit_angles
-        self.angle_steps: Optional[List[float]] = self.config.allowed_angles
+        # self.angle_steps: Optional[List[float]] = self.config.allowed_angles
         self.min_backtrack_deg: Optional[int] = self.config.min_backtrack_deg
         self.segment_modes = []
 
@@ -144,10 +156,35 @@ class PolylineInteractor:
         self.saved_dragging = None  # (path_idx, pt_idx)
         self._last_move_pnt: Optional[AllplanGeo.Point3D] = None  # último pnt calculado en MouseMove
         self.saved_hover_point = None
+        # Hover cross-mode: vértice de la colección OPUESTA al modo activo
+        self._cross_mode_hover_point: Optional[AllplanGeo.Point3D] = None
         self.saved_dragging_original_point = (
             None  # Coordenadas originales antes del drag
         )
         self.drag_ghost_path: list = []  # Copia del path antes del drag (referencia roja)
+        self.snap_target: Optional[AllplanGeo.Point3D] = None  # vértice objetivo durante snap-drag
+        self._extend_snap_refs: list = []  # refs sticky para tracking/angle en extend_mode (máx. 2)
+        self._drag_undo_stack: list = []  # snapshots de active_paths para revertir drags (máx. 10)
+
+        # ── Multi-drag state (Desplazamiento conjunto de tramos) ──────────────
+        # Phase: 0=idle, 1=box_selection, 2=handle_ready, 3=dragging
+        self._multi_drag_phase: int = 0
+        # Corners of the selection box (world coords)
+        self._multi_drag_box_start: Optional[AllplanGeo.Point3D] = None
+        self._multi_drag_box_end: Optional[AllplanGeo.Point3D] = None
+        # Selected vertices: list of (path_idx, vertex_idx, original_Point3D)
+        self._multi_drag_vertices: list = []
+        # Centroid of selected vertices (world coords) = drag handle position
+        self._multi_drag_handle: Optional[AllplanGeo.Point3D] = None
+        # Point where the drag was anchored (first click on handle)
+        self._multi_drag_anchor: Optional[AllplanGeo.Point3D] = None
+        # Current cursor position during dragging (for live preview)
+        self._multi_drag_cursor: Optional[AllplanGeo.Point3D] = None
+        # Vertex snapped to during phase 2 or 3 (None = sin snap activo)
+        self._multi_drag_snap_target: Optional[AllplanGeo.Point3D] = None
+        # Sticky snap ref: último vértice snappeado — persiste al alejar el cursor (como _extend_snap_refs)
+        self._multi_drag_snap_ref: Optional[AllplanGeo.Point3D] = None
+        # ─────────────────────────────────────────────────────────────────────
 
         self.extend_target = None
         self.elements_created = False  # Flag de control
@@ -185,7 +222,6 @@ class PolylineInteractor:
             self.com_prop = None
 
         self._pending_description: str | None = None  # Flag de actualización pendiente
-        self._pending_palette_refresh: bool = False
 
         # ── Soportes: modo inserción ───────────────────────────────────────────
         # Máquina de estados:
@@ -210,6 +246,49 @@ class PolylineInteractor:
         self._soporte_move_p1_origin: Optional[AllplanGeo.Point3D] = None
         self._soporte_move_p2_origin: Optional[AllplanGeo.Point3D] = None
 
+        # ── Optimizer ────────────────────────────────────────────────────────────
+        self._free_points: List[AllplanGeo.Point3D] = []   # puntos sueltos para inject_test_points
+        self._free_point_roles: List[str] = []             # roles paralelos a _free_points
+        self._optimizer_preview_elems: List[Any] = []     # overlay persistido entre frames
+        self._test_input_override: Optional[Dict[str, Any]] = None  # input directo para el optimizador
+        self.selector_elem_mode: bool = False   # RadioButton 1 — modo activar selector
+        self._element_selector = None          # ElementSelector instance (creado al activar el modo)
+        self._mode_change_lock: bool = False   # guard anti-reentrancia para handlers de modo
+        self.punto_input_mode: bool = False   # RadioButton 1 — modo insertar punto
+        self.punto_edit_mode: bool  = False   # RadioButton 2 — modo editar/borrar punto
+        self._punto_hover_idx: Optional[int] = None   # índice del punto resaltado en edit_mode
+        self.optimizer = PolylineOptimizer(self)
+
+        # ── Performance: cache de propiedades para _draw_preview ──────────────
+        # _get_preview_props() los reconstruye solo cuando cambia el fingerprint
+        # (pen/stroke/layer del com_prop + modo auto). Evita 15+ _clone_properties
+        # por MouseMove.
+        self._preview_props: Optional[dict] = None
+        self._preview_props_fp: Optional[tuple] = None
+        # ── Performance: delta threshold para búsquedas hover ─────────────────
+        # Solo se re-ejecutan las 4 búsquedas espaciales si el cursor se movió
+        # más de _HOVER_DELTA_MM desde la última vez.
+        self._last_hover_pnt: Optional[AllplanGeo.Point3D] = None
+        self._HOVER_DELTA_MM: float = 2.0
+
+        # ── Trazado Paralelo ───────────────────────────────────────────────────
+        # Puntos del camino "fuente" (copia tomada al primer click de Agregar).
+        # Se resetea al salir del create_mode o al guardar un nuevo camino.
+        self._parallel_source_pts: list = []
+        # Cuántas paralelas se han generado desde el fuente actual.
+        self._parallel_count: int = 0
+        # Índice en active_paths del camino usado como fuente en la última
+        # generación. Permite detectar cambio de fuente y resetear el contador.
+        self._parallel_source_path_idx: int | None = None
+        # Guard para no resetear el fuente cuando _save_current_polyline es
+        # llamado internamente desde _handle_agregar_paralela.
+        self._saving_for_parallel: bool = False
+        # Cuando True, los clicks en segmentos acumulan selección múltiple
+        # para luego aplicar CambiarTipoInstalacion sobre varios caminos a la vez.
+        self._parallel_multi_select_mode: bool = False
+        # Índices de caminos seleccionados por multi-select (se dibujan en ROJO).
+        self._parallel_selected_path_indices: set = set()
+
         self.script_object._load_default_inst_params(self.config.default_installation)
 
         self._on_installation_type_changed()
@@ -232,10 +311,14 @@ class PolylineInteractor:
         print("="*80)
 
         self.coord_input = coord_input
+        try:
+            self.is_modification_mode = self.script_object.modification_ele_list.is_modification_element()
+        except Exception:
+            self.is_modification_mode = False
+        print(f"[CC-DBG] start_input | is_modification_mode={self.is_modification_mode} | cc_path_numbers ANTES restore={dict(self.script_object.cc_path_numbers)}")
         self._print_prompt()
         self._change_draw_mode()
         self.doc = coord_input.GetInputViewDocument() # type: ignore
-        self._init_soporte_from_json()
         # Restaurar soportes guardados si el PythonPart viene de doble-click edit
         self.script_object._restore_soportes_from_state()
         if self.script_object.soportes_list:
@@ -269,11 +352,49 @@ class PolylineInteractor:
         except Exception:
             return 0
 
+    def _current_poly_mode(self) -> int:
+        value = None
+        try:
+            value = getattr(self.script_object.build_ele, ParamNames.PolyMode.MODE).value
+            mode = value
+            return mode
+        except Exception:
+            return 0
+
+    def _active_path_inst_types(self) -> "Dict[int, str]":
+        """Devuelve el dict path_inst_types correspondiente al modo activo.
+
+        - Modo Manual    → script_object.path_inst_types       (saved_paths)
+        - Modo Automático → script_object.path_inst_types_auto (saved_optimized_paths)
+        """
+        if self._current_poly_mode() == PolyModeValues.Automatico:
+            return self.script_object.path_inst_types_auto
+        return self.script_object.path_inst_types
+
+    def _set_active_path_inst_types(self, new_dict: "Dict[int, str]") -> None:
+        """Asigna un nuevo dict al path_inst_types del modo activo."""
+        if self._current_poly_mode() == PolyModeValues.Automatico:
+            self.script_object.path_inst_types_auto = new_dict
+        else:
+            self.script_object.path_inst_types = new_dict
+
     def _change_draw_mode(self):
         checkbox_value = self._current_mode()
         # --- RESET VISUAL INICIAL ---
-        # Al cambiar de modo, eliminamos la referencia del último punto del cursor
         self.current_point = None
+        self._last_hover_pnt = None  # Forzar búsqueda hover en primer frame del nuevo modo
+
+        # Resetear modo nodos: poner RadioButtonGroup a 0 (Desactivado)
+        try:
+            raw = getattr(self.script_object.build_ele, ParamNames.DrawMode.INSERT_UNDEFINED_POINTS, None)
+            if raw is not None:
+                raw.value = 0
+                self.punto_input_mode  = False
+                self.punto_edit_mode   = False
+                self._punto_hover_idx  = None
+                self._punto_snap_ref   = None
+        except Exception:
+            pass
 
         if checkbox_value == PointModeValues.CREATE:
             self.current_point = None
@@ -297,19 +418,30 @@ class PolylineInteractor:
             self.script_object.show_parameter(ParamNames.Layers.VIEW_INFO, False)
             # Mover a Desactivado y deshabilitar el RadioGroup de edición de soportes
             self._disable_soporte_edit_mode()
+
+            # ── Trazado Paralelo: habilitar checkbox; resto de controles según estado ──
+            self._reset_parallel_state()
+            self.script_object.enable_parameter(ParamNames.Parallel.ENABLED, True)
+            par_raw = getattr(self.script_object.build_ele, ParamNames.Parallel.ENABLED, None)
+            par_checked = bool(getattr(par_raw, "value", False)) if par_raw is not None else False
+            self.script_object.enable_parameter(ParamNames.Parallel.DISTANCE, par_checked)
+            self.script_object.enable_parameter(ParamNames.Parallel.LADO, par_checked)
+            self.script_object.enable_parameter(ParamNames.Parallel.MULTI_SELECT, par_checked)
+            self.script_object.enable_parameter(ParamNames.Parallel.AGREGAR, par_checked)
+
             print(f"[INT] CREATE MODE = ON - Nuevo camino iniciado")
         elif checkbox_value == PointModeValues.EDIT:
             self.highlight_geometries.clear()
             if not self.saved_elements:
                 self.script_object.element_list = []
                 self._save_current_polyline()
-                # self._update_segment_groups()
-                # self.saved_elements = True
 
             self.preview_mode = True
             self.edit_mode = True
             self.create_mode = False
 
+            # Sincronizar segment_groups con active_paths del modo actual (manual o automático)
+            self._update_segment_groups()
             self.script_object._create_elements_preview()
             self._generate_elements_for_preview()
             self.script_object.enable_parameter(ParamNames.DrawMode.INSERT, False)
@@ -321,8 +453,18 @@ class PolylineInteractor:
 
             # Mover a Desactivado y deshabilitar el RadioGroup de edición de soportes
             self._disable_soporte_edit_mode()
+
+            # ── Trazado Paralelo: deshabilitar en EDIT mode ───────────────────
+            self._reset_parallel_state()
+            self.script_object.enable_parameter(ParamNames.Parallel.ENABLED, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.DISTANCE, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.LADO, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.MULTI_SELECT, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.AGREGAR, False)
+
             print(f"[INT] EDIT MODE = ON")
-        else:
+
+        elif checkbox_value == PointModeValues.EXTEND:
             if not self.saved_elements:
                 self._save_current_polyline()
                 self.saved_elements = True
@@ -333,6 +475,8 @@ class PolylineInteractor:
             self.create_mode = False
             self.hover_tooltip_text = ""
 
+            # Sincronizar segment_groups con active_paths del modo actual (manual o automático)
+            self._update_segment_groups()
             self.script_object._create_elements_preview()
             self._generate_elements_for_preview()
 
@@ -343,12 +487,171 @@ class PolylineInteractor:
 
             self.script_object.show_parameter(ParamNames.Layers.DESCRIPTION, False)
             self.script_object.show_parameter(ParamNames.Layers.VIEW_INFO, False)
+            # Nodos indefinidos solo habilitados en modo Automático
+            _auto = self._current_poly_mode() == PolyModeValues.Automatico
+            self.script_object.enable_parameter(ParamNames.DrawMode.INSERT_UNDEFINED_POINTS, _auto)
             # Re-habilitar modos de edición de soporte al volver a Extender
-            self.script_object.enable_parameter(ParamNames.Soportes.EDIT_MODE, True)
+            self.script_object.enable_parameter(ParamNames.Supports.EDIT_MODE, True)
+
+            # ── Trazado Paralelo: deshabilitar en EXTEND mode ─────────────────
+            self._reset_parallel_state()
+            self.script_object.enable_parameter(ParamNames.Parallel.ENABLED, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.DISTANCE, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.LADO, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.MULTI_SELECT, False)
+            self.script_object.enable_parameter(ParamNames.Parallel.AGREGAR, False)
+
             print(f"[INT] EXTEND MODE = ON")
 
-        self._pending_palette_refresh = True
         return True
+
+    def _change_poly_mode(self):
+        """Gestiona el cambio de PolyMode (Manual=0 / Automático=1).
+
+        Al cambiar de modo siempre se fuerza el modo de dibujo a EXTEND,
+        independientemente de si se venía de create_mode o edit_mode.
+        - Manual: desactiva INSERT_UNDEFINED_POINTS y limpia estado de nodos.
+        - Automático: habilita INSERT_UNDEFINED_POINTS controles.
+        """
+        if not self.saved_elements:
+            self._save_current_polyline()
+            self.saved_elements = True
+
+        poly_mode = self._current_poly_mode()
+
+        # ── Forzar siempre modo de dibujo a EXTEND ────────────────────────────
+        mode_param = getattr(self.script_object.build_ele, ParamNames.DrawMode.MODE, None)
+        if mode_param is not None:
+            mode_param.value = PointModeValues.EXTEND
+        self.extend_mode  = True
+        self.create_mode  = False
+        self.edit_mode    = False
+        self.preview_mode = False
+
+        if poly_mode == PolyModeValues.Manual:
+            # Desactivar nodos indefinidos al cambiar a Manual
+            raw = getattr(self.script_object.build_ele, ParamNames.DrawMode.INSERT_UNDEFINED_POINTS, None)
+            if raw is not None:
+                raw.value = 0
+            self.punto_input_mode = False
+            self.punto_edit_mode  = False
+            self._punto_hover_idx = None
+            self._punto_snap_ref  = None
+            self.script_object.enable_parameter(ParamNames.DrawMode.INSERT_UNDEFINED_POINTS, False)
+            print("[INT] PolyMode → Manual: nodos indefinidos desactivados, modo EXTEND activado")
+
+        elif poly_mode == PolyModeValues.Automatico:
+            # Habilitar controles de nodos indefinidos al cambiar a Automático
+            self.script_object.enable_parameter(ParamNames.DrawMode.INSERT_UNDEFINED_POINTS, True)
+            print("[INT] PolyMode → Automático: nodos indefinidos habilitados, modo EXTEND activado")
+
+        # ── Refrescar segment_groups y preview 3D ─────────────────────────────
+        self._update_segment_groups()
+        self.script_object._create_elements_preview()
+
+    def _change_selector_elements_mode(self, value: int):
+        if self._mode_change_lock:
+            return
+        self._mode_change_lock = True
+        try:
+            if value == 1:
+                # ── Activar selector ──────────────────────────────────────────
+                self.selector_elem_mode = True
+                self.punto_input_mode   = False
+                self.punto_edit_mode    = False
+                self.create_mode        = False
+                self.edit_mode          = False
+                self._punto_hover_idx   = None
+                # Forzar modo EXTEND
+                mode = getattr(self.script_object.build_ele, ParamNames.DrawMode.MODE, None)
+                if mode is not None:
+                    mode.value = PointModeValues.EXTEND
+                self.extend_mode = True
+                # Desactivar UI de puntos no definidos (lock activo → sin reentrancia)
+                undef_raw = getattr(self.script_object.build_ele, ParamNames.DrawMode.INSERT_UNDEFINED_POINTS, None)
+                if undef_raw is not None and undef_raw.value != 0:
+                    undef_raw.value = 0
+                # Auto-switch a Automático
+                poly_raw = getattr(self.script_object.build_ele, ParamNames.PolyMode.MODE, None)
+                if poly_raw is not None and poly_raw.value != PolyModeValues.Automatico:
+                    poly_raw.value = PolyModeValues.Automatico
+                # Guardar polilínea activa antes de entrar en modo selección
+                if not self.saved_elements:
+                    self._save_current_polyline()
+                    self.saved_elements = True
+                # Crear selector y arrancar selección en Allplan
+                self._element_selector = ElementSelector(self)
+                self._element_selector.activar()
+                print("[SelectorElementos] Modo: Activar Selector")
+            else:
+                # ── Desactivar selector ───────────────────────────────────────
+                self.selector_elem_mode = False
+                if self._element_selector is not None:
+                    self._element_selector.desactivar()
+                    self._element_selector = None
+
+                print("[SelectorElementos] Modo: Desactivado")
+        finally:
+            self._mode_change_lock = False
+
+    def _change_undefined_point_mode(self, value: int):
+        """Gestiona el cambio de modo de nodos indefinidos (RadioButtonGroup).
+
+        Args:
+            value: 0=Desactivado, 1=Insertar, 2=Editar/Borrar
+        """
+        if self._mode_change_lock:
+            return
+        self._mode_change_lock = True
+        try:
+            if value in (1, 2):
+                # ── Activar modo punto ────────────────────────────────────────
+                # Desactivar selector si estaba activo (desactivar() restaura coord input)
+                if self.selector_elem_mode:
+                    self.selector_elem_mode = False
+                    if self._element_selector is not None:
+                        self._element_selector.desactivar()
+                        self._element_selector = None
+                    # Resetear UI del selector (lock activo → sin reentrancia)
+                    sel_raw = getattr(self.script_object.build_ele, ParamNames.DrawMode.SELECTOR_ELEMENTS, None)
+                    if sel_raw is not None:
+                        sel_raw.value = 0
+
+
+                # Forzar modo EXTEND
+                mode = getattr(self.script_object.build_ele, ParamNames.DrawMode.MODE, None)
+                if mode is not None:
+                    mode.value = PointModeValues.EXTEND
+                self.extend_mode = True
+                # Guardar polilínea activa
+                if not self.saved_elements:
+                    self._save_current_polyline()
+                    self.saved_elements = True
+                # Auto-switch a Automático
+                poly_raw = getattr(self.script_object.build_ele, ParamNames.PolyMode.MODE, None)
+                if poly_raw is not None and poly_raw.value != PolyModeValues.Automatico:
+                    poly_raw.value = PolyModeValues.Automatico
+                self.punto_input_mode  = (value == 1)
+                self.punto_edit_mode   = (value == 2)
+                self._punto_hover_idx  = None
+                self.create_mode       = False
+                self.edit_mode         = False
+                self.points.clear()
+                self._punto_snap_ref   = None
+                _modo = {1: "Insertar", 2: "Editar/Borrar"}[value]
+                print(f"[PointInput] Modo nodos: {_modo}")
+            else:
+                # ── Desactivar ────────────────────────────────────────────────
+                self.punto_input_mode  = False
+                self.punto_edit_mode   = False
+                self._punto_hover_idx  = None
+                print("[PointInput] Modo nodos: Desactivado")
+        finally:
+            self._mode_change_lock = False
+
+    def delete_undefined_point(self):
+        """Limpia todos los puntos no definidos."""
+        UndefinedPointInput(self).clear()
 
     # ============================================================================
     # LOAD DEFAULT INSTALLATION PARAMETERS
@@ -364,6 +667,8 @@ class PolylineInteractor:
         Restaura el estado guardado desde build_ele o desde el PythonPartGroup si existe.
         Se llama en __init__ cuando se edita una instancia existente.
         """
+        self.script_object.cc_path_numbers = {}
+        print(f"[CC-DBG] _restore_saved_state INICIO | is_modification_mode={getattr(self, 'is_modification_mode', '??')} | cc_path_numbers reseteado={{}}")
         try:
             # Intentar restaurar desde build_ele
             for param_name in ["SavedState", "PolylineState", "StateData"]:
@@ -373,8 +678,19 @@ class PolylineInteractor:
                     if not hasattr(param, "value"): continue
 
                     state_json = param.value
+                    print(f"[CC-DBG] build_ele.{param_name} encontrado | tiene_valor={bool(state_json and state_json.strip())} | len={len(state_json) if state_json else 0}")
                     if state_json and isinstance(state_json, str) and state_json.strip():
-                        if self._deserialize_state_from_json(state_json):
+                        deserialize_ok = self._deserialize_state_from_json(state_json)
+                        print(f"[CC-DBG] _deserialize_state_from_json resultado={deserialize_ok} | cc_path_numbers POST-deserialize={dict(self.script_object.cc_path_numbers)}")
+                        if deserialize_ok:
+                            if not getattr(self, "is_modification_mode", False):
+                                self.script_object.cc_path_numbers = {}
+                                self.script_object.saved_paths = []
+                                self.script_object.saved_cut_points = []
+                                self.script_object.saved_vertex_cut_points = []
+                                print(f"[CC-DBG] NO modification_mode → estado limpiado para elemento nuevo (cc_path_numbers + saved_paths)")
+                            else:
+                                print(f"[CC-DBG] modification_mode=True → cc_path_numbers PRESERVADO={dict(self.script_object.cc_path_numbers)}")
                             print(f"[SO] Estado previo restaurado desde build_ele.{param_name}")
                             return True
                 except Exception as e:
@@ -434,14 +750,28 @@ class PolylineInteractor:
         self.last_points = []
 
         self.script_object.saved_paths = []
+        self.script_object.saved_optimized_paths = []
         self.script_object.saved_cut_points = []
         self.script_object.saved_vertex_cut_points = []
         self.script_object.applied_layers = {}
         self.script_object.applied_default_attributes = {}
         self.script_object.applied_attributes = {}
+        self.script_object.applied_codificacion = {}
+        self.script_object.cc_path_numbers = {}
         self.script_object.global_group_numbers = {}
+        self.script_object.path_inst_types = {}
+        self.script_object.path_inst_types_auto = {}
+        self.script_object.camino_inst_types = []
+        self.script_object.auto_path_color_ids = []
+        self.script_object.undefined_points_list = []
         self.script_object._fn_name = ""
         self.script_object.reference_orientation_angle = 0
+
+        # Resetear caches de rendering para que se reconstruyan con el com_prop de la sesión nueva
+        self._preview_props = None
+        self._preview_props_fp = None
+        self._last_hover_pnt = None
+        self._reset_parallel_state()
 
         try:
             if not json_str or not json_str.strip():
@@ -464,7 +794,7 @@ class PolylineInteractor:
             except Exception as e:
                 print(f"[PMP_PARE] Error limpiando copias previas: {e}")
 
-            # Restaurar paths
+            # Restaurar paths (manual)
             if "saved_paths" in state:
                 for path_data in state["saved_paths"]:
                     path = [
@@ -472,6 +802,15 @@ class PolylineInteractor:
                         for pt in path_data
                     ]
                     self.script_object.saved_paths.append(path)
+
+            # Restaurar paths (automático)
+            if "saved_optimized_paths" in state:
+                for path_data in state["saved_optimized_paths"]:
+                    path = [
+                        AllplanGeo.Point3D(pt["X"], pt["Y"], pt["Z"])
+                        for pt in path_data
+                    ]
+                    self.script_object.saved_optimized_paths.append(path)
 
             # Restaurar cut points
             self.script_object.saved_cut_points = []
@@ -511,6 +850,39 @@ class PolylineInteractor:
                 param.value = state["selected_inst_type"]
 
                 self.script_object.selected_inst_type = state["selected_inst_type"]
+
+            if "path_inst_types" in state:
+                self.script_object.path_inst_types = {
+                    int(k): v for k, v in state["path_inst_types"].items()
+                }
+            if "path_inst_types_auto" in state:
+                self.script_object.path_inst_types_auto = {
+                    int(k): v for k, v in state["path_inst_types_auto"].items()
+                }
+
+            if "camino_inst_types" in state:
+                self.script_object.camino_inst_types = list(state["camino_inst_types"])
+
+            if "auto_path_color_ids" in state:
+                self.script_object.auto_path_color_ids = list(state["auto_path_color_ids"])
+
+            if "undefined_points_list" in state:
+                # from .models import UndefinedPoint as _UP
+                restored_undef = []
+                for d in state["undefined_points_list"]:
+                    try:
+                        restored_undef.append(UndefinedPoint.from_dict(d))
+                    except Exception as _ex:
+                        print(f"[SO] Error restaurando UndefinedPoint: {_ex}")
+                self.script_object.undefined_points_list = restored_undef
+                # Reconstruir nodo_list y overlay a partir de los puntos restaurados
+                if restored_undef:
+                    try:
+                        pi = UndefinedPointInput(self)
+                        pi._rebuild_nodo_list(restored_undef)
+                        pi._update_overlay(restored_undef)
+                    except Exception as _ex:
+                        print(f"[SO] Error reconstruyendo overlay tras restaurar: {_ex}")
 
             if "functional_name" in state:
                 param = getattr(self.script_object.build_ele, ParamNames.General.FUNCTIONAL_NAME)
@@ -567,6 +939,12 @@ class PolylineInteractor:
             if "applied_custom_attrs" in state:
                 self.script_object.applied_attributes = ElementSerializer.deserialize_attributes(state["applied_custom_attrs"])
 
+            if "applied_codificacion" in state:
+                self.script_object.applied_codificacion = dict(state["applied_codificacion"])
+
+            if "cc_path_numbers" in state:
+                self.script_object.cc_path_numbers = {int(k): v for k, v in state["cc_path_numbers"].items()}
+
             if "global_group_numbers" in state:
                 self.script_object.global_group_numbers = ElementSerializer.deserialize_global_numbers(state["global_group_numbers"])
 
@@ -584,6 +962,26 @@ class PolylineInteractor:
             # 3. RE-DIBUJO TOTAL
             self.script_object._create_elements_preview() # Limpia element_list y crea nuevos 3D
             self._generate_elements_for_preview()         # Envía al Viewport de Allplan
+
+            # 3b. Overlay de puntos no definidos restaurados.
+            # _generate_elements_for_preview puede desplazar el preview; re-enviamos
+            # los marcadores para que sean visibles en el viewport.
+            _undef_list = getattr(self.script_object, "undefined_points_list", None)
+            if _undef_list:
+                try:
+                    _pi = UndefinedPointInput(self)
+                    _pi._update_overlay(_undef_list)
+                    _placed = self._optimizer_preview_elems
+                    if _placed:
+                        AllplanBaseElements.DrawElementPreview(
+                            self.coord_input.GetInputViewDocument(),  # type: ignore
+                            AllplanGeo.Matrix3D(),
+                            _placed,
+                            False,
+                            None,
+                        )
+                except Exception:
+                    pass
 
             # 4. Restore marker manager state
             mgr = getattr(self.script_object, 'marker_manager', None)
@@ -627,7 +1025,7 @@ class PolylineInteractor:
         # ── Detectar extend_target desde primer punto ─────────────────────────
         if self.extend_target is None:
             first_pnt = self.points[0]
-            for pidx, path in enumerate(self.script_object.saved_paths):
+            for pidx, path in enumerate(self.script_object.active_paths):
                 if not path:
                     continue
                 if self._points_equal(first_pnt, path[-1]):
@@ -640,7 +1038,7 @@ class PolylineInteractor:
         # ── Detectar end_target desde último punto ────────────────────────────
         end_target = None
         last_pnt = self.points[-1]
-        for pidx, path in enumerate(self.script_object.saved_paths):
+        for pidx, path in enumerate(self.script_object.active_paths):
             if not path:
                 continue
             if self.extend_target and self.extend_target[0] == pidx:
@@ -654,36 +1052,35 @@ class PolylineInteractor:
 
         # ── Snapshot de metadata ANTES de modificar paths ─────────────────────
         # Guardamos referencia a los paths originales para remapear metadata
-        old_paths = [list(p) for p in self.script_object.saved_paths]
+        old_paths = [list(p) for p in self.script_object.active_paths]
 
         # ── CASO: Extensión simple (un extremo) ───────────────────────────────
         if self.extend_target is not None:
             pidx, side = self.extend_target
-            if 0 <= pidx < len(self.script_object.saved_paths):
-                base = self.script_object.saved_paths[pidx]
+            if 0 <= pidx < len(self.script_object.active_paths):
+                base = self.script_object.active_paths[pidx]
                 old_len = len(base)  # Longitud ANTES de extender
 
                 if side == "end":
                     new_points = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points[1:]]
                     base.extend(new_points)
-                    # Metadata: los segmentos anteriores mantienen índice
-                    # Los nuevos segmentos no tienen metadata aún → se crearán al vuelo
+                    self._presave_view_modes(pidx, old_len - 1, False)
                     print(f"[INT] Extensión fusionada en polilínea #{pidx} (end)")
 
                 else:  # 'start'
                     new_points = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points[1:]]
                     prepend_count = len(new_points)
-                    self.script_object.saved_paths[pidx] = list(reversed(new_points)) + base
-                    # Metadata: los segmentos originales se desplazan prepend_count posiciones
+                    self.script_object.active_paths[pidx] = list(reversed(new_points)) + base
                     self._shift_metadata(pidx, offset=prepend_count)
+                    self._presave_view_modes(pidx, 0, True)
                     print(f"[INT] Extensión fusionada en polilínea #{pidx} (start)")
 
                 # ── CASO ESPECIAL: fusión de dos paths ────────────────────────
                 if end_target is not None:
                     ep_idx, ep_side = end_target
-                    if 0 <= ep_idx < len(self.script_object.saved_paths):
-                        extended_path = self.script_object.saved_paths[pidx]
-                        other_path    = self.script_object.saved_paths[ep_idx]
+                    if 0 <= ep_idx < len(self.script_object.active_paths):
+                        extended_path = self.script_object.active_paths[pidx]
+                        other_path    = self.script_object.active_paths[ep_idx]
                         base_len      = len(extended_path)  # Segmentos antes de fusionar
 
                         if ep_side == "start":
@@ -704,9 +1101,9 @@ class PolylineInteractor:
                                 reverse=True
                             )
 
-                        self.script_object.saved_paths[pidx] = merged
+                        self.script_object.active_paths[pidx] = merged
                         # Eliminar ep_idx y reindexar metadata
-                        self.script_object.saved_paths.pop(ep_idx)
+                        self.script_object.active_paths.pop(ep_idx)
                         self._reindex_metadata_after_pop(ep_idx)
                         print(f"[INT] Paths #{pidx} y #{ep_idx} fusionados en uno solo")
 
@@ -720,23 +1117,29 @@ class PolylineInteractor:
 
             if match is not None:
                 path_idx, vtx_idx, existing_vtx = match
-                existing_path = self.script_object.saved_paths[path_idx]
+                existing_path = self.script_object.active_paths[path_idx]
                 last_idx = len(existing_path) - 1
                 new_pts = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points[1:]]
 
                 if vtx_idx == last_idx:
-                    self.script_object.saved_paths[path_idx].extend(new_pts)
+                    self.script_object.active_paths[path_idx].extend(new_pts)
+                    self._presave_view_modes(path_idx, last_idx, False)
                     print(f"[CONEXIÓN] Extendido final de camino {path_idx}")
 
                 elif vtx_idx == 0:
                     prepend_count = len(new_pts)
-                    self.script_object.saved_paths[path_idx] = list(reversed(new_pts)) + existing_path
+                    self.script_object.active_paths[path_idx] = list(reversed(new_pts)) + existing_path
                     self._shift_metadata(path_idx, offset=prepend_count)
+                    self._presave_view_modes(path_idx, 0, True)
                     print(f"[CONEXIÓN] Extendido inicio de camino {path_idx}")
 
                 else:
                     branch_path = [existing_vtx] + new_pts
-                    self.script_object.saved_paths.append(branch_path)
+                    self.script_object.active_paths.append(branch_path)
+                    self._presave_view_modes(len(self.script_object.active_paths) - 1, 0, False)
+                    _inst_label = getattr(self.script_object, "selected_inst_type", None)
+                    if _inst_label:
+                        self._active_path_inst_types()[len(self.script_object.active_paths) - 1] = _inst_label
                     print(f"[BIFURCACIÓN] Nueva rama desde camino {path_idx} (Vértice {vtx_idx})")
 
                 self.last_points.extend(self.points[1:])
@@ -744,20 +1147,35 @@ class PolylineInteractor:
             else:
                 self.last_points.extend(self.points)
                 new_path = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in self.points]
-                self.script_object.saved_paths.append(new_path)
+                self.script_object.active_paths.append(new_path)
+                self._presave_view_modes(len(self.script_object.active_paths) - 1, 0, False)
+                _inst_label = getattr(self.script_object, "selected_inst_type", None)
+                if _inst_label:
+                    self.script_object.path_inst_types[len(self.script_object.active_paths) - 1] = _inst_label
                 print(f"[NUEVO] Camino independiente creado")
 
         # ── Sincronización final ───────────────────────────────────────────────
         self.points.clear()
+
+        # Resetear fuente de paralelas cuando el usuario guarda un camino nuevo
+        # de forma explícita (no cuando lo llama _handle_agregar_paralela).
+        if not self._saving_for_parallel:
+            self._reset_parallel_state()
+
+        # Fusión cross-mode: si el segmento guardado conecta un camino auto con
+        # uno manual, ambos se unen en saved_paths y el auto desaparece.
+        self._try_merge_across_modes()
+
         self.get_segments()
+        self._mode_overrides = {}
         self._update_segment_groups()
         self.script_object._create_elements_preview()
         self.saved_elements = True
 
         if self.saved_elements:
-            total_polylines = len(self.script_object.saved_paths)
+            total_polylines = len(self.script_object.active_paths)
             total_segments  = sum(
-                len(pts) - 1 for pts in self.script_object.saved_paths if len(pts) >= 2
+                len(pts) - 1 for pts in self.script_object.active_paths if len(pts) >= 2
             )
             message = (
                 f"✅ Polilínea guardada exitosamente!\n\n"
@@ -828,12 +1246,146 @@ class PolylineInteractor:
             new_key  = f"{int(parts[0]) - 1}_{parts[1]}"
             meta[new_key] = value
 
+        # Remap path_inst_types del modo activo: eliminar removed_path_idx y decrementar > él
+        pit = self._active_path_inst_types().copy()
+        self._set_active_path_inst_types({
+            (k - 1 if k > removed_path_idx else k): v
+            for k, v in pit.items()
+            if k != removed_path_idx
+        })
+
+    # ============================================================================
+    # FUSIÓN CROSS-MODE (manual ↔ automático)
+    # ============================================================================
+
+    def _try_merge_across_modes(self) -> bool:
+        """Detecta y fusiona caminos que conectan saved_optimized_paths con saved_paths.
+
+        Si el extremo de un camino manual coincide (dentro de tolerancia) con el
+        extremo de un camino automático, ambos se fusionan en ``saved_paths`` y
+        el camino automático se elimina de ``saved_optimized_paths``.
+
+        El tipo de instalación del camino manual tiene precedencia; si no tiene
+        tipo propio se hereda del automático.
+
+        Se itera hasta que no queden más conexiones cruzadas pendientes.
+
+        Returns:
+            ``True`` si al menos una fusión fue realizada.
+        """
+        so = self.script_object
+        any_merged = False
+
+        tol_sq = 1.0 ** 2  # 1 mm²
+
+        def _d2(p1: Any, p2: Any) -> float:
+            return (p1.X - p2.X) ** 2 + (p1.Y - p2.Y) ** 2 + (p1.Z - p2.Z) ** 2
+
+        changed = True
+        while changed:
+            changed = False
+            saved = so.saved_paths
+            auto_paths = so.saved_optimized_paths
+
+            if not saved or not auto_paths:
+                break
+
+            for m_idx in range(len(saved)):
+                for a_idx in range(len(auto_paths)):
+                    m_path = saved[m_idx]
+                    a_path = auto_paths[a_idx]
+                    if not m_path or not a_path:
+                        continue
+
+                    m_s, m_e = m_path[0], m_path[-1]
+                    a_s, a_e = a_path[0], a_path[-1]
+
+                    # Detectar orientación de conexión
+                    merged = None
+                    if _d2(m_e, a_s) <= tol_sq:
+                        # [manual →] [→ auto]
+                        merged = m_path + a_path[1:]
+                    elif _d2(m_e, a_e) <= tol_sq:
+                        # [manual →] [← auto reversed]
+                        merged = m_path + list(reversed(a_path))[1:]
+                    elif _d2(m_s, a_e) <= tol_sq:
+                        # [auto →] [→ manual]
+                        merged = a_path + m_path[1:]
+                    elif _d2(m_s, a_s) <= tol_sq:
+                        # [← auto reversed] [→ manual]
+                        merged = list(reversed(a_path)) + m_path[1:]
+
+                    if merged is None:
+                        continue
+
+                    print(
+                        f"[CrossMerge] manual[{m_idx}] ↔ auto[{a_idx}] "
+                        f"→ saved_paths[{m_idx}] ({len(merged)} puntos)"
+                    )
+
+                    # Preservar tipo de instalación (manual primero, auto como fallback)
+                    _manual_type = so.path_inst_types.get(m_idx, "")
+                    _auto_type   = so.path_inst_types_auto.get(a_idx, "")
+                    if not _manual_type and _auto_type:
+                        so.path_inst_types[m_idx] = _auto_type
+
+                    # Reemplazar camino manual con el fusionado
+                    so.saved_paths[m_idx] = merged
+
+                    # Eliminar UndefinedPoints del camino auto fusionado
+                    _color_ids: list = getattr(so, "auto_path_color_ids", [])
+                    _merged_color_id: int | None = (
+                        _color_ids[a_idx] if a_idx < len(_color_ids) else None
+                    )
+                    if _merged_color_id is not None:
+                        undef: list = getattr(so, "undefined_points_list", None) or []
+                        so.undefined_points_list = [
+                            up for up in undef if up.color_id != _merged_color_id
+                        ]
+                        # Reconstruir nodo_list y overlay
+                        try:
+                            from .point_input import UndefinedPointInput
+                            pi = UndefinedPointInput(self)
+                            pi._rebuild_nodo_list(so.undefined_points_list)
+                            pi._update_overlay(so.undefined_points_list)
+                        except Exception as _ex:
+                            print(f"[CrossMerge] Error reconstruyendo overlay: {_ex}")
+
+                    # Eliminar camino auto y reindexar path_inst_types_auto y auto_path_color_ids
+                    so.saved_optimized_paths.pop(a_idx)
+                    new_auto_types: dict = {}
+                    for k, v in so.path_inst_types_auto.items():
+                        if k < a_idx:
+                            new_auto_types[k] = v
+                        elif k > a_idx:
+                            new_auto_types[k - 1] = v
+                        # k == a_idx se descarta (ya absorbido)
+                    so.path_inst_types_auto = new_auto_types
+                    if _color_ids and a_idx < len(_color_ids):
+                        _color_ids.pop(a_idx)
+                        so.auto_path_color_ids = _color_ids
+
+                    changed    = True
+                    any_merged = True
+                    break   # reiniciar bucle con las listas actualizadas
+                if changed:
+                    break
+
+        if any_merged:
+            print(
+                f"[CrossMerge] Fusión completada → "
+                f"{len(so.saved_paths)} camino(s) manual(es), "
+                f"{len(so.saved_optimized_paths)} camino(s) auto restante(s)"
+            )
+
+        return any_merged
+
     def _update_segment_groups(self):
         """
         Sincroniza los grupos de segmentos basándose en TODO lo que hay en data.
         """
         # 1. Preparar la lista de puntos completa (viejas + viva)
-        all_path_points = [list(p) for p in self.script_object.saved_paths]
+        all_path_points = [list(p) for p in self.script_object.active_paths]
 
         if self.create_mode and len(self.points) >= 2:
             all_path_points.append(list(self.points))
@@ -872,12 +1424,12 @@ class PolylineInteractor:
             if len(points) >= 2:
                 # Verificar si coincide con el segmento buscado
                 if (
-                    0 <= path_idx < len(self.script_object.saved_paths)
-                    and 0 <= seg_idx < len(self.script_object.saved_paths[path_idx]) - 1
+                    0 <= path_idx < len(self.script_object.active_paths)
+                    and 0 <= seg_idx < len(self.script_object.active_paths[path_idx]) - 1
                 ):
 
-                    expected_p1 = self.script_object.saved_paths[path_idx][seg_idx]
-                    expected_p2 = self.script_object.saved_paths[path_idx][seg_idx + 1]
+                    expected_p1 = self.script_object.active_paths[path_idx][seg_idx]
+                    expected_p2 = self.script_object.active_paths[path_idx][seg_idx + 1]
 
                     if self._points_equal(
                         points[0], expected_p1
@@ -935,11 +1487,45 @@ class PolylineInteractor:
 
         return all_groups
 
+    def build_segments_for_paths(self, paths: list) -> list:
+        """Construye segment groups directamente desde listas de puntos.
+
+        A diferencia de filter_and_group_segments, este método no depende de
+        self.data para hacer la coincidencia por coordenadas. Calcula los
+        SegmentItems en base a los puntos recibidos, por lo que funciona
+        correctamente para paths del "otro modo" (saved_paths vs
+        saved_optimized_paths) sin importar qué contiene self.data en ese momento.
+
+        Retorna la misma estructura que segment_groups: lista de listas de
+        SegmentItems, una sub-lista por cada path.
+        """
+        try:
+            view_type = self.coord_input.GetViewWorldProjection().GetIsoProjection()  # type: ignore
+            current_mode = self._get_view_mode(view_type)
+        except Exception:
+            current_mode = "XY"
+
+        all_groups = []
+        for path_idx, path_points in enumerate(paths):
+            if len(path_points) < 2:
+                continue
+            pairs = self.build_point_pairs(path_points)
+            group = []
+            for seg_idx, (p1, p2) in enumerate(pairs):
+                meta_key = f"{path_idx}_{seg_idx}"
+                meta = self.script_object.persistent_metadata.get(meta_key)
+                saved_mode = getattr(meta, 'view_mode', None) if meta else None
+                seg = self._calculate_single_segment(p1, p2, seg_idx, saved_mode or current_mode, path_idx)
+                seg.name = f"line_{seg_idx + 1}"
+                group.append(seg)
+            if group:
+                all_groups.append(group)
+        return all_groups
+
     # ============================================================================
     # GENERATE ELEMENTS (TUBO - UNION - CODO - BIFURCACIONES - REDUCTORES)
     # ============================================================================
     def _generate_elements_for_preview(self):
-        print("[SO] Generando elementos con detección de conexiones")
         self.generated_elements.clear()
 
         # --- HELPERS ---
@@ -958,11 +1544,11 @@ class PolylineInteractor:
             return x1 * x2 + y1 * y2 + z1 * z2
 
         try:
-            if not self.script_object.saved_paths: return
+            if not self.script_object.active_paths: return
 
             # 1. MAPA DE CONECTIVIDAD: { (x,y,z): [ (path_idx, point_idx), ... ] }
             global_nodes = {}
-            for p_idx, path in enumerate(self.script_object.saved_paths):
+            for p_idx, path in enumerate(self.script_object.active_paths):
                 for pt_idx, pt in enumerate(path):
                     key = p3d_to_key(pt)
                     if key not in global_nodes: global_nodes[key] = []
@@ -973,7 +1559,7 @@ class PolylineInteractor:
             _current_global_idx = 0
 
             # 2. PROCESAR CADA RUTA
-            for path_idx, path in enumerate(self.script_object.saved_paths):
+            for path_idx, path in enumerate(self.script_object.active_paths):
 
                 if path_idx > 0:
                     _current_global_idx += 1
@@ -1004,7 +1590,7 @@ class PolylineInteractor:
                         key=[_type, path_idx, e, 0, path_idx],
                         geometry=AllplanGeo.Line3D(p1, p2),
                         position=AllplanGeo.Point3D((p1.X+p2.X)/2, (p1.Y+p2.Y)/2, (p1.Z+p2.Z)/2),
-                        layer=self.layer_default if self.layer_default else "",
+                        layer=self._resolve_layer(),
                         path_idx=path_idx,
                         seg_idx=e,
                         params={'start': p3d_to_list(p1), 'end': p3d_to_list(p2)},
@@ -1023,7 +1609,7 @@ class PolylineInteractor:
                     unique_directions = set()
 
                     for c_path_idx, c_pt_idx in connections:
-                        c_path = self.script_object.saved_paths[c_path_idx]
+                        c_path = self.script_object.active_paths[c_path_idx]
 
                         # Dirección hacia el punto anterior (si existe)
                         if c_pt_idx > 0:
@@ -1111,7 +1697,7 @@ class PolylineInteractor:
                             key=[_type, path_idx, i, 0, path_idx],
                             geometry=geom,
                             position=p_curr,
-                            layer=self.layer_default if self.layer_default else "",
+                            layer=self._resolve_layer(),
                             path_idx=path_idx,
                             seg_idx=i,
                             params={'angle': angle_deg}
@@ -1214,15 +1800,14 @@ class PolylineInteractor:
                 for final_idx, element in enumerate(current_path_elements):
                     # Actualizamos el 4to índice de la tupla key con el índice real
 
-                    element["key"][1] = _current_global_idx
+                    element["key"][1] = path_idx
                     element["key"][3] = final_idx
                     element["key"] = tuple(element["key"]) # Volvemos a tupla para
-                    # element["key"][1] = _next_path_group_idx # Usar el contador global
-                    element["path_idx"] = _current_global_idx
+                    element["path_idx"] = path_idx
                     element["seq_id"] = final_idx
 
                     # Aplicar Layer si existe en applied_layers usando la NUEVA estructura de storage_key
-                    storage_key = f"seg_{_current_global_idx}_elem_{final_idx}"
+                    storage_key = f"seg_{path_idx}_elem_{final_idx}"
                     if hasattr(self, 'applied_layers') and storage_key in self.applied_layers:
                         element["layer"] = self.applied_layers[storage_key]["layer"]
 
@@ -1300,6 +1885,166 @@ class PolylineInteractor:
         else:
             return LAYER_NAME_IS_CON_SANE_OBR
 
+    # ── Multi-drag helpers (Desplazamiento conjunto de tramos) ──────────────────
+
+    def _multi_drag_find_snap(self, current_pnt: AllplanGeo.Point3D, mode: str) -> Optional[tuple]:
+        """Como _find_hover_saved_point pero excluye los vértices ya seleccionados."""
+        excluded = {(pidx, vidx) for pidx, vidx, _ in self._multi_drag_vertices}
+        snap_dist = HIT_TOL_VERTEX
+        for pidx, path in enumerate(self.script_object.active_paths):
+            for vidx, saved_p in enumerate(path):
+                if (pidx, vidx) in excluded:
+                    continue
+                dist = self.get_dist_in_plane(current_pnt, saved_p, mode)
+                if dist < snap_dist:
+                    return (pidx, vidx, saved_p)
+        return None
+
+    def _multi_drag_reset(self) -> None:
+        """Resetea toda la máquina de estados del multi-drag a fase 0 (idle)."""
+        self._multi_drag_phase = 0
+        self._multi_drag_box_start = None
+        self._multi_drag_box_end = None
+        self._multi_drag_vertices = []
+        self._multi_drag_handle = None
+        self._multi_drag_anchor = None
+        self._multi_drag_cursor = None
+        self._multi_drag_snap_target = None
+        self._multi_drag_snap_ref = None
+
+    def _multi_drag_collect_vertices(
+        self,
+        box_start: AllplanGeo.Point3D,
+        box_end: AllplanGeo.Point3D,
+    ) -> list:
+        """Devuelve lista de (path_idx, vertex_idx, Point3D) dentro del rectángulo 2D
+        definido por box_start/box_end en coordenadas mundo (ignora Z para el test)."""
+        min_x = min(box_start.X, box_end.X)
+        max_x = max(box_start.X, box_end.X)
+        min_y = min(box_start.Y, box_end.Y)
+        max_y = max(box_start.Y, box_end.Y)
+        result = []
+        for pidx, path in enumerate(self.script_object.active_paths):
+            for vidx, pt in enumerate(path):
+                if min_x <= pt.X <= max_x and min_y <= pt.Y <= max_y:
+                    result.append((pidx, vidx, AllplanGeo.Point3D(pt)))
+        return result
+
+    def _multi_drag_compute_handle(self, vertices: list) -> Optional[AllplanGeo.Point3D]:
+        """Calcula el centroide XYZ de los vértices seleccionados como handle de arrastre."""
+        if not vertices:
+            return None
+        sx = sum(pt.X for _, _, pt in vertices)
+        sy = sum(pt.Y for _, _, pt in vertices)
+        sz = sum(pt.Z for _, _, pt in vertices)
+        n = len(vertices)
+        return AllplanGeo.Point3D(sx / n, sy / n, sz / n)
+
+    def _multi_drag_apply_delta(
+        self,
+        dx: float,
+        dy: float,
+        dz: float,
+    ) -> None:
+        """Aplica el delta (dx, dy, dz) a todos los vértices seleccionados en active_paths."""
+        for pidx, vidx, orig_pt in self._multi_drag_vertices:
+            new_pt = AllplanGeo.Point3D(orig_pt.X + dx, orig_pt.Y + dy, orig_pt.Z + dz)
+            self.script_object.active_paths[pidx][vidx] = new_pt
+
+    def _multi_drag_draw_preview(self, elems: list, view_type: Any, isom_views: set) -> None:
+        """Agrega al buffer de elementos: caja de selección (fase 1) o handle + líneas (fases 2-3)."""
+        try:
+            # Color cian en reposo, amarillo cuando hay snap activo
+            handle_color = 5 if self._multi_drag_snap_target else 6
+
+            def _dash_line(p1: AllplanGeo.Point3D, p2: AllplanGeo.Point3D, color: int = 6) -> None:
+                line = AllplanGeo.Line3D(p1, p2)
+                common_prop = AllplanBaseElements.CommonProperties()
+                common_prop.Color = color
+                common_prop.Layer = 0
+                elems.append(AllplanBasisElements.ModelElement3D(common_prop, line))
+
+            phase = self._multi_drag_phase
+            is_3d = view_type in isom_views
+
+            # Fase 1: rectángulo de selección
+            if phase == 1 and self._multi_drag_box_start and self._multi_drag_box_end:
+                s = self._multi_drag_box_start
+                e = self._multi_drag_box_end
+                z = s.Z
+                corners = [
+                    AllplanGeo.Point3D(s.X, s.Y, z),
+                    AllplanGeo.Point3D(e.X, s.Y, z),
+                    AllplanGeo.Point3D(e.X, e.Y, z),
+                    AllplanGeo.Point3D(s.X, e.Y, z),
+                ]
+                for i in range(4):
+                    _dash_line(corners[i], corners[(i + 1) % 4])
+
+            # Fases 2-3: handle + tracking line en fase 3
+            elif phase in (2, 3) and self._multi_drag_handle:
+                orig_handle = self._multi_drag_handle
+                handle = orig_handle
+                if phase == 3 and self._multi_drag_cursor and self._multi_drag_anchor:
+                    dx = self._multi_drag_cursor.X - self._multi_drag_anchor.X
+                    dy = self._multi_drag_cursor.Y - self._multi_drag_anchor.Y
+                    dz = self._multi_drag_cursor.Z - self._multi_drag_anchor.Z
+                    handle = AllplanGeo.Point3D(
+                        orig_handle.X + dx,
+                        orig_handle.Y + dy,
+                        orig_handle.Z + dz,
+                    )
+
+                a = 60.0  # semilado del cuadrado / cubo (mm)
+
+                if is_3d:
+                    # ── Cubo 3D: 8 vértices, 12 aristas ──
+                    cx, cy, cz = handle.X, handle.Y, handle.Z
+                    v = [
+                        AllplanGeo.Point3D(cx - a, cy - a, cz - a),  # 0 frente-inf-izq
+                        AllplanGeo.Point3D(cx + a, cy - a, cz - a),  # 1 frente-inf-der
+                        AllplanGeo.Point3D(cx + a, cy + a, cz - a),  # 2 frente-sup-der
+                        AllplanGeo.Point3D(cx - a, cy + a, cz - a),  # 3 frente-sup-izq
+                        AllplanGeo.Point3D(cx - a, cy - a, cz + a),  # 4 atrás-inf-izq
+                        AllplanGeo.Point3D(cx + a, cy - a, cz + a),  # 5 atrás-inf-der
+                        AllplanGeo.Point3D(cx + a, cy + a, cz + a),  # 6 atrás-sup-der
+                        AllplanGeo.Point3D(cx - a, cy + a, cz + a),  # 7 atrás-sup-izq
+                    ]
+                    # Cara inferior (z-a), cara superior (z+a), 4 aristas verticales
+                    for i in range(4):
+                        _dash_line(v[i],     v[(i + 1) % 4], handle_color)  # inferior
+                        _dash_line(v[i + 4], v[(i + 1) % 4 + 4], handle_color)  # superior
+                        _dash_line(v[i],     v[i + 4], handle_color)  # vertical
+                else:
+                    # ── Cuadrado 2D + cruz interior ──
+                    cr_arm = 40.0
+                    sq = [
+                        AllplanGeo.Point3D(handle.X - a, handle.Y - a, handle.Z),
+                        AllplanGeo.Point3D(handle.X + a, handle.Y - a, handle.Z),
+                        AllplanGeo.Point3D(handle.X + a, handle.Y + a, handle.Z),
+                        AllplanGeo.Point3D(handle.X - a, handle.Y + a, handle.Z),
+                    ]
+                    for i in range(4):
+                        _dash_line(sq[i], sq[(i + 1) % 4], handle_color)
+                    _dash_line(AllplanGeo.Point3D(handle.X - cr_arm, handle.Y, handle.Z),
+                               AllplanGeo.Point3D(handle.X + cr_arm, handle.Y, handle.Z), handle_color)
+                    _dash_line(AllplanGeo.Point3D(handle.X, handle.Y - cr_arm, handle.Z),
+                               AllplanGeo.Point3D(handle.X, handle.Y + cr_arm, handle.Z), handle_color)
+
+                # Tracking line: dibujada via _draw_create_tracking en _draw_preview (A.3)
+        except Exception:  # nunca romper el preview principal
+            pass
+
+    # ────────────────────────────────────────────────────────────────────────────
+
+    def _apply_z_offset(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
+        """Si ZOffset != 0.0 suma el valor (en metros) a la Z del punto."""
+        param = getattr(self.script_object.build_ele, ParamNames.DrawMode.Z_OFFSET, None)
+        z_offset = float(getattr(param, "value", 0.0))
+        if abs(z_offset) < 1e-9:
+            return AllplanGeo.Point3D(point)
+        return AllplanGeo.Point3D(point.X, point.Y, point.Z + z_offset)
+
     # ============================================================================
     # PROCESSES MOUSE MOVEMENTS
     # ============================================================================
@@ -1325,14 +2070,47 @@ class PolylineInteractor:
             print("[INT.process_mouse_msg] sin coord_input")
             return True
 
+        # ======================================================================
+        # MODO SELECCIÓN DE ELEMENTOS (Integración ElementSelector)
+        # ======================================================================
+        if self.selector_elem_mode:
+            # Usar el selector almacenado (instanciado en _change_selector_elements_mode).
+            # run_selection_logic lee post_element_selection y retorna rápido si no hay selección.
+            selector = getattr(self, '_element_selector', None)
+            if selector is not None:
+                selector.run_selection_logic()
+            return True
+
         # Si current_point es None, usamos un Point3D vacío para evitar el error de Boost.Python
         ref_point = self.current_point if self.current_point is not None else AllplanGeo.Point3D()
-        raw_pnt = self.coord_input.GetInputPoint(mouse_msg, pnt, msg_info, ref_point, bool(self.points)).GetPoint()
+        _has_track_ref = bool(self.points)   # True activa tracking line nativa de Allplan
 
-        # 1. Obtener punto con Snap y detectar el modo de vista
-        smart_pnt, self.is_snapped = self.get_smart_snap_proyectado(raw_pnt)
-        view_type = self.coord_input.GetViewWorldProjection().GetIsoProjection()
+        # ── punto_input_mode: ref_point para tracking line nativa de Allplan ───
+        # Se usa _punto_snap_ref (calculado en el frame anterior) para que la
+        # tracking line parta del punto al que se snapeó, no siempre del último.
+        if self.punto_input_mode:
+            try:
+                _undef = getattr(self.script_object, "undefined_points_list", None) or []
+                if _undef:
+                    _snap_ref = getattr(self, "_punto_snap_ref", None)
+                    if _snap_ref is not None:
+                        ref_point = _snap_ref          # punto snapeado del frame anterior
+                    else:
+                        _c = _undef[-1].coordenadas
+                        ref_point = AllplanGeo.Point3D(_c["x"], _c["y"], _c["z"])
+                    _has_track_ref = True
+            except Exception:
+                pass
+
+        raw_pnt = self.coord_input.GetInputPoint(
+            mouse_msg, pnt, msg_info, ref_point, _has_track_ref,
+        ).GetPoint()
+
+        # 1. Obtener punto con Snap y detectar el modo de vista)
+        self._frame_proj_data = self.coord_input.GetViewWorldProjection()
+        view_type = self._frame_proj_data.GetIsoProjection()
         mode = self._get_view_mode(view_type)
+        smart_pnt, self.is_snapped = self.get_smart_snap_proyectado(raw_pnt)
 
         # 2. Determinar el punto actual (Snap o Herencia de profundidad)
         if self.is_snapped:
@@ -1341,11 +2119,70 @@ class PolylineInteractor:
             current_pnt = AllplanGeo.Point3D(raw_pnt)
             if self.points:
                 last = self.points[-1]
-                # Aplicamos la profundidad del último punto según el plano
-                if mode == "XY":   current_pnt.Z = last.Z
+                if mode == "XY":
+                    current_pnt.Z = last.Z
+                    # Si el cursor no se movió en XY pero el usuario modificó Z
+                    # via input de coordenadas, preservar raw Z para evitar
+                    # Line3D degenerada (Boost.Python VecNullException).
+                    xy_static = (abs(current_pnt.X - last.X) < 1e-3 and
+                                 abs(current_pnt.Y - last.Y) < 1e-3)
+                    if xy_static and abs(raw_pnt.Z - last.Z) > 1e-3:
+                        current_pnt.Z = raw_pnt.Z
                 elif mode == "XZ": current_pnt.Y = last.Y
                 elif mode == "YZ": current_pnt.X = last.X
 
+        # ══════════════════════════════════════════════════════════════════════
+        # MODO NODOS (punto_input_mode / punto_edit_mode)
+        # Guard completo: consume TODOS los mensajes de mouse para que nunca
+        # lleguen al flujo de create_mode ni edit_mode de la polilínea.
+        # ══════════════════════════════════════════════════════════════════════
+        if self.punto_input_mode or self.punto_edit_mode:
+            button = getattr(mouse_msg, 'Button', 1)
+            is_move   = self.coord_input.IsMouseMove(mouse_msg)
+            is_lclick = (button == 1) and not is_move
+
+            if self.punto_input_mode:
+                # _raw_draw_pnt = posición real del cursor (sin snap) para que la
+                # tracking line A.1 vaya desde el snap_ref hasta el cursor, no 0 px.
+                _raw_draw_pnt = AllplanGeo.Point3D(current_pnt)
+                _snapped_pnt, _new_snap_ref = self._snap_to_undefined_points(current_pnt, mode)
+                # Snap sticky: solo actualizar el ref cuando se entra en rango de un
+                # punto (o de uno diferente); si el cursor se aleja, el ref se conserva
+                # hasta que el usuario haga click (así el tracking no se corta).
+                if _new_snap_ref is not None:
+                    self._punto_snap_ref = _new_snap_ref
+                if is_move:
+                    self._draw_preview(_raw_draw_pnt)
+                elif is_lclick:
+                    try:
+                        UndefinedPointInput(self).handle_click(self._apply_z_offset(_snapped_pnt))
+                    except Exception as ex:
+                        print(f"[PointInput] Error añadiendo punto: {ex}")
+                    self._punto_snap_ref = None   # cortar tracking al confirmar
+                    self._draw_preview(_snapped_pnt)
+
+            elif self.punto_edit_mode:
+                undef = getattr(self.script_object, "undefined_points_list", None) or []
+                best_d, best_i = 500.0, None
+                for i, up in enumerate(undef):
+                    c = up.coordenadas
+                    pnt_c = AllplanGeo.Point3D(c["x"], c["y"], c["z"])
+                    d = self.get_dist_in_plane(current_pnt, pnt_c, mode)
+                    if d < best_d:
+                        best_d, best_i = d, i
+                self._punto_hover_idx = best_i
+                if is_move:
+                    self._draw_preview(current_pnt)
+                elif is_lclick and best_i is not None:
+                    try:
+                        UndefinedPointInput(self).delete_at(best_i)
+                    except Exception as ex:
+                        print(f"[PointInput] Error borrando nodo: {ex}")
+                    self._punto_hover_idx = None
+                    self._draw_preview(current_pnt)
+
+            # Consumir el mensaje — nunca pasar al flujo de la polilínea
+            return True
 
         # --- Marker manager intercept (capture modes, hover, selection) ---
         mgr = getattr(self.script_object, 'marker_manager', None)
@@ -1366,7 +2203,7 @@ class PolylineInteractor:
         if self._soporte_manage_mode:
             # Interceptar solo cuando el radio está en Edición (1) o Edición Mover (2).
             # En Desactivado (0) el overlay sigue visible pero los clicks van al flujo normal.
-            edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+            edit_raw = getattr(self.script_object.build_ele, ParamNames.Supports.EDIT_MODE, None)
             if int(getattr(edit_raw, "value", 0)) >= 1:
                 return self._handle_soporte_manage_mouse(mouse_msg, current_pnt, is_left_click)
 
@@ -1384,12 +2221,19 @@ class PolylineInteractor:
                 prev_pt = self.points[-2] if len(self.points) >= 2 else None
 
                 limit_angles = getattr(self.script_object.build_ele, ParamNames.Angles.CHECKBOX).value
-                if self.visible_limit_angles and limit_angles and self.angle_steps and prev_pt is not None:
-                    current_pnt = self.snap_point_with_angle(
-                        current_pnt,
-                        last_pt,
-                        prev_pt
-                    )
+                if self.visible_limit_angles and limit_angles and self.script_object.angle_steps:
+                    snap_prev = prev_pt
+                    if snap_prev is None:
+                        # Primer segmento: activar limitador si el punto de inicio
+                        # coincide con un vértice de un camino existente (bifurcación)
+                        snap_prev = self._find_virtual_prev_for_bifurcation(last_pt)
+                    if snap_prev is not None:
+                        current_pnt = self.snap_point_with_angle(
+                            current_pnt,
+                            last_pt,
+                            snap_prev,
+                            plane=mode,
+                        )
 
                 if self.min_backtrack_deg and prev_pt is not None:
                     current_pnt = self._constrain_no_backtrack(
@@ -1400,30 +2244,70 @@ class PolylineInteractor:
                     )
 
             if self.coord_input.IsMouseMove(mouse_msg):
-                # 1. Prioridad: Vértices guardados (para Drag)
-                self.saved_hover_point = self._find_hover_saved_point(current_pnt, mode)
+                # Delta threshold: omitir las 4 búsquedas O(n) si el cursor no se
+                # movió más de _HOVER_DELTA_MM desde la última vez.
+                _run_hover = True
+                if self._last_hover_pnt is not None:
+                    _dx = current_pnt.X - self._last_hover_pnt.X
+                    _dy = current_pnt.Y - self._last_hover_pnt.Y
+                    _dz = current_pnt.Z - self._last_hover_pnt.Z
+                    if (_dx*_dx + _dy*_dy + _dz*_dz) < self._HOVER_DELTA_MM ** 2:
+                        _run_hover = False
 
-                # 2. Si NO hay vértice, buscamos Midpoints
-                self.hover_mid = (
-                    None if self.saved_hover_point else self._find_hover_midpoint(current_pnt, mode)
-                )
+                if _run_hover:
+                    self._last_hover_pnt = AllplanGeo.Point3D(current_pnt)
+                    # 1. Prioridad: Vértices guardados (para Drag)
+                    self.saved_hover_point = self._find_hover_saved_point(current_pnt, mode)
 
-                # 3. Si NO hay vértice ni midpoint, buscamos Segmentos (para Inserción)
-                self.hover_seg = (
-                    None if (self.saved_hover_point or self.hover_mid)
-                    else self._find_hover_segment(current_pnt, mode)
-                )
+                    # 2. Detectar vértice de la colección opuesta (cross-mode hover)
+                    self._cross_mode_hover_point = self._find_cross_mode_vertex(current_pnt, mode)
+
+                    # 3. Si NO hay vértice, buscamos Midpoints
+                    self.hover_mid = (
+                        None if self.saved_hover_point else self._find_hover_midpoint(current_pnt, mode)
+                    )
+
+                    # 4. Si NO hay vértice ni midpoint, buscamos Segmentos (para Inserción).
+                    # En multi-select mode siempre buscamos segmento para que el click
+                    # pueda usarlo independientemente del snap a vértice.
+                    if self._parallel_multi_select_mode:
+                        self.hover_seg = self._find_hover_segment(current_pnt, mode)
+                    else:
+                        self.hover_seg = (
+                            None if (self.saved_hover_point or self.hover_mid)
+                            else self._find_hover_segment(current_pnt, mode)
+                        )
+
                 self._last_move_pnt = AllplanGeo.Point3D(current_pnt)
                 self._draw_preview(current_pnt)
                 return True
 
             if is_left_click:
+                # ── Modo selección múltiple de paralelas: intercept ───────────────
+                # Cuando está activo, los clicks seleccionan/deseleccionan caminos
+                # completos en lugar de agregar puntos al camino en curso.
+                # Usa hover_seg calculado en el último mouse-move (no angle-snapped)
+                # para mayor fiabilidad.
+                if self._parallel_multi_select_mode:
+                    if self.hover_seg is not None and self.hover_seg[0] == 'tubo':
+                        self._toggle_path_in_selection(self.hover_seg[1])
+                    self._draw_preview(current_pnt)
+                    return True
+
                 snapped_point = None
                 min_dist = float('inf')
 
-                for path in self.script_object.saved_paths:
+                for path in self.script_object.active_paths:
                     for saved_p in path:
                         # AQUÍ usamos la función de distancia en el plano
+                        dist = self.get_dist_in_plane(current_pnt, saved_p, mode)
+                        if dist < HIT_TOL_VERTEX and dist < min_dist:
+                            snapped_point = saved_p
+                            min_dist = dist
+
+                # También snap a vértices de la colección opuesta (cross-mode)
+                for path in self._get_cross_mode_paths():
+                    for saved_p in path:
                         dist = self.get_dist_in_plane(current_pnt, saved_p, mode)
                         if dist < HIT_TOL_VERTEX and dist < min_dist:
                             snapped_point = saved_p
@@ -1460,6 +2344,25 @@ class PolylineInteractor:
                         # Si IDYES → continúa normalmente y agrega el punto
                 # ── FIN VALIDACIÓN ─────────────────────────────────────────────────────
 
+                # _diam_z_param = getattr(self.script_object.build_ele, "CheckBoxAgregarDiametroZ", None)
+                # if getattr(_diam_z_param, "value", False) and snapped_point is None:
+                #     try:
+                #         z_offset = float(self.script_object.diameter_type) / 2.0
+                #         point_to_add = AllplanGeo.Point3D(
+                #             point_to_add.X, point_to_add.Y, point_to_add.Z + z_offset
+                #         )
+                #     except (TypeError, ValueError):
+                #         pass
+
+                if snapped_point is None:
+                    _near_vertex = self._find_hover_saved_point(point_to_add, mode) is not None
+                    if not _near_vertex:
+                        _z_changed = (
+                            not self.points
+                            or abs(point_to_add.Z - self.points[-1].Z) > 1e-3
+                        )
+                        if _z_changed:
+                            point_to_add = self._apply_z_offset(point_to_add)
                 self.points.append(point_to_add)
                 self.current_point = point_to_add
                 self.segment_modes.append(mode) # Guardamos "XY", "XZ" o "YZ"
@@ -1487,14 +2390,23 @@ class PolylineInteractor:
                         current_pnt.X, current_pnt.Y, current_pnt.Z
                     )
                 else:
-                    hovered = self._find_element_at_point(current_pnt, mode, tolerance=HIT_TOL_SEGMENT)
-                    if hovered != self.hovered_element:
-                        self.hovered_element = hovered
-                        if hovered:
-                            self.hover_tooltip_text = self._generate_tooltip_text(hovered)
-                            self.script_object.hover_tooltip_text = self.hover_tooltip_text
-                        else:
-                            self.hover_tooltip_text = ""
+                    _run_hover = True
+                    if self._last_hover_pnt is not None:
+                        _dx = current_pnt.X - self._last_hover_pnt.X
+                        _dy = current_pnt.Y - self._last_hover_pnt.Y
+                        _dz = current_pnt.Z - self._last_hover_pnt.Z
+                        if (_dx*_dx + _dy*_dy + _dz*_dz) < self._HOVER_DELTA_MM ** 2:
+                            _run_hover = False
+                    if _run_hover:
+                        self._last_hover_pnt = AllplanGeo.Point3D(current_pnt)
+                        hovered = self._find_element_at_point(current_pnt, mode, tolerance=HIT_TOL_SEGMENT)
+                        if hovered != self.hovered_element:
+                            self.hovered_element = hovered
+                            if hovered:
+                                self.hover_tooltip_text = self._generate_tooltip_text(hovered)
+                                self.script_object.hover_tooltip_text = self.hover_tooltip_text
+                            else:
+                                self.hover_tooltip_text = ""
 
                 self._draw_preview(current_pnt)
                 return True
@@ -1631,13 +2543,71 @@ class PolylineInteractor:
             # ).GetPoint()
 
             if self.coord_input.IsMouseMove(mouse_msg):
+                _draw_pnt = current_pnt  # por defecto; se sobreescribe durante drag
+
+                # ── Multi-drag: manejar movimiento en fases 1/2/3 ─────────────────
+                _multi_drag_active = bool(getattr(
+                    getattr(self.script_object.build_ele, ParamNames.DrawMode.MULTI_DRAG, None),
+                    "value", False
+                ))
+                if not _multi_drag_active and self._multi_drag_phase != 0:
+                    self._multi_drag_reset()
+                if _multi_drag_active:
+                    phase = self._multi_drag_phase
+                    if phase == 1:
+                        # Actualizar esquina opuesta del rectángulo de selección
+                        self._multi_drag_box_end = AllplanGeo.Point3D(current_pnt)
+                        self._draw_preview(_draw_pnt)
+                        return True
+                    elif phase == 2:
+                        # Handle visible: detectar snap a vértice externo (excluye seleccionados)
+                        snap = self._multi_drag_find_snap(current_pnt, mode)
+                        self._multi_drag_snap_target = (
+                            AllplanGeo.Point3D(snap[2]) if snap else None
+                        )
+                        self._draw_preview(_draw_pnt)
+                        return True
+                    elif phase == 3:
+                        # Arrastre activo: snap basado en posición del HANDLE, no del cursor
+                        _anchor = self._multi_drag_anchor or AllplanGeo.Point3D()
+                        _orig   = self._multi_drag_handle  or AllplanGeo.Point3D()
+                        _handle_pos = AllplanGeo.Point3D(
+                            _orig.X + (current_pnt.X - _anchor.X),
+                            _orig.Y + (current_pnt.Y - _anchor.Y),
+                            _orig.Z + (current_pnt.Z - _anchor.Z),
+                        )
+                        snap = self._multi_drag_find_snap(_handle_pos, mode)
+                        if snap:
+                            snap_v = AllplanGeo.Point3D(snap[2])
+                            self._multi_drag_snap_target = snap_v
+                            self._multi_drag_snap_ref = snap_v  # sticky: persiste al alejar cursor
+                            # Ajustar cursor para que handle aterrice exactamente en snap_v
+                            self._multi_drag_cursor = AllplanGeo.Point3D(
+                                _anchor.X + snap_v.X - _orig.X,
+                                _anchor.Y + snap_v.Y - _orig.Y,
+                                _anchor.Z + snap_v.Z - _orig.Z,
+                            )
+                        else:
+                            self._multi_drag_snap_target = None
+                            # _multi_drag_snap_ref NO se borra (sticky, como _extend_snap_refs)
+                            self._multi_drag_cursor = AllplanGeo.Point3D(current_pnt)
+                        self._draw_preview(_draw_pnt)
+                        return True
+                # ─────────────────────────────────────────────────────────────────
+
                 # A) Si ya estamos arrastrando algo, actualizamos posición
                 if self.saved_dragging is not None:
                     pidx, vidx = self.saved_dragging
-                    self.script_object.saved_paths[pidx][vidx] = AllplanGeo.Point3D(current_pnt)
+                    effective_pnt, self.snap_target = self._resolve_drag_snap(
+                        current_pnt, pidx, vidx, mode
+                    )
+                    self.script_object.active_paths[pidx][vidx] = AllplanGeo.Point3D(effective_pnt)
                     self.saved_hover_point = None
                     self.hover_mid = None
                     self.hover_seg = None
+                    # Pasar posición efectiva a _draw_preview para que la tracking
+                    # line muestre el ángulo proyectado (igual que create_mode)
+                    _draw_pnt = effective_pnt
 
                 # B) Si no hay drag, buscamos qué hay bajo el mouse (PREVIEW)
                 else:
@@ -1695,19 +2665,113 @@ class PolylineInteractor:
                             self.insert_preview_p = self.insert_target = None
 
                 self._last_move_pnt = AllplanGeo.Point3D(current_pnt)
-                self._draw_preview(current_pnt)
+                self._draw_preview(_draw_pnt)
                 return True
 
             if is_left_click:
+                # ── Multi-drag: máquina de 4 fases (Desplazamiento conjunto) ──────
+                _multi_drag_active = bool(getattr(
+                    getattr(self.script_object.build_ele, ParamNames.DrawMode.MULTI_DRAG, None),
+                    "value", False
+                ))
+                if _multi_drag_active:
+                    self.script_object.enable_parameter(ParamNames.DrawMode.INSERT, False)
+
+                    phase = self._multi_drag_phase
+
+                    if phase == 0:
+                        # Fase 0→1: iniciar rectángulo de selección
+                        self._multi_drag_box_start = AllplanGeo.Point3D(current_pnt)
+                        self._multi_drag_box_end   = AllplanGeo.Point3D(current_pnt)
+                        self._multi_drag_phase = 1
+                        self._draw_preview(current_pnt)
+                        return True
+
+                    elif phase == 1:
+                        # Fase 1→2: confirmar rectángulo, recolectar vértices
+                        self._multi_drag_box_end = AllplanGeo.Point3D(current_pnt)
+                        verts = self._multi_drag_collect_vertices(
+                            self._multi_drag_box_start or AllplanGeo.Point3D(),
+                            self._multi_drag_box_end,
+                        )
+                        if verts:
+                            self._multi_drag_vertices = verts
+                            self._multi_drag_handle   = self._multi_drag_compute_handle(verts)
+                            self._multi_drag_phase    = 2
+                        else:
+                            # Sin vértices → cancelar
+                            self._multi_drag_reset()
+                        self._draw_preview(current_pnt)
+                        return True
+
+                    elif phase == 2:
+                        # Fase 2→3: anclar en el punto de click (handle arranca en centroide,
+                        # se mueve relativo al punto de click — comportamiento natural)
+                        self._multi_drag_anchor = AllplanGeo.Point3D(current_pnt)
+                        self._multi_drag_cursor = AllplanGeo.Point3D(current_pnt)
+                        # Guardar snapshot de active_paths para undo
+                        snapshot = [
+                            [AllplanGeo.Point3D(p) for p in path]
+                            for path in self.script_object.active_paths
+                        ]
+                        self._drag_undo_stack.append(snapshot)
+                        if len(self._drag_undo_stack) > 10:
+                            self._drag_undo_stack.pop(0)
+                        self._multi_drag_phase = 3
+                        self._draw_preview(current_pnt)
+                        return True
+
+                    elif phase == 3:
+                        # Fase 3→0: aplicar desplazamiento y sincronizar
+                        # _multi_drag_cursor ya incluye ajuste de snap; fallback a current_pnt
+                        anchor       = self._multi_drag_anchor or AllplanGeo.Point3D()
+                        effective    = self._multi_drag_cursor or current_pnt
+                        dx = effective.X - anchor.X
+                        dy = effective.Y - anchor.Y
+                        dz = effective.Z - anchor.Z
+                        self._multi_drag_apply_delta(dx, dy, dz)
+                        # Sincronizar cada vértice desplazado via _update_segments_after_vertex_drag
+                        seen_orig = set()
+                        for pidx, vidx, orig_pt in self._multi_drag_vertices:
+                            # Deduplicar co-localizados (tolerancia 0.1 mm)
+                            key = (round(orig_pt.X, 1), round(orig_pt.Y, 1), round(orig_pt.Z, 1))
+                            if key in seen_orig:
+                                continue
+                            seen_orig.add(key)
+                            self._update_segments_after_vertex_drag(pidx, vidx, orig_pt, mode)
+                        self._multi_drag_reset()
+                        self._draw_preview(current_pnt)
+                        return True
+                # ─────────────────────────────────────────────────────────────────
+
                 # ─────────────────────────────────────────────────────────────────
                 # 1. FINALIZAR DRAG (máxima prioridad: siempre primero)
                 # ─────────────────────────────────────────────────────────────────
                 if self.saved_dragging is not None:
                     pidx, vidx = self.saved_dragging
                     if self.saved_dragging_original_point:
-                        p_final = AllplanGeo.Point3D(self._last_move_pnt if self._last_move_pnt is not None else current_pnt)
-                        self.script_object.saved_paths[pidx][vidx] = AllplanGeo.Point3D(p_final)
+                        # Snapshot del estado PRE-drag: copiar active_paths y restaurar el
+                        # vértice a su posición original (el drag lo movió en IsMouseMove)
+                        snapshot = [
+                            [AllplanGeo.Point3D(p) for p in path]
+                            for path in self.script_object.active_paths
+                        ]
+                        snapshot[pidx][vidx] = AllplanGeo.Point3D(self.saved_dragging_original_point)
+                        self._drag_undo_stack.append(snapshot)
+                        if len(self._drag_undo_stack) > 10:
+                            self._drag_undo_stack.pop(0)
+
+                        # Calcular posición final aplicando vertex/angle snap al punto del click
+                        final_raw = self._last_move_pnt if self._last_move_pnt is not None else current_pnt
+                        p_final, _snap_hit = self._resolve_drag_snap(final_raw, pidx, vidx, mode)
+                        if _snap_hit is None:
+                            _orig_z = self.saved_dragging_original_point.Z if self.saved_dragging_original_point else p_final.Z
+                            if abs(p_final.Z - _orig_z) > 1e-3:
+                                p_final = self._apply_z_offset(p_final)
+                        self.script_object.active_paths[pidx][vidx] = AllplanGeo.Point3D(p_final)
                         self._update_segments_after_vertex_drag(pidx, vidx, self.saved_dragging_original_point, mode)
+                    self.snap_target = None
+                    self._extend_snap_refs = []
                     self.saved_dragging = self.saved_dragging_original_point = None
                     self._last_move_pnt = None
                     self.drag_ghost_path = []
@@ -1724,7 +2788,7 @@ class PolylineInteractor:
                         if hover_pt is not None:
                             v_path, v_idx, _ = hover_pt
                             if self._is_cuttable_vertex(v_path, v_idx):
-                                pts = self.script_object.saved_paths[v_path]
+                                pts = self.script_object.active_paths[v_path]
                                 cut_pt = AllplanGeo.Point3D(pts[v_idx].X, pts[v_idx].Y, pts[v_idx].Z)
                                 left  = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in pts[:v_idx + 1]]
                                 right = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in pts[v_idx:]]
@@ -1733,9 +2797,9 @@ class PolylineInteractor:
                                 # Remapear metadata ANTES de modificar saved_paths
                                 self._remap_metadata_after_vertex_cut(v_path, v_idx)
 
-                                self.script_object.saved_paths.pop(v_path)
-                                self.script_object.saved_paths.insert(v_path, right)
-                                self.script_object.saved_paths.insert(v_path, left)
+                                self.script_object.active_paths.pop(v_path)
+                                self.script_object.active_paths.insert(v_path, right)
+                                self.script_object.active_paths.insert(v_path, left)
                                 self.script_object.saved_cut_points.append(cut_pt)
                                 self.script_object.saved_vertex_cut_points.append(cut_pt)
                                 self.selected_segments.clear()
@@ -1757,9 +2821,9 @@ class PolylineInteractor:
                         kind, path_idx, seg_idx, _ = target
 
                         if kind == "tubo":
-                            if not (0 <= path_idx < len(self.script_object.saved_paths)):
+                            if not (0 <= path_idx < len(self.script_object.active_paths)):
                                 return True
-                            pts = self.script_object.saved_paths[path_idx]
+                            pts = self.script_object.active_paths[path_idx]
                         else:
                             pts = self.points
 
@@ -1800,14 +2864,17 @@ class PolylineInteractor:
                                 _sc_inherited['layer'] = dict(_sl)
                             # Remapear metadata ANTES de modificar saved_paths
                             self._remap_metadata_after_segment_cut(path_idx, seg_idx)
-                            self.script_object.saved_paths.pop(path_idx)
-                            self.script_object.saved_paths.insert(path_idx, right)
-                            self.script_object.saved_paths.insert(path_idx, left)
+                            self.script_object.active_paths.pop(path_idx)
+                            self.script_object.active_paths.insert(path_idx, right)
+                            self.script_object.active_paths.insert(path_idx, left)
                         else:
                             _snap_sc = {}
                             _sc_inherited = {}
                             self.points = left
-                            self.script_object.saved_paths.append(right)
+                            self.script_object.active_paths.append(right)
+                            _inst_label = getattr(self.script_object, "selected_inst_type", None)
+                            if _inst_label:
+                                self.script_object.path_inst_types[len(self.script_object.active_paths) - 1] = _inst_label
 
                         self.script_object.saved_cut_points.append(
                             AllplanGeo.Point3D(q3.X, q3.Y, q3.Z)
@@ -1863,11 +2930,12 @@ class PolylineInteractor:
                 # ─────────────────────────────────────────────────────────────────
                 if self.saved_hover_point and not self.insert_mode:
                     pidx, vidx, _ = self.saved_hover_point
-                    original = self.script_object.saved_paths[pidx][vidx]
+                    original = self.script_object.active_paths[pidx][vidx]
                     self.saved_dragging_original_point = AllplanGeo.Point3D(original)
                     self.saved_dragging = (pidx, vidx)
+                    self._extend_snap_refs = []  # limpiar tracking al iniciar drag
                     # Solo guardar los segmentos adyacentes al vértice arrastrado
-                    _pts = self.script_object.saved_paths[pidx]
+                    _pts = self.script_object.active_paths[pidx]
                     _ghost: list = []
                     if vidx > 0:
                         _ghost.append((AllplanGeo.Point3D(_pts[vidx - 1]), AllplanGeo.Point3D(_pts[vidx])))
@@ -1924,7 +2992,7 @@ class PolylineInteractor:
         view_mode = self._get_view_mode(mode)
         threshold = 50.0 if view_mode != "XYZ" else 100.0
 
-        for pidx, path in enumerate(self.script_object.saved_paths):
+        for pidx, path in enumerate(self.script_object.active_paths):
             if len(path) < 3:
                 continue
 
@@ -1958,9 +3026,9 @@ class PolylineInteractor:
     def _is_cuttable_vertex(self, path_idx: int, pt_idx: int) -> bool:
         """Devuelve True si el vértice es interior (cortable): no es primero ni último
         del path y el path tiene ≥ 3 puntos (ambos fragmentos quedan con ≥ 2 puntos)."""
-        if not (0 <= path_idx < len(self.script_object.saved_paths)):
+        if not (0 <= path_idx < len(self.script_object.active_paths)):
             return False
-        pts = self.script_object.saved_paths[path_idx]
+        pts = self.script_object.active_paths[path_idx]
         return len(pts) >= 3 and 1 <= pt_idx <= len(pts) - 2
 
     def _is_junction_point(self, path_idx: int, pt_idx: int) -> Optional[Tuple[int, int]]:
@@ -1968,20 +3036,20 @@ class PolylineInteractor:
         Detecta si un punto guardado es un punto de corte (junction entre dos paths adyacentes).
         Retorna (left_path_idx, right_path_idx) si es junction, None si no.
         """
-        if not self.script_object.saved_paths or path_idx < 0 or path_idx >= len(self.script_object.saved_paths):
+        if not self.script_object.active_paths or path_idx < 0 or path_idx >= len(self.script_object.active_paths):
             return None
-        pts = self.script_object.saved_paths[path_idx]
+        pts = self.script_object.active_paths[path_idx]
         if not pts or pt_idx < 0 or pt_idx >= len(pts):
             return None
         TOL_SQ = 1e-3 * 1e-3
         # Caso 1: último punto del path -> match con primer punto del siguiente
-        if pt_idx == len(pts) - 1 and path_idx + 1 < len(self.script_object.saved_paths):
-            next_pts = self.script_object.saved_paths[path_idx + 1]
+        if pt_idx == len(pts) - 1 and path_idx + 1 < len(self.script_object.active_paths):
+            next_pts = self.script_object.active_paths[path_idx + 1]
             if next_pts and self._dist_sq(pts[-1], next_pts[0]) < TOL_SQ:
                 return (path_idx, path_idx + 1)
         # Caso 2: primer punto del path -> match con último punto del anterior
         if pt_idx == 0 and path_idx > 0:
-            prev_pts = self.script_object.saved_paths[path_idx - 1]
+            prev_pts = self.script_object.active_paths[path_idx - 1]
             if prev_pts and self._dist_sq(pts[0], prev_pts[-1]) < TOL_SQ:
                 return (path_idx - 1, path_idx)
         return None
@@ -1998,8 +3066,8 @@ class PolylineInteractor:
         if junction is None:
             return False
         left_idx, right_idx = junction
-        left_pts = self.script_object.saved_paths[left_idx]
-        right_pts = self.script_object.saved_paths[right_idx]
+        left_pts = self.script_object.active_paths[left_idx]
+        right_pts = self.script_object.active_paths[right_idx]
 
         # Determinar si el corte fue hecho en un vértice existente
         cut_pt = left_pts[-1]
@@ -2018,8 +3086,9 @@ class PolylineInteractor:
             merged = [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in left_pts[:-1]] + \
                      [AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in right_pts[1:]]
 
-        self.script_object.saved_paths.pop(right_idx)
-        self.script_object.saved_paths[left_idx] = merged
+        self.script_object.active_paths.pop(right_idx)
+        self.script_object.active_paths[left_idx] = merged
+        self._reindex_metadata_after_pop(right_idx)   # sincroniza path_inst_types y metadata
 
         # Eliminar de saved_cut_points y saved_vertex_cut_points
         self.script_object.saved_cut_points = [
@@ -2114,13 +3183,38 @@ class PolylineInteractor:
             dot = (rp_view.X - p1_view.X) * dx + (rp_view.Y - p1_view.Y) * dy
             return dot / mag_sq
 
+    def _snap_to_undefined_points(self, current_pnt: Any, mode: str = "XY"):
+        """Proximity snap a todos los puntos de ``undefined_points_list``.
+
+        Devuelve ``(snapped_pnt, snap_src)`` donde:
+        - ``snapped_pnt``: el punto snapeado (o ``current_pnt`` si no hay snap).
+        - ``snap_src``: el ``Point3D`` del punto al que se snapeó, o ``None``.
+        La distancia de captura se calcula en el plano de la vista actual (mode).
+        """
+        _SNAP_TOL = 200.0   # mm — radio de captura
+        undef = getattr(self.script_object, "undefined_points_list", None) or []
+        if not undef:
+            return current_pnt, None
+        best_dist = _SNAP_TOL
+        best_pnt  = None
+        for up in undef:
+            c   = up.coordenadas
+            pnt = AllplanGeo.Point3D(c["x"], c["y"], c["z"])
+            d   = self.get_dist_in_plane(current_pnt, pnt, mode)
+            if d < best_dist:
+                best_dist = d
+                best_pnt  = pnt
+        if best_pnt is not None:
+            return best_pnt, best_pnt
+        return current_pnt, None
+
     def get_smart_snap_proyectado(self, raw_pnt):
         """
         Versión optimizada: Detecta el plano de vista y realiza snap a
         geometría 3D real usando proyecciones 2D.
         """
         # 1. Obtener modo de vista (centralizado)
-        proj_data = self.coord_input.GetViewWorldProjection() # type: ignore
+        proj_data = getattr(self, '_frame_proj_data', None) or self.coord_input.GetViewWorldProjection()  # type: ignore
         view_type = proj_data.GetIsoProjection()
 
         mode = self._get_view_mode(view_type) # Extraído a un helper para limpieza
@@ -2174,7 +3268,7 @@ class PolylineInteractor:
         Busca si 'point' coincide con CUALQUIER vértice de algún camino guardado.
         Retorna (path_index, vertex_index, point_object) o None.
         """
-        for path_idx, path in enumerate(self.script_object.saved_paths):
+        for path_idx, path in enumerate(self.script_object.active_paths):
             if not path:
                 continue
 
@@ -2186,6 +3280,45 @@ class PolylineInteractor:
                     # Retornamos la referencia al objeto original 'vtx'
                     return path_idx, vtx_idx, vtx
 
+        return None
+
+    def _find_virtual_prev_for_bifurcation(
+        self,
+        last_pt: AllplanGeo.Point3D,
+        tolerance: float = 1.0,
+    ) -> Optional[AllplanGeo.Point3D]:
+        """Devuelve un punto 'anterior' virtual para activar el limitador de ángulos
+        cuando el primer punto de un nuevo segmento coincide con un vértice de un
+        camino existente (bifurcación).
+
+        Estrategia:
+        - Si el vértice tiene segmento entrante (``vtx_idx > 0``), devuelve el punto
+          precedente — la dirección entrante se usa como referencia.
+        - Si es el primer vértice del camino (``vtx_idx == 0``), devuelve la reflexión
+          del siguiente punto respecto a ``last_pt`` para que el ángulo relativo al
+          segmento saliente sea coherente.
+        - Retorna ``None`` si el punto no coincide con ningún vértice existente.
+        """
+        for path in self.script_object.active_paths:
+            for vtx_idx, vtx in enumerate(path):
+                dist = math.sqrt(
+                    (vtx.X - last_pt.X)**2 +
+                    (vtx.Y - last_pt.Y)**2 +
+                    (vtx.Z - last_pt.Z)**2
+                )
+                if dist > tolerance:
+                    continue
+                # Preferir la dirección entrante (segmento previo al vértice)
+                if vtx_idx > 0:
+                    return path[vtx_idx - 1]
+                # Sin segmento entrante: usar la dirección saliente invertida
+                if len(path) > 1:
+                    nxt = path[1]
+                    return AllplanGeo.Point3D(
+                        2.0 * last_pt.X - nxt.X,
+                        2.0 * last_pt.Y - nxt.Y,
+                        2.0 * last_pt.Z - nxt.Z,
+                    )
         return None
 
     def _find_hover_index(self, p: AllplanGeo.Point3D) -> int:
@@ -2204,6 +3337,307 @@ class PolylineInteractor:
     # ============================================================================
     # METHODS FOR DRAWING THE POLYLINE IN THE ALLPLAN VIEWPORT
     # ============================================================================
+
+    def _draw_saved_paths_elems(
+        self,
+        paths: list,
+        seg_default_prop,
+        vtx_prop,
+        seg_sel_prop,
+        seg_hover_prop,
+        mid_prop,
+        mid_size: float,
+        active_drag_pnt,
+        view_type,
+        XZ_VIEWS: set,
+        YZ_VIEWS: set,
+        ISOM_VIEWS: set,
+        interactive: bool = True,
+    ) -> list:
+        """Genera los elementos de preview para una lista de caminos.
+
+        Dibuja segmentos, midpoints, vértices (handles), junctions y marcadores
+        de corte.  Se usa tanto para ``saved_paths`` como para
+        ``saved_optimized_paths``, variando únicamente las propiedades visuales.
+
+        Args:
+            interactive: Si False, dibuja solo líneas y vértices sin
+                         hover/selección/drag/junctions/cut (modo pasivo).
+        """
+        elems: list = []
+
+        # Paths seleccionados por TrazadoParaleloSeleccionMultiple → se dibujan en ROJO
+        _par_sel_paths = getattr(self, '_parallel_selected_path_indices', set())
+        _par_sel_prop = None
+        if _par_sel_paths and interactive:
+            _par_sel_prop = self._clone_properties(self.com_prop)
+            _par_sel_prop.Color = 6          # rojo Allplan
+            _par_sel_prop.ColorByLayer = False
+            _par_sel_prop.PenByLayer = False
+
+        for path_idx, pts in enumerate(paths):
+            if len(pts) < 2:
+                continue
+
+            # -- display_pts: posiciones con drag en tiempo real --
+            if interactive:
+                display_pts = []
+                for vpt in pts:
+                    if (self.saved_dragging_original_point is not None
+                            and self._points_equal(vpt, self.saved_dragging_original_point)):
+                        display_pts.append(active_drag_pnt)
+                    else:
+                        display_pts.append(vpt)
+            else:
+                display_pts = list(pts)
+
+            # -- Segmentos --
+            for seg_idx in range(len(display_pts) - 1):
+                a, b = display_pts[seg_idx], display_pts[seg_idx + 1]
+
+                if interactive:
+                    is_selected = False
+                    if (self.selected_seg and self.selected_seg[0] == 'tubo'
+                            and self.selected_seg[1] == path_idx
+                            and self.selected_seg[2] == seg_idx):
+                        is_selected = True
+                    if ('tubo', path_idx, seg_idx) in getattr(self, 'selected_segments', set()):
+                        is_selected = True
+
+                    is_hovered = (self.hover_seg and self.hover_seg[0] == 'tubo'
+                                  and self.hover_seg[1] == path_idx
+                                  and self.hover_seg[2] == seg_idx)
+
+                    if _par_sel_prop is not None and path_idx in _par_sel_paths:
+                        prop = _par_sel_prop   # ROJO — camino seleccionado en multi-select
+                    elif is_selected:
+                        prop = seg_sel_prop
+                    elif is_hovered and not self.is_dragging:
+                        prop = seg_hover_prop
+                    else:
+                        prop = seg_default_prop
+                else:
+                    prop = seg_default_prop
+
+                elems.append(AllplanBasisElements.ModelElement3D(prop, AllplanGeo.Line3D(a, b)))
+
+            # -- Midpoints (solo interactivo) --
+            if interactive:
+                for si in range(len(display_pts) - 1):
+                    a, b = display_pts[si], display_pts[si + 1]
+                    mp = self._midpoint(a, b)
+                    elems.extend(self._create_cross_marker(mp, mid_prop, mid_size, z_bias=MIDPOINT_Z_BIAS))
+
+            # -- Vértices / Junctions --
+            for vidx, vpt in enumerate(display_pts):
+                if interactive:
+                    # Detectar junction
+                    junction_pair = None
+                    if (vidx == len(display_pts) - 1
+                            and path_idx + 1 < len(paths)):
+                        next_pts = paths[path_idx + 1]
+                        if next_pts and vpt.GetDistance(next_pts[0]) <= 1e-3:
+                            junction_pair = (path_idx, path_idx + 1)
+                    elif vidx == 0 and path_idx > 0:
+                        prev_pts = paths[path_idx - 1]
+                        if prev_pts and vpt.GetDistance(prev_pts[-1]) <= 1e-3:
+                            junction_pair = (path_idx - 1, path_idx)
+
+                    # ── JUNCTION ──
+                    if junction_pair is not None:
+                        elems.extend(self._draw_junction_marker(
+                            vpt, junction_pair, paths, view_type, XZ_VIEWS, YZ_VIEWS, ISOM_VIEWS))
+                        continue
+
+                    # ── Vértice normal ──
+                    is_hovered_vtx = (
+                        self.saved_hover_point is not None
+                        and self.saved_hover_point[0] == path_idx
+                        and self.saved_hover_point[1] == vidx
+                    )
+
+                    # cut_mode: vértice cortable → X en lugar de círculo
+                    if self.cut_mode and is_hovered_vtx and self._is_cuttable_vertex(path_idx, vidx):
+                        elems.extend(self._draw_cut_vertex_marker(
+                            vpt, view_type, XZ_VIEWS, YZ_VIEWS, ISOM_VIEWS))
+                        continue
+
+                    size = HANDLE_SIZE
+                    if self.saved_dragging is not None and self.saved_dragging == (path_idx, vidx):
+                        size = HANDLE_SIZE * DRAG_SCALE
+                    if is_hovered_vtx:
+                        size = HANDLE_SIZE * HOVER_SCALE
+                else:
+                    size = HANDLE_SIZE * 0.5
+
+                elems.extend(self._create_point_marker(vpt, vtx_prop, size, view_type=view_type))
+
+        return elems
+
+    def _draw_junction_marker(
+        self, vpt, junction_pair, paths, view_type, XZ_VIEWS, YZ_VIEWS, ISOM_VIEWS,
+    ) -> list:
+        """Dibuja el marcador X + cuadrado de selección para una junction."""
+        elems: list = []
+        li, ri = junction_pair
+        cx, cy, cz = vpt.X, vpt.Y, vpt.Z
+
+        is_hovered = getattr(self, 'hover_cut_vertex', None) == junction_pair
+        is_selected = (
+            self.selected_junction is not None
+            and self.selected_junction[0] == li
+            and self.selected_junction[1] == len(paths[li]) - 1
+        )
+
+        cut_prop = self._clone_properties(self.com_prop)
+        cut_prop.ColorByLayer  = False
+        cut_prop.PenByLayer    = False
+        cut_prop.StrokeByLayer = False
+        if is_selected:
+            cut_prop.Color = 5
+        elif is_hovered:
+            cut_prop.Color = 7
+        else:
+            cut_prop.Color = 6
+        try:
+            cut_prop.Pen = 3
+        except Exception:
+            pass
+
+        cut_size = 40 * (1.5 if (is_hovered or is_selected) else 1.0)
+        half = cut_size / 2.0
+
+        # X según vista
+        if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
+                         AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
+        elif view_type in XZ_VIEWS:
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy, cz - half),
+                                  AllplanGeo.Point3D(cx + half, cy, cz + half))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy, cz - half),
+                                  AllplanGeo.Point3D(cx - half, cy, cz + half))))
+        elif view_type in YZ_VIEWS:
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy - half, cz - half),
+                                  AllplanGeo.Point3D(cx, cy + half, cz + half))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy + half, cz - half),
+                                  AllplanGeo.Point3D(cx, cy - half, cz + half))))
+        elif view_type in ISOM_VIEWS:
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy, cz - half),
+                                  AllplanGeo.Point3D(cx, cy, cz + half))))
+
+        # Cuadrado de selección
+        if is_selected or is_hovered:
+            sq_prop = self._clone_properties(self.com_prop)
+            sq_prop.ColorByLayer  = False
+            sq_prop.PenByLayer    = False
+            sq_prop.StrokeByLayer = False
+            sq_prop.Color = 5 if is_selected else 7
+            try:
+                sq_prop.Pen = 1
+            except Exception:
+                pass
+
+            sq = cut_size * 0.9
+
+            if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
+                             AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
+                poly_sq = AllplanGeo.Polyline3D()
+                for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
+                    poly_sq += AllplanGeo.Point3D(cx + dx*sq, cy + dy*sq, cz)
+                elems.append(AllplanBasisElements.ModelElement3D(sq_prop, poly_sq))
+            elif view_type in XZ_VIEWS:
+                poly_sq = AllplanGeo.Polyline3D()
+                for dx, dz in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
+                    poly_sq += AllplanGeo.Point3D(cx + dx*sq, cy, cz + dz*sq)
+                elems.append(AllplanBasisElements.ModelElement3D(sq_prop, poly_sq))
+            elif view_type in YZ_VIEWS:
+                poly_sq = AllplanGeo.Polyline3D()
+                for dy, dz in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
+                    poly_sq += AllplanGeo.Point3D(cx, cy + dy*sq, cz + dz*sq)
+                elems.append(AllplanBasisElements.ModelElement3D(sq_prop, poly_sq))
+            elif view_type in ISOM_VIEWS:
+                bot = [AllplanGeo.Point3D(cx + dx*sq, cy + dy*sq, cz - sq)
+                       for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1)]]
+                top = [AllplanGeo.Point3D(cx + dx*sq, cy + dy*sq, cz + sq)
+                       for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1)]]
+                for i in range(4):
+                    elems.append(AllplanBasisElements.ModelElement3D(sq_prop,
+                        AllplanGeo.Line3D(bot[i], bot[(i+1)%4])))
+                    elems.append(AllplanBasisElements.ModelElement3D(sq_prop,
+                        AllplanGeo.Line3D(top[i], top[(i+1)%4])))
+                    elems.append(AllplanBasisElements.ModelElement3D(sq_prop,
+                        AllplanGeo.Line3D(bot[i], top[i])))
+
+        return elems
+
+    def _draw_cut_vertex_marker(
+        self, vpt, view_type, XZ_VIEWS, YZ_VIEWS, ISOM_VIEWS,
+    ) -> list:
+        """Dibuja el marcador X de corte en un vértice hovereado en cut_mode."""
+        elems: list = []
+        cx, cy, cz = vpt.X, vpt.Y, vpt.Z
+
+        cut_prop = self._clone_properties(self.com_prop)
+        cut_prop.ColorByLayer  = False
+        cut_prop.PenByLayer    = False
+        cut_prop.StrokeByLayer = False
+        cut_prop.Color = 7
+        try:
+            cut_prop.Pen = 3
+        except Exception:
+            pass
+        half = HANDLE_SIZE * 0.75
+
+        if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
+                         AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
+        elif view_type in XZ_VIEWS:
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy, cz - half),
+                                  AllplanGeo.Point3D(cx + half, cy, cz + half))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy, cz - half),
+                                  AllplanGeo.Point3D(cx - half, cy, cz + half))))
+        elif view_type in YZ_VIEWS:
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy - half, cz - half),
+                                  AllplanGeo.Point3D(cx, cy + half, cz + half))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy + half, cz - half),
+                                  AllplanGeo.Point3D(cx, cy - half, cz + half))))
+        else:  # isométrica
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
+                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
+            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy, cz - half),
+                                  AllplanGeo.Point3D(cx, cy, cz + half))))
+        return elems
+
     def _draw_preview(self, current_pnt: Any):
         """
         Función unificada de previsualización.
@@ -2223,47 +3657,8 @@ class PolylineInteractor:
         # 1. SETUP PROPERTIES (Común para todos los modos)
         # ============================================================================
 
-        # Propiedades Base
-        base_prop = self._clone_properties(self.com_prop)
-
-        # Handles (Amarillos)
-        handle_prop = self._clone_properties(self.com_prop)
-        handle_prop.Color = 5 #COLORS.get("handle", 6)
-
-        # Segmentos Guardados (Verde por defecto) (EXTENDED MODE)
-        saved_prop = self._clone_properties(self.com_prop)
-        saved_prop.Color = COLORS.get("preview_saved", 4)
-
-        # Hover y Selección
-        seg_hover_prop = self._clone_properties(self.com_prop)
-        seg_hover_prop.Color = COLORS.get("segment_hover", 6)
-        seg_hover_prop.ColorByLayer = False
-
-        seg_sel_prop = self._clone_properties(self.com_prop)
-        seg_sel_prop.Color = COLORS.get("segment_selected", 5)
-        seg_sel_prop.ColorByLayer = False
-
-        # Rectángulo de selección
-        rect_prop = self._clone_properties(self.com_prop)
-        rect_prop.Color = COLORS.get("rect_selection", 5)
-
-         # Midpoints props (con pen propio y sin ByLayer)
-        mid_prop = self._clone_properties(self.com_prop)
-        mid_prop.Color = 1 #MIDPOINT_COLOR
-        mid_prop.PenByLayer = False
-        mid_prop.ColorByLayer = False
-        mid_prop.StrokeByLayer = False
-        try:
-            mid_prop.Pen = max(MIDPOINT_PEN, getattr(self.com_prop, "Pen", 1))
-        except Exception:
-            pass
-        mid_size = HANDLE_SIZE * MIDPOINT_SIZE_FACTOR
-
-        ins_prev_prop = self._clone_properties(self.com_prop)
-        ins_prev_prop.Color = COLORS["insert_preview"]
-
         # 1. Obtener la proyección actual para decidir qué ejes dibujar
-        proj_data = self.coord_input.GetViewWorldProjection() # type: ignore
+        proj_data = getattr(self, '_frame_proj_data', None) or self.coord_input.GetViewWorldProjection()  # type: ignore
         view_type = proj_data.GetIsoProjection()
 
         # # --- LÓGICA DE SNAP PARA DRAG ---
@@ -2287,291 +3682,64 @@ class PolylineInteractor:
         }
 
         # ============================================================================
-        # 2. DRAW SAVED POINTS (Con soporte para movimiento en tiempo real)
+        # 2. DRAW SAVED PATHS — ambas listas siempre visibles
+        #    La lista ACTIVA se dibuja interactiva; la PASIVA atenuada (solo líneas).
         # ============================================================================
-        for path_idx, pts in enumerate(self.script_object.saved_paths):
-            if len(pts) >= 2:
-                # 2.1 Generar lista de puntos para visualización (Network-Aware)
-                display_pts = []
-                for v_idx, vpt in enumerate(pts):
-                    # Comprobamos si este vértice (de cualquier camino) coincide con la unión original
-                    if (self.saved_dragging_original_point is not None and
-                        self._points_equal(vpt, self.saved_dragging_original_point)):
+        poly_mode = self._current_poly_mode()
+        _is_auto = poly_mode == PolyModeValues.Automatico
 
-                        # Usamos el punto ya procesado con el snap
-                        display_pts.append(active_drag_pnt)
-                    else:
-                        display_pts.append(vpt)
+        # Propiedades cacheadas: se reconstruyen solo cuando cambia pen/stroke/layer/auto
+        _pp = self._get_preview_props(_is_auto)
+        base_prop     = _pp["base"]
+        handle_prop   = _pp["handle"]
+        saved_prop    = _pp["saved"]
+        seg_hover_prop = _pp["seg_hover"]
+        seg_sel_prop  = _pp["seg_sel"]
+        rect_prop     = _pp["rect"]
+        mid_prop      = _pp["mid"]
+        ins_prev_prop = _pp["ins_prev"]
+        mid_size = HANDLE_SIZE * MIDPOINT_SIZE_FACTOR
 
-                # 2.2 Dibujar Segmentos
-                for seg_idx in range(len(display_pts) - 1):
-                    a, b = display_pts[seg_idx], display_pts[seg_idx + 1]
+        # -- Lista PASIVA (atenuada, sin interacción) --
+        _passive_paths = (getattr(self.script_object, "saved_optimized_paths", None) or []) \
+            if not _is_auto else self.script_object.saved_paths
+        _passive_seg_prop = _pp["passive_seg"]
+        _passive_vtx_prop = _pp["passive_vtx"]
 
-                    # Determinar propiedades visuales (Selección / Hover)
-                    is_selected = False
-                    if self.selected_seg and self.selected_seg[0] == 'tubo' and \
-                       self.selected_seg[1] == path_idx and self.selected_seg[2] == seg_idx:
-                        is_selected = True
+        elems.extend(self._draw_saved_paths_elems(
+            _passive_paths, _passive_seg_prop, _passive_vtx_prop,
+            _passive_seg_prop, _passive_seg_prop, mid_prop, mid_size,
+            active_drag_pnt, view_type, XZ_VIEWS, YZ_VIEWS, ISOM_VIEWS,
+            interactive=False,
+        ))
 
-                    if ('tubo', path_idx, seg_idx) in getattr(self, 'selected_segments', set()):
-                        is_selected = True
+        # -- Lista ACTIVA (interactiva, colores normales) --
+        _active_paths = self.script_object.active_paths
+        if _is_auto:
+            _seg_prop = _pp["auto_seg"]
+            _vtx_prop = _pp["auto_vtx"]
+        else:
+            _seg_prop = saved_prop
+            _vtx_prop = handle_prop
 
-                    is_hovered = self.hover_seg and self.hover_seg[0] == 'tubo' and \
-                                 self.hover_seg[1] == path_idx and self.hover_seg[2] == seg_idx
-
-                    # Asignar Propiedad
-                    if is_selected:
-                        prop = seg_sel_prop
-                    elif is_hovered and not self.is_dragging:
-                        prop = seg_hover_prop
-                    else:
-                        prop = saved_prop
-
-                    # Renderizar línea
-                    elems.append(AllplanBasisElements.ModelElement3D(prop, AllplanGeo.Line3D(a, b)))
-
-                # Midpoints (guardadas)
-                # 2.3 Dibujar Midpoints
-                for si in range(len(display_pts) - 1):
-                    # ── Usar display_pts (no pts) para sincronizar con el drag ──
-                    a, b = display_pts[si], display_pts[si + 1]
-                    mp = self._midpoint(a, b)
-
-                    is_selected = (
-                        self.selected_seg is not None
-                        and self.selected_seg[0] == 'tubo'
-                        and self.selected_seg[1] == path_idx
-                        and self.selected_seg[2] == si
-                    )
-
-                    # ── Hover específico sobre el midpoint (usa hover_mid) ──────
-                    is_hovered = (
-                        self.hover_mid is not None
-                        and self.hover_mid[0] == 'tubo'
-                        and self.hover_mid[1] == path_idx
-                        and self.hover_mid[2] == si
-                    )
-                    if is_selected:
-                        prop = mid_prop
-                    elif is_hovered and not self.is_dragging:
-                        prop = mid_prop
-                    else:
-                        prop = mid_prop
-
-                    elems.extend(self._create_cross_marker(mp, mid_prop, mid_size, z_bias=MIDPOINT_Z_BIAS))
-
-                # 2.4 Dibujar Vértices (Handlers)
-                for vidx, vpt in enumerate(display_pts):
-                    # ── Detectar junction por posición en saved_paths ────────────────
-                    # Caso 1: último punto del path actual == primer punto del siguiente
-                    # Caso 2: primer punto del path actual == último punto del anterior
-                    junction_pair = None
-                    if (vidx == len(display_pts) - 1
-                            and path_idx + 1 < len(self.script_object.saved_paths)):
-                        next_pts = self.script_object.saved_paths[path_idx + 1]
-                        if next_pts and vpt.GetDistance(next_pts[0]) <= 1e-3:
-                            junction_pair = (path_idx, path_idx + 1)
-
-                    elif (vidx == 0
-                            and path_idx > 0):
-                        prev_pts = self.script_object.saved_paths[path_idx - 1]
-                        if prev_pts and vpt.GetDistance(prev_pts[-1]) <= 1e-3:
-                            junction_pair = (path_idx - 1, path_idx)
-
-                    # ── JUNCTION: dibujar X + cuadrado de selección ──────────────────
-                    if junction_pair is not None:
-                        li, ri = junction_pair
-                        cx, cy, cz = vpt.X, vpt.Y, vpt.Z
-
-                        is_hovered = (
-                            getattr(self, 'hover_cut_vertex', None) == junction_pair
-                        )
-                        is_selected = (
-                            self.selected_junction is not None
-                            and self.selected_junction[0] == li
-                            and self.selected_junction[1] == len(self.script_object.saved_paths[li]) - 1
-                        )
-
-                        # Propiedades X
-                        cut_prop = self._clone_properties(self.com_prop)
-                        cut_prop.ColorByLayer  = False
-                        cut_prop.PenByLayer    = False
-                        cut_prop.StrokeByLayer = False
-                        if is_selected:
-                            cut_prop.Color = 5   # Amarillo
-                        elif is_hovered:
-                            cut_prop.Color = 7   # Blanco/hover
-                        else:
-                            cut_prop.Color = 6   # Rojo
-                        try:
-                            cut_prop.Pen = 3
-                        except Exception:
-                            pass
-
-                        cut_size = 40 * (1.5 if (is_hovered or is_selected) else 1.0)
-                        half = cut_size / 2.0
-
-                        # Dibujar X según vista
-                        if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
-                                         AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
-
-                        elif view_type in XZ_VIEWS:
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy, cz - half),
-                                                  AllplanGeo.Point3D(cx + half, cy, cz + half))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy, cz - half),
-                                                  AllplanGeo.Point3D(cx - half, cy, cz + half))))
-
-                        elif view_type in YZ_VIEWS:
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy - half, cz - half),
-                                                  AllplanGeo.Point3D(cx, cy + half, cz + half))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy + half, cz - half),
-                                                  AllplanGeo.Point3D(cx, cy - half, cz + half))))
-
-                        elif view_type in ISOM_VIEWS:
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy, cz - half),
-                                                  AllplanGeo.Point3D(cx, cy, cz + half))))
-
-                        # Cuadrado de selección (hover o seleccionado)
-                        if is_selected or is_hovered:
-                            sq_prop = self._clone_properties(self.com_prop)
-                            sq_prop.ColorByLayer  = False
-                            sq_prop.PenByLayer    = False
-                            sq_prop.StrokeByLayer = False
-                            sq_prop.Color = 5 if is_selected else 7
-                            try:
-                                sq_prop.Pen = 1
-                            except Exception:
-                                pass
-
-                            sq = cut_size * 0.9
-
-                            if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
-                                             AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
-                                poly_sq = AllplanGeo.Polyline3D()
-                                for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
-                                    poly_sq += AllplanGeo.Point3D(cx + dx*sq, cy + dy*sq, cz)
-                                elems.append(AllplanBasisElements.ModelElement3D(sq_prop, poly_sq))
-
-                            elif view_type in XZ_VIEWS:
-                                poly_sq = AllplanGeo.Polyline3D()
-                                for dx, dz in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
-                                    poly_sq += AllplanGeo.Point3D(cx + dx*sq, cy, cz + dz*sq)
-                                elems.append(AllplanBasisElements.ModelElement3D(sq_prop, poly_sq))
-
-                            elif view_type in YZ_VIEWS:
-                                poly_sq = AllplanGeo.Polyline3D()
-                                for dy, dz in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
-                                    poly_sq += AllplanGeo.Point3D(cx, cy + dy*sq, cz + dz*sq)
-                                elems.append(AllplanBasisElements.ModelElement3D(sq_prop, poly_sq))
-
-                            elif view_type in ISOM_VIEWS:
-                                bot = [AllplanGeo.Point3D(cx + dx*sq, cy + dy*sq, cz - sq)
-                                       for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1)]]
-                                top = [AllplanGeo.Point3D(cx + dx*sq, cy + dy*sq, cz + sq)
-                                       for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1)]]
-                                for i in range(4):
-                                    elems.append(AllplanBasisElements.ModelElement3D(sq_prop,
-                                        AllplanGeo.Line3D(bot[i], bot[(i+1)%4])))
-                                    elems.append(AllplanBasisElements.ModelElement3D(sq_prop,
-                                        AllplanGeo.Line3D(top[i], top[(i+1)%4])))
-                                    elems.append(AllplanBasisElements.ModelElement3D(sq_prop,
-                                        AllplanGeo.Line3D(bot[i], top[i])))
-
-                        # Junction dibujado, saltar handle normal
-                        continue
-
-                    # ── Vértice normal ───────────────────────────────────────────────
-                    is_hovered_vtx = (
-                        self.saved_hover_point is not None
-                        and self.saved_hover_point[0] == path_idx
-                        and self.saved_hover_point[1] == vidx
-                    )
-
-                    # En cut_mode: vértice cortable hovereado → X de corte en lugar de círculo
-                    if self.cut_mode and is_hovered_vtx and self._is_cuttable_vertex(path_idx, vidx):
-                        cx, cy, cz = vpt.X, vpt.Y, vpt.Z
-                        cut_prop = self._clone_properties(self.com_prop)
-                        cut_prop.ColorByLayer  = False
-                        cut_prop.PenByLayer    = False
-                        cut_prop.StrokeByLayer = False
-                        cut_prop.Color = 7   # blanco/hover
-                        try:
-                            cut_prop.Pen = 3
-                        except Exception:
-                            pass
-                        half = HANDLE_SIZE * 0.75
-
-                        if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
-                                         AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
-                        elif view_type in XZ_VIEWS:
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy, cz - half),
-                                                  AllplanGeo.Point3D(cx + half, cy, cz + half))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy, cz - half),
-                                                  AllplanGeo.Point3D(cx - half, cy, cz + half))))
-                        elif view_type in YZ_VIEWS:
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy - half, cz - half),
-                                                  AllplanGeo.Point3D(cx, cy + half, cz + half))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy + half, cz - half),
-                                                  AllplanGeo.Point3D(cx, cy - half, cz + half))))
-                        else:  # isométrica
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx - half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx + half, cy + half, cz))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx + half, cy - half, cz),
-                                                  AllplanGeo.Point3D(cx - half, cy + half, cz))))
-                            elems.append(AllplanBasisElements.ModelElement3D(cut_prop,
-                                AllplanGeo.Line3D(AllplanGeo.Point3D(cx, cy, cz - half),
-                                                  AllplanGeo.Point3D(cx, cy, cz + half))))
-                        continue
-
-                    size = HANDLE_SIZE
-
-                    if self.saved_dragging is not None and self.saved_dragging == (path_idx, vidx):
-                        size = HANDLE_SIZE * DRAG_SCALE
-
-                    if is_hovered_vtx:
-                        size = HANDLE_SIZE * HOVER_SCALE
-
-                    elems.extend(self._create_point_marker(vpt, handle_prop, size))
+        elems.extend(self._draw_saved_paths_elems(
+            _active_paths, _seg_prop, _vtx_prop,
+            seg_sel_prop, seg_hover_prop, mid_prop, mid_size,
+            active_drag_pnt, view_type, XZ_VIEWS, YZ_VIEWS, ISOM_VIEWS,
+        ))
 
         # ----------------------------------------------------------------------------
         # A) CREATE MODE
         # ----------------------------------------------------------------------------
+        _angle_text_args = None
         # Activa + rubber-band (si hay activa)
         if self.points:
             poly = AllplanGeo.Polyline3D()
             for pt in self.points:
                 poly += pt
-            if hover is not None and not self.is_dragging and self.hover_seg is None and self.create_mode:
-                poly += hover
+            # Rubber-band nativo desactivado: reemplazado por _draw_create_tracking (línea pespunteada)
+            # if hover is not None and not self.is_dragging and self.hover_seg is None and self.create_mode:
+            #     poly += hover
             elems.append(AllplanBasisElements.ModelElement3D(base_prop, poly))
 
             # Handles (activa)
@@ -2581,7 +3749,7 @@ class PolylineInteractor:
                     size = HANDLE_SIZE * HOVER_SCALE
                 if idx == self.drag_index and self.is_dragging:
                     size = HANDLE_SIZE * DRAG_SCALE
-                elems.extend(self._create_point_marker(pt, handle_prop, size))
+                elems.extend(self._create_point_marker(pt, handle_prop, size, view_type=view_type))
 
             # Selección/hover en activa (con overlay + z-bias)
             selected_i = self.selected_seg[2] if (self.selected_seg and self.selected_seg[0] == 'active') else -1
@@ -2613,6 +3781,92 @@ class PolylineInteractor:
                     else:
                         elems.extend(self._create_cross_marker(mp, mid_prop, mid_size, z_bias=MIDPOINT_Z_BIAS))
 
+            # Custom tracking line (pespunteada) + etiqueta de ángulo
+            _angle_text_args = None
+            if self.create_mode and hover is not None and not self.is_dragging:
+                _track_plane = self._get_view_mode(view_type)
+                _track_elems, _track_len_str, _track_ang_str = self._draw_create_tracking(
+                    self.points[-1], hover, _track_plane
+                )
+                elems.extend(_track_elems)
+                if _track_len_str or _track_ang_str:
+                    _angle_text_args = (hover, _track_len_str, _track_ang_str, _track_plane)
+
+        # ----------------------------------------------------------------------------
+        # A.1) PUNTO INPUT MODE — tracking personalizada (línea + ángulo/distancia)
+        # Solo aparece cuando el cursor está sobre un nodo existente (_punto_snap_ref).
+        # Se corta sola al hacer click (en el siguiente frame el snap se re-evalúa).
+        # ----------------------------------------------------------------------------
+        if self.punto_input_mode and hover is not None:
+            _track_origin = getattr(self, "_punto_snap_ref", None)
+            if _track_origin is not None:
+                _track_plane = self._get_view_mode(view_type)
+                _pt_elems, _pt_len_str, _pt_ang_str = self._draw_create_tracking(
+                    _track_origin, hover, _track_plane
+                )
+                elems.extend(_pt_elems)
+                if _pt_len_str or _pt_ang_str:
+                    _angle_text_args = (hover, _pt_len_str, _pt_ang_str, _track_plane)
+
+        # ----------------------------------------------------------------------------
+        # A.2) EXTEND MODE — tracking sticky sobre vértice (igual que punto_input_mode)
+        # _extend_snap_refs acumula hasta 2 refs sticky; se borran al confirmar/iniciar drag.
+        # Se dibuja una línea de tracking por cada ref activa.
+        # ----------------------------------------------------------------------------
+        if self.extend_mode and hover is not None and self._extend_snap_refs:
+            _track_plane = self._get_view_mode(view_type)
+            for _ref in self._extend_snap_refs:
+                _ext_elems, _ext_len_str, _ext_ang_str = self._draw_create_tracking(
+                    _ref, hover, _track_plane
+                )
+                elems.extend(_ext_elems)
+                if _ext_len_str or _ext_ang_str:
+                    _angle_text_args = (hover, _ext_len_str, _ext_ang_str, _track_plane)
+
+        # ----------------------------------------------------------------------------
+        # A.3) MULTI-DRAG fase 3 — tracking personalizada (1 referencia, como single drag)
+        #
+        # handle_pos_raw: posición cruda del handle calculada desde hover (cursor sin ajuste
+        #   de snap), idéntica a como el vértice arrastrado sigue al cursor en single drag.
+        #
+        # Sin snap → _draw_create_tracking(orig_handle, handle_pos_raw)
+        #   Muestra desplazamiento total desde la posición original del centroide.
+        #
+        # Con snap → _draw_create_tracking(snap_vertex, handle_pos_raw)
+        #   Como A.2 single drag: referencia = vértice hovereado, extremo = handle crudo.
+        #   La línea es corta (≤ HIT_TOL_VERTEX = 50 mm) y confirma el snap visualmente.
+        # ----------------------------------------------------------------------------
+        if self.extend_mode and self._multi_drag_phase == 3 and self._multi_drag_handle is not None and hover is not None:
+            # handle_pos_raw: siempre desde hover crudo (no desde _multi_drag_cursor ajustado)
+            if self._multi_drag_anchor:
+                _raw_dx = hover.X - self._multi_drag_anchor.X
+                _raw_dy = hover.Y - self._multi_drag_anchor.Y
+                _raw_dz = hover.Z - self._multi_drag_anchor.Z
+                _handle_pos_raw = AllplanGeo.Point3D(
+                    self._multi_drag_handle.X + _raw_dx,
+                    self._multi_drag_handle.Y + _raw_dy,
+                    self._multi_drag_handle.Z + _raw_dz,
+                )
+            else:
+                _handle_pos_raw = hover
+
+            _track_plane = self._get_view_mode(view_type)
+
+            # Siempre: centroide original → handle (desplazamiento total del grupo)
+            _md_elems, _md_len_str, _md_ang_str = self._draw_create_tracking(
+                self._multi_drag_handle, _handle_pos_raw, _track_plane
+            )
+            elems.extend(_md_elems)
+            if _md_len_str or _md_ang_str:
+                _angle_text_args = (_handle_pos_raw, _md_len_str, _md_ang_str, _track_plane)
+
+            # Adicionalmente con snap_ref sticky: vértice ref → handle (sin sobreescribir texto)
+            if self._multi_drag_snap_ref:
+                _ref_elems, _, _ = self._draw_create_tracking(
+                    self._multi_drag_snap_ref, _handle_pos_raw, _track_plane
+                )
+                elems.extend(_ref_elems)
+
         # ----------------------------------------------------------------------------
         # B) EDIT MODE - LAYERS / ATRIBUTES
         # ----------------------------------------------------------------------------
@@ -2636,13 +3890,6 @@ class PolylineInteractor:
                     elem_prop.Color = 4 if element.get('type') == 'tubo' else 1
                     elem_prop.ColorByLayer = False
                     elem_prop.PenByLayer = False
-
-                    # Dibujar Geometría Principal
-                    # geom = element.get('geometry')
-                    # if geom:
-                    #     try:
-                    #         elems.append(AllplanBasisElements.ModelElement3D(elem_prop, geom))
-                    #     except: pass
 
                     # Dibujar Marcadores de posición (+)
                     pos = element.get('position')
@@ -2681,7 +3928,7 @@ class PolylineInteractor:
         elif self.saved_hover_point is not None:
             pidx, vidx = self.saved_hover_point[0], self.saved_hover_point[1]
             try:
-                marker_pnt = self.script_object.saved_paths[pidx][vidx]
+                marker_pnt = self.script_object.active_paths[pidx][vidx]
             except (IndexError, TypeError):
                 pass
 
@@ -2689,7 +3936,7 @@ class PolylineInteractor:
         elif (self.hover_mid and self.hover_mid[0] == 'tubo' and not self.is_dragging):
             pidx, sidx = self.hover_mid[1], self.hover_mid[2]
             try:
-                pts = self.script_object.saved_paths[pidx]
+                pts = self.script_object.active_paths[pidx]
                 marker_pnt = self._midpoint(pts[sidx], pts[sidx + 1])
             except (IndexError, TypeError):
                 pass
@@ -2744,6 +3991,90 @@ class PolylineInteractor:
                     elems.append(AllplanBasisElements.ModelElement3D(
                         marker_props, AllplanGeo.Line3D(bot[i], top[i])))
 
+        # Cross-mode vertex hover: doble cuadrado amarillo
+        _cm_hover = getattr(self, "_cross_mode_hover_point", None)
+        if self.create_mode and _cm_hover is not None:
+            try:
+                cm_prop = self._clone_properties(self.com_prop)
+                cm_prop.Color = 2  # Amarillo
+                cm_prop.ColorByLayer = False
+                cm_prop.PenByLayer = False
+                cm_prop.StrokeByLayer = False
+                cp = _cm_hover
+                cx2, cy2, cz2 = cp.X, cp.Y, cp.Z
+                for half2 in (SNAP_SIZE * 0.9, SNAP_SIZE * 0.45):
+                    if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
+                                     AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
+                        sq = AllplanGeo.Polyline3D()
+                        for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
+                            sq += AllplanGeo.Point3D(cx2 + dx*half2, cy2 + dy*half2, cz2)
+                        elems.append(AllplanBasisElements.ModelElement3D(cm_prop, sq))
+                    elif view_type in XZ_VIEWS:
+                        sq = AllplanGeo.Polyline3D()
+                        for dx, dz in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
+                            sq += AllplanGeo.Point3D(cx2 + dx*half2, cy2, cz2 + dz*half2)
+                        elems.append(AllplanBasisElements.ModelElement3D(cm_prop, sq))
+                    elif view_type in YZ_VIEWS:
+                        sq = AllplanGeo.Polyline3D()
+                        for dy, dz in [(-1,-1),(1,-1),(1,1),(-1,1),(-1,-1)]:
+                            sq += AllplanGeo.Point3D(cx2, cy2 + dy*half2, cz2 + dz*half2)
+                        elems.append(AllplanBasisElements.ModelElement3D(cm_prop, sq))
+                    elif view_type in ISOM_VIEWS:
+                        bot2 = [AllplanGeo.Point3D(cx2 + dx*half2, cy2 + dy*half2, cz2 - half2)
+                                for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1)]]
+                        top2 = [AllplanGeo.Point3D(cx2 + dx*half2, cy2 + dy*half2, cz2 + half2)
+                                for dx, dy in [(-1,-1),(1,-1),(1,1),(-1,1)]]
+                        for i in range(4):
+                            elems.append(AllplanBasisElements.ModelElement3D(
+                                cm_prop, AllplanGeo.Line3D(bot2[i], bot2[(i+1)%4])))
+                            elems.append(AllplanBasisElements.ModelElement3D(
+                                cm_prop, AllplanGeo.Line3D(top2[i], top2[(i+1)%4])))
+                            elems.append(AllplanBasisElements.ModelElement3D(
+                                cm_prop, AllplanGeo.Line3D(bot2[i], top2[i])))
+            except Exception:
+                pass
+
+        # Snap-drag target: doble cuadrado verde sobre el vértice al que se va a snapear
+        if self.saved_dragging is not None and self.snap_target is not None:
+            try:
+                snap_prop = self._clone_properties(self.com_prop)
+                snap_prop.Color = 3  # verde
+                snap_prop.ColorByLayer = False
+                snap_prop.PenByLayer = False
+                snap_prop.StrokeByLayer = False
+                sx, sy, sz = self.snap_target.X, self.snap_target.Y, self.snap_target.Z
+                for half_s in (SNAP_SIZE * 1.2, SNAP_SIZE * 0.55):
+                    if view_type in [AllplanIFW.eProjectionType.GROUND_PLAN,
+                                     AllplanIFW.eProjectionType.WORKING_PLANE_VIEW]:
+                        sq = AllplanGeo.Polyline3D()
+                        for dx, dy in [(-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1)]:
+                            sq += AllplanGeo.Point3D(sx + dx * half_s, sy + dy * half_s, sz)
+                        elems.append(AllplanBasisElements.ModelElement3D(snap_prop, sq))
+                    elif view_type in XZ_VIEWS:
+                        sq = AllplanGeo.Polyline3D()
+                        for dx, dz in [(-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1)]:
+                            sq += AllplanGeo.Point3D(sx + dx * half_s, sy, sz + dz * half_s)
+                        elems.append(AllplanBasisElements.ModelElement3D(snap_prop, sq))
+                    elif view_type in YZ_VIEWS:
+                        sq = AllplanGeo.Polyline3D()
+                        for dy, dz in [(-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1)]:
+                            sq += AllplanGeo.Point3D(sx, sy + dy * half_s, sz + dz * half_s)
+                        elems.append(AllplanBasisElements.ModelElement3D(snap_prop, sq))
+                    elif view_type in ISOM_VIEWS:
+                        bot = [AllplanGeo.Point3D(sx + dx * half_s, sy + dy * half_s, sz - half_s)
+                               for dx, dy in [(-1, -1), (1, -1), (1, 1), (-1, 1)]]
+                        top = [AllplanGeo.Point3D(sx + dx * half_s, sy + dy * half_s, sz + half_s)
+                               for dx, dy in [(-1, -1), (1, -1), (1, 1), (-1, 1)]]
+                        for i in range(4):
+                            elems.append(AllplanBasisElements.ModelElement3D(
+                                snap_prop, AllplanGeo.Line3D(bot[i], bot[(i + 1) % 4])))
+                            elems.append(AllplanBasisElements.ModelElement3D(
+                                snap_prop, AllplanGeo.Line3D(top[i], top[(i + 1) % 4])))
+                            elems.append(AllplanBasisElements.ModelElement3D(
+                                snap_prop, AllplanGeo.Line3D(bot[i], top[i])))
+            except Exception:
+                pass
+
         if self.orientation_capture_mode and self.orientation_line_start is not None:
             try:
                 orient_prop = self._clone_properties(self.com_prop)
@@ -2775,7 +4106,7 @@ class PolylineInteractor:
         # ============================================================================
         # Punto fantasma de inserción (checkbox ON)
         if (self.insert_mode and self.insert_preview_p is not None):
-            elems.extend(self._create_point_marker(self.insert_preview_p, ins_prev_prop, HANDLE_SIZE * 0.95))
+            elems.extend(self._create_point_marker(self.insert_preview_p, ins_prev_prop, HANDLE_SIZE * 0.95, view_type=view_type))
 
         # 1. Draw Selection Rectangle (If applicable)
         if (self.box_selecting and self.box_start is not None and self.box_curr is not None):
@@ -2825,6 +4156,10 @@ class PolylineInteractor:
                     ghost_prop, AllplanGeo.Line3D(ga, gb)
                 ))
 
+        # Multi-drag: caja de selección / handle de arrastre
+        if self._multi_drag_phase != 0:
+            self._multi_drag_draw_preview(elems, view_type, ISOM_VIEWS)
+
         # 3. Tooltip y Render end
         self._draw_tooltip(elems)
 
@@ -2838,6 +4173,13 @@ class PolylineInteractor:
             True, # Clean previous
             None,
         )
+
+        # --- Angle text overlay with view-specific 3D matrix ---
+        if _angle_text_args:
+            try:
+                self._draw_angle_text_overlay(*_angle_text_args)
+            except Exception as ex:
+                print(f"[INT] angle text overlay: {ex}")
 
         # --- Marker manager overlay (separate DrawElementPreview, clean=False) ---
         mgr = getattr(self.script_object, 'marker_manager', None)
@@ -2858,6 +4200,80 @@ class PolylineInteractor:
                     )
                 except Exception:
                     pass
+
+        # --- overlay de nodos (siempre visible si hay puntos) ---
+        undef_list = getattr(self.script_object, "undefined_points_list", None)
+        if undef_list:
+            pi = UndefinedPointInput(self)
+            try:
+                # Reconstruir siempre el overlay para evitar mostrar estado obsoleto
+                # (p.ej. después de finalizar un camino con doble-click)
+                pi._update_overlay(undef_list)
+                placed_elems = self._optimizer_preview_elems
+                if placed_elems:
+                    AllplanBaseElements.DrawElementPreview(
+                        self.coord_input.GetInputViewDocument(), # type: ignore
+                        AllplanGeo.Matrix3D(),
+                        placed_elems,
+                        False,
+                        None,
+                    )
+            except Exception:
+                pass
+
+            # Modo editar: resaltar el nodo bajo el cursor (color rojo, círculo mayor)
+            if getattr(self, "punto_edit_mode", False):
+                hover_i = getattr(self, "_punto_hover_idx", None)
+                if hover_i is not None and 0 <= hover_i < len(undef_list):
+                    try:
+                        up = undef_list[hover_i]
+                        from .point_input import _make_properties, _make_circle_elems, _coords_to_point3d
+                        hover_prop = _make_properties(6)   # rojo — indica "se puede borrar"
+                        if hover_prop is not None:
+                            hover_prop.ColorByLayer = False
+                            hp = _coords_to_point3d(up.coordenadas)
+                            if hp is not None:
+                                h_elems = _make_circle_elems(hp, hover_prop, size=150.0)
+                                if h_elems:
+                                    AllplanBaseElements.DrawElementPreview(
+                                        self.coord_input.GetInputViewDocument(), # type: ignore
+                                        AllplanGeo.Matrix3D(),
+                                        h_elems,
+                                        False,
+                                        None,
+                                    )
+                    except Exception:
+                        pass
+
+            # Modo insertar: forma del cursor en posición actual
+            if getattr(self, "punto_input_mode", False) and current_pnt is not None:
+                try:
+                    cursor_elems = pi.draw_cursor_preview(current_pnt)
+                    if cursor_elems:
+                        AllplanBaseElements.DrawElementPreview(
+                            self.coord_input.GetInputViewDocument(), # type: ignore
+                            AllplanGeo.Matrix3D(),
+                            cursor_elems,
+                            False,
+                            None,
+                        )
+                except Exception:
+                    pass
+
+
+        # --- Selector de elementos: overlay persistente (techos, subdivisiones, tubos) ---
+        sel_prev = self.script_object.selector_preview_elems
+        if sel_prev:
+            try:
+                AllplanBaseElements.DrawElementPreview(
+                    self.coord_input.GetInputViewDocument(),  # type: ignore
+                    AllplanGeo.Matrix3D(),
+                    sel_prev,
+                    False,
+                    None,
+                )
+            except Exception:
+                pass
 
         # --- Soporte 3D preview overlay ---
         if self._soporte_preview_active:
@@ -2896,7 +4312,7 @@ class PolylineInteractor:
             # En Desactivado (0) no se actualiza el hover — el overlay se dibuja en
             # colores neutros y los clicks pasan al flujo normal de polilínea.
 
-            _edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+            _edit_raw = getattr(self.script_object.build_ele, ParamNames.Supports.EDIT_MODE, None)
             _edit_val = int(getattr(_edit_raw, "value", 0))
             if _edit_val >= SoporteEditModeValues.EDIT:
                 if self._soporte_moving_key is None:
@@ -2937,11 +4353,13 @@ class PolylineInteractor:
         except: pass
 
     def applie_info_element_selected(self):
-
-        # 1. Actualizar el modelo de datos (build_ele)
         param = getattr(self.script_object.build_ele, ParamNames.Layers.DESCRIPTION)
-        param.value = self._pending_description
-
+        # Regenerar desde el estado actual del elemento para reflejar atributos/layers aplicados
+        if self.hovered_element:
+            description = self._generate_tooltip_text(self.hovered_element)
+        else:
+            description = self._pending_description
+        param.value = description
         return True
 
     def _draw_tooltip(self, elems):
@@ -2966,8 +4384,8 @@ class PolylineInteractor:
         loc = AllplanGeo.Point2D(pos.X -offset_y, pos.Y - offset_x)
         try:
             text_prop = AllplanBasisElements.TextProperties()
-            text_prop.Height = 0.4  # Tamaño del texto en mm
-            text_prop.Width = 0.4
+            text_prop.Height = 0.5  # Tamaño del texto en mm
+            text_prop.Width = 0.5
             text_prop.Alignment = AllplanBasisElements.TextAlignment.eMiddleBottom
 
             com_prop = AllplanBaseElements.CommonProperties()
@@ -2986,6 +4404,145 @@ class PolylineInteractor:
         except Exception as e:
             print(f"[SO] Error dibujando tooltip: {e}")
 
+    def _draw_create_tracking(
+        self,
+        last_pt: AllplanGeo.Point3D,
+        hover: AllplanGeo.Point3D,
+        plane: str,
+    ) -> tuple:
+        """Línea de tracking pespunteada + etiqueta de ángulo para create_mode.
+
+        Dibuja una línea discontinua desde el último punto confirmado hasta el
+        cursor, y un TextElement con el ángulo absoluto en el plano activo.
+        Si existe un segmento anterior (o un vértice de bifurcación), también
+        muestra el ángulo relativo (Δ).
+        """
+        result: List[Any] = []
+        try:
+            # Guard: Line3D lanza Boost.Python VecNullException con puntos idénticos
+            _tdx = hover.X - last_pt.X
+            _tdy = hover.Y - last_pt.Y
+            _tdz = hover.Z - last_pt.Z
+            if math.sqrt(_tdx*_tdx + _tdy*_tdy + _tdz*_tdz) < 1e-6:
+                return result, "", ""
+
+            # ── Línea pespunteada ────────────────────────────────────────────
+            track_prop = AllplanBaseElements.CommonProperties()
+            track_prop.GetGlobalProperties()
+            track_prop.Color        = 8      # gris
+            track_prop.ColorByLayer = False
+            track_prop.Pen          = 1
+            track_prop.PenByLayer   = False
+            # track_prop.Stroke       = 3      # dash-dot
+            # track_prop.StrokeByLayer = False
+            result.append(AllplanBasisElements.ModelElement3D(
+                track_prop, AllplanGeo.Line3D(last_pt, hover)
+            ))
+
+            # ── Ángulo en el plano activo ────────────────────────────────────
+            dx = hover.X - last_pt.X
+            dy = hover.Y - last_pt.Y
+            dz = hover.Z - last_pt.Z
+
+            if plane == "XZ":
+                u, v = dx, dz
+            elif plane == "YZ":
+                u, v = dy, dz
+            else:            # XY / XYZ
+                u, v = dx, dy
+
+            if math.sqrt(u*u + v*v) < 1e-3:
+                return result, "", ""
+
+            length_3d = math.sqrt(dx*dx + dy*dy + dz*dz)
+            abs_ang   = math.degrees(math.atan2(v, u)) % 360.0
+            len_str   = f"l: {length_3d:.3f}"
+            ang_str   = f"{abs_ang:.1f}\u00b0"
+
+            # Ángulo relativo al segmento anterior
+            def _rel_str(ref_pt: AllplanGeo.Point3D) -> str:
+                if plane == "XZ":
+                    pu, pv = last_pt.X - ref_pt.X, last_pt.Z - ref_pt.Z
+                elif plane == "YZ":
+                    pu, pv = last_pt.Y - ref_pt.Y, last_pt.Z - ref_pt.Z
+                else:
+                    pu, pv = last_pt.X - ref_pt.X, last_pt.Y - ref_pt.Y
+                if math.sqrt(pu*pu + pv*pv) < 1e-3:
+                    return ""
+                prev_ang = math.degrees(math.atan2(pv, pu)) % 360.0
+                rel = (abs_ang - prev_ang + 360.0) % 360.0
+                if rel > 180.0:
+                    rel -= 360.0
+                return f" (d{rel:+.1f}\u00b0)"   # " (d+45.0°)"
+
+            if len(self.points) >= 2:
+                ang_str += _rel_str(self.points[-2])
+            else:
+                vp = self._find_virtual_prev_for_bifurcation(last_pt)
+                if vp is not None:
+                    ang_str += _rel_str(vp)
+
+        except Exception as ex:
+            print(f"[INT] _draw_create_tracking: {ex}")
+            return result, "", ""
+        return result, len_str, ang_str
+
+    def _draw_angle_text_overlay(self, hover: AllplanGeo.Point3D, len_str: str, ang_str: str, plane: str = "XY"):
+        """Dibuja etiqueta de longitud + ángulo.
+
+        XY / XYZ → TextElement 2D nativo (mejor calidad de fuente).
+        XZ / YZ  → PreviewSymbols vectorial 3D (visible en planos no-XY).
+        """
+        try:
+            proj       = self.coord_input.GetViewWorldProjection()  # type: ignore
+            hover_view = proj.WorldToView(hover)
+
+            combined = "  ".join(filter(None, [ang_str, len_str]))
+            if not combined:
+                return
+
+            if plane in ("XY"):
+                anchor_w = proj.ViewToWorld(AllplanGeo.Point2D(hover_view.X + 50, hover_view.Y + 50))
+                com_prop = AllplanBaseElements.CommonProperties()
+                com_prop.GetGlobalProperties()
+                com_prop.Color        = 7
+                # com_prop.ColorByLayer = False
+
+                text_prop = AllplanBasisElements.TextProperties()
+                text_prop.Height           = 0.6
+                text_prop.Width            = 0.6
+                text_prop.IsScaleDependent = False
+
+                text_elem = AllplanBasisElements.TextElement(
+                    com_prop, text_prop, combined,
+                    AllplanGeo.Point2D(anchor_w.X, anchor_w.Y),
+                )
+                AllplanBaseElements.DrawElementPreview(
+                    self.doc, AllplanGeo.Matrix3D(), [text_elem], False, None
+                )
+            else:
+                from GeneralScripts.PreviewSymbols import PreviewSymbols
+                from Utils.TextReferencePointPosition import TextReferencePointPosition
+
+                anchor_w = proj.ViewToWorld(AllplanGeo.Point2D(hover_view.X + 200, hover_view.Y + 200))
+                safe = (combined
+                        .replace('\u00b0', "'")
+                        .replace('\u0394', 'd')
+                        .replace('\u2212', '-'))
+
+                ps = PreviewSymbols()
+                ps.add_text(
+                    text            = safe,
+                    reference_point = anchor_w,
+                    ref_pnt_pos     = TextReferencePointPosition.BOTTOM_LEFT,
+                    height          = 25.0,
+                    color           = 7,
+                    rotation_angle  = AllplanGeo.Angle(0.0),
+                )
+                ps.draw(AllplanGeo.Matrix3D(), proj, use_system_angle=False)
+        except Exception as ex:
+            print(f"[INT] _draw_angle_text_overlay: {ex}")
+
     def _add_text_label(self, elems_list, point_a: AllplanGeo.Point3D, point_b: AllplanGeo.Point3D, text: str):
         """Añade un TextElement 2D en el centro del segmento, rotado según la dirección del segmento."""
         try:
@@ -2999,8 +4556,8 @@ class PolylineInteractor:
             # No llamar GetGlobalProperties() para evitar escala global
 
             text_prop = AllplanBasisElements.TextProperties()
-            text_prop.Height = 0.30  # Valor fijo pequeño
-            text_prop.Width  = 0.30
+            text_prop.Height = 0.50  # Valor fijo pequeño
+            text_prop.Width  = 0.50
             text_prop.IsScaleDependent = False
 
             elems_list.append(AllplanBasisElements.TextElement(text_com_prop, text_prop, text, loc))
@@ -3092,141 +4649,113 @@ class PolylineInteractor:
             last_point.Z + bz * ln,
         )
 
-    def snap_point_with_angle(self, raw_point: AllplanGeo.Point3D, last_point, prev_point=None):
+    def snap_point_with_angle(
+        self,
+        raw_point: AllplanGeo.Point3D,
+        last_point,
+        prev_point=None,
+        plane: str = "XY",
+    ):
+        """Proyecta raw_point al ángulo permitido más cercano desde last_point.
+
+        Funciona para todos los planos de vista:
+        - ``"XY"``  (planta):         u=X, v=Y, Z fijo
+        - ``"XZ"``  (alzado N/S):     u=X, v=Z, Y fijo
+        - ``"YZ"``  (alzado E/W):     u=Y, v=Z, X fijo
+        - ``"XYZ"`` (isométrico):     detecta el plano dominante y delega
+
+        El ángulo del segmento anterior se mide en el mismo plano para generar
+        los ángulos absolutos válidos a partir de ``self.script_object.angle_steps``.
         """
-        Recibe un punto crudo y devuelve un punto snapeado con ángulos permitidos.
-        """
-        # ---------------------------------------------------
-        #  Utilidades internas
-        # ---------------------------------------------------
-        def normalize_angle(angle_deg):
-            angle_deg = angle_deg % 360.0
-            return angle_deg + 360 if angle_deg < 0 else angle_deg
+        # ── Utilidades ───────────────────────────────────────────────────────
+        def normalize(a: float) -> float:
+            a = a % 360.0
+            return a + 360.0 if a < 0.0 else a
 
-        def angular_distance(a, b):
-            diff = abs(a - b)
-            return min(diff, 360.0 - diff)
+        def ang_dist(a: float, b: float) -> float:
+            d = abs(a - b)
+            return min(d, 360.0 - d)
 
-        def find_closest_valid_angle(angle_deg, valid_list):
-            ang = normalize_angle(angle_deg)
-            return min(valid_list, key=lambda va: angular_distance(ang, va))
+        def find_closest(ang: float, valid) -> float:
+            return min(valid, key=lambda v: ang_dist(normalize(ang), v))
 
-        # ---------------------------------------------------
-        #  Deltas y distancias
-        # ---------------------------------------------------
+        # ── Deltas 3D ────────────────────────────────────────────────────────
         dx = raw_point.X - last_point.X
         dy = raw_point.Y - last_point.Y
         dz = raw_point.Z - last_point.Z
-
-        dist_3d = math.sqrt(dx*dx + dy*dy + dz*dz)
-        if dist_3d <= 1e-6:
+        if math.sqrt(dx*dx + dy*dy + dz*dz) <= 1e-6:
             return raw_point
 
-        dist_xy = math.sqrt(dx*dx + dy*dy)
-        dist_z = abs(dz)
-
-        is_horizontal = dist_xy > dist_z
-        is_vertical = dist_z > dist_xy
-
-        # ---------------------------------------------------
-        #  Ángulos relativos permitidos
-        # ---------------------------------------------------
-        relative_angles = self.angle_steps
-        tolerance = 1.0
-
-        # ---------------------------------------------------
-        #  SNAP EN PLANO XY
-        # ---------------------------------------------------
-        if is_horizontal:
-            angle_deg = math.degrees(math.atan2(dy, dx))
-
-            # ----------------------------
-            #  Si existe segmento previo
-            # ----------------------------
-            if prev_point is not None:
-                pvx = last_point.X - prev_point.X
-                pvy = last_point.Y - prev_point.Y
-                prev_dist_xy = math.sqrt(pvx*pvx + pvy*pvy)
-                prev_dist_z = abs(last_point.Z - prev_point.Z)
-
-                # Solo si el previo fue horizontal real
-                if prev_dist_xy > prev_dist_z and prev_dist_xy > 1e-6:
-                    prev_ang = normalize_angle(math.degrees(math.atan2(pvy, pvx)))
-
-                    # Generar ángulos absolutos relativos al anterior
-                    valid_angles = [
-                        normalize_angle(prev_ang + rel)
-                        for rel in relative_angles # type: ignore
-                    ]
-
-                    # Filtrar retrocesos 180°
-                    def good(a):
-                        delta = angular_distance(a, prev_ang)
-                        return abs(delta - 180) > tolerance
-
-                    snap_angles = [a for a in valid_angles if good(a)]
-                    if not snap_angles:
-                        snap_angles = valid_angles
-
-                else:
-                    # Después de un vertical o primer segmento horizontal
-                    snap_angles = [0, 45, 90, 135, 180, 225, 270, 315]
-
+        # ── Vista isométrica: delegar al plano dominante ─────────────────────
+        if plane == "XYZ":
+            ax, ay, az = abs(dx), abs(dy), abs(dz)
+            if az <= ax and az <= ay:
+                sub = "XY"
+            elif ay <= ax:
+                sub = "XZ"
             else:
-                # Primer segmento
-                snap_angles = [0, 45, 90, 135, 180, 225, 270, 315]
+                sub = "YZ"
+            return self.snap_point_with_angle(raw_point, last_point, prev_point, sub)
 
-            # SNAP final
-            closest = find_closest_valid_angle(angle_deg, snap_angles)
-            rad = math.radians(closest)
-
-            snap_dx = dist_3d * math.cos(rad)
-            snap_dy = dist_3d * math.sin(rad)
-
-            return AllplanGeo.Point3D(
-                last_point.X + snap_dx,
-                last_point.Y + snap_dy,
-                last_point.Z
-            )
-
-        # ---------------------------------------------------
-        #  SNAP VERTICAL O DIAGONAL
-        # ---------------------------------------------------
-        if is_vertical:
-
-            # Diagonal 3D
-            if dist_xy > 1e-3:
-                elevation_deg = math.degrees(math.atan2(dist_z, dist_xy))
-                valid_elev = [0, 45, 90]
-                closest_elev = min(valid_elev, key=lambda e: abs(elevation_deg - e))
-
-                # Snap horizontal (XY)
-                ang_xy_deg = math.degrees(math.atan2(dy, dx))
-                abs_angles = [0, 45, 90, 135, 180, 225, 270, 315]
-                closest_xy = find_closest_valid_angle(ang_xy_deg, abs_angles)
-
-                if closest_elev == 90:
-                    return AllplanGeo.Point3D(last_point.X, last_point.Y, raw_point.Z)
-
-                rad_xy = math.radians(closest_xy)
-                rad_el = math.radians(closest_elev)
-
-                dist_xy_snap = dist_3d * math.cos(rad_el)
-                dist_z_snap = dist_3d * math.sin(rad_el)
-
+        # ── Configuración por plano ───────────────────────────────────────────
+        if plane == "XZ":
+            u, v    = dx, dz
+            pu_fn   = lambda p: last_point.X - p.X
+            pv_fn   = lambda p: last_point.Z - p.Z
+            def rebuild(dist: float, rad: float) -> AllplanGeo.Point3D:
                 return AllplanGeo.Point3D(
-                    last_point.X + dist_xy_snap * math.cos(rad_xy),
-                    last_point.Y + dist_xy_snap * math.sin(rad_xy),
-                    last_point.Z + (dist_z_snap if dz >= 0 else -dist_z_snap)
+                    last_point.X + dist * math.cos(rad),
+                    last_point.Y,
+                    last_point.Z + dist * math.sin(rad),
+                )
+        elif plane == "YZ":
+            u, v    = dy, dz
+            pu_fn   = lambda p: last_point.Y - p.Y
+            pv_fn   = lambda p: last_point.Z - p.Z
+            def rebuild(dist: float, rad: float) -> AllplanGeo.Point3D:
+                return AllplanGeo.Point3D(
+                    last_point.X,
+                    last_point.Y + dist * math.cos(rad),
+                    last_point.Z + dist * math.sin(rad),
+                )
+        else:  # XY (default)
+            u, v    = dx, dy
+            pu_fn   = lambda p: last_point.X - p.X
+            pv_fn   = lambda p: last_point.Y - p.Y
+            def rebuild(dist: float, rad: float) -> AllplanGeo.Point3D:
+                return AllplanGeo.Point3D(
+                    last_point.X + dist * math.cos(rad),
+                    last_point.Y + dist * math.sin(rad),
+                    last_point.Z,
                 )
 
-            # Puro vertical
-            return AllplanGeo.Point3D(last_point.X, last_point.Y, raw_point.Z)
+        dist_plane = math.sqrt(u*u + v*v)
+        if dist_plane <= 1e-6:
+            return raw_point
 
-        # ---------------------------------------------------
-        #  Si no es ni horizontal ni vertical → sin snap
-        # ---------------------------------------------------
-        return raw_point
+        angle_deg     = math.degrees(math.atan2(v, u))
+        fallback      = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
+        steps         = self.script_object.angle_steps or fallback
+
+        # ── Ángulos válidos relativos al segmento anterior ────────────────────
+        if prev_point is not None:
+            pu = pu_fn(prev_point)
+            pv = pv_fn(prev_point)
+            prev_plane_dist = math.sqrt(pu*pu + pv*pv)
+            if prev_plane_dist > 1e-6:
+                prev_ang      = normalize(math.degrees(math.atan2(pv, pu)))
+                valid_angles  = [normalize(prev_ang + rel) for rel in steps]
+                # Excluir retroceso exacto (±180°)
+                snap_angles   = [a for a in valid_angles if abs(ang_dist(a, prev_ang) - 180.0) > 1.0]
+                if not snap_angles:
+                    snap_angles = valid_angles
+            else:
+                snap_angles = steps  # sin dirección de referencia → usar steps como absolutos
+        else:
+            snap_angles = steps  # sin prev_point → ángulos absolutos desde los steps del script
+
+        closest = find_closest(angle_deg, snap_angles)
+        return rebuild(dist_plane, math.radians(closest))
 
     def _dist_sq(self, a: AllplanGeo.Point3D, b: AllplanGeo.Point3D) -> float:
         dx, dy, dz = a.X - b.X, a.Y - b.Y, a.Z - b.Z
@@ -3262,79 +4791,72 @@ class PolylineInteractor:
             AllplanBasisElements.ModelElement3D(properties, AllplanGeo.Line3D(p5, p6)),
         ]
 
-    def _create_point_marker(self, point, properties, size, z_bias: float = 0.0):
+    def _create_point_marker(self, point, properties, size, z_bias: float = 0.0, view_type=None):
         """
-        Dibuja un marcador de vértice como esfera de alambre (wireframe).
+        Marcador de vértice optimizado: un círculo en el plano de la vista activa.
 
-        Se construye directamente con líneas sobre coordenadas esféricas, sin usar
-        BRep3D.CreateSphere, porque en contexto de previsualización Allplan renderiza
-        los sólidos BRep como un círculo plano con un arco interior — no como esfera.
+        - Vista XY (planta/work plane): círculo en plano XY  →  12 líneas
+        - Vista XZ (alzado N/S):        círculo en plano XZ  →  12 líneas
+        - Vista YZ (alzado E/O):        círculo en plano YZ  →  12 líneas
+        - Isométrica / None:            3 círculos ortogonales (XY+XZ+YZ) → 36 líneas
 
-        Vista planta   → círculo completo (paralelo ecuatorial)
-        Vista alzado   → círculo completo (meridiano frontal)
-        Vista isométrica → esfera de alambre tipo globo terráqueo
+        Reducción respecto a la implementación anterior:
+          - Ortográfica: 576 → 12 elementos (48×)
+          - Isométrica:  576 → 36 elementos (16×)
+        Los offsets trigonométricos están pre-cacheados en _MARKER_UNIT_CIRCLE (módulo).
         """
-        import math
-
         radius = max(size * 0.35, 0.01)
         cx = getattr(point, "X", 0.0)
         cy = getattr(point, "Y", 0.0)
         cz = getattr(point, "Z", 0.0) + (z_bias or 0.0)
 
-        SEGMENTS    = 36   # suavidad de cada curva
-        N_PARALLELS = 4    # anillos horizontales (sin polos)
-        N_MERIDIANS = 6    # meridianos (cada uno = círculo completo polo a polo)
-
         elems = []
 
-        def _pt(x, y, z):
-            return AllplanGeo.Point3D(x, y, z)
+        def _seg(ax, ay, az, bx, by, bz):
+            elems.append(AllplanBasisElements.ModelElement3D(
+                properties,
+                AllplanGeo.Line3D(AllplanGeo.Point3D(ax, ay, az),
+                                  AllplanGeo.Point3D(bx, by, bz))
+            ))
 
-        def _line(p1, p2):
-            elems.append(
-                AllplanBasisElements.ModelElement3D(
-                    properties, AllplanGeo.Line3D(p1, p2)
-                )
-            )
+        def _circle_xy():
+            pc, ps = _MARKER_UNIT_CIRCLE[0]
+            for nc, ns in _MARKER_UNIT_CIRCLE[1:]:
+                _seg(cx + radius * pc, cy + radius * ps, cz,
+                     cx + radius * nc, cy + radius * ns, cz)
+                pc, ps = nc, ns
 
-        # ── Paralelos: anillos horizontales ──────────────────────────────────────
-        # φ distribuido entre -π/2 y +π/2, incluyendo el ecuador
-        for i in range(N_PARALLELS):
-            phi    = math.pi * (-0.5 + (i + 1) / (N_PARALLELS + 1))
-            r_ring = radius * math.cos(phi)
-            z_ring = cz + radius * math.sin(phi)
-            prev = None
-            for j in range(SEGMENTS + 1):
-                theta = 2.0 * math.pi * j / SEGMENTS
-                pt = _pt(cx + r_ring * math.cos(theta),
-                        cy + r_ring * math.sin(theta),
-                        z_ring)
-                if prev:
-                    _line(prev, pt)
-                prev = pt
+        def _circle_xz():
+            pc, ps = _MARKER_UNIT_CIRCLE[0]
+            for nc, ns in _MARKER_UNIT_CIRCLE[1:]:
+                _seg(cx + radius * pc, cy, cz + radius * ps,
+                     cx + radius * nc, cy, cz + radius * ns)
+                pc, ps = nc, ns
 
-        # ── Meridianos: círculos completos polo a polo ────────────────────────────
-        # Cada θ genera una vuelta completa:
-        #   primera mitad → θ        (de polo sur a polo norte)
-        #   segunda mitad → θ + π    (de polo norte a polo sur, lado opuesto)
-        for i in range(N_MERIDIANS):
-            theta = math.pi * i / N_MERIDIANS
-            prev  = None
-            for j in range(SEGMENTS * 2 + 1):
-                if j <= SEGMENTS:
-                    phi = math.pi * (-0.5 + j / SEGMENTS)
-                    t   = theta
-                else:
-                    phi = math.pi * (0.5 - (j - SEGMENTS) / SEGMENTS)
-                    t   = theta + math.pi
-                pt = _pt(
-                    cx + radius * math.cos(phi) * math.cos(t),
-                    cy + radius * math.cos(phi) * math.sin(t),
-                    cz + radius * math.sin(phi),
-                )
-                if prev:
-                    _line(prev, pt)
-                prev = pt
+        def _circle_yz():
+            pc, ps = _MARKER_UNIT_CIRCLE[0]
+            for nc, ns in _MARKER_UNIT_CIRCLE[1:]:
+                _seg(cx, cy + radius * pc, cz + radius * ps,
+                     cx, cy + radius * nc, cz + radius * ns)
+                pc, ps = nc, ns
+
+        _XY = {AllplanIFW.eProjectionType.GROUND_PLAN,
+               AllplanIFW.eProjectionType.WORKING_PLANE_VIEW}
+        _XZ = {AllplanIFW.eProjectionType.SOUTH_VIEW,
+               AllplanIFW.eProjectionType.NORTH_VIEW}
+        _YZ = {AllplanIFW.eProjectionType.EAST_VIEW,
+               AllplanIFW.eProjectionType.WEST_VIEW}
+
+        if view_type in _XY:
+            _circle_xy()
+        elif view_type in _XZ:
+            _circle_xz()
+        elif view_type in _YZ:
+            _circle_yz()
+        else:
+            _circle_xy()
+            _circle_xz()
+            _circle_yz()
 
         return elems
 
@@ -3354,17 +4876,16 @@ class PolylineInteractor:
         current_mode = self._get_view_mode(view_type)
 
         # 1. PROCESAR RUTAS GUARDADAS
-        for path_idx, path_points in enumerate(self.script_object.saved_paths):
+        for path_idx, path_points in enumerate(self.script_object.active_paths):
             all_static_points.extend(path_points)
             pairs = self.build_point_pairs(path_points)
             for i, (p1, p2) in enumerate(pairs):
                 meta_key = f"{path_idx}_{i}"
                 meta = self.script_object.persistent_metadata.get(meta_key)
                 saved_mode = getattr(meta, 'view_mode', None) if meta else None
-
-                # Usar saved_mode solo si coincide con la vista actual
-                # Si la vista cambió, recalcular con current_mode
-                seg_mode = saved_mode if (saved_mode and saved_mode == current_mode) else current_mode
+                if not saved_mode:
+                    saved_mode = getattr(self, '_mode_overrides', {}).get(meta_key)
+                seg_mode = saved_mode if saved_mode else current_mode
 
                 segment = self._calculate_single_segment(p1, p2, i, seg_mode, path_idx)
                 self.data.append(segment)
@@ -3383,6 +4904,27 @@ class PolylineInteractor:
 
         return self.data
 
+    def _presave_view_modes(self, path_idx: int, seg_offset: int, reversed_: bool = False) -> None:
+        """Registra segment_modes en _mode_overrides antes de limpiar self.points.
+
+        path_idx  : índice en active_paths donde aterrizan los nuevos segmentos.
+        seg_offset: índice del primer segmento nuevo en ese path.
+        reversed_ : True cuando los segmentos vivos se anteponen en orden inverso
+                    (extend-start / prepend).
+
+        El modo del segmento i (points[i]→points[i+1]) es segment_modes[i+1],
+        es decir el modo activo cuando se colocó el punto de destino.
+        """
+        if not hasattr(self, '_mode_overrides'):
+            self._mode_overrides: dict = {}
+        n = max(0, len(self.points) - 1)
+        for i in range(n):
+            mode = self.segment_modes[i + 1] if (i + 1) < len(self.segment_modes) else ""
+            if not mode:
+                continue
+            path_seg = (seg_offset + n - 1 - i) if reversed_ else (seg_offset + i)
+            self._mode_overrides[f"{path_idx}_{path_seg}"] = mode
+
     def _get_segment_info(self, path_idx: int, seg_idx: int, view_mode: str = "") -> SegmentInfo:
         """
         Busca si el segmento ya tiene info guardada.
@@ -3392,8 +4934,13 @@ class PolylineInteractor:
         # Usamos una clave única basada en el índice del camino y del segmento
         persistence_key = f"{path_idx}_{seg_idx}"
 
+        overrides = getattr(self, '_mode_overrides', {})
         if persistence_key in self.script_object.persistent_metadata:
-            return self.script_object.persistent_metadata[persistence_key]
+            existing = self.script_object.persistent_metadata[persistence_key]
+            # Corregir view_mode si _presave_view_modes dejó un override para esta clave
+            if persistence_key in overrides:
+                existing.view_mode = overrides[persistence_key]
+            return existing
 
         # 2. Si no existe (es un tubo nuevo), creamos la info con el diámetro actual del menú
 
@@ -3403,7 +4950,7 @@ class PolylineInteractor:
             system = self.script_object.selected_inst_type
         label = self._format_segment_label(default_diameter, system)
 
-        # getattr(self.build_ele, ParamNames.General.FUNCTIONAL_NAME)
+        effective_mode = overrides.get(persistence_key, view_mode)
         new_info = SegmentInfo(
             diameter=default_diameter,
             section_type=f"{default_diameter} mm",
@@ -3412,7 +4959,7 @@ class PolylineInteractor:
             distribution_type=self.script_object.distribution_type,
             water_type=self.script_object.water_type,
             face=self.script_object.face_en,
-            view_mode=view_mode,
+            view_mode=effective_mode,
         )
 
         # Guardamos en la persistencia para que no se pierda al redibujar
@@ -3757,41 +5304,42 @@ class PolylineInteractor:
         }
         type_display = type_names.get(element_type, element_type.capitalize())
 
-        # Información básica
-        lines = [f"Inst: {self.script_object.selected_inst_type}", f"Tipo Elemento: {type_display}"]
-
         # Agregar información de la key
-        if len(element_key) >= 3:
-            path_idx = element_key[4]
-            seg_or_vertex_idx = element_key[3] #element_key[3]
+        path_idx = element_key[4] if len(element_key) >= 5 else 0
+        seg_or_vertex_idx = element_key[3] if len(element_key) >= 4 else 0
 
-            if element_type == 'tubo':
-                lines.append(f"Ruta: {path_idx}, Segmento: {seg_or_vertex_idx}")
-                raw_diam = element.get('diameter_in', 0)
+        # Tipo de instalación del path hovereado (no el tipo activo del usuario)
+        path_inst_label = self._active_path_inst_types().get(path_idx) or self.script_object.selected_inst_type or ""
+
+        # Información básica
+        lines = [f"Inst: {path_inst_label}", f"Tipo Elemento: {type_display}"]
+
+        if element_type == 'tubo':
+            lines.append(f"Ruta: {path_idx}, Segmento: {seg_or_vertex_idx}")
+            raw_diam = element.get('diameter_in', 0)
+            try:
+                diameter_in = int(raw_diam)
+            except (ValueError, TypeError):
+                diameter_in = raw_diam
+            lines.append(f"Diametro: {diameter_in}")
+        else:
+            element_params = element.get('params', {})
+            lines.append(f"Ruta: {path_idx}, Vértice: {seg_or_vertex_idx}")
+            if element_type == 'bifurcacion':
+                lines.append(f"Angle: {int(element_params.get('angle', 0))}")
+            elif element_type == 'reduccion':
+                lines.append(f"reducer_type: {element_params.get('reducer_type', '')}")
+                raw_in = element_params.get('diameter_in', 0)
+                raw_out = element_params.get('diameter_out', 0)
                 try:
-                    diameter_in = int(raw_diam)
+                    diameter_in = int(raw_in)
                 except (ValueError, TypeError):
-                    diameter_in = raw_diam
-                lines.append(f"Diametro: {diameter_in}")
-            else:
-                element_params = element.get('params', {})
-                lines.append(f"Ruta: {path_idx}, Vértice: {seg_or_vertex_idx}")
-                if element_type == 'bifurcacion':
-                    lines.append(f"Angle: {int(element_params.get('angle', 0))}")
-                elif element_type == 'reduccion':
-                    lines.append(f"reducer_type: {element_params.get('reducer_type', "")}")
-
-                    raw_in = element_params.get('diameter_in', 0)
-                    raw_out = element_params.get('diameter_out', 0)
-                    try:
-                        diameter_in = int(raw_in)
-                    except (ValueError, TypeError):
-                        diameter_in = raw_in
-                    try:
-                        diameter_out = int(raw_out)
-                    except (ValueError, TypeError):
-                        diameter_out = raw_out
-                    lines.append(f"Diametro IN: {diameter_in} - Diametro OUT: {diameter_out}")
+                    diameter_in = raw_in
+                try:
+                    diameter_out = int(raw_out)
+                except (ValueError, TypeError):
+                    diameter_out = raw_out
+                lines.append(f"Diametro IN: {diameter_in} - Diametro OUT: {diameter_out}")
 
         # Agregar información adicional según el tipo
         if element_type == 'tubo':
@@ -4037,13 +5585,217 @@ class PolylineInteractor:
     def _find_hover_saved_point(self, current_pnt, mode):
         """Busca un vértice guardado usando distancia proyectada según la vista."""
         snap_dist = HIT_TOL_VERTEX # mm
-        for pidx, path in enumerate(self.script_object.saved_paths):
+        for pidx, path in enumerate(self.script_object.active_paths):
             for vidx, saved_p in enumerate(path):
                 # AQUÍ ESTÁ EL CAMBIO: No usar distancia 3D, usar dist_in_plane
                 dist = self.get_dist_in_plane(current_pnt, saved_p, mode)
                 if dist < snap_dist:
                     return (pidx, vidx, saved_p)
         return None
+
+    def _find_snap_to_existing(
+        self,
+        current_pnt: AllplanGeo.Point3D,
+        mode: str,
+        exclude: tuple,
+    ) -> Optional[tuple]:
+        """Retorna (pidx, vidx, Point3D) del vértice más cercano en active_paths dentro de
+        HIT_TOL_VERTEX, excluyendo el vértice (pidx, vidx) que se está arrastrando, o None."""
+        best_dist = HIT_TOL_VERTEX
+        best: Optional[tuple] = None
+        for pidx, path in enumerate(self.script_object.active_paths):
+            for vidx, vp in enumerate(path):
+                if (pidx, vidx) == exclude:
+                    continue
+                dist = self.get_dist_in_plane(current_pnt, vp, mode)
+                if dist < best_dist:
+                    best_dist = dist
+                    best = (pidx, vidx, AllplanGeo.Point3D(vp))
+        return best
+
+    def _resolve_drag_snap(
+        self,
+        raw_pnt: AllplanGeo.Point3D,
+        pidx: int,
+        vidx: int,
+        mode: str,
+    ) -> tuple:
+        """Calcula el punto efectivo durante un drag de vértice.
+
+        Prioridad:
+          1. Vertex snap — cursor dentro de HIT_TOL_VERTEX de otro vértice B:
+             · Acumula B en _extend_snap_refs (máx. 2; si ya hay 2 → reset a [B]).
+             · Si angle limiter activo con 2 refs: intersección de ángulos desde ambos.
+             · Si angle limiter activo con 1 ref: proyección angular absoluta desde B.
+             · Si limiter desactivado: snapa exactamente a B.
+          2. Tracking activa fuera de rango (cursor lejos de B pero _extend_snap_refs activo):
+             · 2 refs → intersección; 1 ref → proyección angular.
+          3. Posición libre sin tracking (raw_pnt).
+
+        Retorna (effective_point, snap_target_or_None).
+        """
+        try:
+            limit_angles = getattr(
+                self.script_object.build_ele, ParamNames.Angles.CHECKBOX
+            ).value
+        except Exception:
+            limit_angles = False
+        _use_angle = (
+            self.visible_limit_angles and limit_angles and bool(self.script_object.angle_steps)
+        )
+
+        hit = self._find_snap_to_existing(raw_pnt, mode, exclude=(pidx, vidx))
+        if hit is not None:
+            _, _, b_pnt = hit
+            # Acumulación sticky: agregar si no está; reset si ya hay 2
+            is_known = any(
+                self.get_dist_in_plane(b_pnt, r, mode) < 1.0
+                for r in self._extend_snap_refs
+            )
+            if not is_known:
+                if len(self._extend_snap_refs) >= 2:
+                    self._extend_snap_refs = [AllplanGeo.Point3D(b_pnt)]
+                else:
+                    self._extend_snap_refs.append(AllplanGeo.Point3D(b_pnt))
+
+            if _use_angle:
+                if len(self._extend_snap_refs) == 2:
+                    effective = self._find_angle_intersection(
+                        raw_pnt, self._extend_snap_refs[0], self._extend_snap_refs[1], mode
+                    )
+                else:
+                    effective = self.snap_point_with_angle(raw_pnt, b_pnt, None, plane=mode)
+                return effective, b_pnt
+            return b_pnt, b_pnt
+
+        # Cursor fuera de rango — aplicar limitador desde refs activas (tracking sticky)
+        if _use_angle and self._extend_snap_refs:
+            if len(self._extend_snap_refs) == 2:
+                effective = self._find_angle_intersection(
+                    raw_pnt, self._extend_snap_refs[0], self._extend_snap_refs[1], mode
+                )
+            else:
+                effective = self.snap_point_with_angle(
+                    raw_pnt, self._extend_snap_refs[0], None, plane=mode
+                )
+            return effective, None
+
+        return raw_pnt, None
+
+    def _find_angle_intersection(
+        self,
+        raw_pnt: AllplanGeo.Point3D,
+        ref_a: AllplanGeo.Point3D,
+        ref_c: AllplanGeo.Point3D,
+        mode: str,
+    ) -> AllplanGeo.Point3D:
+        """Intersección de los rayos de ángulo permitido desde ref_a y ref_c más cercana al cursor.
+
+        Para cada combinación de ángulo válido desde ref_a y desde ref_c resuelve la
+        intersección de las dos rectas y devuelve el punto más cercano a raw_pnt.
+        Si ninguna combinación produce intersección (rayos paralelos o en sentido contrario)
+        devuelve raw_pnt sin modificar.
+        """
+        steps = self.script_object.angle_steps or [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
+
+        # Coordenadas planas según modo de vista
+        if mode == "XZ":
+            ax, ay = ref_a.X, ref_a.Z
+            cx, cy = ref_c.X, ref_c.Z
+            rx, ry = raw_pnt.X, raw_pnt.Z
+            def rebuild(ix, iy): return AllplanGeo.Point3D(ix, ref_a.Y, iy)
+        elif mode == "YZ":
+            ax, ay = ref_a.Y, ref_a.Z
+            cx, cy = ref_c.Y, ref_c.Z
+            rx, ry = raw_pnt.Y, raw_pnt.Z
+            def rebuild(ix, iy): return AllplanGeo.Point3D(ref_a.X, ix, iy)
+        else:  # XY / XYZ
+            ax, ay = ref_a.X, ref_a.Y
+            cx, cy = ref_c.X, ref_c.Y
+            rx, ry = raw_pnt.X, raw_pnt.Y
+            def rebuild(ix, iy): return AllplanGeo.Point3D(ix, iy, raw_pnt.Z)
+
+        best_pnt: Optional[AllplanGeo.Point3D] = None
+        best_dist = float('inf')
+
+        for ang_a in steps:
+            rad_a = math.radians(ang_a)
+            da = (math.cos(rad_a), math.sin(rad_a))
+            for ang_c in steps:
+                rad_c = math.radians(ang_c)
+                dc = (math.cos(rad_c), math.sin(rad_c))
+                # ref_a + t*da = ref_c + s*dc  →  t*da - s*dc = ref_c - ref_a
+                det = da[0] * (-dc[1]) - da[1] * (-dc[0])
+                if abs(det) < 1e-9:
+                    continue  # rayos paralelos
+                dx, dy = cx - ax, cy - ay
+                t = (dx * (-dc[1]) - dy * (-dc[0])) / det
+                if t < 0:
+                    continue  # intersección detrás de ref_a
+                ix, iy = ax + t * da[0], ay + t * da[1]
+                dist = math.hypot(ix - rx, iy - ry)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_pnt = rebuild(ix, iy)
+
+        return best_pnt if best_pnt is not None else raw_pnt
+
+    def undo_last_drag(self) -> bool:
+        """Revierte el último drag confirmado restaurando active_paths desde el stack de undo.
+        Retorna True si había un estado que restaurar, False si el stack estaba vacío."""
+        if not self._drag_undo_stack:
+            print("[UNDO] No hay operaciones de drag para revertir")
+            return False
+        snapshot = self._drag_undo_stack.pop()
+        self.script_object.active_paths = snapshot
+        # Limpiar estados transitorios de drag/snap
+        self.snap_target = None
+        self.saved_dragging = None
+        self.saved_dragging_original_point = None
+        self._last_move_pnt = None
+        self.drag_ghost_path = []
+        # Regenerar segmentos y preview
+        self.get_segments()
+        self._update_segment_groups()
+        self.script_object._create_elements_preview()
+        self._generate_elements_for_preview()
+        print(f"[UNDO] Drag revertido. Operaciones pendientes en stack: {len(self._drag_undo_stack)}")
+        return True
+
+    def _get_cross_mode_paths(self) -> list:
+        """Devuelve la colección de caminos de la modalidad OPUESTA al modo activo.
+
+        - Modo Manual  activo → devuelve ``saved_optimized_paths`` (los automáticos).
+        - Modo Auto    activo → devuelve ``saved_paths`` (los manuales).
+        """
+        if self._current_poly_mode() == PolyModeValues.Manual:
+            return list(getattr(self.script_object, "saved_optimized_paths", None) or [])
+        return list(self.script_object.saved_paths)
+
+    def _find_cross_mode_vertex(
+        self, current_pnt: Any, mode: str
+    ) -> Optional[AllplanGeo.Point3D]:
+        """Busca el vértice más cercano en la colección OPUESTA al modo activo.
+
+        Solo activo en ``create_mode`` para mostrar posibles puntos de conexión
+        cross-mode al usuario mientras dibuja.
+
+        Returns:
+            El ``Point3D`` del vértice más cercano si está dentro de
+            ``HIT_TOL_VERTEX``, o ``None`` si no hay ninguno.
+        """
+        cross_paths = self._get_cross_mode_paths()
+        if not cross_paths:
+            return None
+        best_pt: Optional[AllplanGeo.Point3D] = None
+        best_dist = HIT_TOL_VERTEX
+        for path in cross_paths:
+            for pt in path:
+                dist = self.get_dist_in_plane(current_pnt, pt, mode)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_pt = pt
+        return best_pt
 
     def _find_hover_midpoint(self, p: AllplanGeo.Point3D, mode) -> Optional[Tuple[str, int, int, AllplanGeo.Point3D]]:
         """
@@ -4055,9 +5807,8 @@ class PolylineInteractor:
         min_dist = float('inf')
 
         # Pre-calculamos la proyección si es necesario para optimizar el bucle
-        proj_data = None
-        if mode not in ["XY", "XZ", "YZ"]:
-            proj_data = self.coord_input.GetViewWorldProjection() # type: ignore
+        proj_data = (getattr(self, '_frame_proj_data', None) or self.coord_input.GetViewWorldProjection()  # type: ignore
+                     ) if mode not in ["XY", "XZ", "YZ"] else None
 
         # 1. BUSCAR EN RUTA ACTIVA (La que se está dibujando)
         if len(self.points) >= 2:
@@ -4073,7 +5824,7 @@ class PolylineInteractor:
                     best = ("active", -1, i, mp)
 
         # 2. BUSCAR EN RUTAS GUARDADAS
-        for path_idx, pts in enumerate(self.script_object.saved_paths):
+        for path_idx, pts in enumerate(self.script_object.active_paths):
             if len(pts) < 2:
                 continue
 
@@ -4098,11 +5849,10 @@ class PolylineInteractor:
         min_dist_found = HIT_TOL_SEGMENT
         best_seg = None
 
-        proj_data = None
-        if mode not in ["XY", "XZ", "YZ"]:
-            proj_data = self.coord_input.GetViewWorldProjection() # type: ignore
+        proj_data = (getattr(self, '_frame_proj_data', None) or self.coord_input.GetViewWorldProjection()  # type: ignore
+                     ) if mode not in ["XY", "XZ", "YZ"] else None
 
-        for p_idx, path in enumerate(self.script_object.saved_paths):
+        for p_idx, path in enumerate(self.script_object.active_paths):
             if len(path) < 2:
                 continue
 
@@ -4197,8 +5947,8 @@ class PolylineInteractor:
                 return self.points[seg_idx], self.points[seg_idx + 1]
             return None, None
         if kind == "tubo":
-            if 0 <= path_idx < len(self.script_object.saved_paths):
-                pts = self.script_object.saved_paths[path_idx]
+            if 0 <= path_idx < len(self.script_object.active_paths):
+                pts = self.script_object.active_paths[path_idx]
                 if len(pts) >= 2 and 0 <= seg_idx < len(pts) - 1:
                     return pts[seg_idx], pts[seg_idx + 1]
         return None, None
@@ -4271,6 +6021,19 @@ class PolylineInteractor:
             new_meta[k] = v
         self.script_object.persistent_metadata = new_meta
 
+        # Remap path_inst_types del modo activo: ambas mitades heredan el tipo original
+        pit = self._active_path_inst_types().copy()
+        orig_type = pit.get(v_path, "")
+        new_pit: Dict[int, str] = {}
+        for k, v in pit.items():
+            if k < v_path:
+                new_pit[k] = v
+            elif k > v_path:
+                new_pit[k + 1] = v
+        new_pit[v_path] = orig_type
+        new_pit[v_path + 1] = orig_type
+        self._set_active_path_inst_types(new_pit)
+
     def _remap_metadata_after_segment_cut(self, path_idx: int, seg_idx: int) -> None:
         """
         Tras cortar saved_paths[path_idx] proyectando un punto sobre el segmento seg_idx:
@@ -4303,6 +6066,19 @@ class PolylineInteractor:
             new_meta[f"{path_idx + 1}_0"] = original_meta
         self.script_object.persistent_metadata = new_meta
 
+        # Remap path_inst_types del modo activo: ambas mitades heredan el tipo original
+        pit = self._active_path_inst_types().copy()
+        orig_type = pit.get(path_idx, "")
+        new_pit: Dict[int, str] = {}
+        for k, v in pit.items():
+            if k < path_idx:
+                new_pit[k] = v
+            elif k > path_idx:
+                new_pit[k + 1] = v
+        new_pit[path_idx] = orig_type
+        new_pit[path_idx + 1] = orig_type
+        self._set_active_path_inst_types(new_pit)
+
     # ───────────────────────────────────────────────────────────────────────
     # Helpers para sincronizar applied_attributes / applied_layers
     # ───────────────────────────────────────────────────────────────────────
@@ -4321,8 +6097,9 @@ class PolylineInteractor:
 
     def _shift_applied_path_idx(self, from_path_idx: int) -> None:
         """Incrementa en +1 el path_idx de todas las claves >= from_path_idx
-        en applied_attributes y applied_layers."""
-        for d in [self.script_object.applied_attributes, self.script_object.applied_layers]:
+        en applied_attributes, applied_layers, applied_codificacion y cc_path_numbers."""
+        for d in [self.script_object.applied_attributes, self.script_object.applied_layers,
+                  self.script_object.applied_codificacion]:
             new_d: dict = {}
             for k, v in d.items():
                 parts = k.split("_")  # "seg_{p}_elem_{s}" → ["seg","p","elem","s"]
@@ -4337,6 +6114,13 @@ class PolylineInteractor:
                 new_d[k] = v
             d.clear()
             d.update(new_d)
+
+        cc = getattr(self.script_object, "cc_path_numbers", {})
+        new_cc: dict = {}
+        for p, num in cc.items():
+            new_cc[p + 1 if p >= from_path_idx else p] = num
+        cc.clear()
+        cc.update(new_cc)
 
     def _remap_applied_after_insert(
         self, path_idx: int, seg_idx: int, snapshot: dict, inherited: dict
@@ -4359,6 +6143,8 @@ class PolylineInteractor:
                     self.script_object.applied_attributes[_new_k] = self.script_object.applied_attributes.pop(_old_k)
                 if _old_k in self.script_object.applied_layers:
                     self.script_object.applied_layers[_new_k] = self.script_object.applied_layers.pop(_old_k)
+                if _old_k in self.script_object.applied_codificacion:
+                    self.script_object.applied_codificacion[_new_k] = self.script_object.applied_codificacion.pop(_old_k)
         # Fase 2: heredar para elementos nuevos
         if not inherited:
             return
@@ -4393,6 +6179,10 @@ class PolylineInteractor:
         """
         new_path_idx = old_path_idx + 1
         self._shift_applied_path_idx(new_path_idx)
+        # Propagar CC number del path padre al nuevo sub-path (cortes comparten número)
+        cc = getattr(self.script_object, "cc_path_numbers", {})
+        if old_path_idx in cc and new_path_idx not in cc:
+            cc[new_path_idx] = cc[old_path_idx]
         # Remap del path derecho
         for _pg in self.generated_elements:
             for _e in _pg:  # type: ignore[assignment]
@@ -4407,6 +6197,8 @@ class PolylineInteractor:
                     self.script_object.applied_attributes[_new_k] = self.script_object.applied_attributes.pop(_old_k)
                 if _old_k in self.script_object.applied_layers:
                     self.script_object.applied_layers[_new_k] = self.script_object.applied_layers.pop(_old_k)
+                if _old_k in self.script_object.applied_codificacion:
+                    self.script_object.applied_codificacion[_new_k] = self.script_object.applied_codificacion.pop(_old_k)
         # Heredar para elementos nuevos del path derecho
         if not inherited:
             return
@@ -4447,7 +6239,7 @@ class PolylineInteractor:
                     self.selected_seg = ("active", -1, self.selected_seg[2] + 1)
 
         elif kind == "tubo":
-            if not (0 <= path_idx < len(self.script_object.saved_paths)):
+            if not (0 <= path_idx < len(self.script_object.active_paths)):
                 return
 
             # 0. Capturar estado ANTES de modificar
@@ -4465,12 +6257,12 @@ class PolylineInteractor:
             self._remap_metadata_after_insert(path_idx, seg_idx)
 
             # 1. Modificación de la 'Fuente de Verdad'
-            current_path = self.script_object.saved_paths[path_idx]
+            current_path = self.script_object.active_paths[path_idx]
             new_point = AllplanGeo.Point3D(q.X, q.Y, q.Z)
             current_path.insert(seg_idx + 1, new_point)
 
             # Actualizamos la lista maestra
-            self.script_object.saved_paths[path_idx] = current_path
+            self.script_object.active_paths[path_idx] = current_path
 
             # 2. RE-CÁLCULO TOTAL (La cadena de mando)
             self.get_segments()             # Recalcula toda la trigonometría de todas las rutas
@@ -4501,10 +6293,10 @@ class PolylineInteractor:
         """
         try:
             # 1. Validaciones de seguridad
-            if not (0 <= path_idx < len(self.script_object.saved_paths)):
+            if not (0 <= path_idx < len(self.script_object.active_paths)):
                 return
 
-            pts_referencia = self.script_object.saved_paths[path_idx]
+            pts_referencia = self.script_object.active_paths[path_idx]
             if not (0 <= vertex_idx < len(pts_referencia)):
                 return
 
@@ -4516,7 +6308,7 @@ class PolylineInteractor:
             paths_affected = 0
 
             # 3. Escaneo Global de la Red
-            for p_idx, path in enumerate(self.script_object.saved_paths):
+            for p_idx, path in enumerate(self.script_object.active_paths):
                 modified = False
                 for v_idx, vtx in enumerate(path):
                     # USAR DISTANCIA CON TOLERANCIA
@@ -4527,7 +6319,7 @@ class PolylineInteractor:
                                     (vtx.Z - original_point.Z)**2)
 
                     if dist < 0.1:
-                        self.script_object.saved_paths[p_idx][v_idx] = new_coords
+                        self.script_object.active_paths[p_idx][v_idx] = new_coords
                         vertices_moved += 1
                         modified = True
 
@@ -4540,7 +6332,7 @@ class PolylineInteractor:
             self._update_segment_groups()    # Actualiza IDs y tipos
             self.script_object._create_elements_preview() # Regenera los tubos 3D
 
-            print(f"[RED] Movimiento múltiple: {vertices_moved} tubos reconectados en {paths_affected} caminos.")
+            # print(f"[RED] Movimiento múltiple: {vertices_moved} tubos reconectados en {paths_affected} caminos.")
 
         except Exception as ex:
             print(f"[ERROR RED] Fallo en sincronización: {ex}")
@@ -4569,6 +6361,7 @@ class PolylineInteractor:
         changed = False
         new_persistent_metadata = {}
         new_saved_paths = []
+        new_path_inst_types: Dict[int, str] = {}
 
         message = (
             f"Tipo elemento seleccionado: {kind}\n"
@@ -4577,8 +6370,9 @@ class PolylineInteractor:
             f"Estas seguro que deseas eliminar los elementos seleccionados?\n"
         )
         result = PythonUtility.ShowMessageBox(message, PythonUtility.MB_YESNO)
-        for path_idx, pts in enumerate(self.script_object.saved_paths):
+        for path_idx, pts in enumerate(self.script_object.active_paths):
             if result == 6:
+                orig_type = self._active_path_inst_types().get(path_idx, "")
                 if path_idx not in to_delete:
                     # RUTA ENTERA SE MANTIENE: Re-mapeamos sus segmentos a la nueva posición
                     new_path_idx = len(new_saved_paths)
@@ -4588,6 +6382,7 @@ class PolylineInteractor:
                         if old_key in self.script_object.persistent_metadata:
                             new_persistent_metadata[new_key] = self.script_object.persistent_metadata[old_key]
 
+                    new_path_inst_types[new_path_idx] = orig_type
                     new_saved_paths.append(pts)
                     continue
                 seg_indices = to_delete[path_idx]
@@ -4604,7 +6399,10 @@ class PolylineInteractor:
                     if i in seg_indices:
                         if len(fragment) >= 2:
                             # Guardamos el fragmento y su metadata acumulada
+                            _before = len(new_saved_paths)
                             self._add_fragment_with_meta(new_saved_paths, new_persistent_metadata, fragment, temp_fragments_metadata)
+                            if len(new_saved_paths) > _before:
+                                new_path_inst_types[len(new_saved_paths) - 1] = orig_type
                             changed = True
                         fragment = [pts[i + 1]]
                         temp_fragments_metadata = []
@@ -4616,13 +6414,17 @@ class PolylineInteractor:
                         fragment.append(pts[i + 1])
 
                 if len(fragment) >= 2:
+                    _before = len(new_saved_paths)
                     self._add_fragment_with_meta(new_saved_paths, new_persistent_metadata, fragment, temp_fragments_metadata)
+                    if len(new_saved_paths) > _before:
+                        new_path_inst_types[len(new_saved_paths) - 1] = orig_type
                     changed = True
 
         if changed:
             # 1. ACTUALIZACIÓN DE DATOS (El origen de la verdad)
             self.script_object.persistent_metadata = new_persistent_metadata
-            self.script_object.saved_paths = new_saved_paths
+            self.script_object.active_paths = new_saved_paths
+            self._set_active_path_inst_types(new_path_inst_types)
 
             # 2. RE-CÁLCULO LÓGICO (Construye los nuevos SegmentItems con la nueva metadata)
             # Es vital que esto ocurra ANTES de crear la preview 3D
@@ -4669,9 +6471,9 @@ class PolylineInteractor:
         except (IndexError, TypeError):
             return False
 
-        if not (0 <= path_idx < len(self.script_object.saved_paths)):
+        if not (0 <= path_idx < len(self.script_object.active_paths)):
             return False
-        pts = self.script_object.saved_paths[path_idx]
+        pts = self.script_object.active_paths[path_idx]
         if not pts or seg_idx >= len(pts) - 1:
             return False
 
@@ -4687,8 +6489,10 @@ class PolylineInteractor:
 
         new_saved_paths: list = []
         new_persistent_metadata: dict = {}
+        new_path_inst_types: Dict[int, str] = {}
 
-        for idx, path_pts in enumerate(self.script_object.saved_paths):
+        for idx, path_pts in enumerate(self.script_object.active_paths):
+            orig_type = self._active_path_inst_types().get(idx, "")
             if idx != path_idx:
                 new_path_idx = len(new_saved_paths)
                 for s_idx in range(len(path_pts) - 1):
@@ -4696,6 +6500,7 @@ class PolylineInteractor:
                     new_key = f"{new_path_idx}_{s_idx}"
                     if old_key in self.script_object.persistent_metadata:
                         new_persistent_metadata[new_key] = self.script_object.persistent_metadata[old_key]
+                new_path_inst_types[new_path_idx] = orig_type
                 new_saved_paths.append(path_pts)
             else:
                 left  = path_pts[:seg_idx + 1]
@@ -4708,6 +6513,7 @@ class PolylineInteractor:
                         new_key = f"{new_path_idx}_{s_idx}"
                         if old_key in self.script_object.persistent_metadata:
                             new_persistent_metadata[new_key] = self.script_object.persistent_metadata[old_key]
+                    new_path_inst_types[new_path_idx] = orig_type
                     new_saved_paths.append(left)
 
                 if len(right) >= 2:
@@ -4717,10 +6523,12 @@ class PolylineInteractor:
                         new_key = f"{new_path_idx}_{s_idx}"
                         if old_key in self.script_object.persistent_metadata:
                             new_persistent_metadata[new_key] = self.script_object.persistent_metadata[old_key]
+                    new_path_inst_types[new_path_idx] = orig_type
                     new_saved_paths.append(right)
 
         self.script_object.persistent_metadata = new_persistent_metadata
-        self.script_object.saved_paths = new_saved_paths
+        self.script_object.active_paths = new_saved_paths
+        self._set_active_path_inst_types(new_path_inst_types)
 
         self.get_segments()
         self.highlight_geometry = None
@@ -4760,8 +6568,8 @@ class PolylineInteractor:
         )
         # Verificar que el punto sigue existiendo y sigue siendo junction
         junction = None
-        if (path_idx < len(self.script_object.saved_paths)
-                        and pt_idx < len(self.script_object.saved_paths[path_idx])):
+        if (path_idx < len(self.script_object.active_paths)
+                        and pt_idx < len(self.script_object.active_paths[path_idx])):
                     junction = self._is_junction_point(path_idx, pt_idx)
 
         if junction is not None:
@@ -4829,9 +6637,13 @@ class PolylineInteractor:
         if result != 6:  # 6 = Yes
             return False
 
-        seg_info.diameter     = new_diameter
+        current_system = self.script_object.selected_inst_type or seg_info.system or ""
+        seg_info.diameter = new_diameter
         seg_info.section_type = f"{new_diameter} mm"
-        seg_info.label        = self._format_segment_label(new_diameter, seg_info.system or "")
+        seg_info.system = current_system
+        seg_info.distribution_type = self.script_object.distribution_type
+        seg_info.water_type = self.script_object.water_type
+        seg_info.label = self._format_segment_label(new_diameter, current_system)
 
         self.get_segments()
         self.highlight_geometry = None
@@ -4897,9 +6709,16 @@ class PolylineInteractor:
             seg_info = self.script_object.persistent_metadata.get(key)
             if seg_info is None:
                 continue
-            seg_info.diameter     = new_diameter
+            # seg_info.diameter     = new_diameter
+            # seg_info.section_type = f"{new_diameter} mm"
+            # seg_info.label        = self._format_segment_label(new_diameter, seg_info.system or "")
+            current_system = self.script_object.selected_inst_type or seg_info.system or ""
+            seg_info.diameter = new_diameter
             seg_info.section_type = f"{new_diameter} mm"
-            seg_info.label        = self._format_segment_label(new_diameter, seg_info.system or "")
+            seg_info.system = current_system
+            seg_info.distribution_type = self.script_object.distribution_type
+            seg_info.water_type = self.script_object.water_type
+            seg_info.label = self._format_segment_label(new_diameter, current_system)
             changed = True
 
         if changed:
@@ -4921,6 +6740,144 @@ class PolylineInteractor:
             current_pnt = self.coord_input.GetCurrentPoint(self.current_point).GetPoint()  # type: ignore
             self._draw_preview(current_pnt)
         return changed
+
+    # ============================================================================
+    # CHANGE INSTALLATION TYPE FOR ENTIRE PATH
+    # ============================================================================
+    def change_installation_type_selected_path(self) -> bool:
+        """Cambia el tipo de instalación de todos los segmentos del/los caminos
+        que contienen los segmentos seleccionados.
+
+        Fuente del nuevo tipo: ``build_ele.InstallationType.value`` (paleta).
+
+        Selección activa:
+          - ``selected_seg``      → cambia el camino completo al que pertenece el segmento.
+          - ``selected_segments`` → cambia todos los caminos únicos representados en la selección.
+          - Sin selección        → muestra mensaje informativo.
+
+        Devuelve ``True`` si se realizó algún cambio.
+        """
+        new_type_param = getattr(self.script_object.build_ele, "InstallationType", None)
+        new_type: str = (getattr(new_type_param, "value", None) or "").strip()
+
+        if not new_type:
+            PythonUtility.ShowMessageBox(
+                "No hay ningún tipo de instalación seleccionado en la paleta.\n\n"
+                "Elige un tipo en el combo 'Elegir instalacion' antes de pulsar el botón.",
+                PythonUtility.MB_OK
+            )
+            return False
+
+        # ── Recopilar índices de caminos afectados ─────────────────────────────
+        path_indices: set = set()
+
+        if self.selected_seg is not None:
+            try:
+                path_indices.add(self.selected_seg[1])
+            except (IndexError, TypeError):
+                pass
+
+        if self.selected_segments:
+            for item in self.selected_segments:
+                try:
+                    # item formato: (tipo, path_idx_display, elem_idx, layer_idx, path_idx_real)
+                    if len(item) >= 5:
+                        path_indices.add(item[4])
+                    elif len(item) >= 2:
+                        path_indices.add(item[1])
+                except (IndexError, TypeError):
+                    pass
+
+        # Caminos seleccionados por TrazadoParaleloSeleccionMultiple (multi-select en create_mode)
+        _psp = getattr(self, '_parallel_selected_path_indices', set())
+        path_indices.update(_psp)
+
+        if not path_indices:
+            PythonUtility.ShowMessageBox(
+                "No hay ningún segmento seleccionado.\n\n"
+                "Selecciona un segmento o un grupo de segmentos antes de pulsar el botón.\n\n"
+                "• Modo Edición: haz clic sobre un segmento o usa selección rectangular.\n"
+                "• Modo Creación (multi-select activo): haz clic sobre un camino paralelo.",
+                PythonUtility.MB_OK
+            )
+            return False
+
+        active_paths = self.script_object.active_paths
+        pit = self._active_path_inst_types()
+
+        # ── Construir lista de cambios para el diálogo ─────────────────────────
+        changes: list = []
+        for path_idx in sorted(path_indices):
+            if path_idx >= len(active_paths):
+                continue
+            pts = active_paths[path_idx]
+            seg_count = max(0, len(pts) - 1)
+            old_type = pit.get(path_idx, "")
+            changes.append(PathInstTypeChange(
+                path_idx=path_idx,
+                old_type=old_type,
+                new_type=new_type,
+                segments_count=seg_count,
+            ))
+
+        if not changes:
+            return False
+
+        # ── Diálogo de confirmación ────────────────────────────────────────────
+        summary_lines = "\n\n".join(c.summary() for c in changes)
+        result = PythonUtility.ShowMessageBox(
+            f"Se cambiará el tipo de instalación en {len(changes)} camino(s):\n\n"
+            f"{summary_lines}\n\n"
+            f"¿Deseas aplicar el cambio?",
+            PythonUtility.MB_YESNO
+        )
+        if result != 6:  # 6 = Yes
+            return False
+
+        # ── Aplicar cambios ────────────────────────────────────────────────────
+        for change in changes:
+            path_idx = change.path_idx
+            # 1. Actualizar path_inst_types
+            pit[path_idx] = new_type
+            # 2. Actualizar system en todos los SegmentInfo del camino
+            pts = active_paths[path_idx]
+            for seg_idx in range(max(0, len(pts) - 1)):
+                key = f"{path_idx}_{seg_idx}"
+                seg_info = self.script_object.persistent_metadata.get(key)
+                if seg_info is not None:
+                    seg_info.system = new_type
+                    seg_info.label = self._format_segment_label(seg_info.diameter, new_type)
+
+        # ── Garantizar que path_inst_types tenga entrada para TODOS los caminos ──
+        # Si un camino no tiene su tipo registrado en el dict, _run_preview_pass usa
+        # current_inst_config (= el tipo global de paleta que el usuario acaba de
+        # cambiar a "nuevo tipo") como fallback, lo que haría que ese camino se
+        # renderice con el tipo equivocado.  Se rellena desde seg_info.system.
+        for idx, pts in enumerate(active_paths):
+            if idx not in pit and len(pts) >= 2:
+                inferred = self.script_object.persistent_metadata.get(f"{idx}_0")
+                if inferred and inferred.system:
+                    pit[idx] = inferred.system
+
+        # ── Limpiar selección y refrescar vista ───────────────────────────────
+        self.get_segments()
+        self.highlight_geometry = None
+        self.selected_segments.clear()
+        self.selected_seg     = None
+        self.hover_seg        = None
+        self.insert_preview_p = None
+        self.insert_target    = None
+        self.hover_mid        = None
+        self.highlight_geometries.clear()
+        self.element_list_final = []
+
+        self._update_segment_groups()
+        self.script_object._create_elements_preview()
+        self._generate_elements_for_preview()
+
+        current_pnt = self.coord_input.GetCurrentPoint(self.current_point).GetPoint()  # type: ignore
+        self._draw_preview(current_pnt)
+        return True
 
     # ============================================================================
     # APPLY LAYERS AND ATTRIBUTES
@@ -5020,11 +6977,11 @@ class PolylineInteractor:
         # Mantenemos la actualización de la lista de elementos generados
         # para que el cambio sea visible inmediatamente sin recrear todo
         generated_paths = getattr(self, "generated_elements", [])
-        for path_group in generated_paths:  # Primer nivel: Las rutas
-            for element in path_group:      # Segundo nivel: Los elementos
+        for path_group in generated_paths:
+            for element in path_group:
                 key = element.get('key')
                 if key and len(key) >= 4:
-                    if key[1] == path_idx and key[3] == layer_idx:
+                    if key[1] == path_idx and key[2] == elem_idx:
                         element['layer'] = self.layer_selected
                         break
         print(f"DEBUG - Layer guardado en clave: {applied.storage_key} -> ID: {self.layer_selected}")
@@ -5032,6 +6989,14 @@ class PolylineInteractor:
     def apply_layer_default(self):
         if self.script_object.default_layers:
             self.layer_default = self.script_object.default_layers.get("default", "")
+
+    def _resolve_layer(self) -> str:
+        inst_cfg = self.script_object.current_inst_config
+        if inst_cfg:
+            type_layer = inst_cfg.get("default_layer", "")
+            if type_layer:
+                return type_layer
+        return self.layer_default or ""
 
     def apply_attributes_input(self):
         """
@@ -5076,15 +7041,13 @@ class PolylineInteractor:
 
         applied_count = 0
         affected_paths = set()
+        generated_paths = getattr(self, "generated_elements", [])
 
         # 5. Iterar y Guardar
         for item in targets:
-            storage_key = ""
-
             # Desempaquetar la tupla (igual que en apply_layers_to_selected)
             elem_type, path_idx, elem_idx, layer_idx, idx = item
 
-            # index = layer_idx if inst_type in self.simple_installation else elem_idx
             storage_key = f"seg_{idx}_elem_{layer_idx}"
 
             # Guardar en el diccionario persistente
@@ -5093,19 +7056,14 @@ class PolylineInteractor:
             applied_count += 1
             affected_paths.add(idx)
 
-        # ---------------------------------------------------------
-        # 4. Actualizar generated_elements (Vista previa/interactiva)
-        # ---------------------------------------------------------
-        # Mantenemos la actualización de la lista de elementos generados
-        # para que el cambio sea visible inmediatamente sin recrear todo
-        generated_paths = getattr(self, "generated_elements", [])
-        for path_group in generated_paths:  # Primer nivel: Las rutas
-            for element in path_group:      # Segundo nivel: Los elementos
-                key = element.get('key')
-                if key and len(key) >= 4:
-                    if key[1] == path_idx and key[3] == layer_idx:
-                        element['attribute'] = input_attribute_val
-                        break
+            # Marcar el elemento en generated_elements para que el tooltip lo refleje
+            for path_group in generated_paths:
+                for element in path_group:
+                    key = element.get('key')
+                    if key and len(key) >= 3:
+                        if key[1] == path_idx and key[2] == elem_idx:
+                            element['attribute'] = input_attribute_val
+                            break
 
         # 6. Feedback al Usuario
         message = (
@@ -5115,6 +7073,45 @@ class PolylineInteractor:
             f"Elementos actualizados: {applied_count}\n"
         )
         PythonUtility.ShowMessageBox(message, PythonUtility.MB_OK)
+
+    def apply_codificacion_cajetin_input(self):
+        """
+        Aplica la codificación cajetín a los elementos seleccionados.
+        Se combina con la numeración absoluta CC-{num} en el Atributo personalizado 01.
+        """
+        input_val = getattr(self.script_object.build_ele, ParamNames.Attributes.CODIFICACION).value
+
+        targets = []
+        if self.selected_segments:
+            targets = list(self.selected_segments)
+        elif self.selected_element_id:
+            targets = [self.selected_element_id]
+
+        if not targets:
+            PythonUtility.ShowMessageBox("⚠️ Selecciona elements per aplicar la codificació.", PythonUtility.MB_OK)
+            return
+
+        if not hasattr(self.script_object, "applied_codificacion"):
+            self.script_object.applied_codificacion = {}
+
+        applied_count = 0
+        affected_paths = set()
+
+        for item in targets:
+            elem_type, path_idx, elem_idx, layer_idx, idx = item
+            storage_key = f"seg_{idx}_elem_{layer_idx}"
+            if input_val:
+                self.script_object.applied_codificacion[storage_key] = input_val
+            else:
+                self.script_object.applied_codificacion.pop(storage_key, None)
+            applied_count += 1
+            affected_paths.add(idx)
+
+        label = input_val if input_val else "(buit)"
+        PythonUtility.ShowMessageBox(
+            f"✅ Codificació aplicada!\nValor: {label}\nElements actualitzats: {applied_count}",
+            PythonUtility.MB_OK
+        )
 
     # ============================================================================
     # EVENTS
@@ -5130,6 +7127,7 @@ class PolylineInteractor:
         """ESC: Validar, guardar si es correcto o permitir seguir editando."""
         try:
             print("[INT] ESC/Finalizar: Validando antes de crear...")
+
             if not self.saved_elements:
                 self._save_current_polyline()
                 self.script_object._create_elements_preview()
@@ -5142,6 +7140,21 @@ class PolylineInteractor:
                 # Si todo está bien, creamos y cerramos
                 self.script_object.element_list_final = []
                 self.script_object._generate_pythonparts()
+                # Limpiar puntos no definidos DESPUÉS de serializar (dentro de
+                # _generate_pythonparts → _serialize_state_to_json), para que
+                # queden guardados en SavedState y se restauren al doble-click.
+                self.delete_undefined_point()
+                # Reset completo del estado de dibujo para el siguiente elemento independiente.
+                # saved_paths es acumulativo: sin este reset, los paths del tubo anterior quedan
+                # en la lista y el siguiente tubo los hereda, compartiendo el mismo CC number.
+                # self.script_object.cc_path_numbers = {}
+                # self.script_object.saved_paths = []
+                # self.script_object.saved_cut_points = []
+                # self.script_object.saved_vertex_cut_points = []
+                # self.points = []
+                # self.data = []
+                # self.last_points = []
+                # print(f"[CC-DBG] Elemento creado → estado de dibujo limpiado para el siguiente tubo independiente")
                 return OnCancelFunctionResult.CREATE_ELEMENTS
 
             elif status == "BORRAR":
@@ -5156,6 +7169,8 @@ class PolylineInteractor:
         except Exception as ex:
             self.script_object.element_list_final = []
             self.script_object._generate_pythonparts()
+            self.delete_undefined_point()
+            # self.script_object.cc_path_numbers = {}
             print(f"[INT] Error during cancel function: {ex}")
             return OnCancelFunctionResult.CANCEL_INPUT
 
@@ -5202,6 +7217,15 @@ class PolylineInteractor:
                     PythonUtility.MB_OK
                 )
 
+        elif event_id == EventIds.INSTALLATION_TYPE_CHANGED:  # 1002
+            self._on_installation_type_changed()
+
+        elif event_id == EventIds.CAMBIAR_TIPO_INSTALACION:  # 1045
+            self.change_installation_type_selected_path()
+
+        elif event_id == EventIds.AGREGAR_PARALELA:  # 1050
+            self._handle_agregar_paralela()
+
         elif event_id == EventIds.FINALIZAR_CREACION:  # 1003 - Finalizar -> guardar y crear inmediatament
             print("[SO] Finalizar -> guardar y crear inmediatamente")
             name = "CancelInput"
@@ -5223,12 +7247,21 @@ class PolylineInteractor:
         elif event_id == EventIds.ATTRIBUTE_APPLY: # 1011
             self.apply_attributes_input()
 
+        elif event_id == EventIds.CODIFICACION_CAJETIN_APPLY: # 1039
+            self.apply_codificacion_cajetin_input()
+
         elif event_id == EventIds.DEFINIR_ORIENTACION: # 1012
             # Definir orientación 3D (captura de línea en XY)
             return bool(self.start_orientation_capture())
 
+        elif event_id == EventIds.INVERTIR_CAVAL: # 1017
+            return bool(self._handle_invertir_caval())
+
         # ── Soportes: botones de acción (independientes de la instalación) ──
         elif event_id == EventIds.INSERTAR_SOPORTE: # 1033
+            # Cargar datos del JSON en este momento (no en start_input)
+            self._init_soporte_from_json()
+
             # 1) Salir de cualquier modo de dibujo de polilínea activo y pasar a EXTEND.
             if self.create_mode and len(self.points) >= 2:
                 self._save_current_polyline()
@@ -5248,12 +7281,12 @@ class PolylineInteractor:
                     return default
                 return getattr(raw, "value", raw) or default
 
-            tipo      = _getv(ParamNames.Soportes.TYPE_SUPPORT, "—")
-            subtipo   = _getv(ParamNames.Soportes.SUBTIPO_SOPORTE, "—")
-            sup       = _getv(ParamNames.Soportes.SUPERFICIE, "—")
-            cota_a    = _getv(ParamNames.Soportes.COTA_A, "0")
-            cota_b    = _getv(ParamNames.Soportes.COTA_B, "0")
-            angulo    = _getv(ParamNames.Soportes.ANGULO_INCLINACION, "0")
+            tipo      = _getv(ParamNames.Supports.TYPE_SUPPORT, "—")
+            subtipo   = _getv(ParamNames.Supports.SUBTIPO_SOPORTE, "—")
+            sup       = _getv(ParamNames.Supports.SUPERFICIE, "—")
+            cota_a    = _getv(ParamNames.Supports.COTA_A, "0")
+            cota_b    = _getv(ParamNames.Supports.COTA_B, "0")
+            angulo    = _getv(ParamNames.Supports.ANGULO_INCLINACION, "0")
             p1 = self._soporte_pos1
             p2 = self._soporte_pos2
             p1_str = f"({p1.X:.1f}, {p1.Y:.1f}, {p1.Z:.1f})" if p1 else "—"
@@ -5297,7 +7330,7 @@ class PolylineInteractor:
 
             # Deshabilitar "Insertar Soporte" mientras se está en modo inserción,
             # habilitar "Crear Soporte" y deshabilitar el RadioGroup de edición
-            self.script_object.enable_parameter(ParamNames.Soportes.INSERTAR_SOPORTE, False)
+            self.script_object.enable_parameter(ParamNames.Supports.INSERTAR_SOPORTE, False)
             self.script_object._update_soporte_ui_state(preview_active=True)
             return True
 
@@ -5325,7 +7358,7 @@ class PolylineInteractor:
             self._soporte_manage_mode    = True
             # Re-habilitar "Insertar Soporte", deshabilitar "Crear Soporte",
             # re-habilitar RadioGroup de edición
-            self.script_object.enable_parameter(ParamNames.Soportes.INSERTAR_SOPORTE, True)
+            self.script_object.enable_parameter(ParamNames.Supports.INSERTAR_SOPORTE, True)
             self.script_object._update_soporte_ui_state(preview_active=False)
             return True
 
@@ -5366,7 +7399,7 @@ class PolylineInteractor:
                     PythonUtility.MB_OK,
                 )
                 return True
-            raw = getattr(self.script_object.build_ele, ParamNames.Soportes.ATTR_VALUE)
+            raw = getattr(self.script_object.build_ele, ParamNames.Supports.ATTR_VALUE)
             attr_val = raw.value
             if not attr_val:
                 PythonUtility.ShowMessageBox(
@@ -5380,6 +7413,50 @@ class PolylineInteractor:
                 PythonUtility.MB_OK,
             )
             return True
+
+        # ── Elementos no definidos: botones de acción ──
+        elif event_id == EventIds.INJECT_TEST_POINTS:  # 1040
+            self.optimizer.inject_test_points()
+            return True
+
+        elif event_id == EventIds.GENERAR_CAMINO_OPTIMO:  # 1041
+            # Auto-switch a Automático
+            poly_raw = getattr(self.script_object.build_ele, ParamNames.PolyMode.MODE, None)
+            if poly_raw is not None and poly_raw.value != PolyModeValues.Automatico:
+                poly_raw.value = PolyModeValues.Automatico
+                print("[Optimizer] Auto-switch → Automático")
+
+            # Desactivar nodos indefinidos (el optimizador recalcula todo)
+            undef_raw = getattr(self.script_object.build_ele, ParamNames.DrawMode.INSERT_UNDEFINED_POINTS, None)
+            if undef_raw is not None and undef_raw.value != 0:
+                undef_raw.value = 0
+                self.punto_input_mode = False
+                self.punto_edit_mode  = False
+                self._punto_hover_idx = None
+                self._punto_snap_ref  = None
+                print("[Optimizer] Nodos indefinidos desactivados")
+
+            # Limpiar el preview del selector al ejecutar el optimizador
+            self.script_object.selector_preview_elems = []
+            tipo = getattr(self.script_object, "selected_inst_type", "") or ""
+            self.optimizer.run(tipo_instalacion=tipo)
+            return True
+
+        elif event_id == EventIds.LIMPIAR_PUNTOS_NO_DEFINIDOS:  # 1042
+            self.delete_undefined_point()
+            return True
+
+    def _handle_invertir_caval(self) -> bool:
+        """
+        Handler mínimo para el botón "Invertir caval".
+        Punto de extensión para implementar la lógica de inversión más adelante.
+        """
+        PythonUtility.ShowMessageBox(
+            "Evento 'Invertir caval' recibido.\n"
+            "Handler base activo (sin lógica de inversión todavía).",
+            PythonUtility.MB_OK,
+        )
+        return True
 
     # ========================================
     # HELPERS
@@ -5531,8 +7608,8 @@ class PolylineInteractor:
                 lbl_prop.ColorByLayer = False
                 try:
                     text_prop = AllplanBasisElements.TextProperties()
-                    text_prop.Height = 0.30
-                    text_prop.Width  = 0.30
+                    text_prop.Height = 0.50
+                    text_prop.Width  = 0.50
                     text_prop.IsScaleDependent = False
                     text_elem = AllplanBasisElements.TextElement(
                         lbl_prop, text_prop, f"#{se.key}",
@@ -5610,7 +7687,7 @@ class PolylineInteractor:
 
         # ── Click sobre handle ──
         # Leer modo radio: 1=Edición, 2=Edición Mover (routing ya garantiza ≥1)
-        edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+        edit_raw = getattr(self.script_object.build_ele, ParamNames.Supports.EDIT_MODE, None)
         edit_mode_val = int(getattr(edit_raw, "value", 0))
 
         if edit_mode_val == SoporteEditModeValues.MOVE:
@@ -5636,6 +7713,547 @@ class PolylineInteractor:
         """Botones habilitados siempre que haya soportes acumulados."""
         self.script_object._update_soporte_ui_state()
 
+    # ============================================================================
+    # TRAZADO PARALELO
+    # ============================================================================
+    def _reset_parallel_state(self) -> None:
+        """Descarta la fuente, el contador y el estado multi-select de paralelas."""
+        self._parallel_source_pts = []
+        self._parallel_count = 0
+        self._parallel_source_path_idx = None
+        self._parallel_multi_select_mode = False
+        self._parallel_selected_path_indices.clear()
+        # Desmarcar el checkbox en paleta si existe
+        _ms_raw = getattr(self.script_object.build_ele, ParamNames.Parallel.MULTI_SELECT, None)
+        if _ms_raw is not None:
+            _ms_raw.value = False
+
+    def _handle_parallel_multi_select_changed(self) -> None:
+        """Activa o desactiva el modo de selección múltiple de caminos paralelos.
+
+        Cuando está activo los clicks en create_mode seleccionan/deseleccionan
+        caminos completos (en lugar de agregar puntos) para luego poder aplicar
+        "Cambiar tipo instalación" sobre varios caminos a la vez.
+        Al desactivarlo limpia la selección acumulada.
+        """
+        if not self.create_mode:
+            return
+        ms_raw = getattr(self.script_object.build_ele, ParamNames.Parallel.MULTI_SELECT, None)
+        self._parallel_multi_select_mode = bool(getattr(ms_raw, "value", False))
+        if not self._parallel_multi_select_mode:
+            self._parallel_selected_path_indices.clear()
+        self._draw_preview(self._last_hover_pnt)
+        print(f"[Paralela] Multi-select mode: {self._parallel_multi_select_mode}")
+
+    def _toggle_path_in_selection(self, path_idx: int) -> None:
+        """Toggle la selección del camino ``path_idx`` y todas sus ramas (BFS).
+
+        Usa ``_parallel_selected_path_indices`` (set de int) para rastrear
+        qué caminos están seleccionados. ``_draw_saved_paths_elems`` lee este
+        set y dibuja todos sus segmentos en ROJO.
+        """
+        paths = self.script_object.active_paths
+        if path_idx >= len(paths):
+            return
+
+        # Determinar dirección ANTES del BFS
+        adding = path_idx not in self._parallel_selected_path_indices
+
+        # BFS: recolectar path_idx + todas sus ramas y sub-ramas
+        related: set[int] = set()
+        queue = [path_idx]
+        while queue:
+            idx = queue.pop(0)
+            if idx in related or idx >= len(paths):
+                continue
+            related.add(idx)
+            for branch_idx, _ in self._find_branches_of_path(paths[idx]):
+                if branch_idx not in related:
+                    queue.append(branch_idx)
+
+        if adding:
+            self._parallel_selected_path_indices.update(related)
+        else:
+            self._parallel_selected_path_indices.difference_update(related)
+
+        action = "seleccionados" if adding else "deseleccionados"
+        print(f"[Multi-select] paths {sorted(related)} {action} — total: {len(self._parallel_selected_path_indices)}")
+
+    # ── Performance: cache de CommonProperties ────────────────────────────────
+    def _get_preview_props(self, is_auto: bool) -> dict:
+        """Devuelve un dict con todos los objetos CommonProperties usados en _draw_preview.
+
+        Solo reconstruye cuando cambia el fingerprint (Pen/Stroke/Layer/is_auto).
+        Evita 15+ llamadas a _clone_properties (+ GetGlobalProperties) por MouseMove.
+        """
+        fp = (
+            getattr(self.com_prop, "Pen", 0),
+            getattr(self.com_prop, "Stroke", 0),
+            getattr(self.com_prop, "Layer", 0),
+            is_auto,
+        )
+        if self._preview_props is not None and self._preview_props_fp == fp:
+            return self._preview_props
+
+        def mk(color: int, **kw):
+            p = self._clone_properties(self.com_prop)
+            p.Color = color
+            p.ColorByLayer = False
+            for k, v in kw.items():
+                setattr(p, k, v)
+            return p
+
+        mid_prop = self._clone_properties(self.com_prop)
+        mid_prop.Color = 1
+        mid_prop.PenByLayer = False
+        mid_prop.ColorByLayer = False
+        mid_prop.StrokeByLayer = False
+        try:
+            mid_prop.Pen = max(MIDPOINT_PEN, getattr(self.com_prop, "Pen", 1))
+        except Exception:
+            pass
+
+        passive_color = 52 if not is_auto else 23
+
+        self._preview_props = {
+            "base":        self._clone_properties(self.com_prop),
+            "handle":      mk(5),
+            "saved":       mk(COLORS["preview_saved"]),
+            "seg_hover":   mk(COLORS["segment_hover"], PenByLayer=False),
+            "seg_sel":     mk(COLORS["segment_selected"], PenByLayer=False),
+            "rect":        mk(COLORS["rect_selection"]),
+            "mid":         mid_prop,
+            "ins_prev":    mk(COLORS["insert_preview"]),
+            "passive_seg": mk(passive_color),
+            "passive_vtx": mk(passive_color),
+            "auto_seg":    mk(52),
+            "auto_vtx":    mk(52),
+        }
+        self._preview_props_fp = fp
+        return self._preview_props
+
+    def _compute_parallel_path(
+        self, source_pts: list, offset: float
+    ) -> list:
+        """Genera una polilinea paralela exactamente a ``offset`` mm de la original.
+
+        Algoritmo en tres pasos:
+
+        1. Normal XY de cada segmento
+           Se rota 90° CCW la proyección horizontal del tangente.
+           Los segmentos verticales (sin componente horizontal) heredan la
+           normal del vecino más cercano para mantener continuidad en risers.
+
+        2. Miter joint exacto en cada vértice interior
+           Bisector = normalize(n_i-1 + n_i).
+           miter_scale = 1 / dot(bisector, n_i-1).
+           Esto garantiza que la distancia perpendicular a ambos segmentos
+           adyacentes sea exactamente ``offset``.
+           El miter se limita a MITER_LIMIT × offset para evitar espigas en
+           ángulos cerrados (< ~15°).
+
+        3. El eje Z se conserva idéntico al punto original, de modo que el
+           algoritmo funciona en cualquier plano 3D (horizontal, vertical,
+           inclinado) desplazando siempre en el plano horizontal XY.
+        """
+        import math
+
+        n = len(source_pts)
+        if n < 2:
+            return []
+
+        MITER_LIMIT = 4.0  # máximo scale del miter (ángulo mínimo ~14°)
+
+        # ── Paso 1: normal horizontal de cada segmento ───────────────────────
+        # Resultado: lista de (nx, ny) unitarios. None para segmentos verticales.
+        seg_normals: list = []
+        for i in range(n - 1):
+            dx = source_pts[i + 1].X - source_pts[i].X
+            dy = source_pts[i + 1].Y - source_pts[i].Y
+            horiz = math.sqrt(dx * dx + dy * dy)
+            if horiz > 1e-6:
+                seg_normals.append((-dy / horiz, dx / horiz))
+            else:
+                seg_normals.append(None)  # segmento vertical
+
+        # Rellenar Nones: pasada adelante luego atrás
+        last: tuple | None = None
+        for i, nrm in enumerate(seg_normals):
+            if nrm is not None:
+                last = nrm
+            elif last is not None:
+                seg_normals[i] = last
+        last = None
+        for i in range(len(seg_normals) - 1, -1, -1):
+            if seg_normals[i] is not None:
+                last = seg_normals[i]
+            elif last is not None:
+                seg_normals[i] = last
+        # Fallback absoluto (polyline 100 % vertical)
+        seg_normals = [nrm if nrm is not None else (1.0, 0.0) for nrm in seg_normals]
+
+        # ── Paso 2: offset de cada vértice con miter exacto ─────────────────
+        result = []
+        for i in range(n):
+            pt = source_pts[i]
+
+            if i == 0:
+                nx, ny = seg_normals[0]
+                ox, oy = nx * offset, ny * offset
+
+            elif i == n - 1:
+                nx, ny = seg_normals[-1]
+                ox, oy = nx * offset, ny * offset
+
+            else:
+                n1x, n1y = seg_normals[i - 1]
+                n2x, n2y = seg_normals[i]
+
+                bx = n1x + n2x
+                by = n1y + n2y
+                b_len = math.sqrt(bx * bx + by * by)
+
+                if b_len < 1e-6:
+                    # Normals antiparalelas (giro 180°): usar normal entrante
+                    ox, oy = n1x * offset, n1y * offset
+                else:
+                    bx /= b_len
+                    by /= b_len
+                    # cos del semi-ángulo entre las dos normales
+                    cos_half = bx * n1x + by * n1y
+                    # Escala miter: mantiene distancia perpendicular = offset
+                    # a ambos segmentos adyacentes.
+                    # Se clampea para evitar espigas en ángulos muy agudos.
+                    scale = min(1.0 / max(abs(cos_half), 1.0 / MITER_LIMIT), MITER_LIMIT)
+                    ox = bx * offset * scale
+                    oy = by * offset * scale
+
+            result.append(AllplanGeo.Point3D(pt.X + ox, pt.Y + oy, pt.Z))
+
+        return result
+
+    def _handle_agregar_paralela(self) -> None:
+        """Genera una nueva polilinea paralela al camino fuente y la añade a active_paths.
+
+        Solo opera en create_mode. Cada click acumula una paralela adicional
+        desplazada (n * distancia_centro_a_centro) desde el camino original.
+        distancia_centro_a_centro = distancia_usuario + diámetro_tubo.
+        """
+        if not self.create_mode:
+            return
+
+        # ── Leer parámetros de paleta ─────────────────────────────────────────
+        # TrazadoParaleloDistancia es Integer → el valor llega directamente en mm
+        # (1 = 1 mm, 1000 = 1000 mm). No usar "or" como fallback porque 0 es falsy.
+        dist_raw = getattr(self.script_object.build_ele, ParamNames.Parallel.DISTANCE, None)
+        _dist_val = getattr(dist_raw, "value", None)
+        user_distance = float(_dist_val) if _dist_val is not None else 0.0
+
+        diameter = 0.0
+        try:
+            diameter = float(self.script_object.diameter_type or 0)
+        except (TypeError, ValueError):
+            pass
+
+        center_to_center = user_distance + diameter
+
+        # TrazadoParaleloLado: "dentro" invierte la dirección del offset
+        lado_raw = getattr(self.script_object.build_ele, ParamNames.Parallel.LADO, None)
+        lado_val = (getattr(lado_raw, "value", None) or "fuera").strip().lower()
+        lado_sign = -1.0 if lado_val == "dentro" else 1.0
+
+        print(f"[Paralela] center_to_center={center_to_center:.1f}  lado={lado_val}")
+        # ── Asegurar que haya al menos un camino guardado ─────────────────────
+        # Guardar siempre el segmento en curso si tiene puntos suficientes
+        if len(self.points) >= 2:
+            self._saving_for_parallel = True
+            try:
+                self._save_current_polyline()
+            finally:
+                self._saving_for_parallel = False
+
+        if not self.script_object.active_paths:
+            PythonUtility.ShowMessageBox(
+                "No hay ninguna polilinea guardada para generar una paralela.\n\n"
+                "Dibuja al menos un segmento antes de pulsar 'Agregar Paralela'.",
+                PythonUtility.MB_OK,
+            )
+            return
+
+        # ── Determinar camino fuente: selección múltiple tiene prioridad ──────
+        _paths = self.script_object.active_paths
+        if self._parallel_selected_path_indices:
+            _valid = sorted(i for i in self._parallel_selected_path_indices if i < len(_paths))
+            desired_source_idx = _valid[0] if _valid else len(_paths) - 1
+        else:
+            desired_source_idx = len(_paths) - 1
+
+        # ── Si la fuente es una rama, escalar hasta el camino raíz ──────────
+        # Comentar la línea siguiente para desactivar la detección de ancestro
+        desired_source_idx, _ = self._find_root_ancestor(desired_source_idx, _paths[desired_source_idx])
+
+        # ── Actualizar fuente y resetear contador si cambió ───────────────────
+        if self._parallel_source_path_idx != desired_source_idx or not self._parallel_source_pts:
+            source_path = _paths[desired_source_idx]
+            if len(source_path) < 2:
+                PythonUtility.ShowMessageBox(
+                    "La polilinea fuente no tiene suficientes puntos.",
+                    PythonUtility.MB_OK,
+                )
+                return
+            self._parallel_source_pts = [
+                AllplanGeo.Point3D(p.X, p.Y, p.Z) for p in source_path
+            ]
+            self._parallel_source_path_idx = desired_source_idx
+            self._parallel_count = 0
+
+        # ── Generar siguiente paralela ─────────────────────────────────────────
+        self._parallel_count += 1
+        offset = lado_sign * self._parallel_count * center_to_center
+
+        parallel_pts = self._compute_parallel_path(self._parallel_source_pts, offset)
+        if len(parallel_pts) < 2:
+            print("[Paralela] No se pudo generar la paralela: puntos insuficientes.")
+            self._parallel_count -= 1
+            return
+
+        # ── Añadir a active_paths ─────────────────────────────────────────────
+        new_path_idx = len(self.script_object.active_paths)
+        self.script_object.active_paths.append(parallel_pts)
+
+        # ── Usar tipo de instalación de la paleta (no heredar del fuente) ────────
+        pit = self._active_path_inst_types()
+        palette_inst_type = self.script_object.selected_inst_type or ""
+        if palette_inst_type:
+            pit[new_path_idx] = palette_inst_type
+
+        # ── Generar metadata de segmentos desde la paleta ─────────────────────
+        from .models import SegmentInfo
+        _diameter = self.script_object.diameter_type
+        _system   = palette_inst_type
+        _label    = self._format_segment_label(_diameter, _system)
+        for seg_idx in range(len(parallel_pts) - 1):
+            new_key = f"{new_path_idx}_{seg_idx}"
+            self.script_object.persistent_metadata[new_key] = SegmentInfo(
+                diameter=_diameter,
+                section_type=f"{_diameter} mm",
+                system=_system,
+                label=_label,
+                distribution_type=self.script_object.distribution_type,
+                water_type=self.script_object.water_type,
+                face=self.script_object.face_en,
+                view_mode="",
+            )
+
+        # ── Paralelas de ramas (BFS) — comentar la línea siguiente para desactivar
+        self._generate_branch_parallels(desired_source_idx, self._parallel_source_pts, parallel_pts, offset)
+
+        # ── Refrescar preview ─────────────────────────────────────────────────
+        self._update_segment_groups()
+        self.script_object._create_elements_preview()
+        self._generate_elements_for_preview()
+
+        print(
+            f"[Paralela] #{self._parallel_count} generada en path #{new_path_idx}. "
+            f"Offset: {offset:.1f} mm (distancia={user_distance:.1f} + radio={diameter / 2:.1f})"
+        )
+
+    def _compute_bifurcation_parallel_vertex(
+        self,
+        bifurc_pt:      "AllplanGeo.Point3D",
+        seg_directions: list[tuple[float, float]],
+        offset:         float,
+    ) -> "AllplanGeo.Point3D":
+        """Vértice óptimo de bifurcación en la paralela (miter de N segmentos).
+
+        Para cada segmento que confluye en bifurc_pt su línea offset satisface:
+            nx·x + ny·y = nx·Px + ny·Py + offset
+        donde (nx, ny) es la normal CCW de la dirección del segmento.
+
+        Se resuelve el sistema sobredeterminado por mínimos cuadrados
+        (A^T·A·v = A^T·c), dando el punto P' que minimiza la suma de distancias
+        cuadráticas a todas las líneas offset. Con 2 segmentos equivale al miter
+        exacto; con 3 o más distribuye el error óptimamente entre todos.
+        """
+        import math
+        normals = []
+        for dx, dy in seg_directions:
+            length = math.sqrt(dx * dx + dy * dy)
+            if length < 1e-6:
+                continue
+            normals.append((-dy / length, dx / length))   # CCW
+
+        if not normals:
+            return bifurc_pt
+
+        c = [nx * bifurc_pt.X + ny * bifurc_pt.Y + offset for nx, ny in normals]
+
+        AtA_00 = sum(n[0] * n[0] for n in normals)
+        AtA_01 = sum(n[0] * n[1] for n in normals)
+        AtA_11 = sum(n[1] * n[1] for n in normals)
+        Atc_0  = sum(normals[i][0] * c[i] for i in range(len(normals)))
+        Atc_1  = sum(normals[i][1] * c[i] for i in range(len(normals)))
+
+        det = AtA_00 * AtA_11 - AtA_01 * AtA_01
+        if abs(det) < 1e-12:
+            # Todos los segmentos paralelos: centroide de offsets naturales
+            x = sum(bifurc_pt.X + n[0] * offset for n in normals) / len(normals)
+            y = sum(bifurc_pt.Y + n[1] * offset for n in normals) / len(normals)
+            return AllplanGeo.Point3D(x, y, bifurc_pt.Z)
+
+        x = (AtA_11 * Atc_0 - AtA_01 * Atc_1) / det
+        y = (AtA_00 * Atc_1 - AtA_01 * Atc_0) / det
+        return AllplanGeo.Point3D(x, y, bifurc_pt.Z)
+
+    def _find_parent_path(
+        self, source_pts: list, tolerance: float = 1.0
+    ) -> tuple[int, int] | None:
+        """Si source_pts[0] coincide con un vértice INTERIOR de algún otro camino,
+        retorna (parent_path_idx, parent_vertex_idx). Si no, retorna None.
+        """
+        import math
+        if not source_pts:
+            return None
+        sp0 = source_pts[0]
+        for pidx, path in enumerate(self.script_object.active_paths):
+            n = len(path)
+            for vidx in range(1, n - 1):
+                sv = path[vidx]
+                if math.sqrt(
+                    (sv.X - sp0.X) ** 2 +
+                    (sv.Y - sp0.Y) ** 2 +
+                    (sv.Z - sp0.Z) ** 2
+                ) < tolerance:
+                    return (pidx, vidx)
+        return None
+
+    def _find_root_ancestor(
+        self, path_idx: int, source_pts: list, tolerance: float = 1.0
+    ) -> tuple[int, list]:
+        """Recorre la cadena de padres hasta el camino raíz (aquel cuyo primer
+        punto no coincide con ningún vértice interior de otro camino).
+        Retorna (root_path_idx, root_pts). Protegido contra ciclos con visited.
+        """
+        visited: set[int] = {path_idx}
+        current_idx = path_idx
+        current_pts = source_pts
+        while True:
+            parent = self._find_parent_path(current_pts, tolerance)
+            if parent is None:
+                return (current_idx, current_pts)
+            parent_idx, _ = parent
+            if parent_idx in visited:
+                return (current_idx, current_pts)
+            visited.add(parent_idx)
+            current_idx = parent_idx
+            current_pts = self.script_object.active_paths[parent_idx]
+
+    def _find_branches_of_path(
+        self, source_pts: list, tolerance: float = 1.0
+    ) -> list[tuple[int, int]]:
+        """Retorna [(branch_path_idx, source_vertex_idx), ...] para todos los caminos
+        en active_paths cuyo primer punto coincida (dentro de tolerance mm) con un
+        vértice INTERIOR de source_pts.
+        """
+        import math
+        found = []
+        n = len(source_pts)
+        for b_idx, b_pts in enumerate(self.script_object.active_paths):
+            if not b_pts:
+                continue
+            bp0 = b_pts[0]
+            for v_idx in range(1, n - 1):
+                sv = source_pts[v_idx]
+                if math.sqrt(
+                    (sv.X - bp0.X) ** 2 +
+                    (sv.Y - bp0.Y) ** 2 +
+                    (sv.Z - bp0.Z) ** 2
+                ) < tolerance:
+                    found.append((b_idx, v_idx))
+                    break
+        return found
+
+    def _generate_branch_parallels(
+        self,
+        source_path_idx: int,
+        source_pts: list,
+        parallel_pts: list,
+        offset: float,
+    ) -> None:
+        """Genera paralelas para todas las ramas que bifurcan desde source_pts
+        y sus sub-ramas (BFS), anclando el primer punto de cada paralela al
+        vértice miter correspondiente de la paralela del camino padre.
+        """
+        _diameter = self.script_object.diameter_type
+        _system   = self.script_object.selected_inst_type or ""
+        _label    = self._format_segment_label(_diameter, _system)
+        pit       = self._active_path_inst_types()
+
+        # BFS: cada elemento es (source_pts_original, parallel_pts_generado)
+        queue: list[tuple[list, list]] = [(source_pts, parallel_pts)]
+        processed: set[int] = {source_path_idx}
+
+        while queue:
+            src_pts, par_pts = queue.pop(0)
+            for branch_path_idx, src_vtx_idx in self._find_branches_of_path(src_pts):
+                if branch_path_idx in processed:
+                    continue
+                processed.add(branch_path_idx)
+
+                branch_pts = self.script_object.active_paths[branch_path_idx]
+                if len(branch_pts) < 2:
+                    continue
+
+                branch_parallel = self._compute_parallel_path(branch_pts, offset)
+                if not branch_parallel:
+                    continue
+
+                # Vértice óptimo de bifurcación: miter de los 3 segmentos que confluyen
+                # en el vértice fuente (entrante padre, saliente padre, saliente rama).
+                # Ambas paralelas —padre y rama— comparten este punto para que la
+                # bifurcación quede perfectamente alineada con el offset deseado.
+                bifurc_pt = src_pts[src_vtx_idx]
+                seg_dirs: list[tuple[float, float]] = []
+                if src_vtx_idx > 0:                                         # entrante padre
+                    p = src_pts[src_vtx_idx - 1]
+                    seg_dirs.append((bifurc_pt.X - p.X, bifurc_pt.Y - p.Y))
+                if src_vtx_idx < len(src_pts) - 1:                         # saliente padre
+                    p = src_pts[src_vtx_idx + 1]
+                    seg_dirs.append((p.X - bifurc_pt.X, p.Y - bifurc_pt.Y))
+                if len(branch_pts) >= 2:                                    # saliente rama
+                    seg_dirs.append((branch_pts[1].X - branch_pts[0].X,
+                                     branch_pts[1].Y - branch_pts[0].Y))
+
+                bifurc_parallel_pt = self._compute_bifurcation_parallel_vertex(
+                    bifurc_pt, seg_dirs, offset
+                )
+                par_pts[src_vtx_idx] = bifurc_parallel_pt   # mover vértice del padre
+                branch_parallel[0]   = bifurc_parallel_pt   # arranque de la rama
+
+                b_new_idx = len(self.script_object.active_paths)
+                self.script_object.active_paths.append(branch_parallel)
+
+                if _system:
+                    pit[b_new_idx] = _system
+                for seg_idx in range(len(branch_parallel) - 1):
+                    self.script_object.persistent_metadata[f"{b_new_idx}_{seg_idx}"] = SegmentInfo(
+                        diameter=_diameter,
+                        section_type=f"{_diameter} mm",
+                        system=_system,
+                        label=_label,
+                        distribution_type=self.script_object.distribution_type,
+                        water_type=self.script_object.water_type,
+                        face=self.script_object.face_en,
+                        view_mode="",
+                    )
+
+                # Encolar para detectar sub-ramas de esta rama
+                queue.append((branch_pts, branch_parallel))
+                print(
+                    f"[Paralela] Rama {branch_path_idx} → paralela #{b_new_idx} "
+                    f"(arranque en padre'[{src_vtx_idx}])"
+                )
+
     def _disable_soporte_edit_mode(self) -> None:
         """
         Fija el RadioGroup de edición de soportes a Desactivado (0) y limpia
@@ -5643,7 +8261,7 @@ class PolylineInteractor:
         CREATE o EDIT mode en la polilínea.
         """
         from .models import SoporteEditModeValues
-        edit_raw = getattr(self.script_object.build_ele, ParamNames.Soportes.EDIT_MODE, None)
+        edit_raw = getattr(self.script_object.build_ele, ParamNames.Supports.EDIT_MODE, None)
         if edit_raw is not None:
             edit_raw.value = SoporteEditModeValues.DISABLED
         # Limpiar estado de edición
@@ -5653,7 +8271,7 @@ class PolylineInteractor:
         self._soporte_move_p1_origin = None
         self._soporte_move_p2_origin = None
         # Deshabilitar el RadioGroup visualmente
-        self.script_object.enable_parameter(ParamNames.Soportes.EDIT_MODE, False)
+        self.script_object.enable_parameter(ParamNames.Supports.EDIT_MODE, False)
 
     # ══════════════════════════════════════════════════════════════════════
     # SOPORTES 3D PREVIEW
@@ -5667,8 +8285,22 @@ class PolylineInteractor:
         """
         try:
             json_path = get_default_json_path(self.config.default_installation)
-            supports = load_supports_from_json(json_path)
+            import os as _os
+            supports = load_supports_from_json(json_path) if (json_path and _os.path.exists(str(json_path))) else []
             if not supports:
+                _caller = getattr(self.config, "default_installation", None) or ""
+                if _caller:
+                    raw = getattr(
+                        self.script_object.build_ele,
+                        ParamNames.Supports.SUBTIPO_SOPORTE,
+                        None,
+                    )
+                    if raw is not None:
+                        try:
+                            raw.value = _caller
+                        except Exception:
+                            pass
+                    print(f"[Soportes] Sin JSON — subtipo fijado a instalación caller: {_caller}")
                 return
             first = supports[0]
 
@@ -5693,12 +8325,12 @@ class PolylineInteractor:
                         return v
                 return default
 
-            _set(ParamNames.Soportes.TYPE_SUPPORT,       str(_jv(first, "tipo", "type", default="Omega")))
-            _set(ParamNames.Soportes.SUBTIPO_SOPORTE,    str(_jv(first, "subtipo", "subtype", default="")))
-            _set(ParamNames.Soportes.SUPERFICIE,         str(_jv(first, "superficie", "surface", default="Perforado")))
-            _set(ParamNames.Soportes.COTA_A,             float(_jv(first, "cota_a", "height_a", default=0.0) or 0.0))
-            _set(ParamNames.Soportes.COTA_B,             float(_jv(first, "cota_b", "height_b", default=205.0) or 205.0))
-            _set(ParamNames.Soportes.ANGULO_INCLINACION, float(_jv(first, "angulo_inclinacion", "inclination_angle_deg", default=0.0) or 0.0))
+            _set(ParamNames.Supports.TYPE_SUPPORT,       str(_jv(first, "tipo", "type", default="Omega")))
+            _set(ParamNames.Supports.SUBTIPO_SOPORTE,    str(_jv(first, "subtipo", "subtype", default="")))
+            _set(ParamNames.Supports.SUPERFICIE,         str(_jv(first, "superficie", "surface", default="Perforado")))
+            _set(ParamNames.Supports.COTA_A,             float(_jv(first, "cota_a", "height_a", default=0.0) or 0.0))
+            _set(ParamNames.Supports.COTA_B,             float(_jv(first, "cota_b", "height_b", default=205.0) or 205.0))
+            _set(ParamNames.Supports.ANGULO_INCLINACION, float(_jv(first, "angulo_inclinacion", "inclination_angle_deg", default=0.0) or 0.0))
 
             # Posiciones — guardar en paleta Y en variables del interactor
             p1 = _jv(first, "posicion1", "position1", default=[0.0, 0.0, 0.0])

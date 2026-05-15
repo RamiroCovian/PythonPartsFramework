@@ -362,34 +362,31 @@ def _get_optional_float(
 # ------------------------------------------------------------
 # Carga / mock de JSON
 # ------------------------------------------------------------
-def get_default_json_path(name_folder: str | None = "Ventilacion") -> Path:
+def get_default_json_path(name_folder: str | None = "Ventilacion") -> Optional[Path]:
     """
-    Busca 'Soportes_mock.json' en una carpeta hermana dentro de 'Instalaciones'.
-    Si la carpeta o el archivo no existen, retorna la ruta en la carpeta local.
+    Busca el JSON de soportes en la subcarpeta de instalación correspondiente.
+    Retorna None si la carpeta o el archivo no existen.
     """
-    # 1. Definimos la raíz común (Instalaciones/)
-    # Estamos en: .../Instalaciones/Polylib/utils.py
-    # .parents[1] nos sube a: .../Instalaciones/
+    if not name_folder:
+        return None
+
     root_dir = Path(__file__).resolve().parents[1]
+    target_path = root_dir / name_folder / f"soporte_{name_folder.lower()}.json"
 
-    # 2. Construimos la ruta deseada
-    if name_folder:
-        target_path = root_dir / name_folder / f"soporte_{name_folder.lower()}.json"
-
-    # 3. Validación de error: Si no existe el archivo en esa carpeta...
     if not target_path.exists():
-        # ...pasamos a la ruta anterior (la misma carpeta del script)
-        fallback_path = Path(__file__).with_name("Soportes_mock.json")
-        return fallback_path
+        return None
 
     return target_path
 
-def ensure_mock_json(path: Path | None = None) -> Path:
+def ensure_mock_json(path: Path | None = None) -> Optional[Path]:
     """
     Si no existe el JSON indicado, crea un mock mínimo de pruebas con
-    la estructura acordada.
+    la estructura acordada. Retorna None si no hay ruta disponible.
     """
     json_path = Path(path) if path is not None else get_default_json_path()
+
+    if json_path is None:
+        return None
 
     if json_path.exists():
         return json_path
@@ -419,27 +416,13 @@ def ensure_mock_json(path: Path | None = None) -> Path:
 
 def load_supports_from_json(path: str | Path | None = None) -> List[SupportJson]:
     """
-    Lee el archivo JSON (real o de mock) y devuelve una lista de `SupportJson`.
-
-    Reglas de validación:
-    - Son obligatorios: `tipo`, `subtipo`, `superficie`, `posicion1`, `posicion2`,
-      `cota_a`, `cota_b`.
-    - Para Varifix, `cota_a` y `cota_b` deben ser > 0.
-    - Para Zeta, `cota_a` puede ser 0 pero `cota_b` debe ser > 0.
-    - Si un soporte es inválido, se informa por consola y se ignora.
-
-    Compatibilidad:
-    - Se aceptan temporalmente nombres legacy (`supports`, `type`, etc.).
-
-    Si `path` es None se usa el JSON por defecto en `Soportes/Soportes_mock.json`.
-    Si el archivo no existe, se crea automáticamente un mock válido.
+    Lee el archivo JSON y devuelve una lista de `SupportJson`.
+    Retorna lista vacía si path es None o el archivo no existe.
     """
     json_path = Path(path) if path is not None else get_default_json_path()
 
-    # Crear mock si no existe
-    if not json_path.exists():
-        json_path = ensure_mock_json(json_path)
-
+    if json_path is None or not json_path.exists():
+        return []
     try:
         raw = json.loads(json_path.read_text(encoding="utf-8"))
     except OSError as exc:
@@ -967,6 +950,7 @@ class ElementSerializer:
                         "distribution_type": seg_info.distribution_type,
                         "water_type":        seg_info.water_type,
                         "face":              seg_info.face,
+                        "view_mode":         seg_info.view_mode,
                     }
                 else:
                     # Si por alguna razón ya es un dict, lo guardamos tal cual
@@ -1002,6 +986,7 @@ class ElementSerializer:
                     distribution_type= value.get("distribution_type", ""),
                     water_type=        value.get("water_type", "") or None,
                     face=              value.get("face", ""),
+                    view_mode=          value.get("view_mode", ""),
                 )
 
             return result

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<StringTable>
+  <Content ID="1000" Value="Definir polilinea para una instalacion y generar elementos." />
+  <Content ID="1001" Value="Instalacion" />
+  <Content ID="1002" Value="Angulos Soportados" />
+  <Content ID="1003" Value="Tipos de instalacion" />
+  <Content ID="1004" Value="Elegir instalacion" />
+  <Content ID="1005" Value="Nombre funcional del cable" />
+  <Content ID="1006" Value="Tipo de Distribucion" />
+  <Content ID="1007" Value="Cara (EN)" />
+  <Content ID="1008" Value="Rejiband Ancho (interno)" />
+  <Content ID="1009" Value="Modos de dibujo" />
+  <Content ID="1010" Value="Anadir cortes" />
+  <Content ID="1011" Value="Elegir modo" />
+  <Content ID="1012" Value="Modo Edicion" />
+  <Content ID="1013" Value="Modo Creacion" />
+  <Content ID="1014" Value="Solapamiento" />
+  <Content ID="1015" Value="Solapar mm" />
+  <Content ID="1016" Value="Altura en Z" />
+  <Content ID="1017" Value="Rotacion en ejes (grados)" />
+  <Content ID="1018" Value="Eje X" />
+  <Content ID="1019" Value="Eje Y" />
+  <Content ID="1020" Value="Eje Z" />
+  <Content ID="1021" Value="Layers" />
+  <Content ID="1022" Value="Tipo de instalacion (layers)" />
+  <Content ID="1023" Value="Subtipo (layers)" />
+  <Content ID="1024" Value="Aplicar layers" />
+  <Content ID="1025" Value="Atributos" />
+  <Content ID="1026" Value="Valor atributo" />
+  <Content ID="1027" Value="Aplicar atributo" />
+  <Content ID="1028" Value="Macro" />
+  <Content ID="1029" Value="Elegir punto" />
+  <Content ID="1030" Value="Punto inicial" />
+  <Content ID="1031" Value="Punto final" />
+  <Content ID="1032" Value="Libre" />
+  <Content ID="1033" Value="Seleccionar punto" />
+  <Content ID="1034" Value="Aceptar (Terminar seleccion)" />
+  <Content ID="1035" Value="IsMacroCaptureMode" />
+  <Content ID="1036" Value="Cota Z (mm)" />
+  <Content ID="1037" Value="Tipo de macro" />
+  <Content ID="1038" Value="Macro (SmartSymbol .nmk)" />
+  <Content ID="1039" Value="Fixture (.lfx/.pxf)" />
+  <Content ID="1040" Value="Seleccionar macro (SmartSymbol)" />
+  <Content ID="1041" Value="Seleccionar fixture" />
+  <Content ID="1042" Value="Elemento" />
+  <Content ID="1043" Value="Elemento" />
+  <Content ID="1044" Value="Cota Z (mm)" />
+  <Content ID="1045" Value="Posicion" />
+  <Content ID="1046" Value="Punto inicial" />
+  <Content ID="1047" Value="Punto final" />
+  <Content ID="1048" Value="Libre" />
+  <Content ID="1049" Value="Seleccionar punto" />
+  <Content ID="1050" Value="Aceptar (Terminar seleccion)" />
+  <Content ID="1051" Value="IsElementCaptureMode" />
+  <Content ID="1052" Value="General options" />
+  <Content ID="1053" Value="PythonPartGroup" />
+  <Content ID="1054" Value="Crear como PythonPartGroup" />
+  <Content ID="1055" Value="Orientacion 3D" />
+  <Content ID="1056" Value="Definir orientacion" />
+  <Content ID="1057" Value="Definir orientacion" />
+  <Content ID="1058" Value="Orientacion Actual" />
+  <Content ID="1059" Value="Continuar" />
+  <Content ID="1060" Value="Continuar Polilinea" />
+  <Content ID="1061" Value="Borrar" />
+  <Content ID="1062" Value="Borrar Seleccion" />
+  <Content ID="1063" Value="Finalizar" />
+  <Content ID="1064" Value="Finalizar - Crear" />
+  <Content ID="1065" Value="Unic" />
+  <Content ID="1066" Value="PointRole" />
+  <Content ID="1067" Value="PathId" />
+  <Content ID="1068" Value="SegmentId" />
+  <Content ID="1069" Value="CreatePythonPartGroup" />
+  <Content ID="1070" Value="PendingMacroCapture" />
+  <Content ID="1071" Value="PendingElementCapture" />
+  <Content ID="1072" Value="PolylineState" />
+  <Content ID="1073" Value="Colocar macro" />
+  <Content ID="1074" Value="Colocar elemento" />
+</StringTable>

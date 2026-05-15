@@ -16,16 +16,15 @@ def create_element(key, label, dynamic=False, diameter=None):
     el = {
         "key": key,
         "label": label,
-        "roles": [0, 3],
+        # "roles": [0, 3], # Incluidos por defecto
         "module_path": f"pyp-scripts.{key}_script",  # Prefijo pyp-scripts por defecto
         "pythonpart": f"{class_name}Script",
-        "dinamic": dynamic,
-        "attrs_default": [],
-        "attrs_custom": [],
-        "layers": {},
+        # "dinamic": dynamic,
+        # "attrs_default": [],
+        # "attrs_custom": [],
+        # "layers": {},
     }
-    if diameter:
-        el["diameter"] = diameter
+    # if diameter: el["diameter"] = diameter
     return el
 
 

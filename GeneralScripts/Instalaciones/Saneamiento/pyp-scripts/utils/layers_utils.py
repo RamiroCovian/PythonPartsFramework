@@ -19,9 +19,15 @@ _SANEAMIENTO_LAYER_FALLBACK_BY_KEY = {
     "KN_AIGUA": 40061,
     "KN AIGUA": 40061,
 }
+# Por defecto **desactivado**; activar con ``SANEAMIENTO_LAYER_DEBUG=1`` (o true/yes).
 _SANEAMIENTO_LAYER_DEBUG = str(
     os.getenv("SANEAMIENTO_LAYER_DEBUG", "0")
 ).strip().lower() in ("1", "true", "yes")
+
+
+def layer_debug_enabled() -> bool:
+    """True si el rastro de capas está activo (por defecto no; ver ``SANEAMIENTO_LAYER_DEBUG``)."""
+    return _SANEAMIENTO_LAYER_DEBUG
 
 
 def _resolve_document(so: PBL.script_object.PolylineScriptObject):
@@ -181,6 +187,28 @@ def _apply_layer_to_element(
     en algunos flujos de PythonPart `SetCommonProperties` / asignación a `.CommonProperties`
     no es la que lee `create_individual_pythonpart` vía `GetCommonProperties()`.
     """
+    # Si no existe una capa aplicada explícitamente para esta key, respetar la capa
+    # que ya trae el modelo (definida por el propio script del fitting/tubo).
+    try:
+        has_explicit_layer = bool(
+            hasattr(so, "applied_layers")
+            and isinstance(getattr(so, "applied_layers", None), dict)
+            and key_layer in (so.applied_layers or {})
+        )
+        if not has_explicit_layer:
+            if _SANEAMIENTO_LAYER_DEBUG:
+                try:
+                    al = getattr(so, "applied_layers", None) or {}
+                    print(
+                        f"[SANEAMIENTO][LAYERDBG] keep script layer key={key_layer!r} "
+                        f"(sin entrada en applied_layers; nkeys={len(al)})"
+                    )
+                except Exception:
+                    pass
+            return model_elem
+    except Exception:
+        pass
+
     layer_id = _get_layer_id(key_layer, so)
     if not layer_id:
         if _SANEAMIENTO_LAYER_DEBUG:

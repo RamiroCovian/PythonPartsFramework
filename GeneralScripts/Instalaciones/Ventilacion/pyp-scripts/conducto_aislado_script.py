@@ -161,7 +161,7 @@ class ConductoAisladoScript(BaseScriptObject):
         )
 
         list_new = []
-        attr_list = self.get_attributes(value=selected_diameter)
+        attr_list = self.get_attributes(value=diameter or selected_diameter)
         if attr_list:
             for model_elem in model_ele_list:
                 attr_set_list = []

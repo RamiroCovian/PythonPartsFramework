@@ -6,17 +6,44 @@
         <Version>1.0.0</Version>
         <Interactor>False</Interactor>
     </Script>
+    <!-- ══════════════════════════════════════════
+         PAGE 1: Polilinea — Instalacion + dibujo + optimizacion condicional
+    ══════════════════════════════════════════ -->
     <Page>
         <Name>CrearPolilinea</Name>
-        <Text>Definir polilínea para una instalación y generar elementos.</Text>
-        <!-- INSTALACIÓN: combo con varias opciones -->
+        <Text>Polilinea</Text>
+        <!-- ── Instalación ──────────────────────── -->
+        <!-- ── Tipo de polilinea (controla visibilidad de Optimizacion) ── -->
         <Parameter>
-            <Name>InstallationName</Name>
-            <Text>Instalacion</Text>
-            <Value></Value>
-            <ValueType>Text</ValueType>
-            <FontSize>16</FontSize>
-            <FontStyle>2</FontStyle>
+            <Name>PointModeTitle</Name>
+            <Text>Polilinea</Text>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>InstallationName</Name>
+                <Text>Instalacion</Text>
+                <Value></Value>
+                <ValueType>Text</ValueType>
+                <FontSize>16</FontSize>
+                <FontStyle>2</FontStyle>
+            </Parameter>
+            <Parameter>
+                <Name>PolyMode</Name>
+                <Text>Vista</Text>
+                <Value>0</Value>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Parameter>
+                    <Name>ManualPolyline</Name>
+                    <Text>Manual</Text>
+                    <Value>0</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>AutoPolyline</Name>
+                    <Text>Optimizacion</Text>
+                    <Value>1</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+            </Parameter>
         </Parameter>
         <Parameter>
             <Name>InstallationTypeTitle</Name>
@@ -37,6 +64,18 @@
                 <ValueList></ValueList>
                 <EventId>1002</EventId>
                 <ValueType>StringComboBox</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowCambiarTipo</Name>
+                <Text>Cambiar tipo</Text>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>CambiarTipoInstalacion</Name>
+                    <Text>Cambiar tipo instalacion</Text>
+                    <EventId>1045</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
             </Parameter>
             <Parameter>
                 <Name>DiameterType</Name>
@@ -92,8 +131,154 @@
                 <ValueType>StringComboBox</ValueType>
             </Parameter>
         </Parameter>
+        <!-- ════════════════════════════════════════
+        SECCIÓN OPTIMIZADOR  (visible solo cuando PolyMode == 1)
+        ════════════════════════════════════════ -->
         <Parameter>
-            <Name>PointModeTitle</Name>
+            <Name>SelectorElementos</Name>
+            <Text>Selector de elementos</Text>
+            <ValueType>Expander</ValueType>
+            <Visible>PolyMode == 1</Visible>
+            <Parameter>
+                <Name>ModoSelectorElemento</Name>
+                <Text>Modo</Text>
+                <Value>0</Value>
+                <EventId>1044</EventId>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Parameter>
+                    <Name>ModoSelectorDesactivado</Name>
+                    <Text>Desactivado</Text>
+                    <Value>0</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ModoSelectorInsertar</Name>
+                    <Text>Activar selector</Text>
+                    <Value>1</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>OrdenPuntosUsuario</Name>
+            <Text>Puntos no definidos</Text>
+            <ValueType>Expander</ValueType>
+            <Visible>PolyMode == 1</Visible>
+            <Parameter>
+                <Name>ModoNodosOptimizador</Name>
+                <Text>Modo</Text>
+                <Value>0</Value>
+                <EventId>1044</EventId>
+                <ValueType>RadioButtonGroup</ValueType>
+                <Parameter>
+                    <Name>ModoNodosDesactivado</Name>
+                    <Text>Desactivado</Text>
+                    <Value>0</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ModoNodosInsertar</Name>
+                    <Text>Insertar</Text>
+                    <Value>1</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ModoNodosEditar</Name>
+                    <Text>Editar / Borrar</Text>
+                    <Value>2</Value>
+                    <ValueType>RadioButton</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>SeparatorOrdenPuntos2</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowTipoPuntoOrden</Name>
+                <Text>Tipo de punto</Text>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>TipoPuntoOrden</Name>
+                    <Text>Tipo de punto</Text>
+                    <Value>Inicial</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>Inicial|Paso_Libre|Bifurcacion_Obligado|Final</ValueList>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>SeparatorOrdenPuntos3</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowColorPuntos</Name>
+                <Text>Caminos</Text>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>ColorPuntosNoDefinidos</Name>
+                    <Text>Color (distinguir caminos)</Text>
+                    <Value>Negro</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>Negro|Amarillo|Cyan|Verde|Magenta|Rojo|Azul</ValueList>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowDeteccionPuntosComunes</Name>
+                <Text>Puntos comunes</Text>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>DeteccionPuntosComunesActiva</Name>
+                    <Text>Detectar puntos comunes</Text>
+                    <Value>True</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ToleranciaPuntosComunesMm</Name>
+                    <Text>Tolerancia (mm)</Text>
+                    <Value>5</Value>
+                    <ValueType>Length</ValueType>
+                </Parameter>
+                <Parameter>
+                    <Name>ColorResaltadoPuntosComunes</Name>
+                    <Text>Color resaltado</Text>
+                    <Value>Rojo</Value>
+                    <ValueType>StringComboBox</ValueType>
+                    <ValueList>Negro|Amarillo|Verde|Cyan|Magenta|Rojo|Azul</ValueList>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>SeparatorOrdenPuntos4</Name>
+                <ValueType>Separator</ValueType>
+            </Parameter>
+            <Parameter>
+                <Name>RowLimpiarPuntos</Name>
+                <Text>Borrar</Text>
+                <ValueType>Row</ValueType>
+                <Visible>PolyMode == 1</Visible>
+                <Parameter>
+                    <Name>LimpiarPuntosNoDefinidos</Name>
+                    <Text>Borrar puntos</Text>
+                    <EventId>1042</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowBtnOptimizar</Name>
+                <Text>Optimizar</Text>
+                <ValueType>Row</ValueType>
+                <Visible>PolyMode == 1</Visible>
+                <Parameter>
+                    <Name>GenerarCaminoOptimo</Name>
+                    <Text>Generar Camino Óptimo</Text>
+                    <EventId>1041</EventId>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+        </Parameter>
+        <!-- ── Modos de dibujo ──────────────────── -->
+        <Parameter>
+            <Name>PointModeTitleDraw</Name>
             <Text>Modos de dibujo</Text>
             <ValueType>Expander</ValueType>
             <Parameter>
@@ -106,17 +291,17 @@
                         Modos de dibujo (Ayuda):
 
                         • EDICION
-                        Permite estirar la polilinea desde sus vértices
-                        y agregar puntos o cortes en los segmentos.
-                        El CheckBox “Insertar punto” solo se habilita en este modo.
+                            Permite estirar la polilinea desde sus vértices
+                            y agregar puntos o cortes en los segmentos.
+                            El CheckBox "Insertar punto / Corte" solo se habilita en este modo.
 
                         • CONFIGURACION
-                        Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
-                        para aplicar layers y atributos personalizados.
-                        También permite eliminar uno o más segmentos mediante selección múltiple.
+                            Permite seleccionar tubos, codos, uniones, bifurcaciones, etc,
+                            para aplicar layers y atributos personalizados.
+                            También permite eliminar uno o más segmentos mediante selección múltiple.
 
                         • CREACION - EXTENDER
-                        Permite dibujar y extender la polilinea.
+                            Permite dibujar y extender la polilinea.
                     </Text>
                     <Value>AllplanSettings.PictResPalette.eHotinfo</Value>
                     <!-- ID del recurso de imagen de Allplan -->
@@ -127,7 +312,7 @@
             <Parameter>
                 <Name>PointMode</Name>
                 <Text>Elegir modo</Text>
-                <Value>2</Value>
+                <Value>0</Value>
                 <ValueType>RadioButtonGroup</ValueType>
                 <Parameter>
                     <Name>ExtendPolyline</Name>
@@ -148,50 +333,141 @@
                     <ValueType>RadioButton</ValueType>
                 </Parameter>
             </Parameter>
-        </Parameter>
-        <Parameter>
-            <Name>RowLimitAngles</Name>
-            <ValueType>Row</ValueType>
-            <Value>OVERALL:1</Value>
             <Parameter>
-                <Name>CheckBoxLimitarAngulos</Name>
-                <Text>Limitar ángulos</Text>
-                <Value>True</Value>
-                <ValueType>CheckBox</ValueType>
+                <Name>RowLimitAngles</Name>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>CheckBoxLimitarAngulos</Name>
+                    <Text>Limitar ángulos</Text>
+                    <Value>True</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
             </Parameter>
-        </Parameter>
-        <Parameter>
-            <Name>RowInsertPoint</Name>
+            <!-- <Parameter>
+            <Name>RowAgregarDiametroZ</Name>
             <ValueType>Row</ValueType>
             <Value>OVERALL:1</Value>
             <Parameter>
-                <Name>CheckBoxInsertPoint</Name>
-                <Text>Insertar punto</Text>
+                <Name>CheckBoxAgregarDiametroZ</Name>
+                <Text>Agregar diámetro en Z</Text>
                 <Value>False</Value>
                 <ValueType>CheckBox</ValueType>
             </Parameter>
-        </Parameter>
-        <Parameter>
-            <Name>RowAddCut</Name>
-            <ValueType>Row</ValueType>
-            <Value>OVERALL:1</Value>
+        </Parameter> -->
             <Parameter>
-                <Name>CheckBoxAddCut</Name>
-                <Text>Añadir cortes</Text>
-                <Value>False</Value>
-                <ValueType>CheckBox</ValueType>
+                <Name>RowInsertPoint</Name>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>CheckBoxInsertPoint</Name>
+                    <Text>Insertar punto</Text>
+                    <Value>False</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowAddCut</Name>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>CheckBoxAddCut</Name>
+                    <Text>Añadir cortes</Text>
+                    <Value>False</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowBorrar</Name>
+                <Text>Borrar</Text>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>borrarSeccion</Name>
+                    <Text>Borrar Seccion o Corte</Text>
+                    <EventId>1004</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+             <Parameter>
+                <Name>RowInvertirCaval</Name>
+                <Text>Invertir</Text>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>invertirCaval</Name>
+                    <Text>Invertir caval</Text>
+                    <TextId>2084</TextId>
+                    <EventId>1017</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
             </Parameter>
         </Parameter>
+          <!-- ══════════════════════════════════════════
+             TRAZADO PARALELO (solo en Modo Creacion)
+        ══════════════════════════════════════════ -->
         <Parameter>
-            <Name>RowBorrar</Name>
-            <Text>Borrar</Text>
-            <ValueType>Row</ValueType>
+            <Name>TrazadoParaleloExpander</Name>
+            <Text>Trazado Paralelo</Text>
+            <ValueType>Expander</ValueType>
+            <Visible>PointMode == 2</Visible>
             <Parameter>
-                <Name>borrarSeccion</Name>
-                <Text>Borrar Seccion o Corte</Text>
-                <EventId>1004</EventId>
-                <Value>0</Value>
-                <ValueType>Button</ValueType>
+                <Name>RowParaleloEnabled</Name>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>TrazadoParaleloEnabled</Name>
+                    <Text>Activar trazado paralelo</Text>
+                    <Value>False</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowParaleloDistancia</Name>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>TrazadoParaleloDistancia</Name>
+                    <Text>Distancia (mm) entre tubos</Text>
+                    <Value>0</Value>
+                    <MinValue>0</MinValue>
+                    <ValueType>Integer</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowParaleloLado</Name>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>TrazadoParaleloLado</Name>
+                    <Text>Posicion por</Text>
+                    <Value>fuera</Value>
+                    <ValueList>dentro|fuera</ValueList>
+                    <ValueType>StringComboBox</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowParaleloSeleccionMultiple</Name>
+                <ValueType>Row</ValueType>
+                <Value>OVERALL:1</Value>
+                <Parameter>
+                    <Name>TrazadoParaleloSeleccionMultiple</Name>
+                    <Text>Selección múltiple de segmentos</Text>
+                    <Value>False</Value>
+                    <ValueType>CheckBox</ValueType>
+                </Parameter>
+            </Parameter>
+            <Parameter>
+                <Name>RowAgregarParalela</Name>
+                <Text>Agregar paralela</Text>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>AgregarParalela</Name>
+                    <Text>Agregar Paralela</Text>
+                    <EventId>1050</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
             </Parameter>
         </Parameter>
         <Parameter>
@@ -252,15 +528,15 @@
                 <ValueList></ValueList>
                 <ValueType>StringComboBox</ValueType>
             </Parameter>
-        </Parameter>
-        <Parameter>
-            <ValueType>Row</ValueType>
             <Parameter>
-                <Name>aplicarLayers</Name>
-                <Text>Aplicar layer</Text>
-                <EventId>1009</EventId>
-                <Value>0</Value>
-                <ValueType>Button</ValueType>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>aplicarLayers</Name>
+                    <Text>Aplicar layer</Text>
+                    <EventId>1009</EventId>
+                    <Value>0</Value>
+                    <ValueType>Button</ValueType>
+                </Parameter>
             </Parameter>
         </Parameter>
         <Parameter>
@@ -269,7 +545,27 @@
             <ValueType>Expander</ValueType>
             <Parameter>
                 <Name>AttributeValue</Name>
-                <Text>Valor atributo</Text>
+                <Text>6_CC_IS / pmp_pare</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+            </Parameter>
+            <Parameter>
+                <ValueType>Row</ValueType>
+                <Parameter>
+                    <Name>AttributeApply</Name>
+                    <Text>Aplicar atributos</Text>
+                    <EventId>1011</EventId>
+                    <ValueType>Button</ValueType>
+                </Parameter>
+            </Parameter>
+        </Parameter>
+        <Parameter>
+            <Name>RowCodificacion</Name>
+            <Text>Codificació Cajetín</Text>
+            <ValueType>Expander</ValueType>
+            <Parameter>
+                <Name>CodificacionCajetin</Name>
+                <Text>Codificació Cajetín</Text>
                 <Value></Value>
                 <ValueType>String</ValueType>
             </Parameter>
@@ -277,9 +573,9 @@
         <Parameter>
             <ValueType>Row</ValueType>
             <Parameter>
-                <Name>AttributeApply</Name>
-                <Text>Aplicar atributo</Text>
-                <EventId>1011</EventId>
+                <Name>CodificacionCajetinApply</Name>
+                <Text>Aplicar codificació</Text>
+                <EventId>1039</EventId>
                 <ValueType>Button</ValueType>
             </Parameter>
         </Parameter>
@@ -345,6 +641,7 @@
                 <ValueType>Button</ValueType>
             </Parameter>
         </Parameter>
+        <!-- Parámetros ocultos -->
         <Parameter>
             <Name>zUnique</Name>
             <Text>Unic</Text>
@@ -353,8 +650,7 @@
             <Enable>False</Enable>
             <ValueType>Double</ValueType>
         </Parameter>
-        <!-- Parámetro oculto para guardar el estado de las polilíneas (para poder restaurar al
-        editar) -->
+        <!-- Parámetro oculto para guardar el estado de las polilíneas (para poder restaurar al editar) -->
         <Parameter>
             <Name>SavedState</Name>
             <Text>SavedState</Text>
@@ -380,261 +676,9 @@
             <ValueType>String</ValueType>
         </Parameter>
     </Page>
-    <Page>
-        <Name>PuntosLibresYMacros</Name>
-        <Text>Puntos Libres y Macros</Text>
-        <!-- MACRO: marcar punto inicial/final/libre y seleccionar SmartSymbol/Fixture -->
-        <Parameter>
-            <Name>MacroExpander</Name>
-            <Text>Macro</Text>
-            <ValueType>Expander</ValueType>
-            <Parameter>
-                <Name>MarkerPointMode</Name>
-                <Text>Elegir punto</Text>
-                <Value>2</Value>
-                <ValueType>RadioButtonGroup</ValueType>
-                <Visible>False</Visible>
-                <Parameter>
-                    <Name>MarkerStart</Name>
-                    <Text>Punto inicial</Text>
-                    <Value>0</Value>
-                    <ValueType>RadioButton</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>MarkerEnd</Name>
-                    <Text>Punto final</Text>
-                    <Value>1</Value>
-                    <ValueType>RadioButton</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>MarkerFree</Name>
-                    <Text>Libre</Text>
-                    <Value>2</Value>
-                    <ValueType>RadioButton</ValueType>
-                </Parameter>
-            </Parameter>
-            <Parameter>
-                <ValueType>Row</ValueType>
-                <Visible>True</Visible>
-                <Parameter>
-                    <Name>BtnSelectMacroPoint</Name>
-                    <Text>Seleccionar punto</Text>
-                    <EventId>1013</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                    <Visible>IsMacroCaptureMode == False</Visible>
-                </Parameter>
-                <Parameter>
-                    <Name>BtnAcceptMacro</Name>
-                    <Text>Aceptar (Terminar selección)</Text>
-                    <EventId>1020</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                    <Visible>IsMacroCaptureMode == True</Visible>
-                </Parameter>
-                <Parameter>
-                    <Name>IsMacroCaptureMode</Name>
-                    <Text>IsMacroCaptureMode</Text>
-                    <Value>False</Value>
-                    <ValueType>CheckBox</ValueType>
-                    <Visible>False</Visible>
-                </Parameter>
-            </Parameter>
-            <!-- Parámetro oculto: Z base del local seleccionado (-999999 = no seleccionado) -->
-            <Parameter>
-                <Name>MacroSelectedLocalZ</Name>
-                <Text>Z local seleccionado</Text>
-                <Value>-999999</Value>
-                <ValueType>Double</ValueType>
-                <Visible>False</Visible>
-            </Parameter>
-            <!-- Row: Seleccionar Local | Quitar local -->
-            <Parameter>
-                <ValueType>Row</ValueType>
-                <Visible>True</Visible>
-                <Parameter>
-                    <Name>BtnSelectLocal</Name>
-                    <Text>Seleccionar Local</Text>
-                    <EventId>1026</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>BtnQuitarLocal</Name>
-                    <Text>Quitar local</Text>
-                    <EventId>1027</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                    <Visible>MacroSelectedLocalZ > -100000</Visible>
-                </Parameter>
-            </Parameter>
-            <!-- Modo MANUAL: Cota Z absoluta (visible cuando no hay local seleccionado) -->
-            <Parameter>
-                <Name>MacroZAbs</Name>
-                <Text>Cota Z (mm)</Text>
-                <Value>0</Value>
-                <MinValue>-100000</MinValue>
-                <MaxValue>100000</MaxValue>
-                <ValueType>Integer</ValueType>
-                <Visible>MacroSelectedLocalZ &lt;= -100000</Visible>
-            </Parameter>
-            <!-- Modo con local: Altura relativa al piso (visible cuando hay local seleccionado) -->
-            <Parameter>
-                <Name>MacroZRelative</Name>
-                <Text>Altura sobre el piso (mm)</Text>
-                <Value>1000</Value>
-                <MinValue>0</MinValue>
-                <MaxValue>100000</MaxValue>
-                <ValueType>Integer</ValueType>
-                <Visible>MacroSelectedLocalZ > -100000</Visible>
-            </Parameter>
-            <Parameter>
-                <Name>MacroLibraryElementType</Name>
-                <Text>Tipo de macro</Text>
-                <Value>SmartSymbol</Value>
-                <ValueType>RadioButtonGroup</ValueType>
-                <Visible>False</Visible>
-                <Parameter>
-                    <Name>MacroSmartSymbolRadioButton</Name>
-                    <Text>Macro (SmartSymbol .nmk)</Text>
-                    <Value>SmartSymbol</Value>
-                    <ValueType>RadioButton</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>MacroFixtureRadioButton</Name>
-                    <Text>Fixture (.lfx/.pxf)</Text>
-                    <Value>Fixture</Value>
-                    <ValueType>RadioButton</ValueType>
-                    <Visible>False</Visible>
-                </Parameter>
-            </Parameter>
-            <Parameter>
-                <Name>MacroSmartSymbolPath</Name>
-                <Text>Seleccionar macro (SmartSymbol)</Text>
-                <Value></Value>
-                <ValueType>String</ValueType>
-                <ValueDialog>SmartSymbolDialog</ValueDialog>
-                <Visible>MacroLibraryElementType == "SmartSymbol"</Visible>
-            </Parameter>
-            <Parameter>
-                <Name>MacroFixturePath</Name>
-                <Text>Seleccionar fixture</Text>
-                <Value></Value>
-                <ValueType>String</ValueType>
-                <ValueDialog>FixtureDialog</ValueDialog>
-                <Visible>False</Visible>
-            </Parameter>
-            <Parameter>
-                <Name>MacroRotX</Name>
-                <Text>Rot X macro (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>MacroRotY</Name>
-                <Text>Rot Y macro (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>MacroRotZ</Name>
-                <Text>Rot Z macro (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-        </Parameter>
-        <!-- Modo Puntos Libres -->
-        <Parameter>
-            <Name>PuntosLibresExpander</Name>
-            <Text>Modo puntos libres</Text>
-            <ValueType>Expander</ValueType>
-            <Parameter>
-                <Name>SeparatorPuntosLibres</Name>
-                <ValueType>Separator</ValueType>
-            </Parameter>
-            <Parameter>
-                <Name>RowPuntosLibresElemento</Name>
-                <Text>Elemento</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>DefinedElementType</Name>
-                    <Text>Elemento</Text>
-                    <Value>T sortida</Value>
-                    <ValueType>StringComboBox</ValueType>
-                    <ValueList>T sortida|Colze base|Clau de Pas|Taps</ValueList>
-                </Parameter>
-            </Parameter>
-            <Parameter>
-                <Name>RowPuntosLibresTipo</Name>
-                <Text>Tipo de punto</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>PointType</Name>
-                    <Text>Tipo de punto</Text>
-                    <Value>Intermedio libre</Value>
-                    <ValueType>StringComboBox</ValueType>
-                    <ValueList>
-if DefinedElementType == 'T sortida' or DefinedElementType == 'Clau de Pas':
-    return 'Intermedio ordenado|Intermedio libre'
-else:
-    return 'Inicio|Final'
-                    </ValueList>
-                </Parameter>
-            </Parameter>
-            <Parameter>
-                <Name>RotX</Name>
-                <Text>Rot X (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>RotY</Name>
-                <Text>Rot Y (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>RotZ</Name>
-                <Text>Rot Z (grados)</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-                <MinValue>-360.0</MinValue>
-                <MaxValue>360.0</MaxValue>
-            </Parameter>
-            <Parameter>
-                <Name>RowPuntosLibresBotones</Name>
-                <Text>Acción</Text>
-                <ValueType>Row</ValueType>
-                <Value>OVERALL:1</Value>
-                <Parameter>
-                    <Name>AnadirPuntoLibre</Name>
-                    <Text>Añadir punto</Text>
-                    <EventId>1017</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                </Parameter>
-                <Parameter>
-                    <Name>FinalizarPuntosLibres</Name>
-                    <Text>Finalizar</Text>
-                    <EventId>1018</EventId>
-                    <Value>0</Value>
-                    <ValueType>Button</ValueType>
-                </Parameter>
-            </Parameter>
-        </Parameter>
-    </Page>
+    <!-- ══════════════════════════════════════════
+         PAGE 2: Soportes
+    ══════════════════════════════════════════ -->
     <Page>
         <Name>PageSoportes</Name>
         <Text>Soportes</Text>
@@ -762,7 +806,7 @@ else:
             </Parameter>
             <Parameter>
                 <Name>EditModeEdit</Name>
-                <Text>Edición</Text>
+                <Text>Edición Borrar</Text>
                 <Value>1</Value>
                 <ValueType>RadioButton</ValueType>
             </Parameter>
@@ -789,9 +833,8 @@ else:
                 <ValueType>Button</ValueType>
             </Parameter>
         </Parameter>
-
         <Parameter>
-            <Name>SepAtributos</Name>
+            <Name>SepAtributos2</Name>
             <ValueType>Separator</ValueType>
         </Parameter>
         <!-- ══════════════════════════════════════════

@@ -23,7 +23,7 @@ def create_element(key, label, dynamic=False, diameter=None):
 
 INSTALLATION_INFO = {
     "name": "VENTILACION",
-    "label": "Instalación de Ventilación",
+    "label": "Ventilación",
     "angles": [0, 45, -45, 90, -90],
     "angles_read": "45 - 90 grados",
     "default_layers" : {
@@ -41,6 +41,7 @@ INSTALLATION_INFO = {
         {
             "key": "conducto_normal",
             "label": "Conducto Impulsion",
+            "default_layer": "IS_CON_VENT_FAB",
             "is_individual": False, "min_segment_length": 300,
             "angles": ANGLES_45, "color": 5, "diameter": 75, "allowed_angles": "45 - 90 grados",
             "elems": ["manguito", "difusor"], "connections": [ElementTypes.UNION]
@@ -48,6 +49,7 @@ INSTALLATION_INFO = {
         {
             "key": "conducto_normal",
             "label": "Conducto Extraccion",
+            "default_layer": "IS_CON_VENT_FAB",
             "is_individual": False, "min_segment_length": 300,
             "angles": ANGLES_45, "color": 15, "diameter": 75, "allowed_angles": "45 - 90 grados",
             "elems": ["manguito", "difusor"], "connections": [ElementTypes.UNION]
@@ -55,6 +57,7 @@ INSTALLATION_INFO = {
         {
             "key": "conducto_aislado",
             "label": f"Conducto Aislado", "min_segment_length": 300,
+            "default_layer": "IS_CON_VENT_FAB",
             "is_individual": False, "allowed_angles": "45 - 90 grados",
             "angles": ANGLES_45, "color": 19, "diameter": [150, 160],
             "elems": [], "connections": [ElementTypes.REDUCION]
@@ -62,7 +65,8 @@ INSTALLATION_INFO = {
         {
             "key": "conducto_recuperador",
             "label": "Conducto Recuperador",
-            "is_individual": True, "min_segment_length": 350,
+            "default_layer": "IS_CON_VENT_FAB",
+            "is_individual": True, "min_segment_length": 300,
             "angles": ANGLES_90, "color": 19, "diameter": 160, "allowed_angles": "Solo 90 grados",
             "elems": ["codo_90", "conexion"], "connections": [ElementTypes.UNION, ElementTypes.CODO]
         },

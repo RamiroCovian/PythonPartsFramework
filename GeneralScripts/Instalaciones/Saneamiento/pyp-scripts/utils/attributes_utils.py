@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 import NemAll_Python_BaseElements as AllplanBaseElements
@@ -7,6 +8,35 @@ import NemAll_Python_BaseElements as AllplanBaseElements
 import Instalaciones.PolyLib as PBL
 
 ATTR_PERSO_01_ID = 1083
+
+# Por defecto **desactivado**; activar con ``SANEAMIENTO_ATTR_DEBUG=1`` (o true/yes).
+_SANEAMIENTO_ATTR_DEBUG = str(
+    os.getenv("SANEAMIENTO_ATTR_DEBUG", "0")
+).strip().lower() in ("1", "true", "yes")
+
+
+def attribute_debug_enabled() -> bool:
+    """Rastro palette → modelo para atributos (activar con ``SANEAMIENTO_ATTR_DEBUG=1``)."""
+    return _SANEAMIENTO_ATTR_DEBUG
+
+
+def format_attributes_for_debug(raw_attrs: Any, *, max_attrs: int = 12) -> str:
+    """Resumen legible de IDs/valores para consola (sin volcar objetos enteros)."""
+    normalized = _normalize_attribute_list(raw_attrs)
+    if not normalized:
+        return "[]"
+    parts: List[str] = []
+    for attr in normalized[:max_attrs]:
+        try:
+            aid = getattr(attr, "Id", None)
+            val = getattr(attr, "Value", None)
+            parts.append(f"{aid}={val!r}")
+        except Exception:
+            parts.append("<?>")
+    extra = ""
+    if len(normalized) > max_attrs:
+        extra = f" …(+{len(normalized) - max_attrs})"
+    return "[" + ", ".join(parts) + "]" + extra
 
 
 def _normalize_attribute_list(raw_attrs: Any) -> List:
