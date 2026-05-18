@@ -27,7 +27,9 @@ from HandleParameterType import HandleParameterType
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
 from PythonPartUtil import PythonPartUtil
 from PythonPartTransaction import ConnectToElements
-from ScriptObjectInteractors.BaseScriptObjectInteractor import BaseScriptObjectInteractor
+from ScriptObjectInteractors.BaseScriptObjectInteractor import (
+    BaseScriptObjectInteractor,
+)
 from ScriptObjectInteractors.LineInteractor import LineInteractor, LineInteractorResult
 from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResult
 from TypeCollections.ModelEleList import ModelEleList
@@ -119,7 +121,9 @@ def parse_saved_state(s: str) -> Dict[str, Any]:
         return {}
 
 
-def saved_state_to_point3d(state: Dict[str, Any], key: str) -> AllplanGeo.Point3D | None:
+def saved_state_to_point3d(
+    state: Dict[str, Any], key: str
+) -> AllplanGeo.Point3D | None:
     """Obtiene un Point3D desde state[key] = [x, y, z]. Devuelve None si no existe o es inválido."""
     arr = state.get(key)
     if not arr or len(arr) != 3:
@@ -156,11 +160,11 @@ def create_element_hash(element_type: str, stable: bool = False, **params) -> st
         random_suffix = "_r" + str(random.randint(10**15, 10**16 - 1))
         param_string += random_suffix
     else:
-        z_unique_val = params.get('z_unique', params.get('ZUnique', 0))
+        z_unique_val = params.get("z_unique", params.get("ZUnique", 0))
         if z_unique_val and z_unique_val != 0:
             param_string += f"_z={z_unique_val}"
 
-    hash_val = hashlib.sha224(param_string.encode('utf-8')).hexdigest()
+    hash_val = hashlib.sha224(param_string.encode("utf-8")).hexdigest()
     return hash_val
 
 
@@ -197,25 +201,29 @@ def parse_params_list_to_dict(param_list: List[str]) -> dict:
     """
     params = {}
     for param_str in param_list:
-        if '=' in param_str:
-            parts = param_str.split('=', 1)
+        if "=" in param_str:
+            parts = param_str.split("=", 1)
             if len(parts) == 2:
                 key = parts[0].strip()
-                value = parts[1].strip().rstrip('\n').strip()
+                value = parts[1].strip().rstrip("\n").strip()
                 try:
-                    if '.' in value:
+                    if "." in value:
                         params[key] = float(value)
                     else:
                         params[key] = int(value)
                 except ValueError:
-                    if value.startswith('Point3D('):
+                    if value.startswith("Point3D("):
                         try:
-                            coords = value.replace('Point3D(', '').replace(')', '').split(',')
+                            coords = (
+                                value.replace("Point3D(", "")
+                                .replace(")", "")
+                                .split(",")
+                            )
                             if len(coords) == 3:
                                 params[key] = AllplanGeo.Point3D(
                                     float(coords[0].strip()),
                                     float(coords[1].strip()),
-                                    float(coords[2].strip())
+                                    float(coords[2].strip()),
                                 )
                         except:
                             params[key] = value
@@ -231,20 +239,18 @@ def normalize_vector(vec: AllplanGeo.Vector3D) -> AllplanGeo.Vector3D | None:
     return AllplanGeo.Vector3D(vec.X / length, vec.Y / length, vec.Z / length)
 
 
-def cross_product(v1: AllplanGeo.Vector3D, v2: AllplanGeo.Vector3D) -> AllplanGeo.Vector3D:
+def cross_product(
+    v1: AllplanGeo.Vector3D, v2: AllplanGeo.Vector3D
+) -> AllplanGeo.Vector3D:
     return AllplanGeo.Vector3D(
-        v1.Y * v2.Z - v1.Z * v2.Y,
-        v1.Z * v2.X - v1.X * v2.Z,
-        v1.X * v2.Y - v1.Y * v2.X
+        v1.Y * v2.Z - v1.Z * v2.Y, v1.Z * v2.X - v1.X * v2.Z, v1.X * v2.Y - v1.Y * v2.X
     )
 
 
 def calc_distance_3d(point1: AllplanGeo.Point3D, point2: AllplanGeo.Point3D) -> float:
     return AllplanGeo.CalcLength(
         AllplanGeo.Vector3D(
-            point2.X - point1.X,
-            point2.Y - point1.Y,
-            point2.Z - point1.Z
+            point2.X - point1.X, point2.Y - point1.Y, point2.Z - point1.Z
         )
     )
 
@@ -261,9 +267,9 @@ def vector_dot(v1: AllplanGeo.Vector3D, v2: AllplanGeo.Vector3D) -> float:
     return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z
 
 
-def rotate_vector_around_axis(vector: AllplanGeo.Vector3D,
-                              axis: AllplanGeo.Vector3D,
-                              angle_rad: float) -> AllplanGeo.Vector3D:
+def rotate_vector_around_axis(
+    vector: AllplanGeo.Vector3D, axis: AllplanGeo.Vector3D, angle_rad: float
+) -> AllplanGeo.Vector3D:
     axis_norm = normalize_vector(axis)
     if not axis_norm:
         return vector
@@ -279,15 +285,15 @@ def rotate_vector_around_axis(vector: AllplanGeo.Vector3D,
     return normalize_vector(rotated) or vector
 
 
-def get_view_plane_normal(coord_input: AllplanIFW.CoordinateInput = None) -> AllplanGeo.Vector3D:
+def get_view_plane_normal(
+    coord_input: AllplanIFW.CoordinateInput = None,
+) -> AllplanGeo.Vector3D:
     try:
         if coord_input:
             view_proj = coord_input.GetViewWorldProjection()
             if view_proj and isinstance(view_proj, AllplanGeo.Matrix3D):
                 view_z = AllplanGeo.Vector3D(
-                    view_proj.m20,
-                    view_proj.m21,
-                    view_proj.m22
+                    view_proj.m20, view_proj.m21, view_proj.m22
                 )
                 view_z_normalized = normalize_vector(view_z)
                 if view_z_normalized:
@@ -296,17 +302,32 @@ def get_view_plane_normal(coord_input: AllplanIFW.CoordinateInput = None) -> All
                     abs_z = abs(view_z_normalized.Z)
 
                     if abs_x > abs_y and abs_x > abs_z:
-                        return AllplanGeo.Vector3D(1, 0, 0) if view_z_normalized.X > 0 else AllplanGeo.Vector3D(-1, 0, 0)
+                        return (
+                            AllplanGeo.Vector3D(1, 0, 0)
+                            if view_z_normalized.X > 0
+                            else AllplanGeo.Vector3D(-1, 0, 0)
+                        )
                     if abs_y > abs_z:
-                        return AllplanGeo.Vector3D(0, 1, 0) if view_z_normalized.Y > 0 else AllplanGeo.Vector3D(0, -1, 0)
-                    return AllplanGeo.Vector3D(0, 0, 1) if view_z_normalized.Z > 0 else AllplanGeo.Vector3D(0, 0, -1)
+                        return (
+                            AllplanGeo.Vector3D(0, 1, 0)
+                            if view_z_normalized.Y > 0
+                            else AllplanGeo.Vector3D(0, -1, 0)
+                        )
+                    return (
+                        AllplanGeo.Vector3D(0, 0, 1)
+                        if view_z_normalized.Z > 0
+                        else AllplanGeo.Vector3D(0, 0, -1)
+                    )
     except Exception:
         pass
     return AllplanGeo.Vector3D(0, 0, 1)
 
 
 def get_selected_thickness(build_ele: BuildingElement) -> float:
-    if hasattr(build_ele, 'GrosorSeleccionado') and build_ele.GrosorSeleccionado.value is not None:
+    if (
+        hasattr(build_ele, "GrosorSeleccionado")
+        and build_ele.GrosorSeleccionado.value is not None
+    ):
         return float(build_ele.GrosorSeleccionado.value)
     return 5.0
 
@@ -314,7 +335,7 @@ def get_selected_thickness(build_ele: BuildingElement) -> float:
 def get_neopreno_width(build_ele: BuildingElement, default: float = 50.0) -> float:
     min_width = 20.0
 
-    if hasattr(build_ele, 'Ancho') and build_ele.Ancho.value is not None:
+    if hasattr(build_ele, "Ancho") and build_ele.Ancho.value is not None:
         try:
             width_value = float(build_ele.Ancho.value)
         except (TypeError, ValueError):
@@ -324,36 +345,31 @@ def get_neopreno_width(build_ele: BuildingElement, default: float = 50.0) -> flo
 
     width_value = max(min_width, width_value)
 
-    if hasattr(build_ele, 'Ancho'):
+    if hasattr(build_ele, "Ancho"):
         build_ele.Ancho.value = width_value
 
     return width_value
 
 
 def get_color_for_thickness(thickness: float) -> int:
-    color_map = {
-        5.0: 15,
-        10.0: 4,
-        20.0: 5,
-        30.0: 8,
-        40.0: 3
-    }
+    color_map = {5.0: 15, 10.0: 4, 20.0: 5, 30.0: 8, 40.0: 3}
     return color_map.get(thickness, 15)
 
 
 def update_color_for_thickness(build_ele: BuildingElement):
-    if not build_ele or not hasattr(build_ele, 'GrosorSeleccionado'):
+    if not build_ele or not hasattr(build_ele, "GrosorSeleccionado"):
         return
 
     thickness = get_selected_thickness(build_ele)
     color_number = get_color_for_thickness(thickness)
 
-    if hasattr(build_ele, 'Color'):
+    if hasattr(build_ele, "Color"):
         build_ele.Color.value = color_number
 
 
-def calculate_local_coordinate_system(face_polygon: AllplanGeo.Polygon3D,
-                                     face_normal: AllplanGeo.Vector3D) -> dict:
+def calculate_local_coordinate_system(
+    face_polygon: AllplanGeo.Polygon3D, face_normal: AllplanGeo.Vector3D
+) -> dict:
     try:
         if not face_polygon or face_polygon.Count() < 3:
             return None
@@ -374,23 +390,31 @@ def calculate_local_coordinate_system(face_polygon: AllplanGeo.Polygon3D,
         origin = AllplanGeo.Point3D(
             (min_point.X + max_point.X) / 2.0,
             (min_point.Y + max_point.Y) / 2.0,
-            (min_point.Z + max_point.Z) / 2.0
+            (min_point.Z + max_point.Z) / 2.0,
         )
 
         p0 = face_polygon.GetPoint(0)
         p1 = face_polygon.GetPoint(1)
         edge_vector = AllplanGeo.Vector3D(p1.X - p0.X, p1.Y - p0.Y, p1.Z - p0.Z)
 
-        dot = edge_vector.X * axis_w.X + edge_vector.Y * axis_w.Y + edge_vector.Z * axis_w.Z
+        dot = (
+            edge_vector.X * axis_w.X
+            + edge_vector.Y * axis_w.Y
+            + edge_vector.Z * axis_w.Z
+        )
         axis_u = AllplanGeo.Vector3D(
             edge_vector.X - dot * axis_w.X,
             edge_vector.Y - dot * axis_w.Y,
-            edge_vector.Z - dot * axis_w.Z
+            edge_vector.Z - dot * axis_w.Z,
         )
 
         axis_u = normalize_vector(axis_u)
         if not axis_u:
-            axis_u = AllplanGeo.Vector3D(1, 0, 0) if abs(axis_w.X) < 0.9 else AllplanGeo.Vector3D(0, 1, 0)
+            axis_u = (
+                AllplanGeo.Vector3D(1, 0, 0)
+                if abs(axis_w.X) < 0.9
+                else AllplanGeo.Vector3D(0, 1, 0)
+            )
 
         axis_v = cross_product(axis_w, axis_u)
         axis_v = normalize_vector(axis_v)
@@ -401,9 +425,7 @@ def calculate_local_coordinate_system(face_polygon: AllplanGeo.Polygon3D,
         for i in range(face_polygon.Count()):
             vertex = face_polygon.GetPoint(i)
             vec_from_origin = AllplanGeo.Vector3D(
-                vertex.X - origin.X,
-                vertex.Y - origin.Y,
-                vertex.Z - origin.Z
+                vertex.X - origin.X, vertex.Y - origin.Y, vertex.Z - origin.Z
             )
             u_coords.append(vec_from_origin.DotProduct(axis_u))
             v_coords.append(vec_from_origin.DotProduct(axis_v))
@@ -412,68 +434,69 @@ def calculate_local_coordinate_system(face_polygon: AllplanGeo.Polygon3D,
         height = max(v_coords) - min(v_coords)
 
         return {
-            'origin': origin,
-            'axis_u': axis_u,
-            'axis_v': axis_v,
-            'axis_w': axis_w,
-            'width': width,
-            'height': height,
-            'min_point': min_point,
-            'max_point': max_point
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "axis_w": axis_w,
+            "width": width,
+            "height": height,
+            "min_point": min_point,
+            "max_point": max_point,
         }
 
     except Exception:
         return None
 
 
-def calculate_relative_position(point: AllplanGeo.Point3D,
-                               local_system: dict) -> dict:
+def calculate_relative_position(point: AllplanGeo.Point3D, local_system: dict) -> dict:
     try:
         if not local_system:
             return None
 
-        origin = local_system['origin']
-        axis_u = local_system['axis_u']
-        axis_v = local_system['axis_v']
-        width = local_system['width']
-        height = local_system['height']
+        origin = local_system["origin"]
+        axis_u = local_system["axis_u"]
+        axis_v = local_system["axis_v"]
+        width = local_system["width"]
+        height = local_system["height"]
 
         to_point = AllplanGeo.Vector3D(
-            point.X - origin.X,
-            point.Y - origin.Y,
-            point.Z - origin.Z
+            point.X - origin.X, point.Y - origin.Y, point.Z - origin.Z
         )
 
-        u_absolute = to_point.X * axis_u.X + to_point.Y * axis_u.Y + to_point.Z * axis_u.Z
-        v_absolute = to_point.X * axis_v.X + to_point.Y * axis_v.Y + to_point.Z * axis_v.Z
+        u_absolute = (
+            to_point.X * axis_u.X + to_point.Y * axis_u.Y + to_point.Z * axis_u.Z
+        )
+        v_absolute = (
+            to_point.X * axis_v.X + to_point.Y * axis_v.Y + to_point.Z * axis_v.Z
+        )
 
         u_relative = (u_absolute / width + 0.5) if width > 0.001 else 0.5
         v_relative = (v_absolute / height + 0.5) if height > 0.001 else 0.5
 
         return {
-            'u': u_relative,
-            'v': v_relative,
-            'u_absolute': u_absolute,
-            'v_absolute': v_absolute,
-            'distance_from_origin': AllplanGeo.CalcLength(to_point)
+            "u": u_relative,
+            "v": v_relative,
+            "u_absolute": u_absolute,
+            "v_absolute": v_absolute,
+            "distance_from_origin": AllplanGeo.CalcLength(to_point),
         }
 
     except Exception:
         return None
 
 
-def calculate_position_from_uv(u_relative: float,
-                               v_relative: float,
-                               local_system: dict) -> AllplanGeo.Point3D:
+def calculate_position_from_uv(
+    u_relative: float, v_relative: float, local_system: dict
+) -> AllplanGeo.Point3D:
     try:
         if not local_system:
             return None
 
-        origin = local_system['origin']
-        axis_u = local_system['axis_u']
-        axis_v = local_system['axis_v']
-        width = local_system['width']
-        height = local_system['height']
+        origin = local_system["origin"]
+        axis_u = local_system["axis_u"]
+        axis_v = local_system["axis_v"]
+        width = local_system["width"]
+        height = local_system["height"]
 
         u_absolute = (u_relative - 0.5) * width
         v_absolute = (v_relative - 0.5) * height
@@ -481,7 +504,7 @@ def calculate_position_from_uv(u_relative: float,
         point = AllplanGeo.Point3D(
             origin.X + u_absolute * axis_u.X + v_absolute * axis_v.X,
             origin.Y + u_absolute * axis_u.Y + v_absolute * axis_v.Y,
-            origin.Z + u_absolute * axis_u.Z + v_absolute * axis_v.Z
+            origin.Z + u_absolute * axis_u.Z + v_absolute * axis_v.Z,
         )
 
         return point
@@ -490,9 +513,11 @@ def calculate_position_from_uv(u_relative: float,
         return None
 
 
-def project_line_on_face(line: AllplanGeo.Line3D,
-                        face_point: AllplanGeo.Point3D,
-                         face_normal: AllplanGeo.Vector3D) -> AllplanGeo.Line3D:
+def project_line_on_face(
+    line: AllplanGeo.Line3D,
+    face_point: AllplanGeo.Point3D,
+    face_normal: AllplanGeo.Vector3D,
+) -> AllplanGeo.Line3D:
     try:
         normal = normalize_vector(face_normal)
         if not normal:
@@ -505,52 +530,26 @@ def project_line_on_face(line: AllplanGeo.Line3D,
         if is_horizontal:
             return AllplanGeo.Line3D(
                 AllplanGeo.Point3D(line.StartPoint.X, line.StartPoint.Y, face_point.Z),
-                AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, face_point.Z)
+                AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, face_point.Z),
             )
         else:
-            center = AllplanGeo.Point3D(
-                (line.StartPoint.X + line.EndPoint.X) / 2.0,
-                (line.StartPoint.Y + line.EndPoint.Y) / 2.0,
-                (line.StartPoint.Z + line.EndPoint.Z) / 2.0
-            )
-
-            t = nx * (center.X - face_point.X) + \
-                ny * (center.Y - face_point.Y) + \
-                nz * (center.Z - face_point.Z)
-
-            projected_center = AllplanGeo.Point3D(
-                center.X - t * nx,
-                center.Y - t * ny,
-                center.Z - t * nz
-            )
-
-            offset = AllplanGeo.Vector3D(
-                projected_center.X - center.X,
-                projected_center.Y - center.Y,
-                projected_center.Z - center.Z
-            )
-
             return AllplanGeo.Line3D(
-                AllplanGeo.Point3D(
-                    line.StartPoint.X + offset.X,
-                    line.StartPoint.Y + offset.Y,
-                    line.StartPoint.Z + offset.Z
-                ),
-                AllplanGeo.Point3D(
-                    line.EndPoint.X + offset.X,
-                    line.EndPoint.Y + offset.Y,
-                    line.EndPoint.Z + offset.Z
-                )
+                project_point_to_face_plane(line.StartPoint, face_point, face_normal),
+                project_point_to_face_plane(line.EndPoint, face_point, face_normal),
             )
 
     except Exception:
         return line
 
 
-def build_face_local_axes_for_handles(start_point: AllplanGeo.Point3D,
-                                     end_point: AllplanGeo.Point3D,
-                                     face_point: AllplanGeo.Point3D,
-                                     face_normal: AllplanGeo.Vector3D) -> tuple[AllplanGeo.Vector3D | None, AllplanGeo.Vector3D | None, AllplanGeo.Vector3D | None]:
+def build_face_local_axes_for_handles(
+    start_point: AllplanGeo.Point3D,
+    end_point: AllplanGeo.Point3D,
+    face_point: AllplanGeo.Point3D,
+    face_normal: AllplanGeo.Vector3D,
+) -> tuple[
+    AllplanGeo.Vector3D | None, AllplanGeo.Vector3D | None, AllplanGeo.Vector3D | None
+]:
     """
     Construye los ejes locales de la cara para los handles.
 
@@ -564,9 +563,7 @@ def build_face_local_axes_for_handles(start_point: AllplanGeo.Point3D,
     end_proj = project_point_to_face_plane(end_point, face_point, face_normal)
 
     proj_vec = AllplanGeo.Vector3D(
-        end_proj.X - start_proj.X,
-        end_proj.Y - start_proj.Y,
-        end_proj.Z - start_proj.Z
+        end_proj.X - start_proj.X, end_proj.Y - start_proj.Y, end_proj.Z - start_proj.Z
     )
     x_dir = normalize_vector(proj_vec)
 
@@ -577,7 +574,9 @@ def build_face_local_axes_for_handles(start_point: AllplanGeo.Point3D,
     if not z_dir_normalized:
         return None, None, None
 
-    z_dir = AllplanGeo.Vector3D(-z_dir_normalized.X, -z_dir_normalized.Y, -z_dir_normalized.Z)
+    z_dir = AllplanGeo.Vector3D(
+        -z_dir_normalized.X, -z_dir_normalized.Y, -z_dir_normalized.Z
+    )
 
     y_dir = cross_product(z_dir, x_dir)
     y_dir = normalize_vector(y_dir)
@@ -607,31 +606,26 @@ def build_face_local_axes_for_handles(start_point: AllplanGeo.Point3D,
     return x_dir, y_dir, z_dir
 
 
-def project_point_to_face_plane(p: AllplanGeo.Point3D,
-                                face_point: AllplanGeo.Point3D,
-                                face_normal: AllplanGeo.Vector3D) -> AllplanGeo.Point3D:
+def project_point_to_face_plane(
+    p: AllplanGeo.Point3D,
+    face_point: AllplanGeo.Point3D,
+    face_normal: AllplanGeo.Vector3D,
+) -> AllplanGeo.Point3D:
     """Proyecta un punto al plano definido por face_point y face_normal."""
     n = normalize_vector(face_normal)
     if not n:
         return p
 
-    v = AllplanGeo.Vector3D(
-        p.X - face_point.X,
-        p.Y - face_point.Y,
-        p.Z - face_point.Z
-    )
+    v = AllplanGeo.Vector3D(p.X - face_point.X, p.Y - face_point.Y, p.Z - face_point.Z)
 
     d = vector_dot(v, n)
 
-    return AllplanGeo.Point3D(
-        p.X - n.X * d,
-        p.Y - n.Y * d,
-        p.Z - n.Z * d
-    )
+    return AllplanGeo.Point3D(p.X - n.X * d, p.Y - n.Y * d, p.Z - n.Z * d)
 
 
-def get_view_ray_from_mouse(coord_input: AllplanIFW.CoordinateInput,
-                            mouse_point_2d: AllplanGeo.Point2D) -> tuple[AllplanGeo.Point3D | None, AllplanGeo.Vector3D | None]:
+def get_view_ray_from_mouse(
+    coord_input: AllplanIFW.CoordinateInput, mouse_point_2d: AllplanGeo.Point2D
+) -> tuple[AllplanGeo.Point3D | None, AllplanGeo.Vector3D | None]:
     """
     Obtiene el rayo de vista desde la posicion del mouse.
 
@@ -656,15 +650,13 @@ def get_view_ray_from_mouse(coord_input: AllplanIFW.CoordinateInput,
             return None, None
 
         ray_origin = AllplanGeo.Point3D(
-            inv_view_proj.m30,
-            inv_view_proj.m31,
-            inv_view_proj.m32
+            inv_view_proj.m30, inv_view_proj.m31, inv_view_proj.m32
         )
 
         ray_direction = AllplanGeo.Vector3D(
             mouse_world_approx.X - ray_origin.X,
             mouse_world_approx.Y - ray_origin.Y,
-            mouse_world_approx.Z - ray_origin.Z
+            mouse_world_approx.Z - ray_origin.Z,
         )
 
         ray_direction = normalize_vector(ray_direction)
@@ -677,10 +669,12 @@ def get_view_ray_from_mouse(coord_input: AllplanIFW.CoordinateInput,
         return None, None
 
 
-def intersect_ray_with_face_plane(ray_origin: AllplanGeo.Point3D,
-                                  ray_direction: AllplanGeo.Vector3D,
-                                  face_point: AllplanGeo.Point3D,
-                                  face_normal: AllplanGeo.Vector3D) -> AllplanGeo.Point3D | None:
+def intersect_ray_with_face_plane(
+    ray_origin: AllplanGeo.Point3D,
+    ray_direction: AllplanGeo.Vector3D,
+    face_point: AllplanGeo.Point3D,
+    face_normal: AllplanGeo.Vector3D,
+) -> AllplanGeo.Point3D | None:
     """
     Calcula la interseccion de un rayo con el plano de la cara.
 
@@ -701,11 +695,10 @@ def intersect_ray_with_face_plane(ray_origin: AllplanGeo.Point3D,
     if not ray_dir_norm:
         return None
 
-
     vec_to_face = AllplanGeo.Vector3D(
         face_point.X - ray_origin.X,
         face_point.Y - ray_origin.Y,
-        face_point.Z - ray_origin.Z
+        face_point.Z - ray_origin.Z,
     )
 
     denom = vector_dot(ray_dir_norm, n)
@@ -718,16 +711,18 @@ def intersect_ray_with_face_plane(ray_origin: AllplanGeo.Point3D,
     intersection_point = AllplanGeo.Point3D(
         ray_origin.X + ray_dir_norm.X * t,
         ray_origin.Y + ray_dir_norm.Y * t,
-        ray_origin.Z + ray_dir_norm.Z * t
+        ray_origin.Z + ray_dir_norm.Z * t,
     )
 
     return intersection_point
 
 
-def world_to_uv_face(p: AllplanGeo.Point3D,
-                     origin: AllplanGeo.Point3D,
-                     u_dir: AllplanGeo.Vector3D,
-                     v_dir: AllplanGeo.Vector3D) -> tuple[float, float]:
+def world_to_uv_face(
+    p: AllplanGeo.Point3D,
+    origin: AllplanGeo.Point3D,
+    u_dir: AllplanGeo.Vector3D,
+    v_dir: AllplanGeo.Vector3D,
+) -> tuple[float, float]:
     """
     Convierte un punto global a coordenadas UV del plano de la cara.
 
@@ -740,21 +735,19 @@ def world_to_uv_face(p: AllplanGeo.Point3D,
     Returns:
         tuple: (u, v) coordenadas en el plano UV
     """
-    v = AllplanGeo.Vector3D(
-        p.X - origin.X,
-        p.Y - origin.Y,
-        p.Z - origin.Z
-    )
+    v = AllplanGeo.Vector3D(p.X - origin.X, p.Y - origin.Y, p.Z - origin.Z)
     u = vector_dot(v, u_dir)
     v_coord = vector_dot(v, v_dir)
     return u, v_coord
 
 
-def uv_to_world_face(u: float,
-                     v: float,
-                     origin: AllplanGeo.Point3D,
-                     u_dir: AllplanGeo.Vector3D,
-                     v_dir: AllplanGeo.Vector3D) -> AllplanGeo.Point3D:
+def uv_to_world_face(
+    u: float,
+    v: float,
+    origin: AllplanGeo.Point3D,
+    u_dir: AllplanGeo.Vector3D,
+    v_dir: AllplanGeo.Vector3D,
+) -> AllplanGeo.Point3D:
     """
     Convierte coordenadas UV del plano de la cara a coordenadas world.
 
@@ -771,15 +764,17 @@ def uv_to_world_face(u: float,
     return AllplanGeo.Point3D(
         origin.X + u_dir.X * u + v_dir.X * v,
         origin.Y + u_dir.Y * u + v_dir.Y * v,
-        origin.Z + u_dir.Z * u + v_dir.Z * v
+        origin.Z + u_dir.Z * u + v_dir.Z * v,
     )
 
 
-def get_face_uv_bounds(face_polygon: AllplanGeo.Polygon3D,
-                      face_point: AllplanGeo.Point3D,
-                      face_normal: AllplanGeo.Vector3D,
-                      u_dir: AllplanGeo.Vector3D,
-                      v_dir: AllplanGeo.Vector3D) -> tuple[float, float, float, float]:
+def get_face_uv_bounds(
+    face_polygon: AllplanGeo.Polygon3D,
+    face_point: AllplanGeo.Point3D,
+    face_normal: AllplanGeo.Vector3D,
+    u_dir: AllplanGeo.Vector3D,
+    v_dir: AllplanGeo.Vector3D,
+) -> tuple[float, float, float, float]:
     """
     Calcula los limites UV del poligono de la cara.
 
@@ -802,10 +797,12 @@ def get_face_uv_bounds(face_polygon: AllplanGeo.Polygon3D,
     return min(u_coords), max(u_coords), min(v_coords), max(v_coords)
 
 
-def apply_line_projection_or_translation(line: AllplanGeo.Line3D,
-                                         face_point: AllplanGeo.Point3D,
-                                         face_normal: AllplanGeo.Vector3D,
-                                         max_displacement: float = 50000) -> AllplanGeo.Line3D:
+def apply_line_projection_or_translation(
+    line: AllplanGeo.Line3D,
+    face_point: AllplanGeo.Point3D,
+    face_normal: AllplanGeo.Vector3D,
+    max_displacement: float = 50000,
+) -> AllplanGeo.Line3D:
     if not face_normal or not face_point:
         return line
 
@@ -819,33 +816,35 @@ def apply_line_projection_or_translation(line: AllplanGeo.Line3D,
         offset = AllplanGeo.Vector3D(
             face_point.X - line.StartPoint.X,
             face_point.Y - line.StartPoint.Y,
-            face_point.Z - line.StartPoint.Z
+            face_point.Z - line.StartPoint.Z,
         )
 
         return AllplanGeo.Line3D(
             AllplanGeo.Point3D(
                 line.StartPoint.X + offset.X,
                 line.StartPoint.Y + offset.Y,
-                line.StartPoint.Z + offset.Z
+                line.StartPoint.Z + offset.Z,
             ),
             AllplanGeo.Point3D(
                 line.EndPoint.X + offset.X,
                 line.EndPoint.Y + offset.Y,
-                line.EndPoint.Z + offset.Z
-            )
+                line.EndPoint.Z + offset.Z,
+            ),
         )
 
 
-def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
-                                 ancho: float,
-                                 grosor: float,
-                                 face_normal: AllplanGeo.Vector3D = None,
-                                 face_point: AllplanGeo.Point3D = None,
-                                 invertir_grosor: bool = False,
-                                 coord_input: AllplanIFW.CoordinateInput = None,
-                                 rotation_deg: float = 0.0,
-                                 placement_matrix: AllplanGeo.Matrix3D = None,
-                                 is_free_mode: bool = False) -> AllplanGeo.BRep3D:
+def create_neopreno_solid_on_face(
+    line: AllplanGeo.Line3D,
+    ancho: float,
+    grosor: float,
+    face_normal: AllplanGeo.Vector3D = None,
+    face_point: AllplanGeo.Point3D = None,
+    invertir_grosor: bool = False,
+    coord_input: AllplanIFW.CoordinateInput = None,
+    rotation_deg: float = 0.0,
+    placement_matrix: AllplanGeo.Matrix3D = None,
+    is_free_mode: bool = False,
+) -> AllplanGeo.BRep3D:
     """Crea el solido del neopreno.
 
     Args:
@@ -856,7 +855,9 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
         raw_end = line.EndPoint
 
         if not is_free_mode and face_normal and face_point:
-            punto_inicial = project_point_to_face_plane(raw_start, face_point, face_normal)
+            punto_inicial = project_point_to_face_plane(
+                raw_start, face_point, face_normal
+            )
             punto_final = project_point_to_face_plane(raw_end, face_point, face_normal)
         else:
             punto_inicial = raw_start
@@ -865,7 +866,7 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
         vector_longitud = AllplanGeo.Vector3D(
             punto_final.X - punto_inicial.X,
             punto_final.Y - punto_inicial.Y,
-            punto_final.Z - punto_inicial.Z
+            punto_final.Z - punto_inicial.Z,
         )
 
         longitud = AllplanGeo.CalcLength(vector_longitud)
@@ -890,11 +891,17 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
                 if abs(vector_longitud.DotProduct(vector_grosor)) > 0.9:
                     view_plane_normal = get_view_plane_normal(coord_input)
                     if abs(vector_longitud.Z) < 0.9:
-                        vector_ancho = cross_product(vector_longitud, AllplanGeo.Vector3D(0, 0, 1))
+                        vector_ancho = cross_product(
+                            vector_longitud, AllplanGeo.Vector3D(0, 0, 1)
+                        )
                     elif abs(vector_longitud.Y) < 0.9:
-                        vector_ancho = cross_product(vector_longitud, AllplanGeo.Vector3D(0, 1, 0))
+                        vector_ancho = cross_product(
+                            vector_longitud, AllplanGeo.Vector3D(0, 1, 0)
+                        )
                     else:
-                        vector_ancho = cross_product(vector_longitud, AllplanGeo.Vector3D(1, 0, 0))
+                        vector_ancho = cross_product(
+                            vector_longitud, AllplanGeo.Vector3D(1, 0, 0)
+                        )
                     vector_ancho = normalize_vector(vector_ancho)
                     if not vector_ancho:
                         if abs(vector_longitud.X) < 0.5:
@@ -906,9 +913,7 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
 
             if invertir_grosor:
                 vector_ancho = AllplanGeo.Vector3D(
-                    -vector_ancho.X,
-                    -vector_ancho.Y,
-                    -vector_ancho.Z
+                    -vector_ancho.X, -vector_ancho.Y, -vector_ancho.Z
                 )
                 vector_grosor = cross_product(vector_ancho, vector_longitud)
                 vector_grosor = normalize_vector(vector_grosor)
@@ -917,10 +922,17 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
 
             if abs(rotation_deg) > 1e-6:
                 rotation_rad = math.radians(rotation_deg)
-                vector_ancho = rotate_vector_around_axis(vector_ancho, vector_longitud, rotation_rad)
-                vector_grosor = rotate_vector_around_axis(vector_grosor, vector_longitud, rotation_rad)
+                vector_ancho = rotate_vector_around_axis(
+                    vector_ancho, vector_longitud, rotation_rad
+                )
+                vector_grosor = rotate_vector_around_axis(
+                    vector_grosor, vector_longitud, rotation_rad
+                )
                 vector_ancho = normalize_vector(vector_ancho) or vector_ancho
-                vector_grosor = normalize_vector(cross_product(vector_ancho, vector_longitud)) or vector_grosor
+                vector_grosor = (
+                    normalize_vector(cross_product(vector_ancho, vector_longitud))
+                    or vector_grosor
+                )
 
             desplazamiento_centrado = ancho / 2.0
             longitud_vector_ancho = AllplanGeo.CalcLength(vector_ancho)
@@ -931,21 +943,18 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
                 punto_inicio = AllplanGeo.Point3D(
                     punto_inicial.X - vector_ancho.X * desplazamiento_centrado,
                     punto_inicial.Y - vector_ancho.Y * desplazamiento_centrado,
-                    punto_inicial.Z - vector_ancho.Z * desplazamiento_centrado
+                    punto_inicial.Z - vector_ancho.Z * desplazamiento_centrado,
                 )
 
             vector_grosor_para_cuboid = AllplanGeo.Vector3D(
-                -vector_grosor.X,
-                -vector_grosor.Y,
-                -vector_grosor.Z
+                -vector_grosor.X, -vector_grosor.Y, -vector_grosor.Z
             )
         else:
             if face_normal and face_point:
-                x_dir_solid, y_dir_solid, z_dir_solid = build_face_local_axes_for_handles(
-                    punto_inicial,
-                    punto_final,
-                    face_point,
-                    face_normal
+                x_dir_solid, y_dir_solid, z_dir_solid = (
+                    build_face_local_axes_for_handles(
+                        punto_inicial, punto_final, face_point, face_normal
+                    )
                 )
 
                 if x_dir_solid and y_dir_solid and z_dir_solid:
@@ -958,17 +967,19 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
                         dot_z_face_before = vector_dot(vector_grosor, n_check)
                         if dot_z_face_before > 0:
                             vector_grosor = AllplanGeo.Vector3D(
-                                -vector_grosor.X,
-                                -vector_grosor.Y,
-                                -vector_grosor.Z
+                                -vector_grosor.X, -vector_grosor.Y, -vector_grosor.Z
                             )
-                            vector_longitud = normalize_vector(cross_product(vector_ancho, vector_grosor))
+                            vector_longitud = normalize_vector(
+                                cross_product(vector_ancho, vector_grosor)
+                            )
                             if not vector_longitud:
-                                vector_longitud = normalize_vector(AllplanGeo.Vector3D(
-                                    punto_final.X - punto_inicial.X,
-                                    punto_final.Y - punto_inicial.Y,
-                                    punto_final.Z - punto_inicial.Z
-                                ))
+                                vector_longitud = normalize_vector(
+                                    AllplanGeo.Vector3D(
+                                        punto_final.X - punto_inicial.X,
+                                        punto_final.Y - punto_inicial.Y,
+                                        punto_final.Z - punto_inicial.Z,
+                                    )
+                                )
                                 if not vector_longitud:
                                     vector_longitud = x_dir_solid
 
@@ -976,47 +987,42 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
                     punto_inicio = AllplanGeo.Point3D(
                         punto_inicial.X + vector_grosor.X * offset_centro,
                         punto_inicial.Y + vector_grosor.Y * offset_centro,
-                        punto_inicial.Z + vector_grosor.Z * offset_centro
+                        punto_inicial.Z + vector_grosor.Z * offset_centro,
                     )
 
                     vector_grosor_para_cuboid = AllplanGeo.Vector3D(
-                        -vector_grosor.X,
-                        -vector_grosor.Y,
-                        -vector_grosor.Z
+                        -vector_grosor.X, -vector_grosor.Y, -vector_grosor.Z
                     )
                 else:
-                    vector_grosor = normalize_vector(face_normal) if face_normal else AllplanGeo.Vector3D(0, 0, 1)
+                    vector_grosor = (
+                        normalize_vector(face_normal)
+                        if face_normal
+                        else AllplanGeo.Vector3D(0, 0, 1)
+                    )
                     vector_ancho = cross_product(vector_longitud, vector_grosor)
-                    vector_ancho = normalize_vector(vector_ancho) or AllplanGeo.Vector3D(0, 1, 0)
+                    vector_ancho = normalize_vector(
+                        vector_ancho
+                    ) or AllplanGeo.Vector3D(0, 1, 0)
                     punto_inicio = punto_inicial
                     vector_grosor_para_cuboid = AllplanGeo.Vector3D(
-                        -vector_grosor.X,
-                        -vector_grosor.Y,
-                        -vector_grosor.Z
+                        -vector_grosor.X, -vector_grosor.Y, -vector_grosor.Z
                     )
             else:
                 vector_grosor = AllplanGeo.Vector3D(0, 0, 1)
                 vector_ancho = cross_product(vector_longitud, vector_grosor)
-                vector_ancho = normalize_vector(vector_ancho) or AllplanGeo.Vector3D(0, 1, 0)
+                vector_ancho = normalize_vector(vector_ancho) or AllplanGeo.Vector3D(
+                    0, 1, 0
+                )
                 punto_inicio = punto_inicial
                 vector_grosor_para_cuboid = AllplanGeo.Vector3D(
-                    -vector_grosor.X,
-                    -vector_grosor.Y,
-                    -vector_grosor.Z
+                    -vector_grosor.X, -vector_grosor.Y, -vector_grosor.Z
                 )
 
         axis_placement = AllplanGeo.AxisPlacement3D(
-            punto_inicio,
-            vector_longitud,
-            vector_grosor_para_cuboid
+            punto_inicio, vector_longitud, vector_grosor_para_cuboid
         )
 
-        cuboid = AllplanGeo.BRep3D.CreateCuboid(
-            axis_placement,
-            longitud,
-            ancho,
-            grosor
-        )
+        cuboid = AllplanGeo.BRep3D.CreateCuboid(axis_placement, longitud, ancho, grosor)
 
         return cuboid
 
@@ -1024,15 +1030,17 @@ def create_neopreno_solid_on_face(line: AllplanGeo.Line3D,
         return None
 
 
-def create_handles(build_ele: BuildingElement,
-                   line: AllplanGeo.Line3D,
-                   face_normal: AllplanGeo.Vector3D | None = None,
-                   coord_input: AllplanIFW.CoordinateInput = None,
-                   rotation_deg: float = 0.0,
-                   is_free_mode: bool = False,
-                   x_dir: AllplanGeo.Vector3D | None = None,
-                   y_dir: AllplanGeo.Vector3D | None = None,
-                   z_dir: AllplanGeo.Vector3D | None = None) -> list[HandleProperties]:
+def create_handles(
+    build_ele: BuildingElement,
+    line: AllplanGeo.Line3D,
+    face_normal: AllplanGeo.Vector3D | None = None,
+    coord_input: AllplanIFW.CoordinateInput = None,
+    rotation_deg: float = 0.0,
+    is_free_mode: bool = False,
+    x_dir: AllplanGeo.Vector3D | None = None,
+    y_dir: AllplanGeo.Vector3D | None = None,
+    z_dir: AllplanGeo.Vector3D | None = None,
+) -> list[HandleProperties]:
     """
     Crea los handles para el neopreno.
 
@@ -1049,9 +1057,11 @@ def create_handles(build_ele: BuildingElement,
     line_direction_vec = AllplanGeo.Vector3D(
         punto_final.X - punto_inicial.X,
         punto_final.Y - punto_inicial.Y,
-        punto_final.Z - punto_inicial.Z
+        punto_final.Z - punto_inicial.Z,
     )
-    line_direction = normalize_vector(line_direction_vec) or AllplanGeo.Vector3D(1.0, 0.0, 0.0)
+    line_direction = normalize_vector(line_direction_vec) or AllplanGeo.Vector3D(
+        1.0, 0.0, 0.0
+    )
 
     handle_plane = None
     if not is_free_mode and x_dir and y_dir and z_dir:
@@ -1081,7 +1091,7 @@ def create_handles(build_ele: BuildingElement,
                 [HandleParameterData("PuntoInicial", HandleParameterType.POINT)],
                 HandleDirection.PLANE_DIR,
                 plane=handle_plane,
-                info_text="Punto inicial de la linea"
+                info_text="Punto inicial de la linea",
             )
         )
 
@@ -1093,7 +1103,7 @@ def create_handles(build_ele: BuildingElement,
                 [HandleParameterData("PuntoFinal", HandleParameterType.POINT)],
                 HandleDirection.PLANE_DIR,
                 plane=handle_plane,
-                info_text="Punto final de la linea"
+                info_text="Punto final de la linea",
             )
         )
     else:
@@ -1104,7 +1114,7 @@ def create_handles(build_ele: BuildingElement,
                 punto_inicial,
                 [HandleParameterData("PuntoInicial", HandleParameterType.POINT)],
                 HandleDirection.XYZ_DIR,
-                info_text="Punto inicial de la linea"
+                info_text="Punto inicial de la linea",
             )
         )
 
@@ -1115,7 +1125,7 @@ def create_handles(build_ele: BuildingElement,
                 punto_inicial,
                 [HandleParameterData("PuntoFinal", HandleParameterType.POINT)],
                 HandleDirection.XYZ_DIR,
-                info_text="Punto final de la linea"
+                info_text="Punto final de la linea",
             )
         )
 
@@ -1123,7 +1133,7 @@ def create_handles(build_ele: BuildingElement,
     midpoint = AllplanGeo.Point3D(
         (punto_inicial.X + punto_final.X) / 2.0,
         (punto_inicial.Y + punto_final.Y) / 2.0,
-        (punto_inicial.Z + punto_final.Z) / 2.0
+        (punto_inicial.Z + punto_final.Z) / 2.0,
     )
 
     if is_free_mode:
@@ -1135,17 +1145,21 @@ def create_handles(build_ele: BuildingElement,
             vector_grosor = get_view_plane_normal(coord_input)
 
         width_direction = cross_product(line_direction, vector_grosor)
-        width_direction = normalize_vector(width_direction) or AllplanGeo.Vector3D(0.0, 1.0, 0.0)
+        width_direction = normalize_vector(width_direction) or AllplanGeo.Vector3D(
+            0.0, 1.0, 0.0
+        )
 
         if abs(rotation_deg) > 1e-6:
             rotation_rad = math.radians(rotation_deg)
-            width_direction = rotate_vector_around_axis(width_direction, line_direction, rotation_rad)
+            width_direction = rotate_vector_around_axis(
+                width_direction, line_direction, rotation_rad
+            )
             width_direction = normalize_vector(width_direction) or width_direction
 
         width_handle_point = AllplanGeo.Point3D(
             midpoint.X + width_direction.X * (width_value / 2.0),
             midpoint.Y + width_direction.Y * (width_value / 2.0),
-            midpoint.Z + width_direction.Z * (width_value / 2.0)
+            midpoint.Z + width_direction.Z * (width_value / 2.0),
         )
 
         handle_list.append(
@@ -1158,20 +1172,22 @@ def create_handles(build_ele: BuildingElement,
                         "Ancho",
                         HandleParameterType.VECTOR_DISTANCE,
                         distance_factor=2.0,
-                        dir_vector=width_direction
+                        dir_vector=width_direction,
                     )
                 ],
                 HandleDirection.VECTOR_DIR,
-                dir_vector=width_direction
+                dir_vector=width_direction,
             )
         )
     else:
         if handle_plane and y_dir:
-            width_direction = normalize_vector(y_dir) or AllplanGeo.Vector3D(0.0, 1.0, 0.0)
+            width_direction = normalize_vector(y_dir) or AllplanGeo.Vector3D(
+                0.0, 1.0, 0.0
+            )
             width_handle_point = AllplanGeo.Point3D(
                 midpoint.X + width_direction.X * (width_value / 2.0),
                 midpoint.Y + width_direction.Y * (width_value / 2.0),
-                midpoint.Z + width_direction.Z * (width_value / 2.0)
+                midpoint.Z + width_direction.Z * (width_value / 2.0),
             )
 
             handle_list.append(
@@ -1184,31 +1200,33 @@ def create_handles(build_ele: BuildingElement,
                             "Ancho",
                             HandleParameterType.VECTOR_DISTANCE,
                             distance_factor=2.0,
-                            dir_vector=width_direction
+                            dir_vector=width_direction,
                         )
                     ],
                     HandleDirection.PLANE_DIR,
                     plane=handle_plane,
-                    dir_vector=width_direction
+                    dir_vector=width_direction,
                 )
             )
         else:
             normal_vector = normalize_vector(face_normal) if face_normal else None
-            if not normal_vector and hasattr(build_ele, 'CaraNormalX'):
+            if not normal_vector and hasattr(build_ele, "CaraNormalX"):
                 normal_vector = normalize_vector(
                     AllplanGeo.Vector3D(
                         getattr(build_ele.CaraNormalX, "value", 0.0),
                         getattr(build_ele.CaraNormalY, "value", 0.0),
-                        getattr(build_ele.CaraNormalZ, "value", 1.0)
+                        getattr(build_ele.CaraNormalZ, "value", 1.0),
                     )
                 )
             normal_vector = normal_vector or AllplanGeo.Vector3D(0.0, 0.0, 1.0)
-            width_direction = normalize_vector(cross_product(line_direction, normal_vector)) or AllplanGeo.Vector3D(0.0, 1.0, 0.0)
+            width_direction = normalize_vector(
+                cross_product(line_direction, normal_vector)
+            ) or AllplanGeo.Vector3D(0.0, 1.0, 0.0)
 
             width_handle_point = AllplanGeo.Point3D(
                 midpoint.X + width_direction.X * (width_value / 2.0),
                 midpoint.Y + width_direction.Y * (width_value / 2.0),
-                midpoint.Z + width_direction.Z * (width_value / 2.0)
+                midpoint.Z + width_direction.Z * (width_value / 2.0),
             )
 
             handle_list.append(
@@ -1221,11 +1239,11 @@ def create_handles(build_ele: BuildingElement,
                             "Ancho",
                             HandleParameterType.VECTOR_DISTANCE,
                             distance_factor=2.0,
-                            dir_vector=width_direction
+                            dir_vector=width_direction,
                         )
                     ],
                     HandleDirection.VECTOR_DIR,
-                    dir_vector=width_direction
+                    dir_vector=width_direction,
                 )
             )
 
@@ -1237,10 +1255,10 @@ def create_handles(build_ele: BuildingElement,
                 midpoint,
                 [
                     HandleParameterData("PuntoInicial", HandleParameterType.POINT),
-                    HandleParameterData("PuntoFinal", HandleParameterType.POINT)
+                    HandleParameterData("PuntoFinal", HandleParameterType.POINT),
                 ],
                 HandleDirection.XYZ_DIR,
-                dir_vector=None
+                dir_vector=None,
             )
         )
 
@@ -1261,11 +1279,11 @@ def get_wall_placement_matrix(wall_element) -> AllplanGeo.Matrix3D | None:
 
     placement_matrix = None
     methods_to_try = [
-        'GetPlacementMatrix',
-        'GetTransformationMatrix',
-        'GetModelMatrix',
-        'GetWorldMatrix',
-        'GetMatrix'
+        "GetPlacementMatrix",
+        "GetTransformationMatrix",
+        "GetModelMatrix",
+        "GetWorldMatrix",
+        "GetMatrix",
     ]
 
     for method_name in methods_to_try:
@@ -1282,7 +1300,9 @@ def get_wall_placement_matrix(wall_element) -> AllplanGeo.Matrix3D | None:
 
     if placement_matrix is None:
         try:
-            success, matrix = AllplanBaseElements.PythonPartService.GetPlacementMatrix(wall_element)
+            success, matrix = AllplanBaseElements.PythonPartService.GetPlacementMatrix(
+                wall_element
+            )
             if success and isinstance(matrix, AllplanGeo.Matrix3D):
                 placement_matrix = matrix
         except Exception:
@@ -1309,21 +1329,30 @@ def get_wall_ifc_id(wall_element) -> str | None:
 
     try:
         from DocumentManager import DocumentManager
+
         doc = DocumentManager.get_instance().document
 
-        attrs = wall_element.GetAttributes(AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable)
+        attrs = wall_element.GetAttributes(
+            AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
+        )
         material_value_from_508 = None
         for attr in attrs:
             try:
                 attr_id = getattr(attr, "Id", None)
-                if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                if (
+                    attr_id is None
+                    and isinstance(attr, (tuple, list))
+                    and len(attr) >= 2
+                ):
                     attr_id = attr[0]
                     attr_value = attr[1]
                 else:
                     attr_value = getattr(attr, "Value", None)
 
                 if attr_id == 683:
-                    material_value_from_508 = str(attr_value).strip() if attr_value else ""
+                    material_value_from_508 = (
+                        str(attr_value).strip() if attr_value else ""
+                    )
                     return material_value_from_508
             except Exception:
                 continue
@@ -1338,28 +1367,40 @@ class WallSelectResult:
     def __init__(self):
         self.element = None
         self.element_guid = None
+        self.face_point = None
+        self.face_normal = None
+        self.face_polygon = None
         self.is_selected = False
 
 
 class WallSelectInteractor(BaseScriptObjectInteractor):
 
-    def __init__(self, result: WallSelectResult, prompt_msg: str = "Seleccione el muro", script_object=None):
+    def __init__(
+        self,
+        result: WallSelectResult,
+        prompt_msg: str = "Seleccione el muro",
+        script_object=None,
+    ):
         self.result = result
         self.coord_input = None
         self.prompt_msg = prompt_msg
         self.script_object = script_object
 
-        self.sel_query = AllplanIFW.SelectionQuery([
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Volume3D_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Area3D_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Wall_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.WallTier_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Column_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Beam_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Slab_TypeUUID),
-        ])
+        self.sel_query = AllplanIFW.SelectionQuery(
+            [
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Volume3D_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Area3D_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Wall_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.WallTier_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Column_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Beam_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Slab_TypeUUID),
+            ]
+        )
 
-        self.element_filter = AllplanIFW.ElementSelectFilterSetting(self.sel_query, True)
+        self.element_filter = AllplanIFW.ElementSelectFilterSetting(
+            self.sel_query, True
+        )
 
     def start_input(self, coord_input: AllplanIFW.CoordinateInput):
         self.coord_input = coord_input
@@ -1370,25 +1411,91 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
                 AllplanIFW.InputStringConvert(self.prompt_msg)
             )
 
-    def process_mouse_msg(self, mouse_msg: int, pnt: AllplanGeo.Point2D, msg_info: Any) -> bool:
+    def process_mouse_msg(
+        self, mouse_msg: int, pnt: AllplanGeo.Point2D, msg_info: Any
+    ) -> bool:
         if not self.coord_input:
             return True
 
         if self.coord_input.IsMouseMove(mouse_msg):
-            self.coord_input.SelectElement(mouse_msg, pnt, msg_info, True, True, True, self.element_filter)
+            self.coord_input.SelectElement(
+                mouse_msg, pnt, msg_info, True, True, True, self.element_filter
+            )
             return True
 
-        self.coord_input.SelectElement(mouse_msg, pnt, msg_info, True, True, True, self.element_filter)
+        self.coord_input.SelectElement(
+            mouse_msg, pnt, msg_info, True, True, True, self.element_filter
+        )
         selected_element = self.coord_input.GetSelectedElement()
 
         if selected_element.IsNull():
             return True
 
+        is_selected, face_polygon, intersect_result = self._select_face(
+            selected_element, pnt
+        )
+
+        if self.coord_input.IsMouseMove(mouse_msg):
+            return True
+
         self.result.element = selected_element
         self.result.element_guid = str(selected_element.GetModelElementUUID())
+        if is_selected:
+            self._store_face_result(face_polygon, intersect_result, pnt)
         self.result.is_selected = True
 
         return False
+
+    def _select_face(self, element, pnt):
+        try:
+            is_selected, face_polygon, intersect_result = (
+                AllplanBaseElements.FaceSelectService.SelectWallFace(
+                    element,
+                    pnt,
+                    True,
+                    self.coord_input.GetViewWorldProjection(),
+                    self.coord_input.GetInputViewDocument(),
+                    True,
+                )
+            )
+            if is_selected:
+                return is_selected, face_polygon, intersect_result
+        except Exception:
+            pass
+
+        try:
+            is_selected, face_polygon, intersect_result = (
+                AllplanBaseElements.FaceSelectService.SelectPolyhedronFace(
+                    element,
+                    pnt,
+                    True,
+                    self.coord_input.GetViewWorldProjection(),
+                    self.coord_input.GetInputViewDocument(),
+                    True,
+                )
+            )
+            return is_selected, face_polygon, intersect_result
+        except Exception:
+            pass
+
+        return False, None, None
+
+    def _store_face_result(self, face_polygon, intersect_result, pnt):
+        if intersect_result and hasattr(intersect_result, "IntersectionPoint"):
+            face_normal = intersect_result.FaceNv
+            face_point_approx = intersect_result.IntersectionPoint
+            ray_origin, ray_direction = get_view_ray_from_mouse(self.coord_input, pnt)
+            if ray_origin and ray_direction and face_normal:
+                real_intersection = intersect_ray_with_face_plane(
+                    ray_origin, ray_direction, face_point_approx, face_normal
+                )
+                self.result.face_point = (
+                    real_intersection if real_intersection else face_point_approx
+                )
+            else:
+                self.result.face_point = face_point_approx
+            self.result.face_normal = face_normal
+        self.result.face_polygon = face_polygon
 
     def on_cancel_function(self):
         return OnCancelFunctionResult.CANCEL_INPUT
@@ -1409,22 +1516,30 @@ class SolidFaceSelectResult:
 
 class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
 
-    def __init__(self, result: SolidFaceSelectResult, prompt_msg: str = "Seleccione la cara del solido"):
+    def __init__(
+        self,
+        result: SolidFaceSelectResult,
+        prompt_msg: str = "Seleccione la cara del solido",
+    ):
         self.result = result
         self.coord_input = None
         self.prompt_msg = prompt_msg
 
-        self.sel_query = AllplanIFW.SelectionQuery([
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Volume3D_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Area3D_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Wall_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.WallTier_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Column_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Beam_TypeUUID),
-            AllplanIFW.QueryTypeID(AllplanEleAdapter.Slab_TypeUUID),
-        ])
+        self.sel_query = AllplanIFW.SelectionQuery(
+            [
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Volume3D_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Area3D_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Wall_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.WallTier_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Column_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Beam_TypeUUID),
+                AllplanIFW.QueryTypeID(AllplanEleAdapter.Slab_TypeUUID),
+            ]
+        )
 
-        self.element_filter = AllplanIFW.ElementSelectFilterSetting(self.sel_query, True)
+        self.element_filter = AllplanIFW.ElementSelectFilterSetting(
+            self.sel_query, True
+        )
 
     def start_input(self, coord_input: AllplanIFW.CoordinateInput):
         self.coord_input = coord_input
@@ -1432,27 +1547,33 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
             AllplanIFW.InputStringConvert(self.prompt_msg)
         )
 
-    def process_mouse_msg(self, mouse_msg: int, pnt: AllplanGeo.Point2D, msg_info: Any) -> bool:
-        self.coord_input.SelectElement(mouse_msg, pnt, msg_info, True, True, True, self.element_filter)
+    def process_mouse_msg(
+        self, mouse_msg: int, pnt: AllplanGeo.Point2D, msg_info: Any
+    ) -> bool:
+        self.coord_input.SelectElement(
+            mouse_msg, pnt, msg_info, True, True, True, self.element_filter
+        )
         selected_element = self.coord_input.GetSelectedElement()
 
         if selected_element.IsNull():
             return True
 
-        is_selected, face_polygon, intersect_result = self._select_face(selected_element, pnt)
+        is_selected, face_polygon, intersect_result = self._select_face(
+            selected_element, pnt
+        )
 
         if not is_selected:
             return True
 
         if self.coord_input.IsMouseMove(mouse_msg):
-            if intersect_result and hasattr(intersect_result, 'IntersectionPoint'):
+            if intersect_result and hasattr(intersect_result, "IntersectionPoint"):
                 self._draw_face_normal_preview(intersect_result)
             return True
 
         self.result.element = selected_element
         self.result.element_guid = str(selected_element.GetModelElementUUID())
 
-        if intersect_result and hasattr(intersect_result, 'IntersectionPoint'):
+        if intersect_result and hasattr(intersect_result, "IntersectionPoint"):
             face_normal = intersect_result.FaceNv
             face_point_approx = intersect_result.IntersectionPoint
 
@@ -1466,10 +1587,7 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
             ray_origin, ray_direction = get_view_ray_from_mouse(self.coord_input, pnt)
             if ray_origin and ray_direction and face_normal:
                 real_intersection = intersect_ray_with_face_plane(
-                    ray_origin,
-                    ray_direction,
-                    face_point_approx,
-                    face_normal
+                    ray_origin, ray_direction, face_point_approx, face_normal
                 )
                 if real_intersection:
                     self.result.face_point = real_intersection
@@ -1490,24 +1608,32 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
 
     def _select_face(self, element, pnt):
         try:
-            is_selected, face_polygon, intersect_result = \
+            is_selected, face_polygon, intersect_result = (
                 AllplanBaseElements.FaceSelectService.SelectWallFace(
-                    element, pnt, True,
+                    element,
+                    pnt,
+                    True,
                     self.coord_input.GetViewWorldProjection(),
-                    self.coord_input.GetInputViewDocument(), True
+                    self.coord_input.GetInputViewDocument(),
+                    True,
                 )
+            )
             if is_selected:
                 return is_selected, face_polygon, intersect_result
         except Exception:
             pass
 
         try:
-            is_selected, face_polygon, intersect_result = \
+            is_selected, face_polygon, intersect_result = (
                 AllplanBaseElements.FaceSelectService.SelectPolyhedronFace(
-                    element, pnt, True,
+                    element,
+                    pnt,
+                    True,
                     self.coord_input.GetViewWorldProjection(),
-                    self.coord_input.GetInputViewDocument(), True
+                    self.coord_input.GetInputViewDocument(),
+                    True,
                 )
+            )
             return is_selected, face_polygon, intersect_result
         except Exception:
             pass
@@ -1523,8 +1649,7 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
         common_props.GetGlobalProperties()
 
         ray = AllplanBasisElements.ModelElement3D(
-            common_props,
-            AllplanGeo.Line3D(point_at_face, point_at_face + normal * 500)
+            common_props, AllplanGeo.Line3D(point_at_face, point_at_face + normal * 500)
         )
 
         AllplanBaseElements.DrawElementPreview(
@@ -1532,7 +1657,7 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
             AllplanGeo.Matrix3D(),
             [ray],
             True,
-            None
+            None,
         )
 
     def on_cancel_function(self):
@@ -1543,8 +1668,7 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
 
 
 def create_script_object(
-    build_ele: BuildingElement,
-    script_object_data: BaseScriptObjectData
+    build_ele: BuildingElement, script_object_data: BaseScriptObjectData
 ) -> BaseScriptObject:
     return NeoprenosScriptObject(build_ele, script_object_data)
 
@@ -1552,9 +1676,7 @@ def create_script_object(
 class NeoprenosScriptObject(BaseScriptObject):
 
     def __init__(
-        self,
-        build_ele: BuildingElement,
-        script_object_data: BaseScriptObjectData
+        self, build_ele: BuildingElement, script_object_data: BaseScriptObjectData
     ):
         super().__init__(script_object_data)
 
@@ -1578,13 +1700,12 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.ref_face_element = None
         self.ref_face_polygon = None
 
-
         self._saved_coord_input = self.coord_input if self.coord_input else None
 
         self.is_editing_existing = bool(
-            hasattr(self.build_ele, "SavedState") and
-            isinstance(self.build_ele.SavedState.value, str) and
-            self.build_ele.SavedState.value.strip()
+            hasattr(self.build_ele, "SavedState")
+            and isinstance(self.build_ele.SavedState.value, str)
+            and self.build_ele.SavedState.value.strip()
         )
         self._restored_from_saved_state = False
         self.is_free_mode = self._get_free_mode()
@@ -1595,7 +1716,11 @@ class NeoprenosScriptObject(BaseScriptObject):
             ss = getattr(self.build_ele.SavedState, "value", None)
             if isinstance(ss, str) and ss.strip():
                 self._restored_from_saved_state = self._deserialize_state_from_json(ss)
-        if not self._restored_from_saved_state and hasattr(self, "script_object_data") and self.script_object_data:
+        if (
+            not self._restored_from_saved_state
+            and hasattr(self, "script_object_data")
+            and self.script_object_data
+        ):
             param_list_src = getattr(self.script_object_data, "param_list", None)
             if param_list_src:
                 for p in param_list_src:
@@ -1605,12 +1730,16 @@ class NeoprenosScriptObject(BaseScriptObject):
                         val = rest.strip().rstrip("\n").strip()
                         if val:
                             try:
-                                if (val.startswith("'") and val.endswith("'")) or (val.startswith('"') and val.endswith('"')):
+                                if (val.startswith("'") and val.endswith("'")) or (
+                                    val.startswith('"') and val.endswith('"')
+                                ):
                                     val = ast.literal_eval(val)
                             except Exception:
                                 pass
                             if isinstance(val, str) and val:
-                                self._restored_from_saved_state = self._deserialize_state_from_json(val)
+                                self._restored_from_saved_state = (
+                                    self._deserialize_state_from_json(val)
+                                )
                             break
 
         if self.is_editing_existing:
@@ -1620,14 +1749,23 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         self._update_parameter_visibility()
 
-
     def _get_free_mode(self) -> bool:
-        if hasattr(self.build_ele, 'neopreno_libre'):
+        if hasattr(self.build_ele, "neopreno_libre"):
             val = self.build_ele.neopreno_libre.value
             if isinstance(val, bool):
                 return val
             if isinstance(val, str):
-                return val.lower() in ('true', '1', 'yes')
+                return val.lower() in ("true", "1", "yes")
+            return bool(val)
+        return False
+
+    def _get_allow_line_pickup(self) -> bool:
+        if hasattr(self.build_ele, "PermitirPickUpLinea"):
+            val = self.build_ele.PermitirPickUpLinea.value
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                return val.lower() in ("true", "1", "yes")
             return bool(val)
         return False
 
@@ -1640,16 +1778,30 @@ class NeoprenosScriptObject(BaseScriptObject):
         Incluye "v": 1 para poder migrar formato más adelante.
         """
         try:
-            p0 = self.build_ele.PuntoInicial.value if hasattr(self.build_ele, "PuntoInicial") else None
-            p1 = self.build_ele.PuntoFinal.value if hasattr(self.build_ele, "PuntoFinal") else None
+            p0 = (
+                self.build_ele.PuntoInicial.value
+                if hasattr(self.build_ele, "PuntoInicial")
+                else None
+            )
+            p1 = (
+                self.build_ele.PuntoFinal.value
+                if hasattr(self.build_ele, "PuntoFinal")
+                else None
+            )
             if p0 is None or p1 is None:
                 return ""
 
             grosor = None
-            if hasattr(self.build_ele, "GrosorSeleccionado") and self.build_ele.GrosorSeleccionado.value is not None:
+            if (
+                hasattr(self.build_ele, "GrosorSeleccionado")
+                and self.build_ele.GrosorSeleccionado.value is not None
+            ):
                 grosor = float(self.build_ele.GrosorSeleccionado.value)
             ancho = None
-            if hasattr(self.build_ele, "Ancho") and self.build_ele.Ancho.value is not None:
+            if (
+                hasattr(self.build_ele, "Ancho")
+                and self.build_ele.Ancho.value is not None
+            ):
                 try:
                     ancho = float(self.build_ele.Ancho.value)
                 except (TypeError, ValueError):
@@ -1670,19 +1822,36 @@ class NeoprenosScriptObject(BaseScriptObject):
             rot = 0.0
             if hasattr(self.build_ele, "RotacionManual"):
                 rv = self.build_ele.RotacionManual.value
-                rot = rv.GetDeg() if hasattr(rv, "GetDeg") else float(rv) if rv is not None else 0.0
+                rot = (
+                    rv.GetDeg()
+                    if hasattr(rv, "GetDeg")
+                    else float(rv) if rv is not None else 0.0
+                )
 
             invertido = False
-            if hasattr(self.build_ele, "InvertirGrosor") and self.build_ele.InvertirGrosor.value is not None:
+            if (
+                hasattr(self.build_ele, "InvertirGrosor")
+                and self.build_ele.InvertirGrosor.value is not None
+            ):
                 val = self.build_ele.InvertirGrosor.value
-                invertido = bool(val) if isinstance(val, bool) else str(val).lower() in ("true", "1", "yes")
+                invertido = (
+                    bool(val)
+                    if isinstance(val, bool)
+                    else str(val).lower() in ("true", "1", "yes")
+                )
 
             pmp_pare = ""
-            if hasattr(self.build_ele, "pmp_pare") and self.build_ele.pmp_pare.value is not None:
+            if (
+                hasattr(self.build_ele, "pmp_pare")
+                and self.build_ele.pmp_pare.value is not None
+            ):
                 pmp_pare = str(self.build_ele.pmp_pare.value).strip()
 
             layer = -1
-            if hasattr(self.build_ele, "Layer") and self.build_ele.Layer.value is not None:
+            if (
+                hasattr(self.build_ele, "Layer")
+                and self.build_ele.Layer.value is not None
+            ):
                 try:
                     layer = int(self.build_ele.Layer.value)
                 except (TypeError, ValueError):
@@ -1695,6 +1864,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 "ancho": ancho,
                 "grosor": grosor,
                 "libre": libre,
+                "pickup_linea": self._get_allow_line_pickup(),
                 "rot": rot,
                 "invertido": invertido,
                 "pmp_pare": pmp_pare,
@@ -1703,6 +1873,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             return json.dumps(state, separators=(",", ":"))
         except Exception as e:
             import traceback
+
             return ""
 
     def _deserialize_state_from_json(self, json_str: str) -> bool:
@@ -1724,20 +1895,41 @@ class NeoprenosScriptObject(BaseScriptObject):
             self._restored_state = state
 
             if hasattr(self.build_ele, "PuntoInicial"):
-                self.build_ele.PuntoInicial.value = AllplanGeo.Point3D(float(p0[0]), float(p0[1]), float(p0[2]))
+                self.build_ele.PuntoInicial.value = AllplanGeo.Point3D(
+                    float(p0[0]), float(p0[1]), float(p0[2])
+                )
             if hasattr(self.build_ele, "PuntoFinal"):
-                self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(float(p1[0]), float(p1[1]), float(p1[2]))
+                self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(
+                    float(p1[0]), float(p1[1]), float(p1[2])
+                )
 
-            if "ancho" in state and state["ancho"] is not None and hasattr(self.build_ele, "Ancho"):
+            if (
+                "ancho" in state
+                and state["ancho"] is not None
+                and hasattr(self.build_ele, "Ancho")
+            ):
                 self.build_ele.Ancho.value = float(state["ancho"])
 
-            if "grosor" in state and state["grosor"] is not None and hasattr(self.build_ele, "GrosorSeleccionado"):
+            if (
+                "grosor" in state
+                and state["grosor"] is not None
+                and hasattr(self.build_ele, "GrosorSeleccionado")
+            ):
                 self.build_ele.GrosorSeleccionado.value = float(state["grosor"])
 
             if "libre" in state and hasattr(self.build_ele, "neopreno_libre"):
                 self.build_ele.neopreno_libre.value = bool(state["libre"])
 
-            if "rot" in state and state["rot"] is not None and hasattr(self.build_ele, "RotacionManual"):
+            if "pickup_linea" in state and hasattr(
+                self.build_ele, "PermitirPickUpLinea"
+            ):
+                self.build_ele.PermitirPickUpLinea.value = bool(state["pickup_linea"])
+
+            if (
+                "rot" in state
+                and state["rot"] is not None
+                and hasattr(self.build_ele, "RotacionManual")
+            ):
                 try:
                     self.build_ele.RotacionManual.value = float(state["rot"])
                 except (TypeError, ValueError):
@@ -1749,7 +1941,11 @@ class NeoprenosScriptObject(BaseScriptObject):
             if "pmp_pare" in state and hasattr(self.build_ele, "pmp_pare"):
                 self.build_ele.pmp_pare.value = str(state["pmp_pare"] or "")
 
-            if "layer" in state and state["layer"] is not None and hasattr(self.build_ele, "Layer"):
+            if (
+                "layer" in state
+                and state["layer"] is not None
+                and hasattr(self.build_ele, "Layer")
+            ):
                 try:
                     self.build_ele.Layer.value = int(state["layer"])
                 except (TypeError, ValueError):
@@ -1767,7 +1963,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         Devuelve True si se restauró correctamente.
         """
         try:
-            if hasattr(self.build_ele, "SavedState") and hasattr(self.build_ele.SavedState, "value"):
+            if hasattr(self.build_ele, "SavedState") and hasattr(
+                self.build_ele.SavedState, "value"
+            ):
                 ss = self.build_ele.SavedState.value
                 if isinstance(ss, str) and ss.strip():
                     return self._deserialize_state_from_json(ss)
@@ -1780,7 +1978,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         Se llama justo antes de crear el grupo / antes del return final en CREATE y EDIT.
         """
         try:
-            if hasattr(self.build_ele, "SavedState") and hasattr(self.build_ele.SavedState, "value"):
+            if hasattr(self.build_ele, "SavedState") and hasattr(
+                self.build_ele.SavedState, "value"
+            ):
                 ss = self._serialize_state_to_json()
                 if ss:
                     self.build_ele.SavedState.value = ss
@@ -1794,17 +1994,17 @@ class NeoprenosScriptObject(BaseScriptObject):
         Returns:
             Diccionario con los parámetros parseados del grupo
         """
-        if not hasattr(self, 'script_object_data') or not self.script_object_data:
+        if not hasattr(self, "script_object_data") or not self.script_object_data:
             return {}
 
-        param_list = getattr(self.script_object_data, 'param_list', None)
+        param_list = getattr(self.script_object_data, "param_list", None)
         if not param_list:
             return {}
 
         params = {}
         for p in param_list:
             try:
-                if '=' in p:
+                if "=" in p:
                     key, val = p.split("=", 1)
                     key = key.strip()
                     val = val.strip()
@@ -1815,16 +2015,17 @@ class NeoprenosScriptObject(BaseScriptObject):
         return params
 
     def _check_if_editing_existing(self) -> bool:
-        if (hasattr(self.build_ele, 'z_unique') and
-            self.build_ele.z_unique.value > 0 and
-            hasattr(self.build_ele, 'PuntoInicial') and
-            hasattr(self.build_ele, 'PuntoFinal') and
-            self.build_ele.PuntoInicial.value is not None and
-            self.build_ele.PuntoFinal.value is not None):
+        if (
+            hasattr(self.build_ele, "z_unique")
+            and self.build_ele.z_unique.value > 0
+            and hasattr(self.build_ele, "PuntoInicial")
+            and hasattr(self.build_ele, "PuntoFinal")
+            and self.build_ele.PuntoInicial.value is not None
+            and self.build_ele.PuntoFinal.value is not None
+        ):
 
             existing_line = AllplanGeo.Line3D(
-                self.build_ele.PuntoInicial.value,
-                self.build_ele.PuntoFinal.value
+                self.build_ele.PuntoInicial.value, self.build_ele.PuntoFinal.value
             )
             if AllplanGeo.CalcLength(existing_line) > 0.1:
                 self.line_result.input_line = existing_line
@@ -1832,41 +2033,50 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         return False
 
-
     def _load_saved_connection_info(self):
         """Carga la informacion de conexion guardada cuando se esta editando."""
         if self.is_free_mode:
-            if hasattr(self.build_ele, 'MuroConnection') and \
-               self.build_ele.MuroConnection.value and \
-               hasattr(self.build_ele.MuroConnection.value, 'element') and \
-               self.build_ele.MuroConnection.value.element.IsValid():
+            if (
+                hasattr(self.build_ele, "MuroConnection")
+                and self.build_ele.MuroConnection.value
+                and hasattr(self.build_ele.MuroConnection.value, "element")
+                and self.build_ele.MuroConnection.value.element.IsValid()
+            ):
                 self.detected_wall = self.build_ele.MuroConnection.value.element
                 self.detected_wall_guid = str(self.detected_wall.GetModelElementUUID())
-            elif hasattr(self.build_ele, 'MuroGUID') and self.build_ele.MuroGUID.value:
+            elif hasattr(self.build_ele, "MuroGUID") and self.build_ele.MuroGUID.value:
                 self.detected_wall_guid = self.build_ele.MuroGUID.value
                 try:
-                    wall_guid = AllplanEleAdapter.GUID.FromString(self.detected_wall_guid)
+                    wall_guid = AllplanEleAdapter.GUID.FromString(
+                        self.detected_wall_guid
+                    )
                     self.detected_wall = AllplanEleAdapter.BaseElementAdapter.FromGUID(
-                        wall_guid,
-                        self.document
+                        wall_guid, self.document
                     )
                     if self.detected_wall and not self.detected_wall.IsNull():
-                        if hasattr(self.build_ele, 'MuroConnection'):
-                            self.build_ele.MuroConnection.value.element = self.detected_wall
+                        if hasattr(self.build_ele, "MuroConnection"):
+                            self.build_ele.MuroConnection.value.element = (
+                                self.detected_wall
+                            )
                 except Exception:
                     pass
-            elif hasattr(self.build_ele, 'MuroConnection') and \
-                 self.build_ele.MuroConnection.value.uuid:
+            elif (
+                hasattr(self.build_ele, "MuroConnection")
+                and self.build_ele.MuroConnection.value.uuid
+            ):
                 self.detected_wall_guid = str(self.build_ele.MuroConnection.value.uuid)
         else:
-            if hasattr(self.build_ele, 'SolidoGUID') and self.build_ele.SolidoGUID.value:
+            if (
+                hasattr(self.build_ele, "SolidoGUID")
+                and self.build_ele.SolidoGUID.value
+            ):
+                self.solid_info = {"guid": self.build_ele.SolidoGUID.value}
+            elif (
+                hasattr(self.build_ele, "SolidoConnection")
+                and self.build_ele.SolidoConnection.value.uuid
+            ):
                 self.solid_info = {
-                    'guid': self.build_ele.SolidoGUID.value
-                }
-            elif hasattr(self.build_ele, 'SolidoConnection') and \
-                 self.build_ele.SolidoConnection.value.uuid:
-                self.solid_info = {
-                    'guid': str(self.build_ele.SolidoConnection.value.uuid)
+                    "guid": str(self.build_ele.SolidoConnection.value.uuid)
                 }
 
     def _get_face_local_system(self) -> dict[str, Any] | None:
@@ -1874,28 +2084,33 @@ class NeoprenosScriptObject(BaseScriptObject):
             return None
         return calculate_local_coordinate_system(self.face_polygon, self.face_normal)
 
-    def _clamp_point_to_face(self,
-                             point: AllplanGeo.Point3D,
-                             local_system: dict[str, Any] | None = None) -> AllplanGeo.Point3D:
+    def _clamp_point_to_face(
+        self, point: AllplanGeo.Point3D, local_system: dict[str, Any] | None = None
+    ) -> AllplanGeo.Point3D:
         if local_system is None:
             local_system = self._get_face_local_system()
 
         if not local_system:
             return point
 
+        if self.face_point and self.face_normal:
+            point = project_point_to_face_plane(
+                point, self.face_point, self.face_normal
+            )
+
         relative = calculate_relative_position(point, local_system)
         if not relative:
             return point
 
-        u_clamped = min(max(relative['u'], 0.0), 1.0)
-        v_clamped = min(max(relative['v'], 0.0), 1.0)
+        u_clamped = min(max(relative["u"], 0.0), 1.0)
+        v_clamped = min(max(relative["v"], 0.0), 1.0)
 
         clamped_point = calculate_position_from_uv(u_clamped, v_clamped, local_system)
         return clamped_point if clamped_point else point
 
-    def _clamp_line_to_face(self,
-                            line: AllplanGeo.Line3D,
-                            local_system: dict[str, Any] | None = None) -> tuple[AllplanGeo.Line3D, dict[str, Any] | None]:
+    def _clamp_line_to_face(
+        self, line: AllplanGeo.Line3D, local_system: dict[str, Any] | None = None
+    ) -> tuple[AllplanGeo.Line3D, dict[str, Any] | None]:
         if local_system is None:
             local_system = self._get_face_local_system()
 
@@ -1907,10 +2122,12 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         return AllplanGeo.Line3D(start, end), local_system
 
-    def _max_distance_to_face(self,
-                              origin: AllplanGeo.Point3D,
-                              direction: AllplanGeo.Vector3D,
-                              local_system: dict[str, Any]) -> float:
+    def _max_distance_to_face(
+        self,
+        origin: AllplanGeo.Point3D,
+        direction: AllplanGeo.Vector3D,
+        local_system: dict[str, Any],
+    ) -> float:
         direction_norm = normalize_vector(direction)
         if not direction_norm:
             return 0.0
@@ -1918,39 +2135,41 @@ class NeoprenosScriptObject(BaseScriptObject):
         far_point = AllplanGeo.Point3D(
             origin.X + direction_norm.X * MAX_HANDLE_DISTANCE,
             origin.Y + direction_norm.Y * MAX_HANDLE_DISTANCE,
-            origin.Z + direction_norm.Z * MAX_HANDLE_DISTANCE
+            origin.Z + direction_norm.Z * MAX_HANDLE_DISTANCE,
         )
 
         clamped_point = self._clamp_point_to_face(far_point, local_system)
         return calc_distance_3d(origin, clamped_point)
 
-    def _adjust_width_to_face(self,
-                              line: AllplanGeo.Line3D,
-                              local_system: dict[str, Any]) -> float:
+    def _adjust_width_to_face(
+        self, line: AllplanGeo.Line3D, local_system: dict[str, Any]
+    ) -> float:
         current_width = get_neopreno_width(self.build_ele)
 
         midpoint = AllplanGeo.Point3D(
             (line.StartPoint.X + line.EndPoint.X) / 2.0,
             (line.StartPoint.Y + line.EndPoint.Y) / 2.0,
-            (line.StartPoint.Z + line.EndPoint.Z) / 2.0
+            (line.StartPoint.Z + line.EndPoint.Z) / 2.0,
         )
 
         line_vector = AllplanGeo.Vector3D(
             line.EndPoint.X - line.StartPoint.X,
             line.EndPoint.Y - line.StartPoint.Y,
-            line.EndPoint.Z - line.StartPoint.Z
+            line.EndPoint.Z - line.StartPoint.Z,
         )
-        line_direction = normalize_vector(line_vector) or AllplanGeo.Vector3D(1.0, 0.0, 0.0)
+        line_direction = normalize_vector(line_vector) or AllplanGeo.Vector3D(
+            1.0, 0.0, 0.0
+        )
 
         face_normal = normalize_vector(self.face_normal) if self.face_normal else None
-        if not face_normal and local_system.get('axis_w'):
-            face_normal = normalize_vector(local_system['axis_w'])
+        if not face_normal and local_system.get("axis_w"):
+            face_normal = normalize_vector(local_system["axis_w"])
         if not face_normal:
             face_normal = AllplanGeo.Vector3D(0.0, 0.0, 1.0)
 
         width_direction = normalize_vector(cross_product(line_direction, face_normal))
         if not width_direction:
-            axis_v = local_system.get('axis_v')
+            axis_v = local_system.get("axis_v")
             width_direction = normalize_vector(axis_v) if axis_v else None
         if not width_direction:
             width_direction = AllplanGeo.Vector3D(0.0, 1.0, 0.0)
@@ -1958,8 +2177,10 @@ class NeoprenosScriptObject(BaseScriptObject):
         max_plus = self._max_distance_to_face(midpoint, width_direction, local_system)
         max_minus = self._max_distance_to_face(
             midpoint,
-            AllplanGeo.Vector3D(-width_direction.X, -width_direction.Y, -width_direction.Z),
-            local_system
+            AllplanGeo.Vector3D(
+                -width_direction.X, -width_direction.Y, -width_direction.Z
+            ),
+            local_system,
         )
 
         max_half_width = min(max_plus, max_minus)
@@ -1974,15 +2195,17 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         new_width = new_half_width * 2.0
 
-        if hasattr(self.build_ele, 'Ancho'):
+        if hasattr(self.build_ele, "Ancho"):
             self.build_ele.Ancho.value = new_width
 
         return new_width
 
-    def _prepare_line(self,
-                      line: AllplanGeo.Line3D,
-                      adjust_width: bool = True,
-                      is_already_in_local_coords: bool = False) -> tuple[AllplanGeo.Line3D, dict[str, Any] | None]:
+    def _prepare_line(
+        self,
+        line: AllplanGeo.Line3D,
+        adjust_width: bool = True,
+        is_already_in_local_coords: bool = False,
+    ) -> tuple[AllplanGeo.Line3D, dict[str, Any] | None]:
         """
         Prepara la linea para crear el neopreno.
 
@@ -2022,40 +2245,69 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         return line, local_system
 
-
     def _get_solid_element(self):
         solid_element = None
 
-        if hasattr(self.build_ele, 'SolidoConnection'):
+        if hasattr(self.build_ele, "SolidoConnection"):
             conn = self.build_ele.SolidoConnection.value
-            if hasattr(conn, 'element') and conn.element.IsValid():
+            if hasattr(conn, "element") and conn.element.IsValid():
                 solid_element = conn.element
 
         if not solid_element or solid_element.IsNull():
-            if hasattr(self.build_ele, 'SolidoGUID') and self.build_ele.SolidoGUID.value:
-                solid_guid = AllplanEleAdapter.GUID.FromString(self.build_ele.SolidoGUID.value)
+            if (
+                hasattr(self.build_ele, "SolidoGUID")
+                and self.build_ele.SolidoGUID.value
+            ):
+                solid_guid = AllplanEleAdapter.GUID.FromString(
+                    self.build_ele.SolidoGUID.value
+                )
                 solid_element = AllplanEleAdapter.BaseElementAdapter.FromGUID(
-                    solid_guid,
-                    self.document
+                    solid_guid, self.document
                 )
 
         return solid_element
 
     def _get_stored_normal(self):
         return AllplanGeo.Vector3D(
-            self.build_ele.CaraNormalX.value if hasattr(self.build_ele, 'CaraNormalX') else 0,
-            self.build_ele.CaraNormalY.value if hasattr(self.build_ele, 'CaraNormalY') else 0,
-            self.build_ele.CaraNormalZ.value if hasattr(self.build_ele, 'CaraNormalZ') else 1
+            (
+                self.build_ele.CaraNormalX.value
+                if hasattr(self.build_ele, "CaraNormalX")
+                else 0
+            ),
+            (
+                self.build_ele.CaraNormalY.value
+                if hasattr(self.build_ele, "CaraNormalY")
+                else 0
+            ),
+            (
+                self.build_ele.CaraNormalZ.value
+                if hasattr(self.build_ele, "CaraNormalZ")
+                else 1
+            ),
         )
 
     def _get_stored_point(self):
         return AllplanGeo.Point3D(
-            self.build_ele.PuntoClicX.value if hasattr(self.build_ele, 'PuntoClicX') else 0,
-            self.build_ele.PuntoClicY.value if hasattr(self.build_ele, 'PuntoClicY') else 0,
-            self.build_ele.PuntoClicZ.value if hasattr(self.build_ele, 'PuntoClicZ') else 0
+            (
+                self.build_ele.PuntoClicX.value
+                if hasattr(self.build_ele, "PuntoClicX")
+                else 0
+            ),
+            (
+                self.build_ele.PuntoClicY.value
+                if hasattr(self.build_ele, "PuntoClicY")
+                else 0
+            ),
+            (
+                self.build_ele.PuntoClicZ.value
+                if hasattr(self.build_ele, "PuntoClicZ")
+                else 0
+            ),
         )
 
-    def _find_face_index(self, solid_element, selected_face_polygon, selected_face_normal=None):
+    def _find_face_index(
+        self, solid_element, selected_face_polygon, selected_face_normal=None
+    ):
         """Encuentra el indice de una cara seleccionada comparandola con todas las caras del solido.
 
         Args:
@@ -2088,7 +2340,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             selected_center = AllplanGeo.Point3D(
                 (minmax.Min.X + minmax.Max.X) / 2.0,
                 (minmax.Min.Y + minmax.Max.Y) / 2.0,
-                (minmax.Min.Z + minmax.Max.Z) / 2.0
+                (minmax.Min.Z + minmax.Max.Z) / 2.0,
             )
 
             selected_normal = None
@@ -2109,7 +2361,9 @@ class NeoprenosScriptObject(BaseScriptObject):
 
             for i in range(faces_count):
                 face = solid_geo.GetFace(i)
-                success, _, face_points = AllplanGeo.PolyhedronUtil.GetFacePoints(solid_geo, face)
+                success, _, face_points = AllplanGeo.PolyhedronUtil.GetFacePoints(
+                    solid_geo, face
+                )
 
                 if not success or len(face_points) < 3:
                     continue
@@ -2129,7 +2383,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 face_center = AllplanGeo.Point3D(
                     (minmax.Min.X + minmax.Max.X) / 2.0,
                     (minmax.Min.Y + minmax.Max.Y) / 2.0,
-                    (minmax.Min.Z + minmax.Max.Z) / 2.0
+                    (minmax.Min.Z + minmax.Max.Z) / 2.0,
                 )
 
                 distance = calc_distance_3d(selected_center, face_center)
@@ -2150,22 +2404,24 @@ class NeoprenosScriptObject(BaseScriptObject):
                     dot = abs(face_normal_normalized.DotProduct(selected_normal))
 
                 if distance < 500.0:
-                    candidates.append({
-                        'index': i,
-                        'distance': distance,
-                        'dot': dot,
-                        'center': face_center
-                    })
+                    candidates.append(
+                        {
+                            "index": i,
+                            "distance": distance,
+                            "dot": dot,
+                            "center": face_center,
+                        }
+                    )
 
             if selected_normal:
-                candidates.sort(key=lambda x: (-x['dot'], x['distance']))
+                candidates.sort(key=lambda x: (-x["dot"], x["distance"]))
                 for c in candidates:
-                    if c['dot'] > 0.7:
-                        return c['index']
+                    if c["dot"] > 0.7:
+                        return c["index"]
             else:
-                candidates.sort(key=lambda x: x['distance'])
-                if candidates and candidates[0]['distance'] < 100.0:
-                    return candidates[0]['index']
+                candidates.sort(key=lambda x: x["distance"])
+                if candidates and candidates[0]["distance"] < 100.0:
+                    return candidates[0]["index"]
 
             return None
 
@@ -2196,7 +2452,9 @@ class NeoprenosScriptObject(BaseScriptObject):
                 return False, None, None
 
             face = solid_geo.GetFace(face_index)
-            success, _, face_points = AllplanGeo.PolyhedronUtil.GetFacePoints(solid_geo, face)
+            success, _, face_points = AllplanGeo.PolyhedronUtil.GetFacePoints(
+                solid_geo, face
+            )
 
             if not success or len(face_points) < 3:
                 return False, None, None
@@ -2250,7 +2508,9 @@ class NeoprenosScriptObject(BaseScriptObject):
 
             for i in range(faces_count):
                 face = solid_geo.GetFace(i)
-                success, _, face_points = AllplanGeo.PolyhedronUtil.GetFacePoints(solid_geo, face)
+                success, _, face_points = AllplanGeo.PolyhedronUtil.GetFacePoints(
+                    solid_geo, face
+                )
 
                 if not success or len(face_points) < 3:
                     continue
@@ -2282,7 +2542,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                         face_center = AllplanGeo.Point3D(
                             (minmax.Min.X + minmax.Max.X) / 2.0,
                             (minmax.Min.Y + minmax.Max.Y) / 2.0,
-                            (minmax.Min.Z + minmax.Max.Z) / 2.0
+                            (minmax.Min.Z + minmax.Max.Z) / 2.0,
                         )
 
                         distance_to_stored = calc_distance_3d(face_center, stored_point)
@@ -2290,32 +2550,32 @@ class NeoprenosScriptObject(BaseScriptObject):
                         MAX_DISTANCE = 1000.0  # mm
 
                         if distance_to_stored <= MAX_DISTANCE:
-                            candidate_faces.append({
-                                'index': i,
-                                'polygon': face_polygon,
-                                'normal': face_normal,
-                                'center': face_center,
-                                'dot': dot,
-                                'distance': distance_to_stored
-                            })
+                            candidate_faces.append(
+                                {
+                                    "index": i,
+                                    "polygon": face_polygon,
+                                    "normal": face_normal,
+                                    "center": face_center,
+                                    "dot": dot,
+                                    "distance": distance_to_stored,
+                                }
+                            )
                         pass
 
             if not candidate_faces:
                 return False, None, None
 
-            candidate_faces.sort(key=lambda x: x['distance'])
+            candidate_faces.sort(key=lambda x: x["distance"])
 
             best_candidate = candidate_faces[0]
-            face_polygon = best_candidate['polygon']
-            face_normal = best_candidate['normal']
-            face_center = best_candidate['center']
-            best_dot = best_candidate['dot']
+            face_polygon = best_candidate["polygon"]
+            face_normal = best_candidate["normal"]
+            face_center = best_candidate["center"]
+            best_dot = best_candidate["dot"]
 
             if best_dot < 0:
                 face_normal = AllplanGeo.Vector3D(
-                    -face_normal.X,
-                    -face_normal.Y,
-                    -face_normal.Z
+                    -face_normal.X, -face_normal.Y, -face_normal.Z
                 )
 
             class FakeIntersectResult:
@@ -2341,26 +2601,34 @@ class NeoprenosScriptObject(BaseScriptObject):
             center = AllplanGeo.Point3D(
                 (min_max.Min.X + min_max.Max.X) / 2.0,
                 (min_max.Min.Y + min_max.Max.Y) / 2.0,
-                (min_max.Min.Z + min_max.Max.Z) / 2.0
+                (min_max.Min.Z + min_max.Max.Z) / 2.0,
             )
             center_2d = AllplanGeo.Point2D(center.X, center.Y)
 
-            is_selected, face_polygon, intersect_result = \
+            is_selected, face_polygon, intersect_result = (
                 AllplanBaseElements.FaceSelectService.SelectWallFace(
-                    solid_element, center_2d, True,
+                    solid_element,
+                    center_2d,
+                    True,
                     self.coord_input.GetViewWorldProjection(),
-                    self.coord_input.GetInputViewDocument(), True
+                    self.coord_input.GetInputViewDocument(),
+                    True,
                 )
+            )
 
             if is_selected:
                 return is_selected, face_polygon, intersect_result
 
-            is_selected, face_polygon, intersect_result = \
+            is_selected, face_polygon, intersect_result = (
                 AllplanBaseElements.FaceSelectService.SelectPolyhedronFace(
-                    solid_element, center_2d, True,
+                    solid_element,
+                    center_2d,
+                    True,
                     self.coord_input.GetViewWorldProjection(),
-                    self.coord_input.GetInputViewDocument(), True
+                    self.coord_input.GetInputViewDocument(),
+                    True,
                 )
+            )
 
             return is_selected, face_polygon, intersect_result
 
@@ -2378,7 +2646,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self.is_editing_existing:
             self.is_free_mode = self._get_free_mode()
             self._update_parameter_visibility()
-
 
             if self.line_result and self.line_result.input_line:
                 self._process_line_input()
@@ -2401,12 +2668,12 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.ref_face_element = None
         self.ref_face_polygon = None
 
-        if hasattr(self.build_ele, 'neopreno_libre'):
+        if hasattr(self.build_ele, "neopreno_libre"):
             val = self.build_ele.neopreno_libre.value
             if isinstance(val, bool):
                 self.is_free_mode = val
             elif isinstance(val, str):
-                self.is_free_mode = val.lower() in ('true', '1', 'yes')
+                self.is_free_mode = val.lower() in ("true", "1", "yes")
             else:
                 self.is_free_mode = bool(val)
         else:
@@ -2414,21 +2681,23 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         self._update_parameter_visibility()
 
-        if hasattr(self.build_ele, 'neopreno_libre'):
+        if hasattr(self.build_ele, "neopreno_libre"):
             self.build_ele.neopreno_libre.value = bool(self.is_free_mode)
 
-        neo_log(f"start_input: modo={'libre/muro' if self.is_free_mode else 'solido/cara'}")
+        neo_log(
+            f"start_input: modo={'libre/muro' if self.is_free_mode else 'solido/cara'}"
+        )
 
         if self.is_free_mode:
             self.wall_select_result = WallSelectResult()
             self.interactor_state = SELECTING_WALL
             neo_log("start_input: esperando seleccion de muro")
             self.script_object_interactor = WallSelectInteractor(
-                self.wall_select_result,
-                "Seleccione el muro",
-                script_object=self
+                self.wall_select_result, "Seleccione el muro", script_object=self
             )
-            coord_input_to_use = self._saved_coord_input if self._saved_coord_input else self.coord_input
+            coord_input_to_use = (
+                self._saved_coord_input if self._saved_coord_input else self.coord_input
+            )
             if coord_input_to_use:
                 self.script_object_interactor.start_input(coord_input_to_use)
         else:
@@ -2437,7 +2706,9 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.script_object_interactor = SolidFaceSelectInteractor(
                 self.face_select_result,
             )
-            coord_input_to_use = self._saved_coord_input if self._saved_coord_input else self.coord_input
+            coord_input_to_use = (
+                self._saved_coord_input if self._saved_coord_input else self.coord_input
+            )
             if coord_input_to_use:
                 self.script_object_interactor.start_input(coord_input_to_use)
 
@@ -2474,14 +2745,18 @@ class NeoprenosScriptObject(BaseScriptObject):
                     f"p0=({line.StartPoint.X:.2f},{line.StartPoint.Y:.2f},{line.StartPoint.Z:.2f}) "
                     f"p1=({line.EndPoint.X:.2f},{line.EndPoint.Y:.2f},{line.EndPoint.Z:.2f})"
                 )
-                if self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
+                if self.script_object_interactor and hasattr(
+                    self.script_object_interactor, "coord_input"
+                ):
                     self._saved_coord_input = self.script_object_interactor.coord_input
                 self._process_line_input()
                 if not self.is_editing_existing:
                     self._pending_create_edit = True
                     self.interactor_state = STOPPED
                     self.script_object_interactor = None
-                    neo_log("start_next_input: neopreno pendiente para ajuste de propiedades")
+                    neo_log(
+                        "start_next_input: neopreno pendiente para ajuste de propiedades"
+                    )
                     return
             else:
                 neo_log("start_next_input: SELECTING_LINE sin input_line")
@@ -2499,21 +2774,43 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.detected_wall = selected_element
         real_wall_guid = str(selected_element.GetModelElementUUID())
         self.detected_wall_guid = real_wall_guid
+        self.face_point = self.wall_select_result.face_point
+        self.face_normal = self.wall_select_result.face_normal
+        self.face_polygon = self.wall_select_result.face_polygon
+        self.ref_face_element = selected_element
+        self.ref_face_polygon = self.face_polygon
 
         self.wall_ifc_id = get_wall_ifc_id(selected_element)
 
-        if hasattr(self.build_ele, 'MuroConnection'):
+        if hasattr(self.build_ele, "MuroConnection"):
             self.build_ele.MuroConnection.value.element = selected_element
-            if str(self.build_ele.MuroConnection.value.uuid) == "00000000-0000-0000-0000-000000000000":
+            if (
+                str(self.build_ele.MuroConnection.value.uuid)
+                == "00000000-0000-0000-0000-000000000000"
+            ):
                 try:
-                    element_guid = AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(real_wall_guid)
-                    element_from_guid = AllplanBaseElements.ElementsService.GetElement(element_guid)
+                    element_guid = AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(
+                        real_wall_guid
+                    )
+                    element_from_guid = AllplanBaseElements.ElementsService.GetElement(
+                        element_guid
+                    )
                     if element_from_guid and element_from_guid.IsValid():
                         self.build_ele.MuroConnection.value.element = element_from_guid
                 except Exception:
                     pass
-        if hasattr(self.build_ele, 'MuroGUID'):
+        if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
+
+        if self.face_normal and hasattr(self.build_ele, "CaraNormalX"):
+            self.build_ele.CaraNormalX.value = self.face_normal.X
+            self.build_ele.CaraNormalY.value = self.face_normal.Y
+            self.build_ele.CaraNormalZ.value = self.face_normal.Z
+
+        if self.face_point and hasattr(self.build_ele, "PuntoClicX"):
+            self.build_ele.PuntoClicX.value = self.face_point.X
+            self.build_ele.PuntoClicY.value = self.face_point.Y
+            self.build_ele.PuntoClicZ.value = self.face_point.Z
 
     def _process_solid_selection(self):
         self.face_point = self.face_select_result.face_point
@@ -2527,28 +2824,36 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.ref_face_element = selected_element
         self.ref_face_polygon = self.face_polygon
 
-        face_index = self._find_face_index(selected_element, self.face_polygon, self.face_normal)
-        if face_index is not None and hasattr(self.build_ele, 'CaraIndice'):
+        face_index = self._find_face_index(
+            selected_element, self.face_polygon, self.face_normal
+        )
+        if face_index is not None and hasattr(self.build_ele, "CaraIndice"):
             self.build_ele.CaraIndice.value = face_index
 
         self.solid_info = {
-            'guid': element_guid_str,
-            'element': selected_element,
-            'face_normal': self.face_normal,
-            'face_center': self.face_point,
-            'click_point': self.face_point,
-            'face_index': face_index
+            "guid": element_guid_str,
+            "element": selected_element,
+            "face_normal": self.face_normal,
+            "face_center": self.face_point,
+            "click_point": self.face_point,
+            "face_index": face_index,
         }
 
         parent_element = None
         try:
-            element_guid = AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(element_guid_str)
-            parent_element = AllplanBaseElements.ElementsService.GetElement(element_guid)
+            element_guid = (
+                AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(
+                    element_guid_str
+                )
+            )
+            parent_element = AllplanBaseElements.ElementsService.GetElement(
+                element_guid
+            )
 
             if parent_element and parent_element.IsValid():
                 self.parent_element = parent_element
             else:
-                if hasattr(selected_element, 'GetParentElement'):
+                if hasattr(selected_element, "GetParentElement"):
                     try:
                         parent_element = selected_element.GetParentElement()
                         if parent_element and parent_element.IsValid():
@@ -2558,69 +2863,97 @@ class NeoprenosScriptObject(BaseScriptObject):
         except Exception:
             pass
 
-        wall_element_to_check = self.parent_element if self.parent_element else selected_element
+        wall_element_to_check = (
+            self.parent_element if self.parent_element else selected_element
+        )
         self.wall_ifc_id = get_wall_ifc_id(wall_element_to_check)
 
         if not self.is_free_mode and wall_element_to_check:
             try:
                 element_type = wall_element_to_check.GetElementType()
-                is_wall = (hasattr(element_type, 'TypeUUID') and
-                          (element_type.TypeUUID == AllplanEleAdapter.Wall_TypeUUID or
-                           element_type.TypeUUID == AllplanEleAdapter.WallTier_TypeUUID))
+                is_wall = hasattr(element_type, "TypeUUID") and (
+                    element_type.TypeUUID == AllplanEleAdapter.Wall_TypeUUID
+                    or element_type.TypeUUID == AllplanEleAdapter.WallTier_TypeUUID
+                )
                 if is_wall:
                     self.detected_wall = wall_element_to_check
-                    self.detected_wall_guid = str(wall_element_to_check.GetModelElementUUID())
+                    self.detected_wall_guid = str(
+                        wall_element_to_check.GetModelElementUUID()
+                    )
             except Exception:
                 pass
 
-        if hasattr(self.build_ele, 'SolidoConnection'):
+        if hasattr(self.build_ele, "SolidoConnection"):
             self.build_ele.SolidoConnection.value.element = selected_element
-            if str(self.build_ele.SolidoConnection.value.uuid) == "00000000-0000-0000-0000-000000000000":
+            if (
+                str(self.build_ele.SolidoConnection.value.uuid)
+                == "00000000-0000-0000-0000-000000000000"
+            ):
                 try:
-                    element_guid = AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(element_guid_str)
-                    element_from_guid = AllplanBaseElements.ElementsService.GetElement(element_guid)
+                    element_guid = AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(
+                        element_guid_str
+                    )
+                    element_from_guid = AllplanBaseElements.ElementsService.GetElement(
+                        element_guid
+                    )
                     if element_from_guid and element_from_guid.IsValid():
-                        self.build_ele.SolidoConnection.value.element = element_from_guid
+                        self.build_ele.SolidoConnection.value.element = (
+                            element_from_guid
+                        )
                 except Exception:
                     pass
 
-        if hasattr(self.build_ele, 'SolidoGUID'):
+        if hasattr(self.build_ele, "SolidoGUID"):
             self.build_ele.SolidoGUID.value = element_guid_str
 
-        if hasattr(self.build_ele, 'CaraNormalX'):
+        if hasattr(self.build_ele, "CaraNormalX"):
             self.build_ele.CaraNormalX.value = self.face_normal.X
             self.build_ele.CaraNormalY.value = self.face_normal.Y
             self.build_ele.CaraNormalZ.value = self.face_normal.Z
 
-        if hasattr(self.build_ele, 'PuntoClicX'):
+        if hasattr(self.build_ele, "PuntoClicX"):
             self.build_ele.PuntoClicX.value = self.face_point.X
             self.build_ele.PuntoClicY.value = self.face_point.Y
             self.build_ele.PuntoClicZ.value = self.face_point.Z
 
     def _start_line_input(self):
-        prompt_msg = "Defina la linea para el neopreno - Posicionamiento libre" if self.is_free_mode else "Defina la linea para el neopreno (punto inicial)"
+        prompt_msg = (
+            "Defina la linea para el neopreno - Posicionamiento libre"
+            if self.is_free_mode
+            else "Defina la linea para el neopreno (punto inicial)"
+        )
         neo_log(f"_start_line_input: {prompt_msg}")
 
-        coord_input_to_use = self._saved_coord_input if self._saved_coord_input else self.coord_input
+        coord_input_to_use = (
+            self._saved_coord_input if self._saved_coord_input else self.coord_input
+        )
 
         self.script_object_interactor = LineInteractor(
             self.line_result,
             True,
             prompt_msg,
-            allow_pick_up=True,
-            preview_function=self.draw_neopreno_preview
+            allow_pick_up=self._get_allow_line_pickup(),
+            preview_function=self.draw_neopreno_preview,
         )
 
         if coord_input_to_use:
             try:
                 self.script_object_interactor.start_input(coord_input_to_use)
 
-                if not self.is_free_mode and self.ref_face_element and self.ref_face_polygon:
+                if self.ref_face_element and self.ref_face_polygon:
                     try:
-                        if hasattr(self.script_object_interactor, 'SetReferenceElement'):
-                            self.script_object_interactor.SetReferenceElement(self.ref_face_element)
-                        elif hasattr(self.script_object_interactor, 'AddReferenceGeometry'):
-                            self.script_object_interactor.AddReferenceGeometry(self.ref_face_polygon)
+                        if hasattr(
+                            self.script_object_interactor, "SetReferenceElement"
+                        ):
+                            self.script_object_interactor.SetReferenceElement(
+                                self.ref_face_element
+                            )
+                        elif hasattr(
+                            self.script_object_interactor, "AddReferenceGeometry"
+                        ):
+                            self.script_object_interactor.AddReferenceGeometry(
+                                self.ref_face_polygon
+                            )
                     except Exception:
                         pass
             except Exception:
@@ -2637,14 +2970,20 @@ class NeoprenosScriptObject(BaseScriptObject):
         )
 
         if getattr(self, "_restored_from_saved_state", False):
-            if hasattr(self.build_ele, "PuntoInicial") and hasattr(self.build_ele, "PuntoFinal"):
+            if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+                self.build_ele, "PuntoFinal"
+            ):
                 p0 = getattr(self.build_ele.PuntoInicial, "value", None)
                 p1 = getattr(self.build_ele.PuntoFinal, "value", None)
                 if p0 and p1:
                     self.line_result.input_line = AllplanGeo.Line3D(p0, p1)
                     line = self.line_result.input_line
 
-        if self.is_free_mode:
+        if self.is_free_mode and self.face_normal and self.face_point:
+            line_to_process, local_system = self._prepare_line(line, adjust_width=False)
+            if not local_system and self.face_polygon and self.face_normal:
+                local_system = self._get_face_local_system()
+        elif self.is_free_mode:
             line_to_process = line
             local_system = None
         else:
@@ -2657,63 +2996,69 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.build_ele.PuntoFinal.value = line_to_process.EndPoint
 
         longitud = AllplanGeo.CalcLength(line_to_process)
-        if hasattr(self.build_ele, 'Longitud'):
+        if hasattr(self.build_ele, "Longitud"):
             self.build_ele.Longitud.value = longitud
 
         if local_system and not self._restored_from_saved_state:
             line_center = AllplanGeo.Point3D(
                 (line.StartPoint.X + line.EndPoint.X) / 2.0,
                 (line.StartPoint.Y + line.EndPoint.Y) / 2.0,
-                (line.StartPoint.Z + line.EndPoint.Z) / 2.0
+                (line.StartPoint.Z + line.EndPoint.Z) / 2.0,
             )
 
             rel_pos = calculate_relative_position(line_center, local_system)
 
             if rel_pos:
-                if hasattr(self.build_ele, 'PosicionRelativaU'):
-                    self.build_ele.PosicionRelativaU.value = rel_pos['u']
-                if hasattr(self.build_ele, 'PosicionRelativaV'):
-                    self.build_ele.PosicionRelativaV.value = rel_pos['v']
-                if hasattr(self.build_ele, 'DistanciaDesdeOrigen'):
-                    self.build_ele.DistanciaDesdeOrigen.value = rel_pos['distance_from_origin']
+                if hasattr(self.build_ele, "PosicionRelativaU"):
+                    self.build_ele.PosicionRelativaU.value = rel_pos["u"]
+                if hasattr(self.build_ele, "PosicionRelativaV"):
+                    self.build_ele.PosicionRelativaV.value = rel_pos["v"]
+                if hasattr(self.build_ele, "DistanciaDesdeOrigen"):
+                    self.build_ele.DistanciaDesdeOrigen.value = rel_pos[
+                        "distance_from_origin"
+                    ]
 
-            rel_pos_start = calculate_relative_position(line_to_process.StartPoint, local_system)
+            rel_pos_start = calculate_relative_position(
+                line_to_process.StartPoint, local_system
+            )
             if rel_pos_start:
-                if hasattr(self.build_ele, 'PosicionRelativaU_Inicio'):
-                    self.build_ele.PosicionRelativaU_Inicio.value = rel_pos_start['u']
-                if hasattr(self.build_ele, 'PosicionRelativaV_Inicio'):
-                    self.build_ele.PosicionRelativaV_Inicio.value = rel_pos_start['v']
+                if hasattr(self.build_ele, "PosicionRelativaU_Inicio"):
+                    self.build_ele.PosicionRelativaU_Inicio.value = rel_pos_start["u"]
+                if hasattr(self.build_ele, "PosicionRelativaV_Inicio"):
+                    self.build_ele.PosicionRelativaV_Inicio.value = rel_pos_start["v"]
 
-            rel_pos_end = calculate_relative_position(line_to_process.EndPoint, local_system)
+            rel_pos_end = calculate_relative_position(
+                line_to_process.EndPoint, local_system
+            )
             if rel_pos_end:
-                if hasattr(self.build_ele, 'PosicionRelativaU_Fin'):
-                    self.build_ele.PosicionRelativaU_Fin.value = rel_pos_end['u']
-                if hasattr(self.build_ele, 'PosicionRelativaV_Fin'):
-                    self.build_ele.PosicionRelativaV_Fin.value = rel_pos_end['v']
+                if hasattr(self.build_ele, "PosicionRelativaU_Fin"):
+                    self.build_ele.PosicionRelativaU_Fin.value = rel_pos_end["u"]
+                if hasattr(self.build_ele, "PosicionRelativaV_Fin"):
+                    self.build_ele.PosicionRelativaV_Fin.value = rel_pos_end["v"]
 
             line_vector = AllplanGeo.Vector3D(
                 line_to_process.EndPoint.X - line_to_process.StartPoint.X,
                 line_to_process.EndPoint.Y - line_to_process.StartPoint.Y,
-                line_to_process.EndPoint.Z - line_to_process.StartPoint.Z
+                line_to_process.EndPoint.Z - line_to_process.StartPoint.Z,
             )
             line_vector.Normalize()
 
-            axis_u = local_system['axis_u']
-            axis_v = local_system['axis_v']
+            axis_u = local_system["axis_u"]
+            axis_v = local_system["axis_v"]
 
             line_u = line_vector.DotProduct(axis_u)
             line_v = line_vector.DotProduct(axis_v)
 
-            if hasattr(self.build_ele, 'LineaOrientacionU'):
+            if hasattr(self.build_ele, "LineaOrientacionU"):
                 self.build_ele.LineaOrientacionU.value = line_u
-            if hasattr(self.build_ele, 'LineaOrientacionV'):
+            if hasattr(self.build_ele, "LineaOrientacionV"):
                 self.build_ele.LineaOrientacionV.value = line_v
 
-            if hasattr(self.build_ele, 'AxisU_X'):
+            if hasattr(self.build_ele, "AxisU_X"):
                 self.build_ele.AxisU_X.value = axis_u.X
                 self.build_ele.AxisU_Y.value = axis_u.Y
                 self.build_ele.AxisU_Z.value = axis_u.Z
-            if hasattr(self.build_ele, 'AxisV_X'):
+            if hasattr(self.build_ele, "AxisV_X"):
                 self.build_ele.AxisV_X.value = axis_v.X
                 self.build_ele.AxisV_Y.value = axis_v.Y
                 self.build_ele.AxisV_Z.value = axis_v.Z
@@ -2725,13 +3070,15 @@ class NeoprenosScriptObject(BaseScriptObject):
         )
 
         coord_input = None
-        if self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
+        if self.script_object_interactor and hasattr(
+            self.script_object_interactor, "coord_input"
+        ):
             coord_input = self.script_object_interactor.coord_input
 
         rotation_deg = 0.0
-        if self.is_free_mode and hasattr(self.build_ele, 'RotacionManual'):
+        if self.is_free_mode and hasattr(self.build_ele, "RotacionManual"):
             rot_val = self.build_ele.RotacionManual.value
-            if hasattr(rot_val, 'GetDeg'):
+            if hasattr(rot_val, "GetDeg"):
                 rotation_deg = rot_val.GetDeg()
             elif isinstance(rot_val, (int, float)):
                 rotation_deg = float(rot_val)
@@ -2741,13 +3088,14 @@ class NeoprenosScriptObject(BaseScriptObject):
         z_dir_handle = None
 
         if not self.is_free_mode and self.face_normal and self.face_point:
-            x_dir_handle, y_dir_handle, z_dir_handle = build_face_local_axes_for_handles(
-                line_to_process.StartPoint,
-                line_to_process.EndPoint,
-                self.face_point,
-                self.face_normal
+            x_dir_handle, y_dir_handle, z_dir_handle = (
+                build_face_local_axes_for_handles(
+                    line_to_process.StartPoint,
+                    line_to_process.EndPoint,
+                    self.face_point,
+                    self.face_normal,
+                )
             )
-
 
         self.handles = create_handles(
             self.build_ele,
@@ -2758,7 +3106,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.is_free_mode,
             x_dir_handle,
             y_dir_handle,
-            z_dir_handle
+            z_dir_handle,
         )
 
     def draw_neopreno_preview(self, line: AllplanGeo.Line3D) -> ModelEleList:
@@ -2766,14 +3114,15 @@ class NeoprenosScriptObject(BaseScriptObject):
         if not line or AllplanGeo.CalcLength(line) < 0.1:
             return []
 
-        if self.is_free_mode:
+        if self.is_free_mode and self.face_normal and self.face_point:
+            line_to_use, _ = self._prepare_line(line, adjust_width=False)
+        elif self.is_free_mode:
             line_to_use = line
         else:
             line_to_use, _ = self._prepare_line(line)
 
-
         longitud = AllplanGeo.CalcLength(line_to_use)
-        if hasattr(self.build_ele, 'Longitud'):
+        if hasattr(self.build_ele, "Longitud"):
             self.build_ele.Longitud.value = longitud
 
         grosor = get_selected_thickness(self.build_ele)
@@ -2781,23 +3130,25 @@ class NeoprenosScriptObject(BaseScriptObject):
         ancho = get_neopreno_width(self.build_ele)
 
         invertir_grosor = False
-        if self.is_free_mode and hasattr(self.build_ele, 'InvertirGrosor'):
+        if self.is_free_mode and hasattr(self.build_ele, "InvertirGrosor"):
             val = self.build_ele.InvertirGrosor.value
             if isinstance(val, bool):
                 invertir_grosor = not val
             elif isinstance(val, str):
-                invertir_grosor = val.lower() not in ('true', '1', 'yes')
+                invertir_grosor = val.lower() not in ("true", "1", "yes")
             else:
                 invertir_grosor = not bool(val)
 
         coord_input = None
-        if self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
+        if self.script_object_interactor and hasattr(
+            self.script_object_interactor, "coord_input"
+        ):
             coord_input = self.script_object_interactor.coord_input
 
         rotation_deg = 0.0
-        if self.is_free_mode and hasattr(self.build_ele, 'RotacionManual'):
+        if self.is_free_mode and hasattr(self.build_ele, "RotacionManual"):
             rot_val = self.build_ele.RotacionManual.value
-            if hasattr(rot_val, 'GetDeg'):
+            if hasattr(rot_val, "GetDeg"):
                 rotation_deg = rot_val.GetDeg()
             elif isinstance(rot_val, (int, float)):
                 rotation_deg = float(rot_val)
@@ -2812,7 +3163,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             coord_input,
             rotation_deg,
             AllplanGeo.Matrix3D(),
-            self.is_free_mode
+            self.is_free_mode,
         )
 
         if not solid:
@@ -2834,35 +3185,42 @@ class NeoprenosScriptObject(BaseScriptObject):
     def modify_element_property(self, name: str, _value: Any) -> bool:
         """Maneja cambios en propiedades del elemento."""
         editable_config_changed = name in (
-            'Ancho',
-            'GrosorSeleccionado',
-            'InvertirGrosor',
-            'RotacionManual',
+            "Ancho",
+            "GrosorSeleccionado",
+            "InvertirGrosor",
+            "RotacionManual",
         )
 
-        if name == 'GrosorSeleccionado':
+        if name == "GrosorSeleccionado":
             update_color_for_thickness(self.build_ele)
 
-        if name == 'Ancho':
+        if name == "Ancho":
             get_neopreno_width(self.build_ele)
 
-        if name == 'neopreno_libre':
-            if self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
+        if name == "neopreno_libre":
+            if self.script_object_interactor and hasattr(
+                self.script_object_interactor, "coord_input"
+            ):
                 self._saved_coord_input = self.script_object_interactor.coord_input
             self.is_free_mode = self._get_free_mode()
             self._update_parameter_visibility()
             if not self.is_editing_existing:
-                if self.interactor_state == SELECTING_WALL or self.interactor_state == SELECTING_SOLID:
+                if (
+                    self.interactor_state == SELECTING_WALL
+                    or self.interactor_state == SELECTING_SOLID
+                ):
                     self.start_input()
 
-        if name in ('InvertirGrosor', 'RotacionManual'):
+        if name in ("InvertirGrosor", "RotacionManual"):
             if self.line_result and self.line_result.input_line:
                 if self._pending_create_edit:
                     return False
                 elif self.is_editing_existing:
                     return False
                 elif self.interactor_state == SELECTING_LINE:
-                    if self.script_object_interactor and hasattr(self.script_object_interactor, 'preview_function'):
+                    if self.script_object_interactor and hasattr(
+                        self.script_object_interactor, "preview_function"
+                    ):
                         self.draw_neopreno_preview(self.line_result.input_line)
 
         if self._pending_create_edit and editable_config_changed:
@@ -2885,7 +3243,11 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self.interactor_state == SELECTING_LINE:
             self._start_line_input()
             if self.script_object_interactor:
-                coord_input_to_use = self._saved_coord_input if self._saved_coord_input else self.coord_input
+                coord_input_to_use = (
+                    self._saved_coord_input
+                    if self._saved_coord_input
+                    else self.coord_input
+                )
                 if coord_input_to_use:
                     self.script_object_interactor.start_input(coord_input_to_use)
 
@@ -2894,11 +3256,10 @@ class NeoprenosScriptObject(BaseScriptObject):
     def execute(self) -> CreateElementResult:
         """Dispatcher principal: separa CREATE y EDIT en funciones independientes."""
 
-        if hasattr(self.build_ele, 'IsModify'):
+        if hasattr(self.build_ele, "IsModify"):
             is_modify = self.build_ele.IsModify()
         else:
             is_modify = self.is_editing_existing
-
 
         self.is_editing_existing = is_modify
         neo_log(
@@ -2918,20 +3279,34 @@ class NeoprenosScriptObject(BaseScriptObject):
         """Lógica completa de CREACIÓN: detecta muro, calcula PMP_PARE, genera z_unique, crea geometrías."""
 
         if not self.line_result or not self.line_result.input_line:
-            punto_inicial = getattr(self.build_ele, 'PuntoInicial', None)
-            punto_final = getattr(self.build_ele, 'PuntoFinal', None)
-            if punto_inicial and punto_final and hasattr(punto_inicial, 'value') and hasattr(punto_final, 'value'):
+            punto_inicial = getattr(self.build_ele, "PuntoInicial", None)
+            punto_final = getattr(self.build_ele, "PuntoFinal", None)
+            if (
+                punto_inicial
+                and punto_final
+                and hasattr(punto_inicial, "value")
+                and hasattr(punto_final, "value")
+            ):
                 if punto_inicial.value and punto_final.value:
                     if not self.line_result:
-                        from ScriptObjectInteractors.LineInteractor import LineInteractorResult
+                        from ScriptObjectInteractors.LineInteractor import (
+                            LineInteractorResult,
+                        )
+
                         self.line_result = LineInteractorResult()
-                    self.line_result.input_line = AllplanGeo.Line3D(punto_inicial.value, punto_final.value)
+                    self.line_result.input_line = AllplanGeo.Line3D(
+                        punto_inicial.value, punto_final.value
+                    )
                     neo_log("_execute_create: linea recuperada desde build_ele")
                 else:
-                    neo_log("_execute_create: sin linea y puntos vacios -> CreateElementResult([])")
+                    neo_log(
+                        "_execute_create: sin linea y puntos vacios -> CreateElementResult([])"
+                    )
                     return CreateElementResult([])
             else:
-                neo_log("_execute_create: sin linea ni parametros PuntoInicial/PuntoFinal -> CreateElementResult([])")
+                neo_log(
+                    "_execute_create: sin linea ni parametros PuntoInicial/PuntoFinal -> CreateElementResult([])"
+                )
                 return CreateElementResult([])
 
         line = self.line_result.input_line
@@ -2954,16 +3329,19 @@ class NeoprenosScriptObject(BaseScriptObject):
                                 normal_point = AllplanGeo.Point3D(
                                     self.face_normal.X,
                                     self.face_normal.Y,
-                                    self.face_normal.Z
+                                    self.face_normal.Z,
                                 )
                                 transformed_origin = inv_wall_matrix * origin_point
                                 transformed_normal = inv_wall_matrix * normal_point
                                 self.face_normal = AllplanGeo.Vector3D(
                                     transformed_normal.X - transformed_origin.X,
                                     transformed_normal.Y - transformed_origin.Y,
-                                    transformed_normal.Z - transformed_origin.Z
+                                    transformed_normal.Z - transformed_origin.Z,
                                 )
-                                self.face_normal = normalize_vector(self.face_normal) or self.face_normal
+                                self.face_normal = (
+                                    normalize_vector(self.face_normal)
+                                    or self.face_normal
+                                )
                             except Exception:
                                 pass
             except Exception:
@@ -2974,7 +3352,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self.is_free_mode:
             line_to_use = local_line
         else:
-            line_to_use, _ = self._prepare_line(local_line, is_already_in_local_coords=True)
+            line_to_use, _ = self._prepare_line(
+                local_line, is_already_in_local_coords=True
+            )
 
         start_point = line_to_use.StartPoint
         end_point = line_to_use.EndPoint
@@ -2989,7 +3369,9 @@ class NeoprenosScriptObject(BaseScriptObject):
             self._z_unique_initialized = False
 
         z_unique = 0.0
-        if hasattr(self.build_ele, "z_unique") and hasattr(self.build_ele.z_unique, "value"):
+        if hasattr(self.build_ele, "z_unique") and hasattr(
+            self.build_ele.z_unique, "value"
+        ):
             if not self.build_ele.z_unique.value or self.build_ele.z_unique.value == 0:
                 z_unique = random.random() * 3600
                 self.build_ele.z_unique.value = z_unique
@@ -2999,7 +3381,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             z_unique = random.random() * 3600
 
         wall_pare = None
-        wall = self.detected_wall if hasattr(self, 'detected_wall') else None
+        wall = self.detected_wall if hasattr(self, "detected_wall") else None
         if wall:
             try:
                 wall_pare = get_wall_ifc_id(wall)
@@ -3007,49 +3389,73 @@ class NeoprenosScriptObject(BaseScriptObject):
                 pass
 
         if not wall_pare:
-            if hasattr(self, 'wall_ifc_id') and self.wall_ifc_id:
+            if hasattr(self, "wall_ifc_id") and self.wall_ifc_id:
                 wall_pare = self.wall_ifc_id
             else:
                 wall_pare = "MURO_NO_DEFINIDO"
 
         if not self.is_editing_existing:
-            if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, 'value'):
+            if hasattr(self.build_ele, "pmp_pare") and hasattr(
+                self.build_ele.pmp_pare, "value"
+            ):
                 try:
                     self.build_ele.pmp_pare.value = wall_pare
                 except Exception as e:
                     pass
         else:
-            if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, 'value'):
-                wall_pare = str(self.build_ele.pmp_pare.value).strip() if self.build_ele.pmp_pare.value else ""
-
+            if hasattr(self.build_ele, "pmp_pare") and hasattr(
+                self.build_ele.pmp_pare, "value"
+            ):
+                wall_pare = (
+                    str(self.build_ele.pmp_pare.value).strip()
+                    if self.build_ele.pmp_pare.value
+                    else ""
+                )
 
         self.line_result.input_line = line_to_use
 
-        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, "PMP_PARE")
-        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, "PMP_WALL_ID")
+        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "PMP_PARE"
+        )
+        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "PMP_WALL_ID"
+        )
 
         self.elements = self._create_neopreno_elements(pmp_pare=wall_pare)
-        neo_log(f"_execute_create: elementos geometria={len(self.elements) if self.elements else 0} wall_pare={wall_pare}")
+        neo_log(
+            f"_execute_create: elementos geometria={len(self.elements) if self.elements else 0} wall_pare={wall_pare}"
+        )
 
         if not self.elements:
-            neo_log("_execute_create: no se crearon elementos geometria -> CreateElementResult([])")
+            neo_log(
+                "_execute_create: no se crearon elementos geometria -> CreateElementResult([])"
+            )
             return CreateElementResult([])
 
         individual_pythonparts = self.create_individual_pythonparts_from_elements(
             self.elements,
             pmp_pare=wall_pare,
-            is_modify=False  # Hash random en creación
+            is_modify=False,  # Hash random en creación
         )
 
         if not individual_pythonparts:
-            neo_log("_execute_create: no se crearon PythonParts individuales -> CreateElementResult([])")
+            neo_log(
+                "_execute_create: no se crearon PythonParts individuales -> CreateElementResult([])"
+            )
             return CreateElementResult([])
-
 
         punto_inicial = start_point
         punto_final = end_point
-        ancho = get_neopreno_width(self.build_ele) if hasattr(self.build_ele, 'Ancho') else 50.0
-        grosor = get_selected_thickness(self.build_ele) if hasattr(self.build_ele, 'GrosorSeleccionado') else 5.0
+        ancho = (
+            get_neopreno_width(self.build_ele)
+            if hasattr(self.build_ele, "Ancho")
+            else 50.0
+        )
+        grosor = (
+            get_selected_thickness(self.build_ele)
+            if hasattr(self.build_ele, "GrosorSeleccionado")
+            else 5.0
+        )
         libre = self.is_free_mode
         rot = 0.0
         if hasattr(self.build_ele, "RotacionManual"):
@@ -3060,7 +3466,11 @@ class NeoprenosScriptObject(BaseScriptObject):
         if hasattr(self.build_ele, "InvertirGrosor"):
             val = getattr(self.build_ele.InvertirGrosor, "value", None)
             if val is not None:
-                invertido = bool(val) if isinstance(val, bool) else str(val).lower() in ("true", "1", "yes")
+                invertido = (
+                    bool(val)
+                    if isinstance(val, bool)
+                    else str(val).lower() in ("true", "1", "yes")
+                )
 
         saved_state_str = self._serialize_state_to_json()
         if saved_state_str and hasattr(self.build_ele, "SavedState"):
@@ -3078,50 +3488,59 @@ class NeoprenosScriptObject(BaseScriptObject):
             "Ancho": ancho,
             "Grosor": grosor,
             "Libre": libre,
+            "PermitirPickUpLinea": self._get_allow_line_pickup(),
             "RotacionManual": rot,
             "InvertirGrosor": invertido,
-            "SavedState": saved_state_str if saved_state_str else ""
+            "SavedState": saved_state_str if saved_state_str else "",
         }
 
         group_hash = create_element_hash(
-            "neopreno_group",
-            stable=False  # CREATE = random
+            "neopreno_group", stable=False  # CREATE = random
         )
 
         param_list = create_params_list_from_dict(global_params)
 
-        pmp_pare_in_param_list = any('pmp_pare' in p for p in param_list)
+        pmp_pare_in_param_list = any("pmp_pare" in p for p in param_list)
 
-        python_file_name = self.build_ele.pyp_file_name if hasattr(self.build_ele, 'pyp_file_name') else ""
+        python_file_name = (
+            self.build_ele.pyp_file_name
+            if hasattr(self.build_ele, "pyp_file_name")
+            else ""
+        )
 
         pythonpart_group = PythonPartGroup(
             "Neoprenos",
             param_list,
             group_hash,
             python_file_name,
-            individual_pythonparts
+            individual_pythonparts,
         )
 
         model_elem_list = pythonpart_group.create()
-        neo_log(f"_execute_create: PythonPartGroup elementos={len(model_elem_list) if model_elem_list else 0}")
+        neo_log(
+            f"_execute_create: PythonPartGroup elementos={len(model_elem_list) if model_elem_list else 0}"
+        )
 
         if not model_elem_list or len(model_elem_list) == 0:
             neo_log("_execute_create: PythonPartGroup vacio -> CreateElementResult([])")
             return CreateElementResult([])
-
 
         handles: list[HandleProperties] = []
 
         coord_input = self.coord_input if self.coord_input else None
         if not coord_input:
             coord_input = self._saved_coord_input if self._saved_coord_input else None
-        if not coord_input and self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
+        if (
+            not coord_input
+            and self.script_object_interactor
+            and hasattr(self.script_object_interactor, "coord_input")
+        ):
             coord_input = self.script_object_interactor.coord_input
 
         rotation_deg = 0.0
-        if self.is_free_mode and hasattr(self.build_ele, 'RotacionManual'):
+        if self.is_free_mode and hasattr(self.build_ele, "RotacionManual"):
             rot_val = self.build_ele.RotacionManual.value
-            if hasattr(rot_val, 'GetDeg'):
+            if hasattr(rot_val, "GetDeg"):
                 rotation_deg = rot_val.GetDeg()
             elif isinstance(rot_val, (int, float)):
                 rotation_deg = float(rot_val)
@@ -3131,13 +3550,19 @@ class NeoprenosScriptObject(BaseScriptObject):
         z_dir_handle = None
 
         if not self.is_free_mode and self.face_normal and self.face_point:
-            line_for_handles = self.line_result.input_line if self.line_result and self.line_result.input_line else None
+            line_for_handles = (
+                self.line_result.input_line
+                if self.line_result and self.line_result.input_line
+                else None
+            )
             if line_for_handles:
-                x_dir_handle, y_dir_handle, z_dir_handle = build_face_local_axes_for_handles(
-                    line_for_handles.StartPoint,
-                    line_for_handles.EndPoint,
-                    self.face_point,
-                    self.face_normal
+                x_dir_handle, y_dir_handle, z_dir_handle = (
+                    build_face_local_axes_for_handles(
+                        line_for_handles.StartPoint,
+                        line_for_handles.EndPoint,
+                        self.face_point,
+                        self.face_normal,
+                    )
                 )
 
         if self.line_result and self.line_result.input_line:
@@ -3151,13 +3576,20 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self.is_free_mode,
                 x_dir_handle,
                 y_dir_handle,
-                z_dir_handle
+                z_dir_handle,
             )
         else:
-            punto_inicial = getattr(self.build_ele, 'PuntoInicial', None)
-            punto_final = getattr(self.build_ele, 'PuntoFinal', None)
-            if punto_inicial and punto_final and punto_inicial.value and punto_final.value:
-                fallback_line = AllplanGeo.Line3D(punto_inicial.value, punto_final.value)
+            punto_inicial = getattr(self.build_ele, "PuntoInicial", None)
+            punto_final = getattr(self.build_ele, "PuntoFinal", None)
+            if (
+                punto_inicial
+                and punto_final
+                and punto_inicial.value
+                and punto_final.value
+            ):
+                fallback_line = AllplanGeo.Line3D(
+                    punto_inicial.value, punto_final.value
+                )
                 handles = create_handles(
                     self.build_ele,
                     fallback_line,
@@ -3167,7 +3599,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                     self.is_free_mode,
                     x_dir_handle,
                     y_dir_handle,
-                    z_dir_handle
+                    z_dir_handle,
                 )
 
         self.handles = handles
@@ -3175,29 +3607,38 @@ class NeoprenosScriptObject(BaseScriptObject):
         connect_to_ele = ConnectToElements()
 
         if not self.is_free_mode:
-            if hasattr(self.build_ele, 'SolidoConnection') and \
-               self.build_ele.SolidoConnection.value.uuid:
+            if (
+                hasattr(self.build_ele, "SolidoConnection")
+                and self.build_ele.SolidoConnection.value.uuid
+            ):
                 uuid_str = str(self.build_ele.SolidoConnection.value.uuid)
                 if uuid_str != "00000000-0000-0000-0000-000000000000":
                     connect_to_ele.connection_elements.append(uuid_str)
             if len(connect_to_ele.connection_elements) == 0 and self.solid_info:
-                if self.solid_info.get('guid'):
-                    connect_to_ele.connection_elements.append(self.solid_info['guid'])
-                elif self.solid_info.get('element'):
+                if self.solid_info.get("guid"):
+                    connect_to_ele.connection_elements.append(self.solid_info["guid"])
+                elif self.solid_info.get("element"):
                     try:
-                        element_guid = str(self.solid_info['element'].GetModelElementUUID())
+                        element_guid = str(
+                            self.solid_info["element"].GetModelElementUUID()
+                        )
                         if element_guid != "00000000-0000-0000-0000-000000000000":
                             connect_to_ele.connection_elements.append(element_guid)
                     except Exception:
                         pass
-            if len(connect_to_ele.connection_elements) == 0 and \
-               hasattr(self.build_ele, 'SolidoGUID') and self.build_ele.SolidoGUID.value:
+            if (
+                len(connect_to_ele.connection_elements) == 0
+                and hasattr(self.build_ele, "SolidoGUID")
+                and self.build_ele.SolidoGUID.value
+            ):
                 guid_str = str(self.build_ele.SolidoGUID.value)
                 if guid_str != "00000000-0000-0000-0000-000000000000":
                     connect_to_ele.connection_elements.append(guid_str)
         else:
-            if hasattr(self.build_ele, 'MuroConnection') and \
-               self.build_ele.MuroConnection.value.uuid:
+            if (
+                hasattr(self.build_ele, "MuroConnection")
+                and self.build_ele.MuroConnection.value.uuid
+            ):
                 uuid_str = str(self.build_ele.MuroConnection.value.uuid)
                 if uuid_str != "00000000-0000-0000-0000-000000000000":
                     connect_to_ele.connection_elements.append(uuid_str)
@@ -3211,18 +3652,23 @@ class NeoprenosScriptObject(BaseScriptObject):
                         connect_to_ele.connection_elements.append(wall_guid)
                 except Exception:
                     pass
-            if len(connect_to_ele.connection_elements) == 0 and \
-               hasattr(self.build_ele, 'MuroGUID') and self.build_ele.MuroGUID.value:
+            if (
+                len(connect_to_ele.connection_elements) == 0
+                and hasattr(self.build_ele, "MuroGUID")
+                and self.build_ele.MuroGUID.value
+            ):
                 guid_str = str(self.build_ele.MuroGUID.value)
                 if guid_str != "00000000-0000-0000-0000-000000000000":
                     connect_to_ele.connection_elements.append(guid_str)
 
         if len(connect_to_ele.connection_elements) == 0:
-            neo_log("_execute_create: sin conexion a muro/solido -> mensaje y CreateElementResult([])")
+            neo_log(
+                "_execute_create: sin conexion a muro/solido -> mensaje y CreateElementResult([])"
+            )
             AllplanUtil.ShowMessageBox(
                 "Error: No se pudo establecer conexion con el elemento.\n\n"
                 "El neopreno necesita estar conectado a un muro o solido para guardarse correctamente.",
-                AllplanUtil.MB_OK
+                AllplanUtil.MB_OK,
             )
             return CreateElementResult([])
 
@@ -3244,7 +3690,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
             connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
-            multi_placement=return_multi_placement
+            multi_placement=return_multi_placement,
         )
 
     def _execute_modify(self) -> CreateElementResult:
@@ -3258,14 +3704,18 @@ class NeoprenosScriptObject(BaseScriptObject):
         libre = True
 
         saved_state_str = ""
-        if hasattr(self.build_ele, "SavedState") and hasattr(self.build_ele.SavedState, "value"):
+        if hasattr(self.build_ele, "SavedState") and hasattr(
+            self.build_ele.SavedState, "value"
+        ):
             saved_state_str = (self.build_ele.SavedState.value or "").strip()
         state = parse_saved_state(saved_state_str) if saved_state_str else {}
         p0_restored = saved_state_to_point3d(state, "p0")
         p1_restored = saved_state_to_point3d(state, "p1")
         current_start = None
         current_end = None
-        if hasattr(self.build_ele, 'PuntoInicial') and hasattr(self.build_ele, 'PuntoFinal'):
+        if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+            self.build_ele, "PuntoFinal"
+        ):
             current_start = self.build_ele.PuntoInicial.value
             current_end = self.build_ele.PuntoFinal.value
 
@@ -3273,30 +3723,49 @@ class NeoprenosScriptObject(BaseScriptObject):
             start_point = current_start if current_start is not None else p0_restored
             end_point = current_end if current_end is not None else p1_restored
             wall_pare = (state.get("pmp_pare") or "").strip() or "SIN_PARE"
-            ancho = get_neopreno_width(self.build_ele) if hasattr(self.build_ele, "Ancho") else 50.0
-            grosor = get_selected_thickness(self.build_ele) if hasattr(self.build_ele, "GrosorSeleccionado") else 5.0
+            ancho = (
+                get_neopreno_width(self.build_ele)
+                if hasattr(self.build_ele, "Ancho")
+                else 50.0
+            )
+            grosor = (
+                get_selected_thickness(self.build_ele)
+                if hasattr(self.build_ele, "GrosorSeleccionado")
+                else 5.0
+            )
             libre = self._get_free_mode()
         else:
             if current_start is not None and current_end is not None:
                 start_point = current_start
                 end_point = current_end
             else:
-                return CreateElementResult(self.elements if hasattr(self, 'elements') and self.elements else [],
-                                         self.handles if hasattr(self, 'handles') else [])
+                return CreateElementResult(
+                    (
+                        self.elements
+                        if hasattr(self, "elements") and self.elements
+                        else []
+                    ),
+                    self.handles if hasattr(self, "handles") else [],
+                )
 
-            if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, 'value'):
-                wall_pare = str(self.build_ele.pmp_pare.value).strip() if self.build_ele.pmp_pare.value else ""
+            if hasattr(self.build_ele, "pmp_pare") and hasattr(
+                self.build_ele.pmp_pare, "value"
+            ):
+                wall_pare = (
+                    str(self.build_ele.pmp_pare.value).strip()
+                    if self.build_ele.pmp_pare.value
+                    else ""
+                )
             if not wall_pare:
                 wall_pare = "SIN_PARE"
-            if hasattr(self.build_ele, 'Ancho'):
+            if hasattr(self.build_ele, "Ancho"):
                 ancho = get_neopreno_width(self.build_ele)
-            if hasattr(self.build_ele, 'GrosorSeleccionado'):
+            if hasattr(self.build_ele, "GrosorSeleccionado"):
                 grosor = get_selected_thickness(self.build_ele)
             libre = self._get_free_mode()
 
-
         existing_group_hash = None
-        if hasattr(self.build_ele, 'get_hash'):
+        if hasattr(self.build_ele, "get_hash"):
             try:
                 existing_group_hash = self.build_ele.get_hash()
                 if existing_group_hash:
@@ -3309,6 +3778,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         line = AllplanGeo.Line3D(start_point, end_point)
         if not self.line_result:
             from ScriptObjectInteractors.LineInteractor import LineInteractorResult
+
             self.line_result = LineInteractorResult()
         self.line_result.input_line = line
 
@@ -3328,39 +3798,48 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self.is_free_mode:
             line_to_use = local_line
         else:
-            line_to_use, _ = self._prepare_line(local_line, is_already_in_local_coords=True)
+            line_to_use, _ = self._prepare_line(
+                local_line, is_already_in_local_coords=True
+            )
 
         self.line_result.input_line = line_to_use
 
-        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, "pmp_pare")
-        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, "PMP_WALL_ID")
+        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_pare"
+        )
+        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "PMP_WALL_ID"
+        )
 
         self.elements = self._create_neopreno_elements(pmp_pare=wall_pare)
 
         if not self.elements:
-            return CreateElementResult(self.elements if hasattr(self, 'elements') and self.elements else [],
-                                     self.handles if hasattr(self, 'handles') else [])
+            return CreateElementResult(
+                self.elements if hasattr(self, "elements") and self.elements else [],
+                self.handles if hasattr(self, "handles") else [],
+            )
 
         individual_pp = self.create_individual_pythonparts_from_elements(
-            self.elements,
-            pmp_pare=wall_pare,
-            is_modify=True  # Hash estable en edición
+            self.elements, pmp_pare=wall_pare, is_modify=True  # Hash estable en edición
         )
 
         if not individual_pp:
-            return CreateElementResult(self.elements if hasattr(self, 'elements') and self.elements else [],
-                                     self.handles if hasattr(self, 'handles') else [])
+            return CreateElementResult(
+                self.elements if hasattr(self, "elements") and self.elements else [],
+                self.handles if hasattr(self, "handles") else [],
+            )
 
         if existing_group_hash:
             group_hash = existing_group_hash
         else:
             group_hash = create_element_hash(
-                "neopreno_group",
-                stable=True  # EDIT = estable
+                "neopreno_group", stable=True  # EDIT = estable
             )
 
         z_unique = 0.0
-        if hasattr(self.build_ele, "z_unique") and hasattr(self.build_ele.z_unique, "value"):
+        if hasattr(self.build_ele, "z_unique") and hasattr(
+            self.build_ele.z_unique, "value"
+        ):
             try:
                 z_unique = float(self.build_ele.z_unique.value)
             except (ValueError, TypeError):
@@ -3374,9 +3853,17 @@ class NeoprenosScriptObject(BaseScriptObject):
         if hasattr(self.build_ele, "InvertirGrosor"):
             val = getattr(self.build_ele.InvertirGrosor, "value", None)
             if val is not None:
-                invertido = bool(val) if isinstance(val, bool) else str(val).lower() in ("true", "1", "yes")
+                invertido = (
+                    bool(val)
+                    if isinstance(val, bool)
+                    else str(val).lower() in ("true", "1", "yes")
+                )
         saved_state_str = self._serialize_state_to_json()
-        if saved_state_str and hasattr(self.build_ele, "SavedState") and hasattr(self.build_ele.SavedState, "value"):
+        if (
+            saved_state_str
+            and hasattr(self.build_ele, "SavedState")
+            and hasattr(self.build_ele.SavedState, "value")
+        ):
             self.build_ele.SavedState.value = saved_state_str
 
         global_params = {
@@ -3388,39 +3875,46 @@ class NeoprenosScriptObject(BaseScriptObject):
             "Ancho": ancho,
             "Grosor": grosor,
             "Libre": libre,
+            "PermitirPickUpLinea": self._get_allow_line_pickup(),
             "RotacionManual": rot,
             "InvertirGrosor": invertido,
-            "SavedState": saved_state_str if isinstance(saved_state_str, str) else ""
+            "SavedState": saved_state_str if isinstance(saved_state_str, str) else "",
         }
 
         param_list = create_params_list_from_dict(global_params)
-        python_file_name = self.build_ele.pyp_file_name if hasattr(self.build_ele, 'pyp_file_name') else ""
+        python_file_name = (
+            self.build_ele.pyp_file_name
+            if hasattr(self.build_ele, "pyp_file_name")
+            else ""
+        )
 
         pythonpart_group = PythonPartGroup(
-            "Neoprenos",
-            param_list,
-            group_hash,
-            python_file_name,
-            individual_pp
+            "Neoprenos", param_list, group_hash, python_file_name, individual_pp
         )
 
         model_elem_list = pythonpart_group.create()
 
         if not model_elem_list or len(model_elem_list) == 0:
-            return CreateElementResult(self.elements if hasattr(self, 'elements') and self.elements else [],
-                                     self.handles if hasattr(self, 'handles') else [])
+            return CreateElementResult(
+                self.elements if hasattr(self, "elements") and self.elements else [],
+                self.handles if hasattr(self, "handles") else [],
+            )
 
         handles: list[HandleProperties] = []
         coord_input = self.coord_input if self.coord_input else None
         if not coord_input:
             coord_input = self._saved_coord_input if self._saved_coord_input else None
-        if not coord_input and self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
+        if (
+            not coord_input
+            and self.script_object_interactor
+            and hasattr(self.script_object_interactor, "coord_input")
+        ):
             coord_input = self.script_object_interactor.coord_input
 
         rotation_deg = 0.0
-        if self.is_free_mode and hasattr(self.build_ele, 'RotacionManual'):
+        if self.is_free_mode and hasattr(self.build_ele, "RotacionManual"):
             rot_val = self.build_ele.RotacionManual.value
-            if hasattr(rot_val, 'GetDeg'):
+            if hasattr(rot_val, "GetDeg"):
                 rotation_deg = rot_val.GetDeg()
             elif isinstance(rot_val, (int, float)):
                 rotation_deg = float(rot_val)
@@ -3430,13 +3924,19 @@ class NeoprenosScriptObject(BaseScriptObject):
         z_dir_handle = None
 
         if not self.is_free_mode and self.face_normal and self.face_point:
-            line_for_handles = self.line_result.input_line if self.line_result and self.line_result.input_line else None
+            line_for_handles = (
+                self.line_result.input_line
+                if self.line_result and self.line_result.input_line
+                else None
+            )
             if line_for_handles:
-                x_dir_handle, y_dir_handle, z_dir_handle = build_face_local_axes_for_handles(
-                    line_for_handles.StartPoint,
-                    line_for_handles.EndPoint,
-                    self.face_point,
-                    self.face_normal
+                x_dir_handle, y_dir_handle, z_dir_handle = (
+                    build_face_local_axes_for_handles(
+                        line_for_handles.StartPoint,
+                        line_for_handles.EndPoint,
+                        self.face_point,
+                        self.face_normal,
+                    )
                 )
 
         if self.line_result and self.line_result.input_line:
@@ -3450,13 +3950,20 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self.is_free_mode,
                 x_dir_handle,
                 y_dir_handle,
-                z_dir_handle
+                z_dir_handle,
             )
         else:
-            punto_inicial = getattr(self.build_ele, 'PuntoInicial', None)
-            punto_final = getattr(self.build_ele, 'PuntoFinal', None)
-            if punto_inicial and punto_final and punto_inicial.value and punto_final.value:
-                fallback_line = AllplanGeo.Line3D(punto_inicial.value, punto_final.value)
+            punto_inicial = getattr(self.build_ele, "PuntoInicial", None)
+            punto_final = getattr(self.build_ele, "PuntoFinal", None)
+            if (
+                punto_inicial
+                and punto_final
+                and punto_inicial.value
+                and punto_final.value
+            ):
+                fallback_line = AllplanGeo.Line3D(
+                    punto_inicial.value, punto_final.value
+                )
                 handles = create_handles(
                     self.build_ele,
                     fallback_line,
@@ -3466,7 +3973,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                     self.is_free_mode,
                     x_dir_handle,
                     y_dir_handle,
-                    z_dir_handle
+                    z_dir_handle,
                 )
 
         self.handles = handles
@@ -3479,62 +3986,79 @@ class NeoprenosScriptObject(BaseScriptObject):
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
             uuid_parameter_name="PythonPartUUID",
-            multi_placement=True
+            multi_placement=False,
         )
 
-    def move_handle(self,
-                    handle_prop: HandleProperties,
-                    input_pnt: AllplanGeo.Point3D) -> CreateElementResult:
+    def move_handle(
+        self, handle_prop: HandleProperties, input_pnt: AllplanGeo.Point3D
+    ) -> CreateElementResult:
         """
         Maneja el movimiento de handles.
         """
-        handle_name = handle_prop.name if hasattr(handle_prop, 'name') else 'unknown'
+        handle_name = handle_prop.name if hasattr(handle_prop, "name") else "unknown"
         input_pnt_final = input_pnt
-        if not self.is_free_mode and self.face_normal and self.face_point and self.face_polygon:
+        if (
+            not self.is_free_mode
+            and self.face_normal
+            and self.face_point
+            and self.face_polygon
+        ):
             current_point = None
             if handle_name == "PuntoInicialHandle":
-                start_prop = getattr(self.build_ele, 'PuntoInicial', None)
-                if start_prop and hasattr(start_prop, 'value') and start_prop.value:
+                start_prop = getattr(self.build_ele, "PuntoInicial", None)
+                if start_prop and hasattr(start_prop, "value") and start_prop.value:
                     current_point = start_prop.value
             elif handle_name == "PuntoFinalHandle":
-                end_prop = getattr(self.build_ele, 'PuntoFinal', None)
-                if end_prop and hasattr(end_prop, 'value') and end_prop.value:
+                end_prop = getattr(self.build_ele, "PuntoFinal", None)
+                if end_prop and hasattr(end_prop, "value") and end_prop.value:
                     current_point = end_prop.value
             elif handle_name == "AnchoHandle":
-                start_prop = getattr(self.build_ele, 'PuntoInicial', None)
-                end_prop = getattr(self.build_ele, 'PuntoFinal', None)
+                start_prop = getattr(self.build_ele, "PuntoInicial", None)
+                end_prop = getattr(self.build_ele, "PuntoFinal", None)
                 if start_prop and end_prop and start_prop.value and end_prop.value:
                     current_point = AllplanGeo.Point3D(
                         (start_prop.value.X + end_prop.value.X) / 2.0,
                         (start_prop.value.Y + end_prop.value.Y) / 2.0,
-                        (start_prop.value.Z + end_prop.value.Z) / 2.0
+                        (start_prop.value.Z + end_prop.value.Z) / 2.0,
                     )
 
             if current_point:
                 if self.line_result and self.line_result.input_line:
                     line_for_axes = self.line_result.input_line
                 else:
-                    start_prop = getattr(self.build_ele, 'PuntoInicial', None)
-                    end_prop = getattr(self.build_ele, 'PuntoFinal', None)
+                    start_prop = getattr(self.build_ele, "PuntoInicial", None)
+                    end_prop = getattr(self.build_ele, "PuntoFinal", None)
                     if start_prop and end_prop and start_prop.value and end_prop.value:
-                        line_for_axes = AllplanGeo.Line3D(start_prop.value, end_prop.value)
+                        line_for_axes = AllplanGeo.Line3D(
+                            start_prop.value, end_prop.value
+                        )
                     else:
                         line_for_axes = None
 
                 if line_for_axes:
-                    x_dir_handle, y_dir_handle, z_dir_handle = build_face_local_axes_for_handles(
-                        line_for_axes.StartPoint,
-                        line_for_axes.EndPoint,
-                        self.face_point,
-                        self.face_normal
+                    x_dir_handle, y_dir_handle, z_dir_handle = (
+                        build_face_local_axes_for_handles(
+                            line_for_axes.StartPoint,
+                            line_for_axes.EndPoint,
+                            self.face_point,
+                            self.face_normal,
+                        )
                     )
 
                     if x_dir_handle and y_dir_handle and z_dir_handle:
-                        current_proj = project_point_to_face_plane(current_point, self.face_point, self.face_normal)
-                        input_proj = project_point_to_face_plane(input_pnt, self.face_point, self.face_normal)
+                        current_proj = project_point_to_face_plane(
+                            current_point, self.face_point, self.face_normal
+                        )
+                        input_proj = project_point_to_face_plane(
+                            input_pnt, self.face_point, self.face_normal
+                        )
 
-                        u_current, v_current = world_to_uv_face(current_proj, self.face_point, x_dir_handle, y_dir_handle)
-                        u_input, v_input = world_to_uv_face(input_proj, self.face_point, x_dir_handle, y_dir_handle)
+                        u_current, v_current = world_to_uv_face(
+                            current_proj, self.face_point, x_dir_handle, y_dir_handle
+                        )
+                        u_input, v_input = world_to_uv_face(
+                            input_proj, self.face_point, x_dir_handle, y_dir_handle
+                        )
 
                         du = u_input - u_current
                         dv = v_input - v_current
@@ -3544,32 +4068,43 @@ class NeoprenosScriptObject(BaseScriptObject):
                             self.face_point,
                             self.face_normal,
                             x_dir_handle,
-                            y_dir_handle
+                            y_dir_handle,
                         )
 
                         u_new = max(u_min, min(u_max, u_current + du))
                         v_new = max(v_min, min(v_max, v_current + dv))
 
-                        new_point_uv = uv_to_world_face(u_new, v_new, self.face_point, x_dir_handle, y_dir_handle)
-                        new_point_proj = project_point_to_face_plane(new_point_uv, self.face_point, self.face_normal)
+                        new_point_uv = uv_to_world_face(
+                            u_new, v_new, self.face_point, x_dir_handle, y_dir_handle
+                        )
+                        new_point_proj = project_point_to_face_plane(
+                            new_point_uv, self.face_point, self.face_normal
+                        )
 
-                        dist_to_plane = abs(vector_dot(
-                            AllplanGeo.Vector3D(
-                                new_point_proj.X - self.face_point.X,
-                                new_point_proj.Y - self.face_point.Y,
-                                new_point_proj.Z - self.face_point.Z
-                            ),
-                            normalize_vector(self.face_normal) or AllplanGeo.Vector3D(0, 0, 1)
-                        ))
+                        dist_to_plane = abs(
+                            vector_dot(
+                                AllplanGeo.Vector3D(
+                                    new_point_proj.X - self.face_point.X,
+                                    new_point_proj.Y - self.face_point.Y,
+                                    new_point_proj.Z - self.face_point.Z,
+                                ),
+                                normalize_vector(self.face_normal)
+                                or AllplanGeo.Vector3D(0, 0, 1),
+                            )
+                        )
 
                         input_pnt_final = new_point_proj
 
-        HandlePropertiesService.update_property_value(self.build_ele, handle_prop, input_pnt_final)
+        HandlePropertiesService.update_property_value(
+            self.build_ele, handle_prop, input_pnt_final
+        )
 
-        start_prop = getattr(self.build_ele, 'PuntoInicial', None)
-        end_prop = getattr(self.build_ele, 'PuntoFinal', None)
-        start_point = start_prop.value if start_prop and hasattr(start_prop, 'value') else None
-        end_point = end_prop.value if end_prop and hasattr(end_prop, 'value') else None
+        start_prop = getattr(self.build_ele, "PuntoInicial", None)
+        end_prop = getattr(self.build_ele, "PuntoFinal", None)
+        start_point = (
+            start_prop.value if start_prop and hasattr(start_prop, "value") else None
+        )
+        end_point = end_prop.value if end_prop and hasattr(end_prop, "value") else None
 
         if start_point and end_point:
             self.line_result.input_line = AllplanGeo.Line3D(start_point, end_point)
@@ -3581,11 +4116,15 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         return self.execute()
 
-    def get_or_create_layer_in_group(self, group_name: str, short_name: str, long_name: str) -> int:
+    def get_or_create_layer_in_group(
+        self, group_name: str, short_name: str, long_name: str
+    ) -> int:
         """Busca la layer por short_name o la crea en el grupo usando CreateLayer.
         LayerManager no existe en NemAll_Python_BaseElements; se usa CreateLayer.
         """
-        layer_id = AllplanBaseElements.LayerService.GetIDByShortName(short_name, self.document)
+        layer_id = AllplanBaseElements.LayerService.GetIDByShortName(
+            short_name, self.document
+        )
         if layer_id > 0:
             return layer_id
 
@@ -3595,10 +4134,16 @@ class NeoprenosScriptObject(BaseScriptObject):
             "",
             long_name,
             short_name,
-            1, 1, 1, True, True,
+            1,
+            1,
+            1,
+            True,
+            True,
         )
 
-    def _create_neopreno_elements(self, pmp_pare: str = None) -> List[AllplanBasisElements.ModelElement3D]:
+    def _create_neopreno_elements(
+        self, pmp_pare: str = None
+    ) -> List[AllplanBasisElements.ModelElement3D]:
         """Crea los elementos del neopreno como ModelElement3D individuales.
 
         Args:
@@ -3618,7 +4163,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             line_to_use, _ = self._prepare_line(line)
 
         longitud = AllplanGeo.CalcLength(line_to_use)
-        if hasattr(self.build_ele, 'Longitud'):
+        if hasattr(self.build_ele, "Longitud"):
             self.build_ele.Longitud.value = longitud
 
         grosor = get_selected_thickness(self.build_ele)
@@ -3626,25 +4171,29 @@ class NeoprenosScriptObject(BaseScriptObject):
         ancho = get_neopreno_width(self.build_ele)
 
         invertir_grosor = False
-        if self.is_free_mode and hasattr(self.build_ele, 'InvertirGrosor'):
+        if self.is_free_mode and hasattr(self.build_ele, "InvertirGrosor"):
             val = self.build_ele.InvertirGrosor.value
             if isinstance(val, bool):
                 invertir_grosor = not val
             elif isinstance(val, str):
-                invertir_grosor = val.lower() not in ('true', '1', 'yes')
+                invertir_grosor = val.lower() not in ("true", "1", "yes")
             else:
                 invertir_grosor = not bool(val)
 
         coord_input = self.coord_input if self.coord_input else None
         if not coord_input:
             coord_input = self._saved_coord_input if self._saved_coord_input else None
-        if not coord_input and self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
+        if (
+            not coord_input
+            and self.script_object_interactor
+            and hasattr(self.script_object_interactor, "coord_input")
+        ):
             coord_input = self.script_object_interactor.coord_input
 
         rotation_deg = 0.0
-        if self.is_free_mode and hasattr(self.build_ele, 'RotacionManual'):
+        if self.is_free_mode and hasattr(self.build_ele, "RotacionManual"):
             rot_val = self.build_ele.RotacionManual.value
-            if hasattr(rot_val, 'GetDeg'):
+            if hasattr(rot_val, "GetDeg"):
                 rotation_deg = rot_val.GetDeg()
             elif isinstance(rot_val, (int, float)):
                 rotation_deg = float(rot_val)
@@ -3659,16 +4208,24 @@ class NeoprenosScriptObject(BaseScriptObject):
             coord_input,
             rotation_deg,
             AllplanGeo.Matrix3D(),
-            self.is_free_mode
+            self.is_free_mode,
         )
 
-        layer_id = AllplanBaseElements.LayerService.GetIDByShortName(NEO_LAYER, self.document)
+        layer_id = AllplanBaseElements.LayerService.GetIDByShortName(
+            NEO_LAYER, self.document
+        )
 
         common_props = AllplanBaseElements.CommonProperties()
         common_props.GetGlobalProperties()
-        common_props.Color = self.build_ele.Color.value if hasattr(self.build_ele, 'Color') else 15
-        common_props.Pen = self.build_ele.Pen.value if hasattr(self.build_ele, 'Pen') else 1
-        common_props.Stroke = self.build_ele.Stroke.value if hasattr(self.build_ele, 'Stroke') else 1
+        common_props.Color = (
+            self.build_ele.Color.value if hasattr(self.build_ele, "Color") else 15
+        )
+        common_props.Pen = (
+            self.build_ele.Pen.value if hasattr(self.build_ele, "Pen") else 1
+        )
+        common_props.Stroke = (
+            self.build_ele.Stroke.value if hasattr(self.build_ele, "Stroke") else 1
+        )
         common_props.Layer = layer_id
 
         attr_list = BuildingElementAttributeList()
@@ -3695,7 +4252,12 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         return elements
 
-    def create_individual_pythonparts_from_elements(self, elements_list: List[AllplanBasisElements.ModelElement3D], pmp_pare: str = None, is_modify: bool = False) -> List[PythonPart]:
+    def create_individual_pythonparts_from_elements(
+        self,
+        elements_list: List[AllplanBasisElements.ModelElement3D],
+        pmp_pare: str = None,
+        is_modify: bool = False,
+    ) -> List[PythonPart]:
         """
         Convierte una lista de ModelElement3D en PythonParts individuales.
         Cada elemento 3D se envuelve en su propia PythonPart para que GSI pueda leerlos individualmente.
@@ -3711,18 +4273,28 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         pythonparts_list = []
 
-        python_file_name = self.build_ele.pyp_file_name if hasattr(self.build_ele, 'pyp_file_name') else ""
+        python_file_name = (
+            self.build_ele.pyp_file_name
+            if hasattr(self.build_ele, "pyp_file_name")
+            else ""
+        )
 
         for idx, element in enumerate(elements_list):
             try:
-                common_props = element.GetCommonProperties() if hasattr(element, 'GetCommonProperties') else AllplanBaseElements.CommonProperties()
-                if not hasattr(common_props, 'Layer') or common_props.Layer <= 0:
-                    layer_id = AllplanBaseElements.LayerService.GetIDByShortName(NEO_LAYER, self.document)
+                common_props = (
+                    element.GetCommonProperties()
+                    if hasattr(element, "GetCommonProperties")
+                    else AllplanBaseElements.CommonProperties()
+                )
+                if not hasattr(common_props, "Layer") or common_props.Layer <= 0:
+                    layer_id = AllplanBaseElements.LayerService.GetIDByShortName(
+                        NEO_LAYER, self.document
+                    )
                     common_props.Layer = layer_id
 
                 attr_list = BuildingElementAttributeList()
                 attr_pmp_id = getattr(self, "attr_pmp_pare_id", 0)
-                attr_wall_name_id =getattr(self, "attr_pmp_wall_id", 0)
+                attr_wall_name_id = getattr(self, "attr_pmp_wall_id", 0)
 
                 wall_pare = pmp_pare if pmp_pare else ""
                 if wall_pare and attr_pmp_id > 0:
@@ -3734,24 +4306,21 @@ class NeoprenosScriptObject(BaseScriptObject):
                 views = [View2D3D([element])]
 
                 params = {
-                    'ElementIndex': idx,
-                    'ElementType': type(element).__name__,
-                    'Layer': common_props.Layer,
-                    'Color': common_props.Color,
-                    'Pen': common_props.Pen,
-                    'Stroke': common_props.Stroke
+                    "ElementIndex": idx,
+                    "ElementType": type(element).__name__,
+                    "Layer": common_props.Layer,
+                    "Color": common_props.Color,
+                    "Pen": common_props.Pen,
+                    "Stroke": common_props.Stroke,
                 }
 
                 hash_value = create_element_hash(
-                    "neopreno_element",
-                    stable=is_modify,
-                    Index=idx
+                    "neopreno_element", stable=is_modify, Index=idx
                 )
 
                 param_list = create_params_list_from_dict(params)
 
                 element_name = f"NeoprenoElement_{idx}"
-
 
                 pythonpart = PythonPart(
                     element_name,
@@ -3760,13 +4329,14 @@ class NeoprenosScriptObject(BaseScriptObject):
                     python_file=python_file_name,
                     views=views,
                     common_props=common_props,
-                    attribute_list=attribute_list if attribute_list else None
+                    attribute_list=attribute_list if attribute_list else None,
                 )
 
                 pythonparts_list.append(pythonpart)
 
             except Exception as e:
                 import traceback
+
                 continue
 
         return pythonparts_list
@@ -3780,6 +4350,30 @@ class NeoprenosScriptObject(BaseScriptObject):
         if is_modify:
             self.interactor_state = STOPPED
             self.script_object_interactor = None
+            has_points = False
+            if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+                self.build_ele, "PuntoFinal"
+            ):
+                has_points = bool(
+                    self.build_ele.PuntoInicial.value
+                    and self.build_ele.PuntoFinal.value
+                )
+            has_saved_state = False
+            if hasattr(self.build_ele, "SavedState") and hasattr(
+                self.build_ele.SavedState, "value"
+            ):
+                state = parse_saved_state(
+                    (self.build_ele.SavedState.value or "").strip()
+                )
+                has_saved_state = (
+                    saved_state_to_point3d(state, "p0") is not None
+                    and saved_state_to_point3d(state, "p1") is not None
+                )
+            if not (has_points or has_saved_state):
+                neo_log(
+                    "on_cancel_function: MODIFY sin puntos/SavedState -> CANCEL_INPUT para conservar PPG"
+                )
+                return OnCancelFunctionResult.CANCEL_INPUT
             return OnCancelFunctionResult.CREATE_ELEMENTS
 
         if self.line_result and self.line_result.input_line:
