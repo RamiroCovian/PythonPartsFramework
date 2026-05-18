@@ -4920,15 +4920,12 @@ class AngularLineScript(BaseScriptObject):
             if self._is_individual_distribution():
                 if self.wall_select_result.is_selected:
                     print(
-                        "[INPUT][INDIVIDUAL] Muro seleccionado; pasando a seleccion de cara"
+                        "[INPUT][INDIVIDUAL] Muro seleccionado; pasando a seleccion de posicion"
                     )
                     self._process_wall_selection_free()
-                    self.state = SELECTING_FACE
-                    self.face_select_result = SolidFaceSelectResult()
-                    self.script_object_interactor = SolidFaceSelectInteractor(
-                        self.face_select_result,
-                        "Seleccione la cara del muro para orientar el angular",
-                    )
+                    self._resolve_individual_face_from_wall()
+                    self.state = SELECTING_POSITION
+                    self._start_position_input()
                 else:
                     self.state = CANCEL
                     self.script_object_interactor = None
@@ -4989,6 +4986,150 @@ class AngularLineScript(BaseScriptObject):
 
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
+
+    def _get_face_center(self, face_polygon: AllplanGeo.Polygon3D):
+        """Calcula el centro del bounding box de una cara."""
+        try:
+            if not face_polygon or face_polygon.Count() < 3:
+                return None
+
+            result = AllplanGeo.CalcMinMax(face_polygon)
+            minmax = result[0] if isinstance(result, tuple) else result
+            return AllplanGeo.Point3D(
+                (minmax.Min.X + minmax.Max.X) / 2.0,
+                (minmax.Min.Y + minmax.Max.Y) / 2.0,
+                (minmax.Min.Z + minmax.Max.Z) / 2.0,
+            )
+        except Exception:
+            return None
+
+    def _face_distance_to_point(self, face_info: dict, point: AllplanGeo.Point3D) -> float:
+        """Distancia absoluta desde un punto al plano de una cara lateral."""
+        try:
+            normal = normalize_vector(face_info.get("normal"))
+            polygon = face_info.get("polygon")
+            plane_point = self._get_face_center(polygon)
+            if not normal or normal.GetLength() < 1e-6 or not plane_point:
+                return float("inf")
+
+            to_point = AllplanGeo.Vector3D(
+                point.X - plane_point.X,
+                point.Y - plane_point.Y,
+                point.Z - plane_point.Z,
+            )
+            return abs(vector_dot(to_point, normal))
+        except Exception:
+            return float("inf")
+
+    def _face_horizontal_span(self, face_info: dict) -> float:
+        """Longitud horizontal aproximada de una cara; prioriza caras principales."""
+        try:
+            local_system = calculate_local_coordinate_system(
+                face_info.get("polygon"), face_info.get("normal")
+            )
+            if not local_system:
+                return 0.0
+
+            spans = []
+            for axis_key in ("axis_u", "axis_v"):
+                axis = normalize_vector(local_system.get(axis_key))
+                if axis and axis.GetLength() > 1e-6:
+                    span_key = "width" if axis_key == "axis_u" else "height"
+                    spans.append(
+                        float(local_system.get(span_key, 0.0)) * (1.0 - abs(axis.Z))
+                    )
+            return max(spans) if spans else 0.0
+        except Exception:
+            return 0.0
+
+    def _store_current_face_info(self, selected_element, face_index=None) -> None:
+        """Persiste normal, punto de cara, GUID e indice para reconstruccion posterior."""
+        if self.face_normal:
+            self.face_normal = normalize_vector(self.face_normal) or self.face_normal
+            if hasattr(self.build_ele, "CaraNormalX"):
+                self.build_ele.CaraNormalX.value = self.face_normal.X
+            if hasattr(self.build_ele, "CaraNormalY"):
+                self.build_ele.CaraNormalY.value = self.face_normal.Y
+            if hasattr(self.build_ele, "CaraNormalZ"):
+                self.build_ele.CaraNormalZ.value = self.face_normal.Z
+
+        if self.face_point:
+            if hasattr(self.build_ele, "PuntoClicX"):
+                self.build_ele.PuntoClicX.value = self.face_point.X
+            if hasattr(self.build_ele, "PuntoClicY"):
+                self.build_ele.PuntoClicY.value = self.face_point.Y
+            if hasattr(self.build_ele, "PuntoClicZ"):
+                self.build_ele.PuntoClicZ.value = self.face_point.Z
+
+        if face_index is None and selected_element and self.face_polygon:
+            face_index = self._find_face_index(
+                selected_element, self.face_polygon, self.face_normal
+            )
+        if face_index is not None and hasattr(self.build_ele, "CaraIndice"):
+            self.build_ele.CaraIndice.value = face_index
+
+    def _resolve_individual_face_from_wall(
+        self, reference_point: AllplanGeo.Point3D = None
+    ) -> bool:
+        """Deriva la cara lateral del muro para distribucion individual."""
+        wall_element = self.detected_wall or self._get_wall_element()
+        if not wall_element:
+            return False
+
+        lateral_faces = get_wall_lateral_faces(wall_element)
+        if not lateral_faces:
+            print("[INPUT][INDIVIDUAL] No se pudieron obtener caras laterales del muro")
+            return False
+
+        if reference_point:
+            lateral_faces.sort(
+                key=lambda face: (
+                    self._face_distance_to_point(face, reference_point),
+                    -self._face_horizontal_span(face),
+                )
+            )
+        else:
+            lateral_faces.sort(key=lambda face: -self._face_horizontal_span(face))
+
+        best_face = lateral_faces[0]
+        face_polygon = best_face.get("polygon")
+        face_normal = normalize_vector(best_face.get("normal"))
+        face_center = self._get_face_center(face_polygon)
+        if reference_point and face_center and face_normal and face_normal.GetLength() > 1e-6:
+            face_point = project_point_to_plane(reference_point, face_center, face_normal)
+        else:
+            face_point = face_center
+
+        if (
+            not face_polygon
+            or not face_normal
+            or face_normal.GetLength() < 1e-6
+            or not face_point
+        ):
+            return False
+
+        self.detected_wall = wall_element
+        self.detected_wall_guid = str(wall_element.GetModelElementUUID())
+        self.face_polygon = face_polygon
+        self.face_normal = face_normal
+        self.face_point = face_point
+        self.face_local_system = calculate_local_coordinate_system(
+            self.face_polygon, self.face_normal
+        )
+        previous_face_index = (
+            self.build_ele.CaraIndice.value
+            if hasattr(self.build_ele, "CaraIndice")
+            else None
+        )
+        self._store_current_face_info(wall_element, best_face.get("index"))
+
+        if previous_face_index != best_face.get("index"):
+            print(
+                "[INPUT][INDIVIDUAL] Cara derivada desde muro: "
+                f"idx={best_face.get('index')} normal=({self.face_normal.X:.3f}, "
+                f"{self.face_normal.Y:.3f}, {self.face_normal.Z:.3f})"
+            )
+        return True
 
     def _process_wall_selection(self):
         """Procesa la selección del muro"""
@@ -5165,6 +5306,8 @@ class AngularLineScript(BaseScriptObject):
         self, position: AllplanGeo.Point3D
     ) -> AllplanGeo.Line3D:
         """Construye una línea interna de pieza desde el punto clicado."""
+        self._resolve_individual_face_from_wall(position)
+
         angular_key = (
             self.build_ele.TipoAngular.value
             if hasattr(self.build_ele, "TipoAngular")
