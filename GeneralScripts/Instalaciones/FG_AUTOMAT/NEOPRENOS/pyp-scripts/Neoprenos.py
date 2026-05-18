@@ -2939,23 +2939,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         if coord_input_to_use:
             try:
                 self.script_object_interactor.start_input(coord_input_to_use)
-
-                if self.ref_face_element and self.ref_face_polygon:
-                    try:
-                        if hasattr(
-                            self.script_object_interactor, "SetReferenceElement"
-                        ):
-                            self.script_object_interactor.SetReferenceElement(
-                                self.ref_face_element
-                            )
-                        elif hasattr(
-                            self.script_object_interactor, "AddReferenceGeometry"
-                        ):
-                            self.script_object_interactor.AddReferenceGeometry(
-                                self.ref_face_polygon
-                            )
-                    except Exception:
-                        pass
             except Exception:
                 pass
 

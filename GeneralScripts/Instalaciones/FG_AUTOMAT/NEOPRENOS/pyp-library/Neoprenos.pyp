@@ -4,7 +4,7 @@
         <Name>Instalaciones\FG_AUTOMAT\NEOPRENOS\pyp-scripts\Neoprenos.py</Name>
         <Title>Neopreno</Title>
         <Version>1.0</Version>
-        <ReadLastInput>True</ReadLastInput>
+        <!-- <ReadLastInput>True</ReadLastInput> -->
         <Interactor>False</Interactor>
         <ScriptObject>True</ScriptObject>
         <Text>Crea neopreno 3D con posicionamiento libre o sobre sólido</Text>
@@ -51,6 +51,15 @@
             <Visible>True</Visible>
             <Enable>False</Enable>
             <ReadOnly>z_unique > 0</ReadOnly>
+        </Parameter>
+
+        <Parameter>
+            <Name>PermitirPickUpLinea</Name>
+            <Text>Tomar linea completa del muro</Text>
+            <TextId>e_NEO_PP_306A</TextId>
+            <Value>false</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>True</Visible>
         </Parameter>
 
         <Parameter>
