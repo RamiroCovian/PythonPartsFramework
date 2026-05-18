@@ -60,7 +60,10 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.0.1-seleccionar-ppg-fix"
+ANGULARES_SCRIPT_VERSION = "2.3.2-seleccionar-restaurado-sin-native-sync"
+# Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
+ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
+ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
 ANGULAR_EVENT_SELECT_EXISTING = 1048
 ANGULAR_EVENT_DESELECT_EXISTING = 1049
 
@@ -2889,6 +2892,7 @@ class AngularLineScript(BaseScriptObject):
 
         if self.is_modification_mode:
             self._load_existing_points()
+            # MODIFY: sin sync de modelo ni escaneo de muro (evita C0000005).
 
     def _get_free_mode(self) -> bool:
         """Obtiene el estado del modo libre desde las propiedades"""
@@ -3876,6 +3880,10 @@ class AngularLineScript(BaseScriptObject):
                 if hasattr(conn, "element"):
                     pass
 
+            if getattr(self, "is_modification_mode", False):
+                self._apply_face_context_from_build_ele_only()
+                return
+
             wall_element = self._get_wall_element()
             if wall_element:
                 pass
@@ -3910,11 +3918,43 @@ class AngularLineScript(BaseScriptObject):
                         except Exception as e2:
                             pass
 
-                self._load_face_info_from_properties()
+                if getattr(self, "is_modification_mode", False):
+                    self._apply_face_context_from_build_ele_only()
+                else:
+                    self._load_face_info_from_properties()
             else:
-                pass
+                self._apply_face_context_from_build_ele_only()
         except Exception as e:
             import traceback
+
+    def _apply_face_context_from_build_ele_only(self) -> None:
+        """Cara/muro solo desde parametros (sin FaceSelect ni geometria del muro)."""
+        try:
+            if (
+                hasattr(self.build_ele, "CaraNormalX")
+                and hasattr(self.build_ele, "CaraNormalY")
+                and hasattr(self.build_ele, "CaraNormalZ")
+            ):
+                normal = AllplanGeo.Vector3D(
+                    self.build_ele.CaraNormalX.value,
+                    self.build_ele.CaraNormalY.value,
+                    self.build_ele.CaraNormalZ.value,
+                )
+                self.face_normal = normalize_vector(normal) or normal
+            if (
+                hasattr(self.build_ele, "PuntoClicX")
+                and hasattr(self.build_ele, "PuntoClicY")
+                and hasattr(self.build_ele, "PuntoClicZ")
+            ):
+                self.face_point = AllplanGeo.Point3D(
+                    self.build_ele.PuntoClicX.value,
+                    self.build_ele.PuntoClicY.value,
+                    self.build_ele.PuntoClicZ.value,
+                )
+            self.face_polygon = None
+            self.face_local_system = None
+        except Exception:
+            pass
 
     def _load_face_info_from_properties(self):
         """Carga la información de la cara desde las propiedades guardadas"""
@@ -3984,6 +4024,9 @@ class AngularLineScript(BaseScriptObject):
                 )
             else:
                 pass
+
+            if getattr(self, "is_modification_mode", False):
+                return
 
             if self.detected_wall and self.face_normal and self.face_point:
                 stored_normal = self._get_stored_normal()
@@ -4309,6 +4352,8 @@ class AngularLineScript(BaseScriptObject):
 
     def _find_face_on_wall(self, wall_element, stored_normal, stored_point):
         """Encuentra la cara del muro que coincide con la normal guardada"""
+        if getattr(self, "is_modification_mode", False):
+            return False, None, None
         try:
             view_projection = None
             input_document = self.document
@@ -6092,6 +6137,1125 @@ class AngularLineScript(BaseScriptObject):
             line=line,
         )
 
+    def _coerce_to_base_element_adapter(self, element):
+        """ModificationElementList guarda NOIGUID (str), no BaseElementAdapter."""
+        if element is None:
+            return None
+        if isinstance(element, str):
+            try:
+                adapter = AllplanEleAdapter.BaseElementAdapter.FromNOIGUID(
+                    element, self.document
+                )
+                if adapter is not None and not adapter.IsNull():
+                    return adapter
+            except Exception:
+                return None
+            return None
+        try:
+            if element.IsNull():
+                return None
+        except Exception:
+            pass
+        return element
+
+    def _adapter_from_modification_list(self, modification_list):
+        """Resuelve el PPG desde ModificationElementList (lista de GUIDs)."""
+        if modification_list is None:
+            return None
+        try:
+            if hasattr(modification_list, "is_modification_element"):
+                if not modification_list.is_modification_element():
+                    return None
+                return modification_list.get_base_element_adapter(self.document)
+        except Exception:
+            pass
+        if len(modification_list) > 0:
+            return self._coerce_to_base_element_adapter(modification_list[0])
+        return None
+
+    def _get_pyp_adapter_for_geometry_sync(self):
+        """Adapter del PPG cuyo posicionamiento debe leerse del modelo."""
+        if getattr(self, "_inline_selected_angular_active", False):
+            inline_list = getattr(self, "_inline_modification_ele_list", None)
+            adapter = self._adapter_from_modification_list(inline_list)
+            if adapter is not None:
+                return adapter
+        modification_list = getattr(self, "modification_ele_list", None)
+        adapter = self._adapter_from_modification_list(modification_list)
+        if adapter is not None:
+            return adapter
+        return None
+
+    def _get_direct_child_adapters(self, root, max_children: int = 24) -> list:
+        """Hijos directos del PPG (sin recorrer arbol completo: evita cierres nativos)."""
+        if root is None:
+            return []
+        children_out: list = []
+        try:
+            children = (
+                AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
+                    root, True
+                )
+            )
+        except Exception:
+            return children_out
+        if not children:
+            return children_out
+        for child in children:
+            if len(children_out) >= max_children:
+                break
+            coerced = self._coerce_to_base_element_adapter(child)
+            if coerced is not None:
+                children_out.append(coerced)
+        return children_out
+
+    def _collect_descendant_adapters_from_pyp(self, pyp_element) -> list:
+        """PPG + hijos directos (sin GetChildModelElementsFromTree)."""
+        root = self._coerce_to_base_element_adapter(pyp_element)
+        if root is None:
+            return []
+
+        adapters: list = [root]
+        seen: set[str] = set()
+        try:
+            seen.add(str(root.GetNOIGUID()))
+        except Exception:
+            seen.add(str(id(root)))
+
+        for child in self._get_direct_child_adapters(root):
+            try:
+                key = str(child.GetNOIGUID())
+            except Exception:
+                key = str(id(child))
+            if key in seen:
+                continue
+            seen.add(key)
+            adapters.append(child)
+
+        return adapters
+
+    def _geometry_from_adapter_element(self, element):
+        """Geometria 3D de un adapter (modelo o dibujo)."""
+        if element is None:
+            return None
+        for getter_name in (
+            "GetModelGeometry",
+            "GetGeometry",
+            "GetPureArchitectureElementGeometry",
+            "GetGroundViewArchitectureElementGeometry",
+        ):
+            if not hasattr(element, getter_name):
+                continue
+            try:
+                geo = getattr(element, getter_name)()
+                if geo is not None:
+                    return geo
+            except Exception:
+                continue
+        return None
+
+    def _bbox_from_line3d(self, line: AllplanGeo.Line3D) -> dict | None:
+        if line is None:
+            return None
+        try:
+            start = line.StartPoint
+            end = line.EndPoint
+        except Exception:
+            return None
+        if start is None or end is None:
+            return None
+        min_pt = AllplanGeo.Point3D(
+            min(start.X, end.X),
+            min(start.Y, end.Y),
+            min(start.Z, end.Z),
+        )
+        max_pt = AllplanGeo.Point3D(
+            max(start.X, end.X),
+            max(start.Y, end.Y),
+            max(start.Z, end.Z),
+        )
+        center = AllplanGeo.Point3D(
+            (min_pt.X + max_pt.X) / 2.0,
+            (min_pt.Y + max_pt.Y) / 2.0,
+            (min_pt.Z + max_pt.Z) / 2.0,
+        )
+        return {
+            "min": min_pt,
+            "max": max_pt,
+            "center": center,
+            "width": abs(max_pt.X - min_pt.X),
+            "height": abs(max_pt.Y - min_pt.Y),
+            "depth": abs(max_pt.Z - min_pt.Z),
+        }
+
+    def _iter_pyp_descendant_adapters(self, pyp_element, max_depth: int = 6):
+        """Recorre el PPG y descendientes (PythonParts internos, volumenes, etc.)."""
+        if pyp_element is None:
+            return
+        try:
+            if pyp_element.IsNull():
+                return
+        except Exception:
+            pass
+
+        queue: list[tuple] = [(pyp_element, 0)]
+        seen: set = set()
+        while queue:
+            current, depth = queue.pop(0)
+            try:
+                key = str(current.GetModelElementUUID())
+            except Exception:
+                key = id(current)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield current
+
+            if depth >= max_depth:
+                continue
+
+            children = []
+            for fetch in (
+                lambda ele: AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
+                    ele, True
+                ),
+                lambda ele: AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildElements(
+                    ele, True
+                ),
+            ):
+                try:
+                    found = fetch(current)
+                    if found:
+                        children.extend(found)
+                except Exception:
+                    continue
+
+            for child in children:
+                try:
+                    if child is None or child.IsNull():
+                        continue
+                except Exception:
+                    continue
+                queue.append((child, depth + 1))
+
+    def _collect_brep_geometries_from_ppg(self, pyp_element) -> list:
+        """Geometrias 3D actuales bajo el PPG (tras mover en el dibujo)."""
+        geometries: list = []
+        for adapter in self._iter_pyp_descendant_adapters(pyp_element):
+            geo = self._geometry_from_adapter_element(adapter)
+            if geo is None:
+                continue
+            if isinstance(geo, AllplanGeo.BRep3D):
+                geometries.append(geo)
+                continue
+            if isinstance(geo, AllplanGeo.Polyhedron3D):
+                try:
+                    err, brep = AllplanGeo.CreateBRep3D(geo)
+                    if err == AllplanGeo.eGeometryErrorCode.eOK and brep:
+                        geometries.append(brep)
+                except Exception:
+                    pass
+        return geometries
+
+    def _is_valid_sync_adapter(self, adapter) -> bool:
+        """Adapter utilizable por APIs nativas sin provocar access violation."""
+        coerced = self._coerce_to_base_element_adapter(adapter)
+        if coerced is None:
+            return False
+        try:
+            return not coerced.IsNull()
+        except Exception:
+            return True
+
+    def _get_placement_matrix_from_pyp(self, pyp_element) -> AllplanGeo.Matrix3D | None:
+        """Matriz de colocacion del PPG (cambia al arrastrar en Allplan)."""
+        if self._is_inline_angular_edit_session():
+            return None
+        root = self._coerce_to_base_element_adapter(pyp_element)
+        if not self._is_valid_sync_adapter(root):
+            return None
+
+        candidates = [root]
+
+        for candidate in candidates:
+            try:
+                result = AllplanBaseElements.PythonPartService.GetPlacementMatrix(
+                    candidate
+                )
+            except Exception:
+                continue
+            placement_matrix = None
+            if isinstance(result, tuple) and len(result) >= 2:
+                ok = result[0]
+                placement_matrix = result[1]
+                if ok is False:
+                    continue
+            elif isinstance(result, AllplanGeo.Matrix3D):
+                placement_matrix = result
+            if placement_matrix is None:
+                continue
+            try:
+                translation = placement_matrix.GetTranslationVector()
+                trans_len = translation.GetLength() if translation else 0.0
+                print(
+                    f"[SYNC][ANGULAR] Placement matrix traslacion={trans_len:.3f} mm"
+                )
+                if translation and trans_len > 1e-6:
+                    return placement_matrix
+            except Exception:
+                return placement_matrix
+        return None
+
+    def _read_child_pythonpart_param_dict(self, adapter) -> dict:
+        """Parametros de un PythonPart hijo (Angular_0, etc.)."""
+        if adapter is None:
+            return {}
+        try:
+            success, _name, parameter = (
+                AllplanBaseElements.PythonPartService.GetParameter(adapter)
+            )
+            if not success:
+                return {}
+            return parse_params_list_to_dict(
+                self._parameter_to_param_list(parameter)
+            )
+        except Exception:
+            return {}
+
+    def _read_line_from_child_pythonpart_params(
+        self, pyp_element
+    ) -> tuple[AllplanGeo.Point3D | None, AllplanGeo.Point3D | None]:
+        """Start/End guardados en los PythonParts hijos (si Allplan los actualizo)."""
+        root = self._coerce_to_base_element_adapter(pyp_element)
+        if root is None:
+            root = self._get_pyp_adapter_for_geometry_sync()
+        if root is None:
+            return None, None
+
+        best: tuple[int, AllplanGeo.Point3D, AllplanGeo.Point3D] | None = None
+        for adapter in self._collect_shallow_geometry_adapters(root, max_depth=4):
+            try:
+                if AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
+                    adapter
+                ):
+                    continue
+                if not AllplanBaseElements.PythonPartService.IsPythonPartElement(
+                    adapter
+                ):
+                    continue
+            except Exception:
+                continue
+
+            params = self._read_child_pythonpart_param_dict(adapter)
+            required = ("StartX", "StartY", "StartZ", "EndX", "EndY", "EndZ")
+            if not all(key in params for key in required):
+                continue
+            try:
+                start = AllplanGeo.Point3D(
+                    float(params["StartX"]),
+                    float(params["StartY"]),
+                    float(params["StartZ"]),
+                )
+                end = AllplanGeo.Point3D(
+                    float(params["EndX"]),
+                    float(params["EndY"]),
+                    float(params["EndZ"]),
+                )
+            except (TypeError, ValueError):
+                continue
+            element_index = int(params.get("ElementIndex", 999))
+            if best is None or element_index < best[0]:
+                best = (element_index, start, end)
+
+        if best is None:
+            return None, None
+        return best[1], best[2]
+
+    def _minmax_bbox_dict_from_adapters(
+        self, adapters: list, label: str
+    ) -> dict | None:
+        """Bounding box mundial via GetMinMaxBox (geometria ya movida en el dibujo)."""
+        valid_adapters: list = []
+        for adapter in adapters:
+            coerced = self._coerce_to_base_element_adapter(adapter)
+            if coerced is not None:
+                valid_adapters.append(coerced)
+        if not valid_adapters:
+            return None
+
+        if len(valid_adapters) > 16:
+            valid_adapters = valid_adapters[:16]
+
+        try:
+            elem_list = AllplanEleAdapter.BaseElementAdapterList(valid_adapters)
+        except Exception:
+            try:
+                elem_list = AllplanEleAdapter.BaseElementAdapterList()
+                for adapter in valid_adapters:
+                    elem_list.append(adapter)
+            except Exception as exc:
+                print(
+                    f"[SYNC][ANGULAR] Error creando BaseElementAdapterList "
+                    f"({label}): {exc}"
+                )
+                return None
+
+        minmax = None
+        for only_3d in (True, False):
+            try:
+                minmax = AllplanBaseElements.GetMinMaxBox(elem_list, 0.0, only_3d)
+                if minmax is not None:
+                    break
+            except TypeError:
+                try:
+                    minmax = AllplanBaseElements.GetMinMaxBox(elem_list)
+                    if minmax is not None:
+                        break
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+        if minmax is None:
+            print(f"[SYNC][ANGULAR] GetMinMaxBox sin resultado ({label})")
+            return None
+
+        try:
+            min_pt = minmax.GetMin()
+            max_pt = minmax.GetMax()
+            center = minmax.GetCenter()
+        except Exception:
+            try:
+                min_pt, max_pt = minmax.Get()
+                center = AllplanGeo.Point3D(
+                    (min_pt.X + max_pt.X) / 2.0,
+                    (min_pt.Y + max_pt.Y) / 2.0,
+                    (min_pt.Z + max_pt.Z) / 2.0,
+                )
+            except Exception as exc:
+                print(
+                    f"[SYNC][ANGULAR] Error leyendo MinMax3D ({label}): {exc}"
+                )
+                return None
+
+        width = abs(max_pt.X - min_pt.X)
+        height = abs(max_pt.Y - min_pt.Y)
+        depth = abs(max_pt.Z - min_pt.Z)
+        if width + height + depth < 1.0:
+            print(f"[SYNC][ANGULAR] MinMax degenerado ({label})")
+            return None
+
+        print(
+            f"[SYNC][ANGULAR] MinMax OK ({label}, n={len(adapters)}): "
+            f"center=({center.X:.1f},{center.Y:.1f},{center.Z:.1f}) "
+            f"size=({width:.1f},{height:.1f},{depth:.1f})"
+        )
+        return {
+            "min": min_pt,
+            "max": max_pt,
+            "center": center,
+            "width": width,
+            "height": height,
+            "depth": depth,
+        }
+
+    def _get_bbox_dict_from_minmax_box(self, pyp_element) -> dict | None:
+        """BBox del PPG y descendientes usando la API nativa de Allplan."""
+        root = self._coerce_to_base_element_adapter(pyp_element)
+        if root is None:
+            return None
+
+        all_adapters = self._collect_descendant_adapters_from_pyp(root)
+        print(f"[SYNC][ANGULAR] Adapters descendientes: {len(all_adapters)}")
+
+        volume_adapters: list = []
+        try:
+            volume_type_id = AllplanIFW.QueryTypeID(
+                AllplanEleAdapter.Volume3D_TypeUUID
+            )
+            for adapter in all_adapters:
+                try:
+                    if (
+                        adapter.GetElementAdapterType().GetGuid()
+                        == volume_type_id
+                    ):
+                        volume_adapters.append(adapter)
+                except Exception:
+                    continue
+        except Exception:
+            volume_adapters = []
+
+        print(f"[SYNC][ANGULAR] Adapters Volume3D: {len(volume_adapters)}")
+
+        direct_children = [a for a in all_adapters if a is not root]
+        for label, adapters in (
+            ("grupo", [root]),
+            ("hijos", direct_children),
+            ("volume3d", volume_adapters),
+        ):
+            bbox = self._minmax_bbox_dict_from_adapters(adapters, label)
+            if bbox:
+                return bbox
+        return None
+
+    def _sync_line_from_child_pythonpart_params(
+        self, pyp_element, min_displacement_mm: float = 5.0
+    ) -> bool:
+        new_start, new_end = self._read_line_from_child_pythonpart_params(
+            pyp_element
+        )
+        if new_start is None or new_end is None:
+            return False
+
+        old_start = (
+            getattr(self.build_ele.PuntoInicial, "value", None)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else None
+        )
+        old_end = (
+            getattr(self.build_ele.PuntoFinal, "value", None)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else None
+        )
+        if old_start is None or old_end is None:
+            self._apply_line_points_to_build_ele(new_start, new_end)
+            print(
+                "[SYNC][ANGULAR] Linea desde parametros hijo Start/End "
+                f"(sin puntos previos): {new_start} -> {new_end}"
+            )
+            return True
+
+        displacement = min(
+            old_start.GetDistance(new_start), old_end.GetDistance(new_end)
+        )
+        if displacement < min_displacement_mm:
+            return False
+
+        self._apply_line_points_to_build_ele(new_start, new_end)
+        print(
+            f"[SYNC][ANGULAR] Linea sincronizada desde parametros hijo "
+            f"(delta={displacement:.1f} mm): {new_start} -> {new_end}"
+        )
+        return True
+
+    def _sync_line_from_bbox_dict(
+        self, bbox: dict, min_displacement_mm: float = 5.0
+    ) -> bool:
+        """Reconstruye PuntoInicial/PuntoFinal desde el centro del bbox."""
+        axis_u = self._get_axis_u_vector_from_build_ele()
+        if not axis_u:
+            print("[SYNC][ANGULAR] Sin eje U para reconstruir linea desde bbox")
+            return False
+
+        tipo_key = (
+            str(getattr(self.build_ele.TipoAngular, "value", "") or "").strip()
+            if hasattr(self.build_ele, "TipoAngular")
+            else ""
+        )
+        definition = ANGULAR_CATALOG.get(tipo_key, {})
+        piece_length = float(
+            definition.get("piece_length", definition.get("length", 0.0)) or 0.0
+        )
+        if piece_length <= 1e-6:
+            if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+                self.build_ele, "PuntoFinal"
+            ):
+                p0 = getattr(self.build_ele.PuntoInicial, "value", None)
+                p1 = getattr(self.build_ele.PuntoFinal, "value", None)
+                if p0 is not None and p1 is not None:
+                    piece_length = p0.GetDistance(p1)
+
+        if piece_length <= 1e-6:
+            dims = sorted(
+                [bbox["width"], bbox["height"], bbox["depth"]], reverse=True
+            )
+            piece_length = dims[0] if dims else 0.0
+
+        if piece_length <= 1e-6:
+            return False
+
+        center = bbox["center"]
+        half = piece_length / 2.0
+        new_start = move_point(center, axis_u, -half)
+        new_end = move_point(center, axis_u, half)
+
+        if not self._is_manual_z_enabled():
+            z_value = center.Z
+            new_start = AllplanGeo.Point3D(new_start.X, new_start.Y, z_value)
+            new_end = AllplanGeo.Point3D(new_end.X, new_end.Y, z_value)
+
+        old_start = (
+            getattr(self.build_ele.PuntoInicial, "value", None)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else None
+        )
+        old_end = (
+            getattr(self.build_ele.PuntoFinal, "value", None)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else None
+        )
+        displacement = float("inf")
+        if old_start is not None:
+            displacement = min(displacement, old_start.GetDistance(new_start))
+        if old_end is not None:
+            displacement = min(displacement, old_end.GetDistance(new_end))
+        if displacement == float("inf"):
+            displacement = 0.0
+
+        if displacement < min_displacement_mm:
+            print(
+                f"[SYNC][ANGULAR] BBox alineado con parametros "
+                f"(delta={displacement:.2f} mm)"
+            )
+            return False
+
+        self._apply_line_points_to_build_ele(new_start, new_end)
+        print(
+            f"[SYNC][ANGULAR] Linea sincronizada desde MinMax del dibujo "
+            f"(delta={displacement:.1f} mm): {new_start} -> {new_end}"
+        )
+        return True
+
+    def _get_combined_bbox_from_geometries(
+        self, geometries: list
+    ) -> dict | None:
+        """Bounding box unificado de varias BRep3D."""
+        if not geometries:
+            return None
+        min_x = min_y = min_z = float("inf")
+        max_x = max_y = max_z = float("-inf")
+        for geo in geometries:
+            bbox = get_bounding_box_from_geometry(geo)
+            if not bbox:
+                continue
+            min_x = min(min_x, bbox["min"].X)
+            min_y = min(min_y, bbox["min"].Y)
+            min_z = min(min_z, bbox["min"].Z)
+            max_x = max(max_x, bbox["max"].X)
+            max_y = max(max_y, bbox["max"].Y)
+            max_z = max(max_z, bbox["max"].Z)
+        if min_x == float("inf"):
+            return None
+        min_pt = AllplanGeo.Point3D(min_x, min_y, min_z)
+        max_pt = AllplanGeo.Point3D(max_x, max_y, max_z)
+        center = AllplanGeo.Point3D(
+            (min_x + max_x) / 2.0,
+            (min_y + max_y) / 2.0,
+            (min_z + max_z) / 2.0,
+        )
+        return {
+            "min": min_pt,
+            "max": max_pt,
+            "center": center,
+            "width": abs(max_x - min_x),
+            "height": abs(max_y - min_y),
+            "depth": abs(max_z - min_z),
+        }
+
+    def _get_axis_u_vector_from_build_ele(self) -> AllplanGeo.Vector3D | None:
+        """Eje U guardado en el PPG (direccion del angular sobre la cara)."""
+        if (
+            hasattr(self.build_ele, "AxisU_X")
+            and hasattr(self.build_ele, "AxisU_Y")
+            and hasattr(self.build_ele, "AxisU_Z")
+        ):
+            axis_u = AllplanGeo.Vector3D(
+                float(self.build_ele.AxisU_X.value),
+                float(self.build_ele.AxisU_Y.value),
+                float(self.build_ele.AxisU_Z.value),
+            )
+            axis_u = normalize_vector(axis_u)
+            if axis_u and axis_u.GetLength() > 1e-6:
+                return axis_u
+
+        if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+            self.build_ele, "PuntoFinal"
+        ):
+            p0 = getattr(self.build_ele.PuntoInicial, "value", None)
+            p1 = getattr(self.build_ele.PuntoFinal, "value", None)
+            if p0 is not None and p1 is not None:
+                direction = normalize_vector(vector_from_points(p0, p1))
+                if direction and direction.GetLength() > 1e-6:
+                    return direction
+
+        if self.face_normal and self.face_point:
+            try:
+                return self._get_individual_horizontal_axis_on_face()
+            except Exception:
+                pass
+        return None
+
+    def _apply_line_points_to_build_ele(
+        self, start: AllplanGeo.Point3D, end: AllplanGeo.Point3D
+    ) -> None:
+        """Actualiza paleta, line_result y SavedState con la linea indicada."""
+        if hasattr(self.build_ele, "PuntoInicial"):
+            self.build_ele.PuntoInicial.value = AllplanGeo.Point3D(
+                start.X, start.Y, start.Z
+            )
+        if hasattr(self.build_ele, "PuntoFinal"):
+            self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(
+                end.X, end.Y, end.Z
+            )
+        self.line_result.input_line = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(start.X, start.Y, start.Z),
+            AllplanGeo.Point3D(end.X, end.Y, end.Z),
+        )
+        if hasattr(self.build_ele, "LongitudLinea"):
+            try:
+                self.build_ele.LongitudLinea.value = vector_from_points(
+                    start, end
+                ).GetLength()
+            except Exception:
+                pass
+        if hasattr(self.build_ele, "SavedState"):
+            self._save_state_to_build_ele()
+
+    def _get_build_ele_insert_matrix(self) -> AllplanGeo.Matrix3D | None:
+        """Matriz que Allplan rellena al abrir MODIFY (geo_matrix / GetPlacementMatrix)."""
+        if not hasattr(self.build_ele, "get_insert_matrix"):
+            return None
+        try:
+            matrix = self.build_ele.get_insert_matrix()
+        except Exception:
+            return None
+        return matrix
+
+    def _matrix_translation_length(self, matrix: AllplanGeo.Matrix3D) -> float:
+        try:
+            translation = matrix.GetTranslationVector()
+            return float(translation.GetLength()) if translation else 0.0
+        except Exception:
+            return 0.0
+
+    def _sync_line_from_build_ele_insert_matrix(
+        self, min_displacement_mm: float = 1.0
+    ) -> bool:
+        """
+        Aplica el desplazamiento del PPG arrastrado usando insert_matrix del framework.
+
+        Al entrar en MODIFY, BuildingElementInput.prepare_script_data() calcula
+        insert_matrix desde GetPlacementMatrix. Los parametros PuntoInicial/Final y
+        SavedState siguen en la posicion de creacion hasta que se aplica aqui.
+        """
+        matrix = self._get_build_ele_insert_matrix()
+        if matrix is None:
+            print("[EDIT][SYNC] insert_matrix no disponible en build_ele")
+            return False
+
+        trans_len = self._matrix_translation_length(matrix)
+        print(
+            f"[EDIT][SYNC] insert_matrix traslacion={trans_len:.3f} mm "
+            f"(umbral={min_displacement_mm:.1f} mm)"
+        )
+        if trans_len < min_displacement_mm:
+            return False
+
+        old_start = (
+            getattr(self.build_ele.PuntoInicial, "value", None)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else None
+        )
+        old_end = (
+            getattr(self.build_ele.PuntoFinal, "value", None)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else None
+        )
+        if old_start is None or old_end is None:
+            return False
+
+        try:
+            new_start = AllplanGeo.Transform(old_start, matrix)
+            new_end = AllplanGeo.Transform(old_end, matrix)
+        except Exception as exc:
+            print(f"[EDIT][SYNC] Error aplicando insert_matrix: {exc}")
+            return False
+
+        displacement = min(
+            old_start.GetDistance(new_start), old_end.GetDistance(new_end)
+        )
+        if displacement < min_displacement_mm:
+            print(
+                f"[EDIT][SYNC] insert_matrix sin desplazamiento en puntos "
+                f"(delta={displacement:.3f} mm)"
+            )
+            return False
+
+        self._apply_line_points_to_build_ele(new_start, new_end)
+        try:
+            self.build_ele.set_insert_matrix(AllplanGeo.Matrix3D())
+        except Exception:
+            pass
+        print(
+            f"[EDIT][SYNC] Linea actualizada desde insert_matrix: "
+            f"{old_start} -> {new_start} | {old_end} -> {new_end}"
+        )
+        return True
+
+    def _is_inline_angular_edit_session(self) -> bool:
+        """Edicion de un PPG ya colocado via boton Seleccionar (sesion CREATE)."""
+        return bool(getattr(self, "_inline_selected_angular_active", False))
+
+    def _try_sync_drag_offset_for_modify(self) -> bool:
+        """Orden seguro: insert_matrix del framework; sin recorrer el arbol del PPG."""
+        if self._is_inline_angular_edit_session():
+            print(
+                "[EDIT][SYNC] Omitido en edicion inline (Seleccionar); "
+                "no usar insert_matrix de MODIFY"
+            )
+            return False
+        if self._sync_line_from_build_ele_insert_matrix():
+            return True
+        if not ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE:
+            return False
+        adapter = self._get_pyp_adapter_for_geometry_sync()
+        if adapter is None:
+            return False
+        try:
+            return self._sync_line_from_ppg_placement_matrix(adapter)
+        except Exception as exc:
+            print(f"[EDIT][SYNC] GetPlacementMatrix omitido: {exc}")
+            return False
+
+    def _sync_line_from_ppg_placement_matrix(
+        self, pyp_element, min_displacement_mm: float = 5.0
+    ) -> bool:
+        """
+        Allplan desplaza el PPG con GetPlacementMatrix al arrastrar; los parametros no se actualizan solos.
+        No usar en sesion inline (Seleccionar): provoca access violation.
+        """
+        if self._is_inline_angular_edit_session():
+            return False
+        placement_matrix = self._get_placement_matrix_from_pyp(pyp_element)
+        if placement_matrix is None:
+            return False
+
+        old_start = (
+            getattr(self.build_ele.PuntoInicial, "value", None)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else None
+        )
+        old_end = (
+            getattr(self.build_ele.PuntoFinal, "value", None)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else None
+        )
+        if old_start is None or old_end is None:
+            return False
+
+        try:
+            new_start = AllplanGeo.Transform(old_start, placement_matrix)
+            new_end = AllplanGeo.Transform(old_end, placement_matrix)
+        except Exception as exc:
+            print(
+                f"[SELECT][ANGULAR] Error aplicando placement matrix: {exc}"
+            )
+            return False
+
+        displacement = min(
+            old_start.GetDistance(new_start), old_end.GetDistance(new_end)
+        )
+        if displacement < min_displacement_mm:
+            print(
+                f"[SELECT][ANGULAR] Placement matrix sin desplazamiento relevante "
+                f"(delta={displacement:.2f} mm)"
+            )
+            return False
+
+        try:
+            translation = placement_matrix.GetTranslationVector()
+            trans_len = translation.GetLength() if translation else 0.0
+        except Exception:
+            trans_len = displacement
+
+        self._apply_line_points_to_build_ele(new_start, new_end)
+        print(
+            f"[SELECT][ANGULAR] Linea sincronizada desde placement matrix del PPG "
+            f"(traslacion={trans_len:.1f} mm, delta={displacement:.1f} mm): "
+            f"{new_start} -> {new_end}"
+        )
+        return True
+
+    def _bbox_dict_from_geometry_object(self, geo) -> dict | None:
+        """BBox de un objeto geometria (BRep, polyhedron, linea o lista)."""
+        if geo is None:
+            return None
+        if isinstance(geo, AllplanGeo.BRep3D):
+            return get_bounding_box_from_geometry(geo)
+        if isinstance(geo, AllplanGeo.Polyhedron3D):
+            try:
+                err, brep = AllplanGeo.CreateBRep3D(geo)
+                if err == AllplanGeo.eGeometryErrorCode.eOK and brep:
+                    return get_bounding_box_from_geometry(brep)
+            except Exception:
+                pass
+            return None
+        if isinstance(geo, AllplanGeo.Line3D):
+            return self._bbox_from_line3d(geo)
+        if isinstance(geo, (list, tuple)):
+            merged = None
+            for item in geo:
+                part = self._bbox_dict_from_geometry_object(item)
+                if not part:
+                    continue
+                if merged is None:
+                    merged = part
+                    continue
+                merged = {
+                    "min": AllplanGeo.Point3D(
+                        min(merged["min"].X, part["min"].X),
+                        min(merged["min"].Y, part["min"].Y),
+                        min(merged["min"].Z, part["min"].Z),
+                    ),
+                    "max": AllplanGeo.Point3D(
+                        max(merged["max"].X, part["max"].X),
+                        max(merged["max"].Y, part["max"].Y),
+                        max(merged["max"].Z, part["max"].Z),
+                    ),
+                }
+            if merged:
+                min_pt = merged["min"]
+                max_pt = merged["max"]
+                merged["center"] = AllplanGeo.Point3D(
+                    (min_pt.X + max_pt.X) / 2.0,
+                    (min_pt.Y + max_pt.Y) / 2.0,
+                    (min_pt.Z + max_pt.Z) / 2.0,
+                )
+                merged["width"] = abs(max_pt.X - min_pt.X)
+                merged["height"] = abs(max_pt.Y - min_pt.Y)
+                merged["depth"] = abs(max_pt.Z - min_pt.Z)
+            return merged
+        return None
+
+    def _get_minmax_bbox_from_root_only(self, root) -> dict | None:
+        """Un solo GetMinMaxBox sobre el PPG (adapter valido)."""
+        root = self._coerce_to_base_element_adapter(root)
+        if root is None:
+            return None
+        try:
+            elem_list = AllplanEleAdapter.BaseElementAdapterList([root])
+        except Exception as exc:
+            print(f"[SYNC][ANGULAR] BaseElementAdapterList(root): {exc}")
+            return None
+
+        minmax = None
+        for only_3d in (True, False):
+            try:
+                minmax = AllplanBaseElements.GetMinMaxBox(elem_list, 0.0, only_3d)
+                if minmax is not None:
+                    break
+            except TypeError:
+                try:
+                    minmax = AllplanBaseElements.GetMinMaxBox(elem_list)
+                    if minmax is not None:
+                        break
+                except Exception as exc:
+                    print(f"[SYNC][ANGULAR] GetMinMaxBox(root): {exc}")
+            except Exception as exc:
+                print(f"[SYNC][ANGULAR] GetMinMaxBox(root): {exc}")
+
+        if minmax is None:
+            return None
+
+        try:
+            min_pt = minmax.GetMin()
+            max_pt = minmax.GetMax()
+            center = minmax.GetCenter()
+        except Exception:
+            try:
+                min_pt, max_pt = minmax.Get()
+                center = AllplanGeo.Point3D(
+                    (min_pt.X + max_pt.X) / 2.0,
+                    (min_pt.Y + max_pt.Y) / 2.0,
+                    (min_pt.Z + max_pt.Z) / 2.0,
+                )
+            except Exception:
+                return None
+
+        print(
+            f"[SYNC][ANGULAR] GetMinMaxBox(root) OK: "
+            f"center=({center.X:.1f},{center.Y:.1f},{center.Z:.1f})"
+        )
+        return {
+            "min": min_pt,
+            "max": max_pt,
+            "center": center,
+            "width": abs(max_pt.X - min_pt.X),
+            "height": abs(max_pt.Y - min_pt.Y),
+            "depth": abs(max_pt.Z - min_pt.Z),
+        }
+
+    def _collect_shallow_geometry_adapters(
+        self, root, max_depth: int = 2, max_adapters: int = 48
+    ) -> list:
+        """PPG + descendientes limitados (sin GetChildModelElementsFromTree)."""
+        if root is None:
+            return []
+
+        output: list = [root]
+        seen: set[str] = set()
+
+        def _remember(adapter) -> None:
+            if len(output) >= max_adapters:
+                return
+            coerced = self._coerce_to_base_element_adapter(adapter)
+            if coerced is None:
+                return
+            try:
+                key = str(coerced.GetNOIGUID())
+            except Exception:
+                key = str(id(coerced))
+            if key in seen:
+                return
+            seen.add(key)
+            output.append(coerced)
+
+        queue: list[tuple] = [(root, 0)]
+        while queue:
+            current, depth = queue.pop(0)
+            if depth >= max_depth:
+                continue
+            try:
+                children = (
+                    AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
+                        current, True
+                    )
+                )
+            except Exception:
+                continue
+            if not children:
+                continue
+            for child in list(children)[:24]:
+                coerced = self._coerce_to_base_element_adapter(child)
+                if coerced is None:
+                    continue
+                _remember(coerced)
+                if depth + 1 < max_depth:
+                    queue.append((coerced, depth + 1))
+
+        return output
+
+    def _get_largest_bbox_from_pyp_hierarchy(self, pyp_element) -> dict | None:
+        """
+        Lee la posicion real tras arrastrar: BRep de hijos directos del PPG.
+        Evita GetMinMaxBox y recorridos profundos (inestables en MODIFY).
+        """
+        root = self._coerce_to_base_element_adapter(pyp_element)
+        if root is None:
+            root = self._get_pyp_adapter_for_geometry_sync()
+        if root is None:
+            return None
+
+        candidates = self._collect_shallow_geometry_adapters(root, max_depth=4)
+        print(
+            f"[SYNC][ANGULAR] Escaneando {len(candidates)} adapters "
+            f"(geometria, max 4 niveles)"
+        )
+
+        best_bbox = None
+        best_size = 0.0
+        for adapter in candidates:
+            try:
+                if adapter.IsNull():
+                    continue
+            except Exception:
+                pass
+            geo = self._geometry_from_adapter_element(adapter)
+            geo_type = type(geo).__name__ if geo is not None else "None"
+            bbox = self._bbox_dict_from_geometry_object(geo)
+            if not bbox:
+                try:
+                    type_name = str(adapter.GetElementAdapterType().GetGuid())
+                except Exception:
+                    type_name = "?"
+                print(
+                    f"[SYNC][ANGULAR]   sin bbox: geo={geo_type} type={type_name[:8]}..."
+                )
+                continue
+            size = float(bbox["width"] * bbox["height"] * bbox["depth"])
+            if size > best_size:
+                best_size = size
+                best_bbox = bbox
+                print(
+                    f"[SYNC][ANGULAR]   candidato: geo={geo_type} "
+                    f"center=({bbox['center'].X:.1f},{bbox['center'].Y:.1f},"
+                    f"{bbox['center'].Z:.1f}) vol~{size:.0f}"
+                )
+
+        if best_bbox:
+            center = best_bbox["center"]
+            print(
+                f"[SYNC][ANGULAR] Solido mayor encontrado: "
+                f"center=({center.X:.1f},{center.Y:.1f},{center.Z:.1f}) "
+                f"vol~{best_size:.0f}"
+            )
+        return best_bbox
+
+    def _sync_line_from_ppg_model_geometry(
+        self, pyp_element, min_displacement_mm: float = 5.0
+    ) -> bool:
+        """
+        Tras mover el PPG en el dibujo, intenta alinear PuntoInicial/PuntoFinal.
+
+        Por defecto solo usa GetPlacementMatrix en el adapter raiz del PPG.
+        El recorrido de hijos, GetMinMaxBox y getters de geometria provocan
+        access violation (C0000005) al entrar en MODIFY en Allplan 2025.
+        """
+        if not ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE:
+            return False
+
+        try:
+            root = self._coerce_to_base_element_adapter(pyp_element)
+            if not self._is_valid_sync_adapter(root):
+                root = self._get_pyp_adapter_for_geometry_sync()
+            if not self._is_valid_sync_adapter(root):
+                print(
+                    "[SYNC][ANGULAR] Sin adapter PPG valido; se omiten APIs de modelo"
+                )
+                return False
+
+            print(
+                "[SYNC][ANGULAR] Sincronizando (solo placement matrix del PPG raiz)..."
+            )
+
+            if self._sync_line_from_ppg_placement_matrix(
+                root, min_displacement_mm=min_displacement_mm
+            ):
+                return True
+
+            if not ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ:
+                print(
+                    "[SYNC][ANGULAR] Placement sin desplazamiento; "
+                    "lectura profunda desactivada (evita crash MODIFY)"
+                )
+                return False
+
+            if self._sync_line_from_child_pythonpart_params(
+                root, min_displacement_mm=min_displacement_mm
+            ):
+                return True
+
+            minmax_bbox = self._get_minmax_bbox_from_root_only(root)
+            if minmax_bbox and self._sync_line_from_bbox_dict(
+                minmax_bbox, min_displacement_mm=min_displacement_mm
+            ):
+                return True
+
+            bbox = self._get_largest_bbox_from_pyp_hierarchy(root)
+            if bbox and self._sync_line_from_bbox_dict(
+                bbox, min_displacement_mm=min_displacement_mm
+            ):
+                return True
+
+            print("[SYNC][ANGULAR] No se pudo leer posicion desplazada del PPG")
+            return False
+        except Exception as exc:
+            print(f"[SYNC][ANGULAR] Error no fatal en sincronizacion: {exc}")
+            import traceback
+
+            traceback.print_exc()
+            return False
+
     def _distance_point_to_segment(self, point, start, end) -> float:
         """Distancia 3D de un punto a un segmento."""
         if point is None or start is None or end is None:
@@ -6272,15 +7436,22 @@ class AngularLineScript(BaseScriptObject):
             self._palette_distribution_user_override = False
             self.is_free_mode = False
 
-            self._reload_face_context_from_build_ele()
+            try:
+                self.build_ele.set_insert_matrix(AllplanGeo.Matrix3D())
+            except Exception:
+                pass
+
+            self._apply_face_context_from_build_ele_only()
+            self._ensure_line_result_from_build_ele_for_modify()
             self._sync_line_from_build_ele_points()
             if result.record_index is not None:
                 self._sync_angular_record_geometry_from_line(result.record_index)
 
             self._refresh_inline_execute_cache()
+            self._draw_inline_selected_angular_preview()
             print(
-                "[SELECT][ANGULAR] PPG en edicion: modifique paleta o handles; "
-                "Deseleccionar para seguir colocando"
+                "[SELECT][ANGULAR] Parametros cargados en paleta; edicion inline "
+                "(cambie propiedades o handles; Deseleccionar para seguir colocando)"
             )
             return True
 
@@ -6312,31 +7483,8 @@ class AngularLineScript(BaseScriptObject):
         self._leave_individual_angular_edit_mode()
 
     def _reload_face_context_from_build_ele(self) -> None:
-        """Cara/muro desde build_ele (ya cargado del PPG seleccionado)."""
-        if (
-            hasattr(self.build_ele, "CaraNormalX")
-            and hasattr(self.build_ele, "CaraNormalY")
-            and hasattr(self.build_ele, "CaraNormalZ")
-        ):
-            normal = AllplanGeo.Vector3D(
-                self.build_ele.CaraNormalX.value,
-                self.build_ele.CaraNormalY.value,
-                self.build_ele.CaraNormalZ.value,
-            )
-            self.face_normal = normalize_vector(normal) or normal
-        if (
-            hasattr(self.build_ele, "PuntoClicX")
-            and hasattr(self.build_ele, "PuntoClicY")
-            and hasattr(self.build_ele, "PuntoClicZ")
-        ):
-            self.face_point = AllplanGeo.Point3D(
-                self.build_ele.PuntoClicX.value,
-                self.build_ele.PuntoClicY.value,
-                self.build_ele.PuntoClicZ.value,
-            )
-        self.face_polygon = None
-        self.face_local_system = None
-        self._load_face_info_from_properties()
+        """Cara/muro desde parametros del PPG (sin escanear geometria del muro)."""
+        self._apply_face_context_from_build_ele_only()
 
     def _sync_line_from_build_ele_points(self) -> bool:
         """line_result desde PuntoInicial/PuntoFinal de la paleta (posicion real del PPG)."""
@@ -6404,6 +7552,11 @@ class AngularLineScript(BaseScriptObject):
             self.is_modification_mode = True
             self.state = STOPPED
             self._reload_face_context_from_build_ele()
+
+            try:
+                self.build_ele.set_insert_matrix(AllplanGeo.Matrix3D())
+            except Exception:
+                pass
 
             print("[SELECT][ANGULAR] Aplicando cambios al PPG en el dibujo...")
             result = self._execute_modify()
@@ -8213,6 +9366,11 @@ class AngularLineScript(BaseScriptObject):
         """Lógica completa de EDICIÓN: lee TODO desde build_ele, NO detecta muro, NO recalcula PMP_PARE, hash estable."""
         print("[EDIT] Iniciando edición...")
         print("========== EXECUTE MODIFY ==========")
+        self._apply_face_context_from_build_ele_only()
+        self._ensure_line_result_from_build_ele_for_modify()
+
+        # Tras arrastre nativo: parametros y SavedState quedan en creacion; insert_matrix trae el delta.
+        self._try_sync_drag_offset_for_modify()
 
         # 1Solo usar SavedState si faltan puntos (para no pisar cambios del usuario).
         print(
@@ -8309,7 +9467,7 @@ class AngularLineScript(BaseScriptObject):
 
         if self._is_individual_distribution():
             if not (self.face_normal and self.face_point):
-                self._load_face_info_from_properties()
+                self._apply_face_context_from_build_ele_only()
 
             current_line = AllplanGeo.Line3D(start_point, end_point)
             center = AllplanGeo.Point3D(
@@ -8338,15 +9496,22 @@ class AngularLineScript(BaseScriptObject):
                 x_dir = self._get_individual_horizontal_axis_on_face()
 
             if piece_length > 0 and x_dir and x_dir.GetLength() > 1e-6:
-                current_line = AllplanGeo.Line3D(
-                    move_point(center, x_dir, -piece_length / 2.0),
-                    move_point(center, x_dir, piece_length / 2.0),
-                )
-                print(
-                    "[EDIT][INDIVIDUAL] Linea normalizada al tipo "
-                    f"{tipo_angular_key}: centro=({center.X:.3f}, {center.Y:.3f}, {center.Z:.3f}) "
-                    f"len={piece_length:.3f}"
-                )
+                span = vector_from_points(start_point, end_point).GetLength()
+                if span < piece_length * 0.5:
+                    current_line = AllplanGeo.Line3D(
+                        move_point(center, x_dir, -piece_length / 2.0),
+                        move_point(center, x_dir, piece_length / 2.0),
+                    )
+                    print(
+                        "[EDIT][INDIVIDUAL] Linea normalizada al tipo "
+                        f"{tipo_angular_key}: centro=({center.X:.3f}, {center.Y:.3f}, {center.Z:.3f}) "
+                        f"len={piece_length:.3f}"
+                    )
+                else:
+                    print(
+                        "[EDIT][INDIVIDUAL] Se conserva linea de parametros "
+                        f"(span={span:.1f} mm, tipo={piece_length:.1f} mm)"
+                    )
 
             # EDICIÓN: no reproyectar sobre la cara; PuntoInicial/PuntoFinal vienen del PPG/SavedState.
             # (Nunca partir la llamada _project_line_to_individual_vertical_face(current_line) en dos líneas:
