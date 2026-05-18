@@ -26,7 +26,7 @@ from HandleParameterData import HandleParameterData
 from HandleParameterType import HandleParameterType
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
 from PythonPartUtil import PythonPartUtil
-from PythonPartTransaction import ConnectToElements, PythonPartTransaction
+from PythonPartTransaction import ConnectToElements
 from ScriptObjectInteractors.BaseScriptObjectInteractor import BaseScriptObjectInteractor
 from ScriptObjectInteractors.LineInteractor import LineInteractor, LineInteractorResult
 from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResult
@@ -2491,91 +2491,6 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.script_object_interactor = None
             neo_log("start_next_input: linea procesada, fallback execute/framework")
 
-    def _prepare_next_create_interactor(self):
-        """Prepara la siguiente colocacion sin depender del multi_placement del framework."""
-        neo_log("_prepare_next_create_interactor: reiniciando ciclo de creacion")
-
-        self.line_result = LineInteractorResult()
-        self.wall_select_result = WallSelectResult()
-        self.face_select_result = SolidFaceSelectResult()
-        self.handles = []
-
-        self.solid_info = None
-        self.detected_wall = None
-        self.detected_wall_guid = None
-        self.wall_ifc_id = None
-        self.parent_element = None
-        self.face_point = None
-        self.face_normal = None
-        self.face_polygon = None
-        self.ref_face_element = None
-        self.ref_face_polygon = None
-        self.elements = []
-
-        if hasattr(self.build_ele, "z_unique") and hasattr(self.build_ele.z_unique, "value"):
-            self.build_ele.z_unique.value = 0.0
-        if hasattr(self.build_ele, "PythonPartUUID") and hasattr(self.build_ele.PythonPartUUID, "value"):
-            self.build_ele.PythonPartUUID.value = ""
-        if hasattr(self.build_ele, "SavedState") and hasattr(self.build_ele.SavedState, "value"):
-            self.build_ele.SavedState.value = ""
-
-        self.is_free_mode = self._get_free_mode()
-        if hasattr(self.build_ele, 'neopreno_libre'):
-            self.build_ele.neopreno_libre.value = bool(self.is_free_mode)
-
-        if self.is_free_mode:
-            self.interactor_state = SELECTING_WALL
-            self.wall_select_result = WallSelectResult()
-            self.script_object_interactor = WallSelectInteractor(
-                self.wall_select_result,
-                "Seleccione el muro",
-                script_object=self
-            )
-            neo_log("_prepare_next_create_interactor: siguiente input=muro")
-        else:
-            self.interactor_state = SELECTING_SOLID
-            self.face_select_result = SolidFaceSelectResult()
-            self.script_object_interactor = SolidFaceSelectInteractor(
-                self.face_select_result,
-            )
-            neo_log("_prepare_next_create_interactor: siguiente input=solido/cara")
-
-    def _create_current_neopreno_directly(self) -> bool:
-        """Crea el neopreno actual y mantiene vivo el flujo de entrada."""
-        neo_log("_create_current_neopreno_directly: inicio")
-        try:
-            result = self._execute_create()
-            if not result or not result.elements:
-                neo_log("_create_current_neopreno_directly: resultado vacio")
-                return False
-
-            transaction = PythonPartTransaction(
-                self.document,
-                connect_to_ele=result.connect_to_ele
-            )
-            created = transaction.execute(
-                AllplanGeo.Matrix3D(),
-                self.coord_input.GetViewWorldProjection(),
-                result.elements,
-                self.modification_ele_list,
-                result.reinf_rearrange,
-                True,
-                None,
-                uuid_parameter_name=result.uuid_parameter_name,
-                elements_to_delete=result.elements_to_delete
-            )
-            neo_log(
-                "_create_current_neopreno_directly: creado "
-                f"result_elements={len(result.elements)} "
-                f"created={len(created) if created else 0}"
-            )
-            return True
-        except Exception as e:
-            import traceback
-            neo_log(f"_create_current_neopreno_directly: EXCEPTION {e}")
-            traceback.print_exc()
-            return False
-
     def _process_wall_selection(self):
         element_guid_str = self.wall_select_result.element_guid
         selected_element = self.wall_select_result.element
@@ -3312,18 +3227,9 @@ class NeoprenosScriptObject(BaseScriptObject):
             return CreateElementResult([])
 
         self._save_state_to_build_ele()
-        if not self._pending_create_edit:
-            try:
-                from DocumentManager import DocumentManager
-                doc_manager = DocumentManager.get_instance()
-                was_pyp_null = doc_manager.pythonpart_element.IsNull()
-                doc_manager.clear_pythonpart_element()
-                neo_log(f"_execute_create: DocumentManager.pythonpart_element cleared was_null={was_pyp_null}")
-            except Exception as e:
-                neo_log(f"_execute_create: no se pudo limpiar DocumentManager.pythonpart_element: {e}")
 
         return_handles = handles if self._pending_create_edit else []
-        return_multi_placement = not self._pending_create_edit
+        return_multi_placement = True
         neo_log(
             "_execute_create: return "
             f"model_elems={len(model_elem_list)} "
@@ -3573,7 +3479,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
             uuid_parameter_name="PythonPartUUID",
-            multi_placement=False
+            multi_placement=True
         )
 
     def move_handle(self,
@@ -3866,107 +3772,24 @@ class NeoprenosScriptObject(BaseScriptObject):
         return pythonparts_list
 
     def on_cancel_function(self) -> OnCancelFunctionResult:
-        if not self.line_result or not self.line_result.input_line:
-            return OnCancelFunctionResult.CANCEL_INPUT
+        if hasattr(self.build_ele, "IsModify"):
+            is_modify = self.build_ele.IsModify()
+        else:
+            is_modify = getattr(self, "is_modification_mode", False)
 
-        try:
+        if is_modify:
+            self.interactor_state = STOPPED
+            self.script_object_interactor = None
+            return OnCancelFunctionResult.CREATE_ELEMENTS
 
-            wall_pare = None
-            if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, "value") and self.build_ele.pmp_pare.value:
-                wall_pare = self.build_ele.pmp_pare.value
-            else:
-                if self.detected_wall:
-                    try:
-                        wall_pare = get_wall_ifc_id(self.detected_wall)
-                    except Exception:
-                        pass
-                if not wall_pare and getattr(self, "wall_ifc_id", None):
-                    wall_pare = self.wall_ifc_id
-                if not wall_pare:
-                    wall_pare = "MURO_NO_DEFINIDO"
-                if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, "value"):
-                    try:
-                        self.build_ele.pmp_pare.value = wall_pare
-                    except Exception:
-                        pass
+        if self.line_result and self.line_result.input_line:
+            self._pending_create_edit = False
+            self.interactor_state = STOPPED
+            self.script_object_interactor = None
+            return OnCancelFunctionResult.CREATE_ELEMENTS
 
-            self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, "pmp_pare")
-            self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, "PMP_WALL_ID")
-
-            elements = self._create_neopreno_elements(pmp_pare=wall_pare)
-
-            if not elements:
-                return OnCancelFunctionResult.CANCEL_INPUT
-
-            individual_pythonparts = self.create_individual_pythonparts_from_elements(elements, pmp_pare=wall_pare)
-
-            if not individual_pythonparts:
-                return OnCancelFunctionResult.CANCEL_INPUT
-
-            start_point = self.line_result.input_line.StartPoint
-            end_point = self.line_result.input_line.EndPoint
-            ancho = get_neopreno_width(self.build_ele) if hasattr(self.build_ele, "Ancho") else 50.0
-            grosor = get_selected_thickness(self.build_ele) if hasattr(self.build_ele, "GrosorSeleccionado") else 5.0
-            libre = getattr(self, "is_free_mode", True)
-            rot = 0.0
-            if hasattr(self.build_ele, "RotacionManual"):
-                rv = getattr(self.build_ele.RotacionManual, "value", None)
-                if rv is not None:
-                    rot = rv.GetDeg() if hasattr(rv, "GetDeg") else float(rv)
-            invertido = False
-            if hasattr(self.build_ele, "InvertirGrosor"):
-                val = getattr(self.build_ele.InvertirGrosor, "value", None)
-                if val is not None:
-                    invertido = bool(val) if isinstance(val, bool) else str(val).lower() in ("true", "1", "yes")
-            saved_state_str = self._serialize_state_to_json() if hasattr(self, "_serialize_state_to_json") else ""
-            z_unique = 0.0
-            if hasattr(self.build_ele, "z_unique") and hasattr(self.build_ele.z_unique, "value"):
-                try:
-                    z_unique = float(self.build_ele.z_unique.value)
-                except (ValueError, TypeError):
-                    z_unique = 0.0
-
-            global_params = {
-                "z_unique": z_unique,
-                "pmp_pare": wall_pare,
-                "TotalElements": len(elements),
-                "PuntoInicial": start_point,
-                "PuntoFinal": end_point,
-                "Ancho": ancho,
-                "Grosor": grosor,
-                "Libre": libre,
-                "RotacionManual": rot,
-                "InvertirGrosor": invertido,
-                "SavedState": saved_state_str if saved_state_str else ""
-            }
-
-            group_hash = create_element_hash('neopreno_group', stable=False)
-
-            param_list = create_params_list_from_dict(global_params)
-
-            python_file_name = self.build_ele.pyp_file_name if hasattr(self.build_ele, 'pyp_file_name') else ""
-
-            pythonpart_group = PythonPartGroup(
-                "Neoprenos",
-                param_list,
-                group_hash,
-                python_file_name,
-                individual_pythonparts
-            )
-
-            model_elem_list = pythonpart_group.create()
-
-            if model_elem_list and len(model_elem_list) > 0:
-                AllplanBaseElements.CreateElements(
-                    self.document,
-                    AllplanGeo.Matrix3D(),
-                    model_elem_list,
-                    [],
-                    None
-                )
-
-        except Exception as e:
-            import traceback
-            return OnCancelFunctionResult.CANCEL_INPUT
+        if self._pending_create_edit:
+            self._pending_create_edit = False
+            return OnCancelFunctionResult.CREATE_ELEMENTS
 
         return OnCancelFunctionResult.CANCEL_INPUT
