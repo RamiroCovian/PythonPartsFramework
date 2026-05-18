@@ -326,7 +326,7 @@
             <TextId>e_NEO_PP_336</TextId>
             <Value>50</Value>
             <ValueType>Length</ValueType>
-            <Enable>False</Enable>
+            <Enable>True</Enable>
         </Parameter>
 
         <Parameter>

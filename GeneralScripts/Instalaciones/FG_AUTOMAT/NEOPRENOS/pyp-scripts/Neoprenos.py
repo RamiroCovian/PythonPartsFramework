@@ -1589,6 +1589,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._restored_from_saved_state = False
         self.is_free_mode = self._get_free_mode()
         self.needs_auto_update = False
+        self._pending_create_edit = False
 
         if hasattr(self.build_ele, "SavedState"):
             ss = getattr(self.build_ele.SavedState, "value", None)
@@ -2477,9 +2478,11 @@ class NeoprenosScriptObject(BaseScriptObject):
                     self._saved_coord_input = self.script_object_interactor.coord_input
                 self._process_line_input()
                 if not self.is_editing_existing:
-                    if self._create_current_neopreno_directly():
-                        self._prepare_next_create_interactor()
-                        return
+                    self._pending_create_edit = True
+                    self.interactor_state = STOPPED
+                    self.script_object_interactor = None
+                    neo_log("start_next_input: neopreno pendiente para ajuste de propiedades")
+                    return
             else:
                 neo_log("start_next_input: SELECTING_LINE sin input_line")
 
@@ -2915,8 +2918,18 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def modify_element_property(self, name: str, _value: Any) -> bool:
         """Maneja cambios en propiedades del elemento."""
+        editable_config_changed = name in (
+            'Ancho',
+            'GrosorSeleccionado',
+            'InvertirGrosor',
+            'RotacionManual',
+        )
+
         if name == 'GrosorSeleccionado':
             update_color_for_thickness(self.build_ele)
+
+        if name == 'Ancho':
+            get_neopreno_width(self.build_ele)
 
         if name == 'neopreno_libre':
             if self.script_object_interactor and hasattr(self.script_object_interactor, 'coord_input'):
@@ -2929,11 +2942,24 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         if name in ('InvertirGrosor', 'RotacionManual'):
             if self.line_result and self.line_result.input_line:
-                if self.is_editing_existing:
+                if self._pending_create_edit:
+                    return False
+                elif self.is_editing_existing:
                     return False
                 elif self.interactor_state == SELECTING_LINE:
                     if self.script_object_interactor and hasattr(self.script_object_interactor, 'preview_function'):
                         self.draw_neopreno_preview(self.line_result.input_line)
+
+        if self._pending_create_edit and editable_config_changed:
+            self.is_free_mode = self._get_free_mode()
+            self._save_state_to_build_ele()
+            return False
+
+        if self.is_editing_existing and editable_config_changed:
+            self.is_free_mode = self._get_free_mode()
+            if self.line_result and self.line_result.input_line:
+                self._save_state_to_build_ele()
+            return False
 
         if self.is_editing_existing:
             return False
@@ -3286,28 +3312,33 @@ class NeoprenosScriptObject(BaseScriptObject):
             return CreateElementResult([])
 
         self._save_state_to_build_ele()
-        try:
-            from DocumentManager import DocumentManager
-            doc_manager = DocumentManager.get_instance()
-            was_pyp_null = doc_manager.pythonpart_element.IsNull()
-            doc_manager.clear_pythonpart_element()
-            neo_log(f"_execute_create: DocumentManager.pythonpart_element cleared was_null={was_pyp_null}")
-        except Exception as e:
-            neo_log(f"_execute_create: no se pudo limpiar DocumentManager.pythonpart_element: {e}")
+        if not self._pending_create_edit:
+            try:
+                from DocumentManager import DocumentManager
+                doc_manager = DocumentManager.get_instance()
+                was_pyp_null = doc_manager.pythonpart_element.IsNull()
+                doc_manager.clear_pythonpart_element()
+                neo_log(f"_execute_create: DocumentManager.pythonpart_element cleared was_null={was_pyp_null}")
+            except Exception as e:
+                neo_log(f"_execute_create: no se pudo limpiar DocumentManager.pythonpart_element: {e}")
+
+        return_handles = handles if self._pending_create_edit else []
+        return_multi_placement = not self._pending_create_edit
         neo_log(
             "_execute_create: return "
             f"model_elems={len(model_elem_list)} "
             f"connect={len(connect_to_ele.connection_elements)} "
-            "handles=0 multi_placement=True"
+            f"handles={len(return_handles)} "
+            f"multi_placement={return_multi_placement}"
         )
 
         return CreateElementResult(
             elements=model_elem_list,
-            handles=[],
+            handles=return_handles,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
             connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
-            multi_placement=True
+            multi_placement=return_multi_placement
         )
 
     def _execute_modify(self) -> CreateElementResult:
@@ -3326,34 +3357,23 @@ class NeoprenosScriptObject(BaseScriptObject):
         state = parse_saved_state(saved_state_str) if saved_state_str else {}
         p0_restored = saved_state_to_point3d(state, "p0")
         p1_restored = saved_state_to_point3d(state, "p1")
+        current_start = None
+        current_end = None
+        if hasattr(self.build_ele, 'PuntoInicial') and hasattr(self.build_ele, 'PuntoFinal'):
+            current_start = self.build_ele.PuntoInicial.value
+            current_end = self.build_ele.PuntoFinal.value
 
         if p0_restored is not None and p1_restored is not None:
-            start_point = p0_restored
-            end_point = p1_restored
+            start_point = current_start if current_start is not None else p0_restored
+            end_point = current_end if current_end is not None else p1_restored
             wall_pare = (state.get("pmp_pare") or "").strip() or "SIN_PARE"
-            ancho = state.get("ancho")
-            if ancho is None:
-                ancho = get_neopreno_width(self.build_ele) if hasattr(self.build_ele, "Ancho") else 50.0
-            else:
-                try:
-                    ancho = float(ancho)
-                except (TypeError, ValueError):
-                    ancho = 50.0
-            grosor = state.get("grosor")
-            if grosor is None:
-                grosor = get_selected_thickness(self.build_ele) if hasattr(self.build_ele, "GrosorSeleccionado") else 5.0
-            else:
-                try:
-                    grosor = float(grosor)
-                except (TypeError, ValueError):
-                    grosor = 5.0
-            libre = state.get("libre", True)
-            if not isinstance(libre, bool):
-                libre = bool(libre) if libre is not None else True
+            ancho = get_neopreno_width(self.build_ele) if hasattr(self.build_ele, "Ancho") else 50.0
+            grosor = get_selected_thickness(self.build_ele) if hasattr(self.build_ele, "GrosorSeleccionado") else 5.0
+            libre = self._get_free_mode()
         else:
-            if hasattr(self.build_ele, 'PuntoInicial') and hasattr(self.build_ele, 'PuntoFinal'):
-                start_point = self.build_ele.PuntoInicial.value
-                end_point = self.build_ele.PuntoFinal.value
+            if current_start is not None and current_end is not None:
+                start_point = current_start
+                end_point = current_end
             else:
                 return CreateElementResult(self.elements if hasattr(self, 'elements') and self.elements else [],
                                          self.handles if hasattr(self, 'handles') else [])
@@ -3366,7 +3386,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 ancho = get_neopreno_width(self.build_ele)
             if hasattr(self.build_ele, 'GrosorSeleccionado'):
                 grosor = get_selected_thickness(self.build_ele)
-            libre = getattr(self, "is_free_mode", True)
+            libre = self._get_free_mode()
 
 
         existing_group_hash = None
@@ -3449,7 +3469,9 @@ class NeoprenosScriptObject(BaseScriptObject):
             val = getattr(self.build_ele.InvertirGrosor, "value", None)
             if val is not None:
                 invertido = bool(val) if isinstance(val, bool) else str(val).lower() in ("true", "1", "yes")
-        saved_state_str = self._serialize_state_to_json() if self._restored_from_saved_state else (getattr(self.build_ele.SavedState, "value", None) or "") if hasattr(self.build_ele, "SavedState") else ""
+        saved_state_str = self._serialize_state_to_json()
+        if saved_state_str and hasattr(self.build_ele, "SavedState") and hasattr(self.build_ele.SavedState, "value"):
+            self.build_ele.SavedState.value = saved_state_str
 
         global_params = {
             "z_unique": z_unique,
