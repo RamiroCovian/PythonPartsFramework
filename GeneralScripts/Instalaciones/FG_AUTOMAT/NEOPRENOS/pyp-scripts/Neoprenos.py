@@ -4219,6 +4219,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         attr_wall_id = self.attr_pmp_wall_id
         if attr_id > 0 and pmp_pare:
             attr_list.add_attribute(attr_id, pmp_pare)
+        if attr_wall_id > 0 and pmp_pare:
             attr_list.add_attribute(attr_wall_id, pmp_pare)
 
         elements = []
@@ -4282,6 +4283,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 wall_pare = pmp_pare if pmp_pare else ""
                 if wall_pare and attr_pmp_id > 0:
                     attr_list.add_attribute(attr_pmp_id, wall_pare)
+                if wall_pare and attr_wall_name_id > 0:
                     attr_list.add_attribute(attr_wall_name_id, wall_pare)
 
                 attribute_list = attr_list.get_attribute_list()
@@ -4297,8 +4299,42 @@ class NeoprenosScriptObject(BaseScriptObject):
                     "Stroke": common_props.Stroke,
                 }
 
+                line = self.line_result.input_line if self.line_result and self.line_result.input_line else None
+                if line:
+                    params.update({
+                        "StartX": line.StartPoint.X,
+                        "StartY": line.StartPoint.Y,
+                        "StartZ": line.StartPoint.Z,
+                        "EndX": line.EndPoint.X,
+                        "EndY": line.EndPoint.Y,
+                        "EndZ": line.EndPoint.Z,
+                    })
+
+                params["Ancho"] = get_neopreno_width(self.build_ele) if hasattr(self.build_ele, "Ancho") else 50.0
+                params["Grosor"] = get_selected_thickness(self.build_ele) if hasattr(self.build_ele, "GrosorSeleccionado") else 5.0
+                params["FreeMode"] = bool(getattr(self, "is_free_mode", False))
+
+                rot = 0.0
+                if hasattr(self.build_ele, "RotacionManual"):
+                    rot_val = getattr(self.build_ele.RotacionManual, "value", None)
+                    if rot_val is not None:
+                        rot = rot_val.GetDeg() if hasattr(rot_val, "GetDeg") else float(rot_val)
+                params["RotacionManual"] = rot
+
+                invertido = False
+                if hasattr(self.build_ele, "InvertirGrosor"):
+                    val = getattr(self.build_ele.InvertirGrosor, "value", None)
+                    if val is not None:
+                        invertido = bool(val) if isinstance(val, bool) else str(val).lower() in ("true", "1", "yes")
+                params["InvertirGrosor"] = invertido
+
+                hash_params = {
+                    key: round(float(value), 6) if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+                    for key, value in params.items()
+                }
+
                 hash_value = create_element_hash(
-                    "neopreno_element", stable=is_modify, Index=idx
+                    "neopreno_element", stable=is_modify, **hash_params
                 )
 
                 param_list = create_params_list_from_dict(params)
