@@ -33,7 +33,7 @@ from ScriptObjectInteractors.BaseScriptObjectInteractor import (
 from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResult
 from TypeCollections.ModelEleList import ModelEleList
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
-from PythonPartTransaction import ConnectToElements
+from PythonPartTransaction import ConnectToElements, PythonPartTransaction
 from HandleProperties import HandleProperties
 from HandlePropertiesService import HandlePropertiesService
 from HandleParameterData import HandleParameterData
@@ -48,7 +48,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "1.2.13-sin-handles-individual"
+ANGULARES_SCRIPT_VERSION = "1.2.14-individual-sin-esc"
 
 # Parámetros del .pyp que deben viajar en SavedState y en param_list del grupo para que EDIT
 # no pierda muro/cara/ejes (si no, la geometría se recalcula con contexto incompleto).
@@ -4966,7 +4966,20 @@ class AngularLineScript(BaseScriptObject):
             print(
                 "[INPUT][INDIVIDUAL] Posicion seleccionada; construyendo linea interna"
             )
+            coord_input = getattr(self.script_object_interactor, "coord_input", None)
             self._process_position_input()
+
+            if self._is_individual_distribution() and not self.is_modification_mode:
+                if self._materialize_current_individual_angular(coord_input):
+                    self.line_result = LineInteractorResult()
+                    self.position_result = PointInteractorResult()
+                    self.preview_active = False
+                    self.state = SELECTING_POSITION
+                    self._start_position_input()
+                    if coord_input:
+                        self.script_object_interactor.start_input(coord_input)
+                    return
+
             self.script_object_interactor = None
             self.preview_active = True
 
@@ -5411,6 +5424,53 @@ class AngularLineScript(BaseScriptObject):
 
         self.line_result.input_line = line
         self._process_line_input(apply_incremental_growth=False)
+
+    def _materialize_current_individual_angular(self, coord_input=None) -> bool:
+        """Crea el PPG individual inmediatamente y deja la ejecucion lista para otro click."""
+        if getattr(self, "is_modification_mode", False):
+            return False
+        if not self._is_individual_distribution():
+            return False
+        if not self.line_result.input_line:
+            return False
+
+        try:
+            result = self._execute_create()
+            if not result or not result.elements:
+                print("[INPUT][INDIVIDUAL] No se materializo: resultado vacio")
+                return False
+
+            if coord_input:
+                view_world_projection = coord_input.GetViewWorldProjection()
+            else:
+                view_world_projection = AllplanIFW.ViewWorldProjection()
+
+            transaction = PythonPartTransaction(
+                self.document,
+                connect_to_ele=result.connect_to_ele,
+            )
+            created_elements = transaction.execute(
+                placement_matrix=AllplanGeo.Matrix3D(),
+                view_world_projection=view_world_projection,
+                model_ele_list=result.elements,
+                modification_ele_list=getattr(self, "modification_ele_list", []),
+                rearrange_reinf_pos_nr=result.reinf_rearrange,
+                append_reinf_pos_nr=True,
+                asso_ref_object=None,
+                uuid_parameter_name=result.uuid_parameter_name,
+                elements_to_delete=result.elements_to_delete,
+            )
+            print(
+                f"[INPUT][INDIVIDUAL] Angular creado y fijado: {len(created_elements)} elementos"
+            )
+            return True
+
+        except Exception as exc:
+            print(f"[INPUT][INDIVIDUAL] Error creando angular inmediato: {exc}")
+            import traceback
+
+            traceback.print_exc()
+            return False
 
     def _restart_interactor_for_current_distribution(self) -> bool:
         """Reinicia el primer input cuando cambia el tipo de distribución."""
@@ -7437,4 +7497,7 @@ class AngularLineScript(BaseScriptObject):
             is_m = getattr(self, "is_modification_mode", False)
         if is_m:
             self.state = STOPPED
+        elif self._is_individual_distribution() and not self.line_result.input_line:
+            self.state = CANCEL
+            return OnCancelFunctionResult.CANCEL_INPUT
         return OnCancelFunctionResult.CREATE_ELEMENTS
