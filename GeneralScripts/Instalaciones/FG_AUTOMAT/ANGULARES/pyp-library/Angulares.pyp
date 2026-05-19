@@ -152,6 +152,33 @@
     </Parameter>
 
     <Parameter>
+      <Name>RowSeleccionAngularIndividual</Name>
+      <Text>Edición</Text>
+      <ValueType>Row</ValueType>
+      <Visible>True</Visible>
+      <Parameter>
+        <Name>SeleccionarAngularIndividual</Name>
+        <Text>Seleccionar</Text>
+        <EventId>1048</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <TextId>1048</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+      <Parameter>
+        <Name>DeseleccionarAngularIndividual</Name>
+        <Text>Deseleccionar</Text>
+        <EventId>1049</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <TextId>1049</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+    </Parameter>
+
+    <Parameter>
       <Name>SeparacionAngulares</Name>
       <Text>Separación entre angulares</Text>
       <Value>10</Value>
