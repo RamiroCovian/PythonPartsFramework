@@ -70,6 +70,22 @@ def neo_log(message: str) -> None:
         pass
 
 
+def resolve_attribute_id(document, *candidate_names: str) -> int:
+    """Devuelve el primer ID de atributo valido probando varios nombres (p. ej. pmp_pare / PMP_PARE)."""
+    for name in candidate_names:
+        if not name:
+            continue
+        try:
+            attr_id = AllplanBaseElements.AttributeService.GetAttributeID(
+                document, name
+            )
+            if attr_id and attr_id > 0:
+                return attr_id
+        except Exception:
+            continue
+    return 0
+
+
 neo_log(f"module loaded: {__file__}")
 
 
@@ -1953,6 +1969,21 @@ class NeoprenosScriptObject(BaseScriptObject):
         """Siempre activo: tomar linea completa del muro (sin control en paleta)."""
         return True
 
+    def _init_pmp_attribute_ids(self) -> None:
+        """Resuelve IDs de PMP_PARE y PMP_WALL_ID (mismo criterio que Angulares / Neoprenos1)."""
+        doc = getattr(self, "document", None)
+        if not doc:
+            self.attr_pmp_pare_id = 0
+            self.attr_pmp_wall_id = 0
+            return
+        self.attr_pmp_pare_id = resolve_attribute_id(doc, "pmp_pare", "PMP_PARE")
+        self.attr_pmp_wall_id = resolve_attribute_id(doc, "PMP_WALL_ID")
+        if self.attr_pmp_pare_id <= 0 or self.attr_pmp_wall_id <= 0:
+            neo_log(
+                "_init_pmp_attribute_ids: "
+                f"PMP_PARE={self.attr_pmp_pare_id} PMP_WALL_ID={self.attr_pmp_wall_id}"
+            )
+
     def _update_parameter_visibility(self):
         pass
 
@@ -3624,12 +3655,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         self.line_result.input_line = line_to_use
 
-        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(
-            self.document, "PMP_PARE"
-        )
-        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(
-            self.document, "PMP_WALL_ID"
-        )
+        self._init_pmp_attribute_ids()
 
         self.elements = self._create_neopreno_elements(pmp_pare=wall_pare)
         neo_log(
@@ -4893,12 +4919,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         self.line_result.input_line = line_to_use
 
-        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(
-            self.document, "pmp_pare"
-        )
-        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(
-            self.document, "PMP_WALL_ID"
-        )
+        self._init_pmp_attribute_ids()
 
         self.elements = self._create_neopreno_elements(pmp_pare=wall_pare)
 
@@ -5325,8 +5346,13 @@ class NeoprenosScriptObject(BaseScriptObject):
         if pmp_pare is None:
             pmp_pare = ""
 
-        attr_id = self.attr_pmp_pare_id
-        attr_wall_id = self.attr_pmp_wall_id
+        if getattr(self, "attr_pmp_pare_id", 0) <= 0 or getattr(
+            self, "attr_pmp_wall_id", 0
+        ) <= 0:
+            self._init_pmp_attribute_ids()
+
+        attr_id = getattr(self, "attr_pmp_pare_id", 0)
+        attr_wall_id = getattr(self, "attr_pmp_wall_id", 0)
         if attr_id > 0 and pmp_pare:
             attr_list.add_attribute(attr_id, pmp_pare)
         if attr_wall_id > 0 and pmp_pare:
@@ -5385,6 +5411,11 @@ class NeoprenosScriptObject(BaseScriptObject):
                         NEO_LAYER, self.document
                     )
                     common_props.Layer = layer_id
+
+                if getattr(self, "attr_pmp_pare_id", 0) <= 0 or getattr(
+                    self, "attr_pmp_wall_id", 0
+                ) <= 0:
+                    self._init_pmp_attribute_ids()
 
                 attr_list = BuildingElementAttributeList()
                 attr_pmp_id = getattr(self, "attr_pmp_pare_id", 0)
