@@ -52,7 +52,6 @@ NEOPRENO_EVENT_DESELECT_EXISTING = 1051
 
 NEOPRENO_CHECKBOX_PARAM_KEYS: tuple[str, ...] = (
     "neopreno_libre",
-    "PermitirPickUpLinea",
     "InvertirGrosor",
 )
 
@@ -1951,14 +1950,8 @@ class NeoprenosScriptObject(BaseScriptObject):
         return False
 
     def _get_allow_line_pickup(self) -> bool:
-        if hasattr(self.build_ele, "PermitirPickUpLinea"):
-            val = self.build_ele.PermitirPickUpLinea.value
-            if isinstance(val, bool):
-                return val
-            if isinstance(val, str):
-                return val.lower() in ("true", "1", "yes")
-            return bool(val)
-        return False
+        """Siempre activo: tomar linea completa del muro (sin control en paleta)."""
+        return True
 
     def _update_parameter_visibility(self):
         pass

@@ -54,15 +54,6 @@
         </Parameter>
 
         <Parameter>
-            <Name>PermitirPickUpLinea</Name>
-            <Text>Tomar linea completa del muro</Text>
-            <TextId>e_NEO_PP_306A</TextId>
-            <Value>false</Value>
-            <ValueType>CheckBox</ValueType>
-            <Visible>True</Visible>
-        </Parameter>
-
-        <Parameter>
             <Name>RowSeleccionNeopreno</Name>
             <Text>Edición</Text>
             <ValueType>Row</ValueType>
