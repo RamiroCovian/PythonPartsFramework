@@ -26,7 +26,8 @@ from HandleParameterData import HandleParameterData
 from HandleParameterType import HandleParameterType
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
 from PythonPartUtil import PythonPartUtil
-from PythonPartTransaction import ConnectToElements
+from PythonPartTransaction import ConnectToElements, PythonPartTransaction
+from TypeCollections.ModificationElementList import ModificationElementList
 from ScriptObjectInteractors.BaseScriptObjectInteractor import (
     BaseScriptObjectInteractor,
 )
@@ -43,6 +44,17 @@ STOPPED = 0
 SELECTING_SOLID = 1
 SELECTING_WALL = 2
 SELECTING_LINE = 3
+SELECTING_EXISTING_NEOPRENO = 4
+
+NEOPRENOS_SCRIPT_VERSION = "1.1.0-seleccionar-insert-matrix"
+NEOPRENO_EVENT_SELECT_EXISTING = 1050
+NEOPRENO_EVENT_DESELECT_EXISTING = 1051
+
+NEOPRENO_CHECKBOX_PARAM_KEYS: tuple[str, ...] = (
+    "neopreno_libre",
+    "PermitirPickUpLinea",
+    "InvertirGrosor",
+)
 
 MIN_WIDTH = 20.0
 MIN_WIDTH_HALF = MIN_WIDTH / 2.0
@@ -189,6 +201,43 @@ def create_params_list_from_dict(params: dict) -> List[str]:
     return param_list
 
 
+def parse_bool_param_value(value: Any) -> bool | None:
+    """Convierte True/False, 0/1 o strings del param_list a bool."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if value is None:
+        return None
+    text = str(value).strip().strip("'").strip('"').lower()
+    if text in ("true", "1", "yes", "on"):
+        return True
+    if text in ("false", "0", "no", "off"):
+        return False
+    return None
+
+
+def coerce_build_ele_param_value(key: str, value: Any) -> Any:
+    """Tipo correcto al cargar param_list del PPG en build_ele (evita CheckBox con str)."""
+    if key in NEOPRENO_CHECKBOX_PARAM_KEYS:
+        parsed = parse_bool_param_value(value)
+        if parsed is not None:
+            return parsed
+    if key in ("RotacionManual",):
+        try:
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+    if key in ("PuntoInicial", "PuntoFinal") and isinstance(value, AllplanGeo.Point3D):
+        return value
+    if key in ("Ancho", "GrosorSeleccionado", "Longitud", "z_unique"):
+        try:
+            return float(value) if value is not None else value
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
 def parse_params_list_to_dict(param_list: List[str]) -> dict:
     """
     Parsea una lista de strings de parámetros en un diccionario.
@@ -206,6 +255,22 @@ def parse_params_list_to_dict(param_list: List[str]) -> dict:
             if len(parts) == 2:
                 key = parts[0].strip()
                 value = parts[1].strip().rstrip("\n").strip()
+                bool_val = parse_bool_param_value(value)
+                if bool_val is not None and str(value).strip().lower() in (
+                    "true",
+                    "false",
+                    "0",
+                    "1",
+                ):
+                    params[key] = bool_val
+                    continue
+                try:
+                    parsed = ast.literal_eval(value)
+                    if isinstance(parsed, bool):
+                        params[key] = parsed
+                        continue
+                except (ValueError, SyntaxError):
+                    pass
                 try:
                     if "." in value:
                         params[key] = float(value)
@@ -1667,6 +1732,113 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
         pass
 
 
+class NeoprenoSelectResult:
+    """Resultado de seleccion de un PPG Neoprenos existente."""
+
+    def __init__(self):
+        self.element = None
+        self.param_list: list = []
+        self.input_point = None
+        self.record_index = None
+        self.is_selected = False
+
+
+class ExistingNeoprenoSelectInteractor(BaseScriptObjectInteractor):
+    """Selecciona un PPG Neoprenos del dibujo (clic en geometria o grupo)."""
+
+    def __init__(
+        self,
+        result: NeoprenoSelectResult,
+        prompt_msg: str = "Seleccione el neopreno (PPG) en el dibujo",
+        owner=None,
+    ):
+        self.result = result
+        self.coord_input = None
+        self.prompt_msg = prompt_msg
+        self.owner = owner
+
+    def start_input(self, coord_input: AllplanIFW.CoordinateInput):
+        self.coord_input = coord_input
+        coord_input.InitFirstElementInput(
+            AllplanIFW.InputStringConvert(self.prompt_msg)
+        )
+
+    def process_mouse_msg(
+        self, mouse_msg: int, pnt: AllplanGeo.Point2D, msg_info: Any
+    ) -> bool:
+        if not self.coord_input or self.owner is None:
+            return True
+
+        self.coord_input.SelectElement(mouse_msg, pnt, msg_info, True, False, False)
+
+        if self.coord_input.IsMouseMove(mouse_msg):
+            return True
+
+        try:
+            input_point = self.coord_input.GetInputPoint(
+                mouse_msg, pnt, msg_info
+            ).GetPoint()
+        except Exception:
+            input_point = None
+
+        selected_element = self.coord_input.GetSelectedElement()
+        if selected_element is None or selected_element.IsNull():
+            if input_point is not None:
+                pyp_element, param_list = self.owner._resolve_neopreno_ppg_from_adapter(
+                    None, input_point
+                )
+                if pyp_element is not None:
+                    record_index, _ = (
+                        self.owner._register_or_refresh_neopreno_record_from_ppg(
+                            pyp_element, param_list, input_point=input_point
+                        )
+                    )
+                    self._finish_selection(
+                        pyp_element, param_list, record_index, input_point
+                    )
+                    return False
+            print(
+                "[SELECT][NEOPRENO] Clic sin elemento: seleccione la geometria del neopreno"
+            )
+            return True
+
+        pyp_element, param_list = self.owner._resolve_neopreno_ppg_from_adapter(
+            selected_element, input_point
+        )
+        if pyp_element is None:
+            print("[SELECT][NEOPRENO] No se identifico el PPG Neoprenos en el dibujo")
+            return True
+
+        fresh_params = self.owner._read_neopreno_param_list_from_element(pyp_element)
+        if fresh_params:
+            param_list = fresh_params
+
+        record_index, _ = self.owner._register_or_refresh_neopreno_record_from_ppg(
+            pyp_element, param_list, input_point=input_point
+        )
+        self._finish_selection(pyp_element, param_list, record_index, input_point)
+        return False
+
+    def _finish_selection(
+        self, pyp_element, param_list, record_index, input_point
+    ) -> None:
+        self.result.element = pyp_element
+        self.result.param_list = list(param_list) if param_list else []
+        self.result.input_point = input_point
+        self.result.record_index = record_index
+        self.result.is_selected = True
+        print(
+            f"[SELECT][NEOPRENO] PPG seleccionado registro={record_index} "
+            f"params={len(self.result.param_list)}"
+        )
+
+    def on_cancel_function(self):
+        return OnCancelFunctionResult.CANCEL_INPUT
+
+    def on_mouse_leave(self):
+        pass
+
+
 def create_script_object(
     build_ele: BuildingElement, script_object_data: BaseScriptObjectData
 ) -> BaseScriptObject:
@@ -1712,6 +1884,20 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.needs_auto_update = False
         self._pending_create_edit = False
 
+        self.is_modification_mode = self.modification_ele_list.is_modification_element()
+        self.neopreno_select_result = NeoprenoSelectResult()
+        self._inline_selected_neopreno_active = False
+        self._inline_modification_ele_list = None
+        self._inline_original_modification_mode = getattr(
+            self, "is_modification_mode", False
+        )
+        self._inline_original_modification_ele_list = getattr(
+            self, "modification_ele_list", None
+        )
+        self._created_neopreno_records: list[dict] = []
+        self._neopreno_record_selected_index = None
+        self._inline_last_execute_result = None
+
         if hasattr(self.build_ele, "SavedState"):
             ss = getattr(self.build_ele.SavedState, "value", None)
             if isinstance(ss, str) and ss.strip():
@@ -1742,11 +1928,16 @@ class NeoprenosScriptObject(BaseScriptObject):
                                 )
                             break
 
-        if self.is_editing_existing:
+        if self.is_modification_mode:
+            self.is_editing_existing = True
+            self._ensure_line_result_from_build_ele_for_modify()
+            self._apply_face_context_from_build_ele_only()
+        elif self.is_editing_existing:
             self._load_saved_connection_info()
         if self._restored_from_saved_state:
             self.is_free_mode = self._get_free_mode()
 
+        neo_log(f"init version={NEOPRENOS_SCRIPT_VERSION} modify={self.is_modification_mode}")
         self._update_parameter_visibility()
 
     def _get_free_mode(self) -> bool:
@@ -2751,6 +2942,25 @@ class NeoprenosScriptObject(BaseScriptObject):
                     self._saved_coord_input = self.script_object_interactor.coord_input
                 self._process_line_input()
                 if not self.is_editing_existing:
+                    if getattr(self, "_inline_selected_neopreno_active", False):
+                        self._finish_inline_neopreno_edit()
+                    coord_input = (
+                        self.script_object_interactor.coord_input
+                        if self.script_object_interactor
+                        and hasattr(self.script_object_interactor, "coord_input")
+                        else self._saved_coord_input
+                    )
+                    if self._materialize_current_neopreno(coord_input):
+                        self.line_result = LineInteractorResult()
+                        self._pending_create_edit = False
+                        self.interactor_state = SELECTING_LINE
+                        self._start_line_input()
+                        if coord_input and self.script_object_interactor:
+                            self.script_object_interactor.start_input(coord_input)
+                        neo_log(
+                            "start_next_input: neopreno materializado; siguiente linea"
+                        )
+                        return
                     self._pending_create_edit = True
                     self.interactor_state = STOPPED
                     self.script_object_interactor = None
@@ -2765,6 +2975,16 @@ class NeoprenosScriptObject(BaseScriptObject):
             # ejecute el PythonPart con el flujo estandar.
             self.script_object_interactor = None
             neo_log("start_next_input: linea procesada, fallback execute/framework")
+
+        elif self.interactor_state == SELECTING_EXISTING_NEOPRENO:
+            self.script_object_interactor = None
+            if self.neopreno_select_result.is_selected:
+                if self._enter_inline_neopreno_edit_mode(self.neopreno_select_result):
+                    self.interactor_state = STOPPED
+                else:
+                    self._resume_neopreno_line_input(self._get_active_coord_input())
+            else:
+                self._resume_neopreno_line_input(self._get_active_coord_input())
 
     def _process_wall_selection(self):
         element_guid_str = self.wall_select_result.element_guid
@@ -3206,6 +3426,12 @@ class NeoprenosScriptObject(BaseScriptObject):
                     ):
                         self.draw_neopreno_preview(self.line_result.input_line)
 
+        if getattr(self, "_inline_selected_neopreno_active", False) and (
+            editable_config_changed or name == "neopreno_libre"
+        ):
+            self._commit_inline_palette_change(name)
+            return True
+
         if self._pending_create_edit and editable_config_changed:
             self.is_free_mode = self._get_free_mode()
             self._save_state_to_build_ele()
@@ -3242,7 +3468,16 @@ class NeoprenosScriptObject(BaseScriptObject):
         if hasattr(self.build_ele, "IsModify"):
             is_modify = self.build_ele.IsModify()
         else:
-            is_modify = self.is_editing_existing
+            is_modify = self.is_editing_existing or getattr(
+                self, "is_modification_mode", False
+            )
+
+        if getattr(self, "_inline_selected_neopreno_active", False) and not is_modify:
+            cached = getattr(self, "_inline_last_execute_result", None)
+            if cached is not None and cached.elements:
+                neo_log("execute: edicion inline, reutiliza cache")
+                return cached
+            return CreateElementResult()
 
         self.is_editing_existing = is_modify
         neo_log(
@@ -3254,8 +3489,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         if is_modify:
             return self._execute_modify()
-        else:
-            return self._execute_create()
+        return self._execute_create()
 
     def _execute_create(self) -> CreateElementResult:
         neo_log("_execute_create: inicio")
@@ -3676,8 +3910,887 @@ class NeoprenosScriptObject(BaseScriptObject):
             multi_placement=return_multi_placement,
         )
 
+    # --- Sincronizacion posicion tras arrastre (MODIFY) y edicion inline (Seleccionar) ---
+
+    def _ensure_line_result_from_build_ele_for_modify(self) -> None:
+        if self.line_result.input_line:
+            return
+        p0 = (
+            getattr(self.build_ele.PuntoInicial, "value", None)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else None
+        )
+        p1 = (
+            getattr(self.build_ele.PuntoFinal, "value", None)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else None
+        )
+        if p0 is not None and p1 is not None:
+            self.line_result.input_line = AllplanGeo.Line3D(p0, p1)
+            return
+        ss = (
+            (self.build_ele.SavedState.value or "").strip()
+            if hasattr(self.build_ele, "SavedState")
+            and hasattr(self.build_ele.SavedState, "value")
+            else ""
+        )
+        st = parse_saved_state(ss) if ss else {}
+        q0 = saved_state_to_point3d(st, "p0")
+        q1 = saved_state_to_point3d(st, "p1")
+        if q0 is not None and q1 is not None:
+            self.line_result.input_line = AllplanGeo.Line3D(q0, q1)
+
+    def _apply_face_context_from_build_ele_only(self) -> None:
+        try:
+            if (
+                hasattr(self.build_ele, "CaraNormalX")
+                and hasattr(self.build_ele, "CaraNormalY")
+                and hasattr(self.build_ele, "CaraNormalZ")
+            ):
+                normal = AllplanGeo.Vector3D(
+                    self.build_ele.CaraNormalX.value,
+                    self.build_ele.CaraNormalY.value,
+                    self.build_ele.CaraNormalZ.value,
+                )
+                self.face_normal = normalize_vector(normal) or normal
+            if (
+                hasattr(self.build_ele, "PuntoClicX")
+                and hasattr(self.build_ele, "PuntoClicY")
+                and hasattr(self.build_ele, "PuntoClicZ")
+            ):
+                self.face_point = AllplanGeo.Point3D(
+                    self.build_ele.PuntoClicX.value,
+                    self.build_ele.PuntoClicY.value,
+                    self.build_ele.PuntoClicZ.value,
+                )
+            self.face_polygon = None
+        except Exception:
+            pass
+
+    def _normalize_checkbox_build_ele_values(self) -> None:
+        """Asegura bool nativo en CheckBox tras cargar param_list (paleta Allplan)."""
+        for key in NEOPRENO_CHECKBOX_PARAM_KEYS:
+            if not hasattr(self.build_ele, key):
+                continue
+            attr = getattr(self.build_ele, key)
+            if not hasattr(attr, "value"):
+                continue
+            parsed = parse_bool_param_value(attr.value)
+            if parsed is not None:
+                attr.value = parsed
+
+    def _apply_param_list_to_build_ele(self, param_list_src: list) -> None:
+        if not param_list_src:
+            return
+        try:
+            params = parse_params_list_to_dict(param_list_src)
+            for key, value in params.items():
+                if key == "SavedState":
+                    continue
+                if not hasattr(self.build_ele, key):
+                    continue
+                attr = getattr(self.build_ele, key)
+                if not hasattr(attr, "value"):
+                    continue
+                try:
+                    attr.value = coerce_build_ele_param_value(key, value)
+                except Exception as exc:
+                    print(f"[SELECT][NEOPRENO] No se aplico {key}: {exc}")
+            self._normalize_checkbox_build_ele_values()
+            if (
+                hasattr(self.build_ele, "Longitud")
+                and hasattr(self.build_ele, "PuntoInicial")
+                and hasattr(self.build_ele, "PuntoFinal")
+            ):
+                p0 = getattr(self.build_ele.PuntoInicial, "value", None)
+                p1 = getattr(self.build_ele.PuntoFinal, "value", None)
+                if p0 is not None and p1 is not None:
+                    self.build_ele.Longitud.value = AllplanGeo.CalcLength(
+                        AllplanGeo.Line3D(p0, p1)
+                    )
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error aplicando param_list: {exc}")
+
+    def _apply_line_points_to_build_ele(
+        self, start: AllplanGeo.Point3D, end: AllplanGeo.Point3D
+    ) -> None:
+        if hasattr(self.build_ele, "PuntoInicial"):
+            self.build_ele.PuntoInicial.value = AllplanGeo.Point3D(
+                start.X, start.Y, start.Z
+            )
+        if hasattr(self.build_ele, "PuntoFinal"):
+            self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(end.X, end.Y, end.Z)
+        self.line_result.input_line = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(start.X, start.Y, start.Z),
+            AllplanGeo.Point3D(end.X, end.Y, end.Z),
+        )
+        self._save_state_to_build_ele()
+
+    def _get_build_ele_insert_matrix(self) -> AllplanGeo.Matrix3D | None:
+        if not hasattr(self.build_ele, "get_insert_matrix"):
+            return None
+        try:
+            return self.build_ele.get_insert_matrix()
+        except Exception:
+            return None
+
+    def _matrix_translation_length(self, matrix: AllplanGeo.Matrix3D) -> float:
+        try:
+            translation = matrix.GetTranslationVector()
+            return float(translation.GetLength()) if translation else 0.0
+        except Exception:
+            return 0.0
+
+    def _sync_line_from_build_ele_insert_matrix(
+        self, min_displacement_mm: float = 1.0
+    ) -> bool:
+        matrix = self._get_build_ele_insert_matrix()
+        if matrix is None:
+            return False
+        trans_len = self._matrix_translation_length(matrix)
+        if trans_len < min_displacement_mm:
+            return False
+        old_start = (
+            getattr(self.build_ele.PuntoInicial, "value", None)
+            if hasattr(self.build_ele, "PuntoInicial")
+            else None
+        )
+        old_end = (
+            getattr(self.build_ele.PuntoFinal, "value", None)
+            if hasattr(self.build_ele, "PuntoFinal")
+            else None
+        )
+        if old_start is None or old_end is None:
+            return False
+        try:
+            new_start = AllplanGeo.Transform(old_start, matrix)
+            new_end = AllplanGeo.Transform(old_end, matrix)
+        except Exception:
+            return False
+        displacement = min(
+            old_start.GetDistance(new_start), old_end.GetDistance(new_end)
+        )
+        if displacement < min_displacement_mm:
+            return False
+        self._apply_line_points_to_build_ele(new_start, new_end)
+        try:
+            self.build_ele.set_insert_matrix(AllplanGeo.Matrix3D())
+        except Exception:
+            pass
+        print(
+            f"[EDIT][SYNC] Linea actualizada desde insert_matrix "
+            f"traslacion={trans_len:.1f} mm"
+        )
+        return True
+
+    def _is_inline_neopreno_edit_session(self) -> bool:
+        return bool(getattr(self, "_inline_selected_neopreno_active", False))
+
+    def _try_sync_drag_offset_for_modify(self) -> bool:
+        if self._is_inline_neopreno_edit_session():
+            return False
+        return self._sync_line_from_build_ele_insert_matrix()
+
+    def _sync_line_from_build_ele_points(self) -> bool:
+        if not hasattr(self.build_ele, "PuntoInicial") or not hasattr(
+            self.build_ele, "PuntoFinal"
+        ):
+            return False
+        p0 = getattr(self.build_ele.PuntoInicial, "value", None)
+        p1 = getattr(self.build_ele.PuntoFinal, "value", None)
+        if p0 is None or p1 is None:
+            return False
+        self.line_result.input_line = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(p0.X, p0.Y, p0.Z),
+            AllplanGeo.Point3D(p1.X, p1.Y, p1.Z),
+        )
+        return True
+
+    def _element_adapter_key(self, element) -> str:
+        if element is None:
+            return ""
+        try:
+            if element.IsNull():
+                return ""
+        except Exception:
+            pass
+        try:
+            return str(element.GetModelElementUUID())
+        except Exception:
+            pass
+        try:
+            return str(element.GetNOIGUID())
+        except Exception:
+            return ""
+
+    def _normalize_pyp_display_name(self, name: Any) -> str:
+        return str(name or "").strip().strip("'\"")
+
+    def _parameter_to_param_list(self, parameter: Any) -> list:
+        if isinstance(parameter, str):
+            return parameter.splitlines()
+        if isinstance(parameter, (list, tuple)):
+            return list(parameter)
+        return []
+
+    def _is_neopreno_pyp_params(self, name: Any, parameter: Any) -> bool:
+        if self._normalize_pyp_display_name(name) == "Neoprenos":
+            return True
+        param_list = self._parameter_to_param_list(parameter)
+        if not param_list:
+            return False
+        params = parse_params_list_to_dict(param_list)
+        if params.get("SavedState") and (
+            params.get("GrosorSeleccionado") is not None
+            or params.get("Ancho") is not None
+        ):
+            return True
+        if "neopreno_libre" in params:
+            return True
+        return False
+
+    def _read_neopreno_param_list_from_element(self, pyp_element) -> list:
+        if pyp_element is None:
+            return []
+        try:
+            if pyp_element.IsNull():
+                return []
+        except Exception:
+            pass
+        try:
+            success, name, parameter = (
+                AllplanBaseElements.PythonPartService.GetParameter(pyp_element)
+            )
+            if success and self._is_neopreno_pyp_params(name, parameter):
+                return self._parameter_to_param_list(parameter)
+        except Exception:
+            pass
+        return []
+
+    def _coerce_to_base_element_adapter(self, element):
+        if element is None:
+            return None
+        if isinstance(element, str):
+            try:
+                adapter = AllplanEleAdapter.BaseElementAdapter.FromNOIGUID(
+                    element, self.document
+                )
+                if adapter is not None and not adapter.IsNull():
+                    return adapter
+            except Exception:
+                return None
+            return None
+        try:
+            if element.IsNull():
+                return None
+        except Exception:
+            pass
+        return element
+
+    def _adapter_is_under_element(self, selected_element, ancestor_element) -> bool:
+        if selected_element is None or ancestor_element is None:
+            return False
+        ancestor_key = self._element_adapter_key(ancestor_element)
+        if not ancestor_key:
+            return False
+        if self._element_adapter_key(selected_element) == ancestor_key:
+            return True
+        current = selected_element
+        visited: set[str] = set()
+        for _ in range(14):
+            try:
+                if current is None or current.IsNull():
+                    break
+            except Exception:
+                break
+            if self._element_adapter_key(current) == ancestor_key:
+                return True
+            try:
+                noiguid = str(current.GetNOIGUID())
+            except Exception:
+                noiguid = ""
+            if noiguid and noiguid in visited:
+                break
+            if noiguid:
+                visited.add(noiguid)
+            try:
+                parent = (
+                    AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                        current
+                    )
+                )
+            except Exception:
+                parent = None
+            if parent is None or parent.IsNull():
+                break
+            current = parent
+        return False
+
+    def _distance_point_to_segment(self, point, start, end) -> float:
+        if point is None or start is None or end is None:
+            return float("inf")
+        vx = end.X - start.X
+        vy = end.Y - start.Y
+        vz = end.Z - start.Z
+        wx = point.X - start.X
+        wy = point.Y - start.Y
+        wz = point.Z - start.Z
+        length_sq = vx * vx + vy * vy + vz * vz
+        if length_sq <= 1e-9:
+            return point.GetDistance(start)
+        t = max(0.0, min(1.0, (wx * vx + wy * vy + wz * vz) / length_sq))
+        proj = AllplanGeo.Point3D(
+            start.X + t * vx, start.Y + t * vy, start.Z + t * vz
+        )
+        return point.GetDistance(proj)
+
+    def _find_created_neopreno_record_at_point(self, point):
+        if point is None:
+            return None, None
+        records = getattr(self, "_created_neopreno_records", []) or []
+        best_record = None
+        best_idx = None
+        best_dist = float("inf")
+        for idx, record in enumerate(records):
+            pos = record.get("pos")
+            if pos is not None:
+                dist_center = point.GetDistance(pos)
+                if dist_center <= 300.0:
+                    return idx, record
+            dist = self._distance_point_to_segment(
+                point, record.get("start"), record.get("end")
+            )
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = idx
+                best_record = record
+        if best_record is not None and best_dist <= 350.0:
+            return best_idx, best_record
+        return None, None
+
+    def _build_neopreno_record_from_ppg(
+        self,
+        pyp_element,
+        param_list: list,
+        model_ele_list=None,
+        line: AllplanGeo.Line3D | None = None,
+    ) -> dict:
+        params = parse_params_list_to_dict(param_list) if param_list else {}
+        start = params.get("PuntoInicial")
+        end = params.get("PuntoFinal")
+        if line is not None:
+            start = AllplanGeo.Point3D(
+                line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
+            )
+            end = AllplanGeo.Point3D(
+                line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
+            )
+        elif not isinstance(start, AllplanGeo.Point3D) or not isinstance(
+            end, AllplanGeo.Point3D
+        ):
+            start = None
+            end = None
+        pos = None
+        if isinstance(start, AllplanGeo.Point3D) and isinstance(end, AllplanGeo.Point3D):
+            pos = AllplanGeo.Point3D(
+                (start.X + end.X) / 2.0,
+                (start.Y + end.Y) / 2.0,
+                (start.Z + end.Z) / 2.0,
+            )
+        return {
+            "element": pyp_element,
+            "model_list": model_ele_list,
+            "param_list": list(param_list) if param_list else [],
+            "pos": pos,
+            "start": start,
+            "end": end,
+        }
+
+    def _find_created_neopreno_record_index_for_element(self, element) -> int | None:
+        key = self._element_adapter_key(element)
+        if not key:
+            return None
+        for idx, record in enumerate(self._created_neopreno_records):
+            record_element = record.get("element")
+            if record_element and self._element_adapter_key(record_element) == key:
+                return idx
+        return None
+
+    def _register_or_refresh_neopreno_record_from_ppg(
+        self,
+        pyp_element,
+        param_list: list,
+        input_point=None,
+        model_ele_list=None,
+        line: AllplanGeo.Line3D | None = None,
+    ) -> tuple[int | None, dict | None]:
+        if pyp_element is None:
+            return None, None
+        full_param_list = param_list or self._read_neopreno_param_list_from_element(
+            pyp_element
+        )
+        record = self._build_neopreno_record_from_ppg(
+            pyp_element, full_param_list, model_ele_list=model_ele_list, line=line
+        )
+        if record.get("pos") is None and input_point is not None and hasattr(
+            input_point, "X"
+        ):
+            record["pos"] = AllplanGeo.Point3D(
+                input_point.X, input_point.Y, input_point.Z
+            )
+        existing_idx = self._find_created_neopreno_record_index_for_element(pyp_element)
+        if existing_idx is not None:
+            self._created_neopreno_records[existing_idx].update(record)
+            return existing_idx, self._created_neopreno_records[existing_idx]
+        self._created_neopreno_records.append(record)
+        new_idx = len(self._created_neopreno_records) - 1
+        return new_idx, record
+
+    def _build_current_inline_param_list(self) -> list:
+        params: dict[str, Any] = {}
+        if hasattr(self.build_ele, "SavedState"):
+            ss = str(getattr(self.build_ele.SavedState, "value", "") or "")
+            if ss:
+                params["SavedState"] = ss
+        for key in (
+            "PuntoInicial",
+            "PuntoFinal",
+            "Ancho",
+            "GrosorSeleccionado",
+            "neopreno_libre",
+            "RotacionManual",
+            "InvertirGrosor",
+            "pmp_pare",
+            "z_unique",
+            "MuroGUID",
+            "SolidoGUID",
+        ):
+            if not hasattr(self.build_ele, key):
+                continue
+            attr = getattr(self.build_ele, key)
+            if hasattr(attr, "value"):
+                params[key] = attr.value
+        return create_params_list_from_dict(params)
+
+    def _remember_created_neopreno(
+        self, created_elements, model_ele_list=None
+    ) -> None:
+        line = getattr(self.line_result, "input_line", None)
+        if not line:
+            return
+        pyp_adapter = next(
+            (
+                element
+                for element in created_elements
+                if AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
+                    element
+                )
+            ),
+            None,
+        )
+        if pyp_adapter is None:
+            pyp_adapter = next(
+                (
+                    element
+                    for element in created_elements
+                    if AllplanBaseElements.PythonPartService.IsPythonPartElement(element)
+                ),
+                None,
+            )
+        if pyp_adapter is None:
+            return
+        param_list = self._read_neopreno_param_list_from_element(pyp_adapter)
+        if not param_list:
+            param_list = self._build_current_inline_param_list()
+        self._register_or_refresh_neopreno_record_from_ppg(
+            pyp_adapter, param_list, model_ele_list=model_ele_list, line=line
+        )
+
+    def _resolve_neopreno_ppg_from_adapter(
+        self, selected_element, input_point=None
+    ) -> tuple[Any, list]:
+        current = selected_element
+        visited: set[str] = set()
+        rejected: list[str] = []
+        if current is not None:
+            try:
+                if not current.IsNull():
+                    for _depth in range(14):
+                        try:
+                            noiguid = str(current.GetNOIGUID())
+                        except Exception:
+                            noiguid = ""
+                        if noiguid and noiguid in visited:
+                            break
+                        if noiguid:
+                            visited.add(noiguid)
+                        is_group = False
+                        is_part = False
+                        try:
+                            is_group = (
+                                AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
+                                    current
+                                )
+                            )
+                            is_part = (
+                                not is_group
+                                and AllplanBaseElements.PythonPartService.IsPythonPartElement(
+                                    current
+                                )
+                            )
+                        except Exception:
+                            pass
+                        if is_group or is_part:
+                            try:
+                                success, name, parameter = (
+                                    AllplanBaseElements.PythonPartService.GetParameter(
+                                        current
+                                    )
+                                )
+                                if success and self._is_neopreno_pyp_params(
+                                    name, parameter
+                                ):
+                                    return current, self._parameter_to_param_list(
+                                        parameter
+                                    )
+                                if success and is_group:
+                                    rejected.append(
+                                        self._normalize_pyp_display_name(name)
+                                    )
+                            except Exception:
+                                pass
+                        try:
+                            parent = (
+                                AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                                    current
+                                )
+                            )
+                        except Exception:
+                            parent = None
+                        if parent is None or parent.IsNull():
+                            break
+                        current = parent
+            except Exception:
+                pass
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if selected_element is not None:
+            try:
+                if not selected_element.IsNull():
+                    for idx, record in enumerate(records):
+                        rec_element = record.get("element")
+                        if rec_element and self._adapter_is_under_element(
+                            selected_element, rec_element
+                        ):
+                            param_list = self._read_neopreno_param_list_from_element(
+                                rec_element
+                            )
+                            if not param_list:
+                                param_list = list(record.get("param_list") or [])
+                            return rec_element, param_list
+            except Exception:
+                pass
+        if input_point is not None:
+            record_index, record = self._find_created_neopreno_record_at_point(
+                input_point
+            )
+            if record is not None:
+                rec_element = record.get("element")
+                param_list = self._read_neopreno_param_list_from_element(rec_element)
+                if not param_list:
+                    param_list = list(record.get("param_list") or [])
+                return rec_element, param_list
+        if rejected:
+            print(f"[SELECT][NEOPRENO] Otros PPG encontrados: {rejected}")
+        return None, []
+
+    def _materialize_current_neopreno(self, coord_input=None) -> bool:
+        if getattr(self, "is_modification_mode", False):
+            return False
+        if not self.line_result.input_line:
+            return False
+        try:
+            result = self._execute_create()
+            if not result or not result.elements:
+                return False
+            if coord_input:
+                view_world_projection = coord_input.GetViewWorldProjection()
+            else:
+                view_world_projection = AllplanIFW.ViewWorldProjection()
+            transaction = PythonPartTransaction(
+                self.document,
+                connect_to_ele=result.connect_to_ele,
+            )
+            created_elements = transaction.execute(
+                placement_matrix=AllplanGeo.Matrix3D(),
+                view_world_projection=view_world_projection,
+                model_ele_list=result.elements,
+                modification_ele_list=getattr(self, "modification_ele_list", []),
+                rearrange_reinf_pos_nr=result.reinf_rearrange,
+                append_reinf_pos_nr=True,
+                asso_ref_object=None,
+                uuid_parameter_name=result.uuid_parameter_name,
+                elements_to_delete=result.elements_to_delete,
+            )
+            self._remember_created_neopreno(created_elements, model_ele_list=result.elements)
+            neo_log(f"neopreno materializado: {len(created_elements)} elementos")
+            return True
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error materializando: {exc}")
+            return False
+
+    def _get_active_coord_input(self):
+        coord_input = getattr(self, "coord_input", None)
+        if coord_input:
+            return coord_input
+        interactor = getattr(self, "script_object_interactor", None)
+        return getattr(interactor, "coord_input", None)
+
+    def _resume_neopreno_line_input(self, coord_input=None) -> bool:
+        self.interactor_state = SELECTING_LINE
+        self.line_result = LineInteractorResult()
+        self._pending_create_edit = False
+        self._start_line_input()
+        if coord_input is None:
+            coord_input = self._get_active_coord_input()
+        if coord_input and self.script_object_interactor:
+            self.script_object_interactor.start_input(coord_input)
+            return True
+        return False
+
+    def _start_inline_neopreno_selection(self) -> bool:
+        if getattr(self, "is_modification_mode", False):
+            print("[SELECT][NEOPRENO] No disponible en MODIFY externo")
+            return False
+        if getattr(self, "_inline_selected_neopreno_active", False):
+            self._leave_inline_neopreno_edit_mode()
+        self.neopreno_select_result = NeoprenoSelectResult()
+        self.interactor_state = SELECTING_EXISTING_NEOPRENO
+        self.script_object_interactor = ExistingNeoprenoSelectInteractor(
+            self.neopreno_select_result,
+            "Seleccione el neopreno (PPG) en el dibujo",
+            owner=self,
+        )
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+        return True
+
+    def _deselect_inline_neopreno(self) -> bool:
+        if getattr(self, "_inline_selected_neopreno_active", False):
+            self._leave_inline_neopreno_edit_mode()
+        self.neopreno_select_result = NeoprenoSelectResult()
+        return self._resume_neopreno_line_input(self._get_active_coord_input())
+
+    def _enter_inline_neopreno_edit_mode(self, result: NeoprenoSelectResult) -> bool:
+        if not result or not result.is_selected or result.element is None:
+            return False
+        try:
+            self._inline_original_modification_mode = getattr(
+                self, "is_modification_mode", False
+            )
+            self._inline_original_modification_ele_list = getattr(
+                self, "modification_ele_list", None
+            )
+            param_list = self._read_neopreno_param_list_from_element(result.element)
+            if not param_list:
+                param_list = list(result.param_list or [])
+            self._apply_param_list_to_build_ele(param_list)
+            params = parse_params_list_to_dict(param_list)
+            saved_state = str(params.get("SavedState", "") or "").strip()
+            if saved_state:
+                self._deserialize_state_from_json(saved_state)
+            self._normalize_checkbox_build_ele_values()
+            self._inline_modification_ele_list = ModificationElementList(
+                [result.element]
+            )
+            self.modification_ele_list = self._inline_original_modification_ele_list
+            self.is_modification_mode = False
+            self.is_editing_existing = False
+            self._inline_selected_neopreno_active = True
+            self._neopreno_record_selected_index = result.record_index
+            self.is_free_mode = self._get_free_mode()
+            try:
+                self.build_ele.set_insert_matrix(AllplanGeo.Matrix3D())
+            except Exception:
+                pass
+            self._apply_face_context_from_build_ele_only()
+            self._ensure_line_result_from_build_ele_for_modify()
+            self._sync_line_from_build_ele_points()
+            self._refresh_inline_execute_cache()
+            print("[SELECT][NEOPRENO] Edicion inline activa")
+            return True
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error entrando en edicion: {exc}")
+            return False
+
+    def _leave_inline_neopreno_edit_mode(self) -> None:
+        self._inline_selected_neopreno_active = False
+        self._inline_modification_ele_list = None
+        self._neopreno_record_selected_index = None
+        self._inline_last_execute_result = None
+        self.is_modification_mode = getattr(
+            self, "_inline_original_modification_mode", False
+        )
+        self.is_editing_existing = self.is_modification_mode
+        self.modification_ele_list = getattr(
+            self, "_inline_original_modification_ele_list", None
+        )
+
+    def _finish_inline_neopreno_edit(self) -> None:
+        self._leave_inline_neopreno_edit_mode()
+
+    def _build_inline_edit_handles_result(self) -> CreateElementResult:
+        start_prop = getattr(self.build_ele, "PuntoInicial", None)
+        end_prop = getattr(self.build_ele, "PuntoFinal", None)
+        start_point = (
+            start_prop.value if start_prop and hasattr(start_prop, "value") else None
+        )
+        end_point = end_prop.value if end_prop and hasattr(end_prop, "value") else None
+        if not start_point or not end_point:
+            line = getattr(self.line_result, "input_line", None)
+            if line:
+                start_point = line.StartPoint
+                end_point = line.EndPoint
+        if not start_point or not end_point:
+            return CreateElementResult(elements=[], handles=[])
+        line = AllplanGeo.Line3D(start_point, end_point)
+        handles = create_handles(
+            self.build_ele,
+            line,
+            None if self.is_free_mode else self.face_normal,
+            None if self.is_free_mode else self.face_point,
+        )
+        return CreateElementResult(elements=[], handles=handles)
+
+    def _refresh_inline_execute_cache(self) -> None:
+        handles = self._build_inline_edit_handles_result().handles
+        model_list = None
+        idx = getattr(self, "_neopreno_record_selected_index", None)
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if idx is not None and 0 <= idx < len(records):
+            model_list = records[idx].get("model_list")
+        connect_to_ele = ConnectToElements()
+        if hasattr(self.build_ele, "MuroGUID") and getattr(
+            self.build_ele.MuroGUID, "value", None
+        ):
+            mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
+            if mg:
+                connect_to_ele.connection_elements.append(mg)
+        if model_list:
+            self._inline_last_execute_result = CreateElementResult(
+                elements=model_list,
+                handles=handles,
+                placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
+                connect_to_ele=connect_to_ele,
+                uuid_parameter_name="PythonPartUUID",
+                multi_placement=True,
+            )
+
+    def _apply_inline_edit_to_model(self, coord_input=None) -> bool:
+        if not getattr(self, "_inline_selected_neopreno_active", False):
+            return False
+        if not self._inline_modification_ele_list:
+            return False
+        original_modification_list = self.modification_ele_list
+        original_modification_mode = self.is_modification_mode
+        try:
+            if not self._sync_line_from_build_ele_points():
+                return False
+            self.modification_ele_list = self._inline_modification_ele_list
+            self.is_modification_mode = True
+            try:
+                self.build_ele.set_insert_matrix(AllplanGeo.Matrix3D())
+            except Exception:
+                pass
+            result = self._execute_modify()
+            if not result or not result.elements:
+                return False
+            if coord_input:
+                view_world_projection = coord_input.GetViewWorldProjection()
+            else:
+                view_world_projection = AllplanIFW.ViewWorldProjection()
+            transaction = PythonPartTransaction(
+                self.document,
+                connect_to_ele=result.connect_to_ele,
+            )
+            created_elements = transaction.execute(
+                placement_matrix=AllplanGeo.Matrix3D(),
+                view_world_projection=view_world_projection,
+                model_ele_list=result.elements,
+                modification_ele_list=self._inline_modification_ele_list,
+                rearrange_reinf_pos_nr=result.reinf_rearrange,
+                append_reinf_pos_nr=True,
+                asso_ref_object=None,
+                uuid_parameter_name=result.uuid_parameter_name,
+                elements_to_delete=result.elements_to_delete,
+                use_system_angle=False,
+            )
+            new_pyp = None
+            for element in created_elements:
+                if AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
+                    element
+                ):
+                    new_pyp = element
+                    break
+            if new_pyp is None:
+                for element in created_elements:
+                    if AllplanBaseElements.PythonPartService.IsPythonPartElement(
+                        element
+                    ):
+                        new_pyp = element
+                        break
+            if new_pyp is not None:
+                self._inline_modification_ele_list = ModificationElementList([new_pyp])
+                idx = getattr(self, "_neopreno_record_selected_index", None)
+                records = getattr(self, "_created_neopreno_records", []) or []
+                fresh_params = self._read_neopreno_param_list_from_element(new_pyp)
+                if idx is not None and 0 <= idx < len(records):
+                    line = self.line_result.input_line
+                    records[idx]["element"] = new_pyp
+                    records[idx]["model_list"] = result.elements
+                    records[idx]["param_list"] = fresh_params or records[idx].get(
+                        "param_list", []
+                    )
+            self._inline_last_execute_result = result
+            self._refresh_inline_execute_cache()
+            return True
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error aplicando edicion: {exc}")
+            return False
+        finally:
+            self.modification_ele_list = original_modification_list
+            self.is_modification_mode = original_modification_mode
+
+    def _commit_inline_palette_change(self, property_name: str) -> bool:
+        if not getattr(self, "_inline_selected_neopreno_active", False):
+            return False
+        if self.line_result.input_line:
+            line = self.line_result.input_line
+            if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+                self.build_ele, "PuntoFinal"
+            ):
+                self.build_ele.PuntoInicial.value = AllplanGeo.Point3D(
+                    line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
+                )
+                self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(
+                    line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
+                )
+        self._apply_inline_edit_to_model()
+        return True
+
+    def on_control_event(self, event_id: int):
+        if event_id == NEOPRENO_EVENT_SELECT_EXISTING:
+            return self._start_inline_neopreno_selection()
+        if event_id == NEOPRENO_EVENT_DESELECT_EXISTING:
+            return self._deselect_inline_neopreno()
+        return True
+
     def _execute_modify(self) -> CreateElementResult:
         """Lógica completa de EDICIÓN: lee TODO desde build_ele, NUNCA escribe parámetros persistentes."""
+        if not self._is_inline_neopreno_edit_session():
+            self._apply_face_context_from_build_ele_only()
+            self._ensure_line_result_from_build_ele_for_modify()
+            self._try_sync_drag_offset_for_modify()
 
         start_point = None
         end_point = None
@@ -4096,6 +5209,10 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.line_result.input_line = None
 
         get_neopreno_width(self.build_ele)
+
+        if getattr(self, "_inline_selected_neopreno_active", False):
+            self._apply_inline_edit_to_model(self._get_active_coord_input())
+            return self.execute()
 
         return self.execute()
 

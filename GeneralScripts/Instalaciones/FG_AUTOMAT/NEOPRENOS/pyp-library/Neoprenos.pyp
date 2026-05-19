@@ -63,6 +63,33 @@
         </Parameter>
 
         <Parameter>
+            <Name>RowSeleccionNeopreno</Name>
+            <Text>Edición</Text>
+            <ValueType>Row</ValueType>
+            <Visible>True</Visible>
+            <Parameter>
+                <Name>SeleccionarNeopreno</Name>
+                <Text>Seleccionar</Text>
+                <EventId>1050</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <TextId>e_NEO_PP_1050</TextId>
+                <Persistent>No</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>DeseleccionarNeopreno</Name>
+                <Text>Deseleccionar</Text>
+                <EventId>1051</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <TextId>e_NEO_PP_1051</TextId>
+                <Persistent>No</Persistent>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
             <Name>SolidoConnection</Name>
             <Text>Conexión al Sólido</Text>
             <TextId>e_NEO_PP_307</TextId>
