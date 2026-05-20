@@ -5762,7 +5762,7 @@ class AngularLineScript(BaseScriptObject):
         )
         self._preview_attribute_ids_ready = True
 
-    def _apply_individual_preview_display_properties(
+    def _apply_angular_preview_display_properties(
         self, elements: list[Any]
     ) -> list[Any]:
         """Misma geometria que el angular final; capa de preview (Construction)."""
@@ -5787,10 +5787,66 @@ class AngularLineScript(BaseScriptObject):
             )
         return preview_elements
 
-    def _build_individual_angular_preview_from_line(
+    def _prepare_line_for_distribution_preview(
+        self, line: AllplanGeo.Line3D
+    ) -> AllplanGeo.Line3D:
+        """Alinea la guia de preview con la misma logica que preview_line_function."""
+        if not line:
+            return line
+
+        self._update_incremental_growth()
+
+        if (
+            not self.is_free_mode
+            and self.face_polygon
+            and self.face_normal
+            and self.face_point
+        ):
+            if self._is_individual_distribution():
+                line = self._project_line_to_individual_vertical_face(line)
+            else:
+                projected_line = project_line_on_face(
+                    line, self.face_point, self.face_normal
+                )
+                line = clamp_line_to_face_bounds(
+                    projected_line, self.face_polygon, self.face_normal
+                )
+
+        try:
+            angular_key = (
+                self.build_ele.TipoAngular.value
+                if hasattr(self.build_ele, "TipoAngular")
+                else None
+            )
+            if angular_key and angular_key in ANGULAR_CATALOG:
+                definition = ANGULAR_CATALOG[angular_key]
+                piece_length = definition.get(
+                    "piece_length", definition.get("length", 0.0)
+                )
+                separation = 10.0
+                if hasattr(self.build_ele, "SeparacionAngulares"):
+                    try:
+                        separation = max(
+                            0.0, float(self.build_ele.SeparacionAngulares.value)
+                        )
+                    except (ValueError, TypeError):
+                        pass
+                if piece_length > 0:
+                    if self._is_individual_distribution():
+                        line = set_line_length(line, piece_length)
+                    else:
+                        line = adjust_group_line_to_occupied_length(
+                            line, piece_length, separation
+                        )
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        return line
+
+    def _build_distribution_angular_preview_from_line(
         self, line: AllplanGeo.Line3D
     ) -> list[Any]:
-        """Preview 3D del angular individual (geometria real, no solo el eje)."""
+        """Preview 3D real (Individual o Grupal) a partir de la linea guia."""
         if not line:
             return []
         try:
@@ -5799,7 +5855,8 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return []
 
-        if not self._is_individual_distribution():
+        distribution_type = self._get_distribution_type()
+        if distribution_type not in (DISTRIBUTION_INDIVIDUAL, DISTRIBUTION_GROUP):
             return []
 
         angular_key = (
@@ -5842,7 +5899,7 @@ class AngularLineScript(BaseScriptObject):
         )
 
         geometries, edges = self._create_geometries_for_distribution(
-            distribution_type=DISTRIBUTION_INDIVIDUAL,
+            distribution_type=distribution_type,
             definition=definition,
             start_point=start_point,
             end_point=end_point,
@@ -5861,7 +5918,15 @@ class AngularLineScript(BaseScriptObject):
         model_elements = self.create_angulars(
             geometries, edges, definition, pmp_pare=wall_pare or None
         )
-        return self._apply_individual_preview_display_properties(model_elements)
+        return self._apply_angular_preview_display_properties(model_elements)
+
+    def _build_individual_angular_preview_from_line(
+        self, line: AllplanGeo.Line3D
+    ) -> list[Any]:
+        """Preview 3D del angular individual."""
+        if not self._is_individual_distribution():
+            return []
+        return self._build_distribution_angular_preview_from_line(line)
 
     def _start_position_input(self):
         """Inicia el tercer click: posición final del angular individual."""
@@ -5884,7 +5949,7 @@ class AngularLineScript(BaseScriptObject):
             return
 
         preview_line = self._build_individual_centered_preview_line(line)
-        preview_elements = self._build_individual_angular_preview_from_line(
+        preview_elements = self._build_distribution_angular_preview_from_line(
             preview_line
         )
 
@@ -7804,7 +7869,7 @@ class AngularLineScript(BaseScriptObject):
         line = getattr(self.line_result, "input_line", None)
         if not line:
             return []
-        return self._build_individual_angular_preview_from_line(line)
+        return self._build_distribution_angular_preview_from_line(line)
 
     def _get_inline_selection_axis_line(self) -> AllplanGeo.Line3D | None:
         """Segmento del angular seleccionado para las lineas auxiliares."""
@@ -8215,65 +8280,22 @@ class AngularLineScript(BaseScriptObject):
         )
 
     def preview_line_function(self, line: AllplanGeo.Line3D) -> ModelEleList:
-        """Función de preview para la línea.
-
-        Si hay una cara seleccionada y no está en modo libre, proyecta y recorta la línea a los límites.
-        Si el crecimiento incremental está activado, ajusta la línea según incrementos.
-        """
+        """Preview 3D de todos los angulares a lo largo de la linea (Grupal/Individual)."""
         if not line:
             return ModelEleList()
 
-        self._update_incremental_growth()
-
-        if (
-            not self.is_free_mode
-            and self.face_polygon
-            and self.face_normal
-            and self.face_point
-        ):
-            if self._is_individual_distribution():
-                line = self._project_line_to_individual_vertical_face(line)
-            else:
-                projected_line = project_line_on_face(
-                    line, self.face_point, self.face_normal
-                )
-                line = clamp_line_to_face_bounds(
-                    projected_line, self.face_polygon, self.face_normal
-                )
-
-        try:
-            angular_key = (
-                self.build_ele.TipoAngular.value
-                if hasattr(self.build_ele, "TipoAngular")
-                else None
-            )
-            if angular_key and angular_key in ANGULAR_CATALOG:
-                definition = ANGULAR_CATALOG[angular_key]
-                piece_length = definition.get(
-                    "piece_length", definition.get("length", 0.0)
-                )
-
-                separation = 10.0
-                if hasattr(self.build_ele, "SeparacionAngulares"):
-                    try:
-                        separation = max(
-                            0.0, float(self.build_ele.SeparacionAngulares.value)
-                        )
-                    except (ValueError, TypeError):
-                        pass
-
-                if piece_length > 0:
-                    if self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
-                        line = set_line_length(line, piece_length)
-                    else:
-                        line = adjust_group_line_to_occupied_length(
-                            line, piece_length, separation
-                        )
-        except (ValueError, TypeError, AttributeError):
-            pass
+        prepared_line = self._prepare_line_for_distribution_preview(line)
+        preview_elements = self._build_distribution_angular_preview_from_line(
+            prepared_line
+        )
+        if preview_elements:
+            model_list = ModelEleList()
+            model_list.extend(preview_elements)
+            return model_list
 
         model_list = ModelEleList()
-        model_list.append_geometry_3d(line)
+        if prepared_line:
+            model_list.append_geometry_3d(prepared_line)
         return model_list
 
     def _prepare_line(self, line: AllplanGeo.Line3D) -> tuple[AllplanGeo.Line3D, dict]:
@@ -8909,11 +8931,26 @@ class AngularLineScript(BaseScriptObject):
             return
 
         if self.preview_active and self.line_result.input_line:
-            model_list = ModelEleList()
-            model_list.append_geometry_3d(self.line_result.input_line)
-            AllplanBaseElements.DrawElementPreview(
-                self.document, AllplanGeo.Matrix3D(), model_list, True, None
+            prepared_line = self._prepare_line_for_distribution_preview(
+                self.line_result.input_line
             )
+            preview_elements = self._build_distribution_angular_preview_from_line(
+                prepared_line
+            )
+            if preview_elements:
+                AllplanBaseElements.DrawElementPreview(
+                    self.document,
+                    AllplanGeo.Matrix3D(),
+                    preview_elements,
+                    True,
+                    None,
+                )
+            elif prepared_line:
+                model_list = ModelEleList()
+                model_list.append_geometry_3d(prepared_line)
+                AllplanBaseElements.DrawElementPreview(
+                    self.document, AllplanGeo.Matrix3D(), model_list, True, None
+                )
 
     def _get_inline_preview_document(self):
         """Obtiene el documento de vista activo para previews interactivos."""
