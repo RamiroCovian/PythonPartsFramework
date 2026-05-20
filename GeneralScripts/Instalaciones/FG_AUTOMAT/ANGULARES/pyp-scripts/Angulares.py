@@ -63,9 +63,9 @@ ANGULAR_OTHER_EXECUTION_MSG = (
 
 ANGULAR_SELECTION_AUX_COLOR = 3
 ANGULAR_SELECTION_AUX_PEN = 15
-ANGULAR_SELECTION_AUX_OUTWARD_MM = 120.0
-ANGULAR_SELECTION_AUX_BRACKET_MM = 200.0
-ANGULAR_SELECTION_AUX_PARALLEL_MM = 70.0
+ANGULAR_SELECTION_AUX_OUTWARD_MM = 0.0
+ANGULAR_SELECTION_AUX_CROSS_HALF_MM = 120.0
+ANGULAR_SELECTION_AUX_PARALLEL_MM = 0.0
 
 
 def _find_nearest_angular_record_index(
@@ -148,7 +148,9 @@ def _append_aux_line(
             return
     except Exception:
         return
-    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(p0, p1)))
+    elements.append(
+        AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(p0, p1))
+    )
 
 
 def _build_angular_selection_auxiliary_elements(
@@ -158,22 +160,22 @@ def _build_angular_selection_auxiliary_elements(
     pen: int = ANGULAR_SELECTION_AUX_PEN,
 ) -> list[Any]:
     """
-    Marco auxiliar de seleccion: eje, paralelas y escuadras en extremos.
+    Marco auxiliar de seleccion: eje, paralelas y cruz central (sin escuadras).
     No modifica el color del angular; solo indica que esta seleccionado.
     """
     if line is None:
         return []
 
     props = _make_angular_selection_aux_properties(color=color, pen=pen)
-    start = AllplanGeo.Point3D(
-        line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
-    )
+    start = AllplanGeo.Point3D(line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z)
     end = AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z)
 
     outward_norm = normalize_vector(outward) if outward is not None else None
     if outward_norm is not None and outward_norm.GetLength() > 1e-6:
-        start = _offset_point3d(start, outward_norm, ANGULAR_SELECTION_AUX_OUTWARD_MM)
-        end = _offset_point3d(end, outward_norm, ANGULAR_SELECTION_AUX_OUTWARD_MM)
+        outward_mm = float(ANGULAR_SELECTION_AUX_OUTWARD_MM)
+        if abs(outward_mm) > 0.01:
+            start = _offset_point3d(start, outward_norm, outward_mm)
+            end = _offset_point3d(end, outward_norm, outward_mm)
 
     axis_vec = normalize_vector(
         AllplanGeo.Vector3D(end.X - start.X, end.Y - start.Y, end.Z - start.Z)
@@ -184,9 +186,13 @@ def _build_angular_selection_auxiliary_elements(
     if outward_norm is not None and outward_norm.GetLength() > 1e-6:
         lateral = normalize_vector(vector_cross(axis_vec, outward_norm))
     else:
-        lateral = normalize_vector(vector_cross(axis_vec, AllplanGeo.Vector3D(0.0, 0.0, 1.0)))
+        lateral = normalize_vector(
+            vector_cross(axis_vec, AllplanGeo.Vector3D(0.0, 0.0, 1.0))
+        )
     if lateral.GetLength() < 1e-6:
-        lateral = normalize_vector(vector_cross(axis_vec, AllplanGeo.Vector3D(0.0, 1.0, 0.0)))
+        lateral = normalize_vector(
+            vector_cross(axis_vec, AllplanGeo.Vector3D(0.0, 1.0, 0.0))
+        )
     vertical = normalize_vector(vector_cross(axis_vec, lateral))
 
     guides: list[Any] = []
@@ -199,22 +205,12 @@ def _build_angular_selection_auxiliary_elements(
         p1 = _offset_point3d(end, lateral, off)
         _append_aux_line(guides, props, p0, p1)
 
-    bracket = ANGULAR_SELECTION_AUX_BRACKET_MM
-    for anchor in (start, end):
-        corner_a = _offset_point3d(anchor, lateral, bracket)
-        corner_b = _offset_point3d(anchor, vertical, bracket)
-        corner_c = _offset_point3d(corner_a, vertical, bracket)
-        _append_aux_line(guides, props, anchor, corner_a)
-        _append_aux_line(guides, props, anchor, corner_b)
-        _append_aux_line(guides, props, corner_a, corner_c)
-        _append_aux_line(guides, props, corner_b, corner_c)
-
     mid = AllplanGeo.Point3D(
         (start.X + end.X) / 2.0,
         (start.Y + end.Y) / 2.0,
         (start.Z + end.Z) / 2.0,
     )
-    cross_half = bracket * 0.65
+    cross_half = float(ANGULAR_SELECTION_AUX_CROSS_HALF_MM)
     _append_aux_line(
         guides,
         props,
@@ -2915,7 +2911,9 @@ class ExistingAngularSelectInteractor(BaseScriptObjectInteractor):
                             pyp_element, param_list, input_point=input_point
                         )
                     )
-                    self._finish_selection(pyp_element, param_list, record_index, input_point)
+                    self._finish_selection(
+                        pyp_element, param_list, record_index, input_point
+                    )
                     return False
             print(
                 "[SELECT][ANGULAR] Clic sin elemento: seleccione la geometria "
@@ -3036,9 +3034,12 @@ class AngularLineScript(BaseScriptObject):
                     self._apply_param_list_to_build_ele(param_list_src)
                     _params = parse_params_list_to_dict(param_list_src)
                     self._z_unique_from_group = _params.get("z_unique", 0)
-                    self._group_hash_from_params = str(
-                        _params.get("GroupHash", "") or ""
-                    ).strip().strip("'").strip('"')
+                    self._group_hash_from_params = (
+                        str(_params.get("GroupHash", "") or "")
+                        .strip()
+                        .strip("'")
+                        .strip('"')
+                    )
                     try:
                         self._z_unique_from_group = (
                             float(self._z_unique_from_group)
@@ -3706,9 +3707,12 @@ class AngularLineScript(BaseScriptObject):
                 raw_pp = str(state.get("pmp_pare", "") or "").strip()
                 self.build_ele.pmp_pare.value = raw_pp.strip("'").strip('"')
 
-            state_group_hash = str(
-                state.get("GroupHash", state.get("group_hash", "")) or ""
-            ).strip().strip("'").strip('"')
+            state_group_hash = (
+                str(state.get("GroupHash", state.get("group_hash", "")) or "")
+                .strip()
+                .strip("'")
+                .strip('"')
+            )
             if state_group_hash:
                 self._group_hash_from_params = state_group_hash
 
@@ -5407,7 +5411,9 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return None
 
-    def _face_distance_to_point(self, face_info: dict, point: AllplanGeo.Point3D) -> float:
+    def _face_distance_to_point(
+        self, face_info: dict, point: AllplanGeo.Point3D
+    ) -> float:
         """Distancia absoluta desde un punto al plano de una cara lateral."""
         try:
             normal = normalize_vector(face_info.get("normal"))
@@ -5499,8 +5505,15 @@ class AngularLineScript(BaseScriptObject):
         face_polygon = best_face.get("polygon")
         face_normal = normalize_vector(best_face.get("normal"))
         face_center = self._get_face_center(face_polygon)
-        if reference_point and face_center and face_normal and face_normal.GetLength() > 1e-6:
-            face_point = project_point_to_plane(reference_point, face_center, face_normal)
+        if (
+            reference_point
+            and face_center
+            and face_normal
+            and face_normal.GetLength() > 1e-6
+        ):
+            face_point = project_point_to_plane(
+                reference_point, face_center, face_normal
+            )
         else:
             face_point = face_center
 
@@ -5832,9 +5845,7 @@ class AngularLineScript(BaseScriptObject):
             props.Construction = True
             props.ColorByLayer = False
             props.PenByLayer = False
-            preview_elements.append(
-                AllplanBasisElements.ModelElement3D(props, geo)
-            )
+            preview_elements.append(AllplanBasisElements.ModelElement3D(props, geo))
         return preview_elements
 
     def _prepare_line_for_distribution_preview(
@@ -5936,7 +5947,9 @@ class AngularLineScript(BaseScriptObject):
         try:
             separation = max(
                 0.0,
-                float(getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0),
+                float(
+                    getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0
+                ),
             )
         except (ValueError, TypeError):
             separation = 10.0
@@ -5962,7 +5975,9 @@ class AngularLineScript(BaseScriptObject):
 
         self._ensure_preview_attribute_ids()
         wall_pare = ""
-        if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, "value"):
+        if hasattr(self.build_ele, "pmp_pare") and hasattr(
+            self.build_ele.pmp_pare, "value"
+        ):
             wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
 
         model_elements = self.create_angulars(
@@ -6012,9 +6027,7 @@ class AngularLineScript(BaseScriptObject):
         elif preview_line:
             model_list = ModelEleList()
             model_list.append_geometry_3d(preview_line)
-            AllplanBaseElements.DrawElementPreview(
-                doc, matrix, model_list, True, None
-            )
+            AllplanBaseElements.DrawElementPreview(doc, matrix, model_list, True, None)
 
         self._draw_inline_selected_angular_preview(clear_before=False)
 
@@ -6215,10 +6228,8 @@ class AngularLineScript(BaseScriptObject):
             if noiguid:
                 visited.add(noiguid)
             try:
-                parent = (
-                    AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
-                        current
-                    )
+                parent = AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                    current
                 )
             except Exception:
                 parent = None
@@ -6256,10 +6267,8 @@ class AngularLineScript(BaseScriptObject):
                         is_group = False
                         is_part = False
                         try:
-                            is_group = (
-                                AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
-                                    current
-                                )
+                            is_group = AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
+                                current
                             )
                             is_part = (
                                 not is_group
@@ -6290,10 +6299,8 @@ class AngularLineScript(BaseScriptObject):
                                         )
                                         return current, param_list
                                     try:
-                                        parent = (
-                                            AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
-                                                current
-                                            )
+                                        parent = AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                                            current
                                         )
                                     except Exception:
                                         parent = None
@@ -6336,10 +6343,8 @@ class AngularLineScript(BaseScriptObject):
                                 )
 
                         try:
-                            parent = (
-                                AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
-                                    current
-                                )
+                            parent = AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                                current
                             )
                         except Exception:
                             parent = None
@@ -6382,9 +6387,7 @@ class AngularLineScript(BaseScriptObject):
                 param_list = self._read_angular_param_list_from_element(rec_element)
                 if not param_list:
                     param_list = list(record.get("param_list") or [])
-                print(
-                    f"[SELECT][ANGULAR] PPG por proximidad indice={record_index}"
-                )
+                print(f"[SELECT][ANGULAR] PPG por proximidad indice={record_index}")
                 return rec_element, param_list
 
         if rejected_group_names:
@@ -6410,9 +6413,7 @@ class AngularLineScript(BaseScriptObject):
             start = AllplanGeo.Point3D(
                 line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
             )
-            end = AllplanGeo.Point3D(
-                line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
-            )
+            end = AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z)
         elif not isinstance(start, AllplanGeo.Point3D) or not isinstance(
             end, AllplanGeo.Point3D
         ):
@@ -6420,7 +6421,9 @@ class AngularLineScript(BaseScriptObject):
             end = None
 
         pos = None
-        if isinstance(start, AllplanGeo.Point3D) and isinstance(end, AllplanGeo.Point3D):
+        if isinstance(start, AllplanGeo.Point3D) and isinstance(
+            end, AllplanGeo.Point3D
+        ):
             pos = AllplanGeo.Point3D(
                 (start.X + end.X) / 2.0,
                 (start.Y + end.Y) / 2.0,
@@ -6490,9 +6493,7 @@ class AngularLineScript(BaseScriptObject):
             return existing_idx, self._created_angular_records[existing_idx]
 
         if getattr(self, "state", None) == SELECTING_EXISTING_ANGULAR:
-            print(
-                "[SELECT][ANGULAR] PPG ignorado: no pertenece a la ejecucion actual"
-            )
+            print("[SELECT][ANGULAR] PPG ignorado: no pertenece a la ejecucion actual")
             return None, None
 
         self._created_angular_records.append(record)
@@ -6510,13 +6511,9 @@ class AngularLineScript(BaseScriptObject):
             "(solo angulares colocados en esta sesion)"
         )
         try:
-            AllplanUtil.ShowMessageBox(
-                ANGULAR_OTHER_EXECUTION_MSG, AllplanUtil.MB_OK
-            )
+            AllplanUtil.ShowMessageBox(ANGULAR_OTHER_EXECUTION_MSG, AllplanUtil.MB_OK)
         except Exception as exc:
-            print(
-                f"[SELECT][ANGULAR] No se pudo mostrar el cuadro de aviso: {exc}"
-            )
+            print(f"[SELECT][ANGULAR] No se pudo mostrar el cuadro de aviso: {exc}")
             print(ANGULAR_OTHER_EXECUTION_MSG)
 
     def _remember_created_individual_angular(
@@ -6618,10 +6615,8 @@ class AngularLineScript(BaseScriptObject):
             return []
         children_out: list = []
         try:
-            children = (
-                AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
-                    root, True
-                )
+            children = AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
+                root, True
             )
         except Exception:
             return children_out
@@ -6823,9 +6818,7 @@ class AngularLineScript(BaseScriptObject):
             try:
                 translation = placement_matrix.GetTranslationVector()
                 trans_len = translation.GetLength() if translation else 0.0
-                print(
-                    f"[SYNC][ANGULAR] Placement matrix traslacion={trans_len:.3f} mm"
-                )
+                print(f"[SYNC][ANGULAR] Placement matrix traslacion={trans_len:.3f} mm")
                 if translation and trans_len > 1e-6:
                     return placement_matrix
             except Exception:
@@ -6842,9 +6835,7 @@ class AngularLineScript(BaseScriptObject):
             )
             if not success:
                 return {}
-            return parse_params_list_to_dict(
-                self._parameter_to_param_list(parameter)
-            )
+            return parse_params_list_to_dict(self._parameter_to_param_list(parameter))
         except Exception:
             return {}
 
@@ -6959,9 +6950,7 @@ class AngularLineScript(BaseScriptObject):
                     (min_pt.Z + max_pt.Z) / 2.0,
                 )
             except Exception as exc:
-                print(
-                    f"[SYNC][ANGULAR] Error leyendo MinMax3D ({label}): {exc}"
-                )
+                print(f"[SYNC][ANGULAR] Error leyendo MinMax3D ({label}): {exc}")
                 return None
 
         width = abs(max_pt.X - min_pt.X)
@@ -6996,15 +6985,10 @@ class AngularLineScript(BaseScriptObject):
 
         volume_adapters: list = []
         try:
-            volume_type_id = AllplanIFW.QueryTypeID(
-                AllplanEleAdapter.Volume3D_TypeUUID
-            )
+            volume_type_id = AllplanIFW.QueryTypeID(AllplanEleAdapter.Volume3D_TypeUUID)
             for adapter in all_adapters:
                 try:
-                    if (
-                        adapter.GetElementAdapterType().GetGuid()
-                        == volume_type_id
-                    ):
+                    if adapter.GetElementAdapterType().GetGuid() == volume_type_id:
                         volume_adapters.append(adapter)
                 except Exception:
                     continue
@@ -7027,9 +7011,7 @@ class AngularLineScript(BaseScriptObject):
     def _sync_line_from_child_pythonpart_params(
         self, pyp_element, min_displacement_mm: float = 5.0
     ) -> bool:
-        new_start, new_end = self._read_line_from_child_pythonpart_params(
-            pyp_element
-        )
+        new_start, new_end = self._read_line_from_child_pythonpart_params(pyp_element)
         if new_start is None or new_end is None:
             return False
 
@@ -7092,9 +7074,7 @@ class AngularLineScript(BaseScriptObject):
                     piece_length = p0.GetDistance(p1)
 
         if piece_length <= 1e-6:
-            dims = sorted(
-                [bbox["width"], bbox["height"], bbox["depth"]], reverse=True
-            )
+            dims = sorted([bbox["width"], bbox["height"], bbox["depth"]], reverse=True)
             piece_length = dims[0] if dims else 0.0
 
         if piece_length <= 1e-6:
@@ -7142,9 +7122,7 @@ class AngularLineScript(BaseScriptObject):
         )
         return True
 
-    def _get_combined_bbox_from_geometries(
-        self, geometries: list
-    ) -> dict | None:
+    def _get_combined_bbox_from_geometries(self, geometries: list) -> dict | None:
         """Bounding box unificado de varias BRep3D."""
         if not geometries:
             return None
@@ -7220,9 +7198,7 @@ class AngularLineScript(BaseScriptObject):
                 start.X, start.Y, start.Z
             )
         if hasattr(self.build_ele, "PuntoFinal"):
-            self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(
-                end.X, end.Y, end.Z
-            )
+            self.build_ele.PuntoFinal.value = AllplanGeo.Point3D(end.X, end.Y, end.Z)
         self.line_result.input_line = AllplanGeo.Line3D(
             AllplanGeo.Point3D(start.X, start.Y, start.Z),
             AllplanGeo.Point3D(end.X, end.Y, end.Z),
@@ -7373,9 +7349,7 @@ class AngularLineScript(BaseScriptObject):
             new_start = AllplanGeo.Transform(old_start, placement_matrix)
             new_end = AllplanGeo.Transform(old_end, placement_matrix)
         except Exception as exc:
-            print(
-                f"[SELECT][ANGULAR] Error aplicando placement matrix: {exc}"
-            )
+            print(f"[SELECT][ANGULAR] Error aplicando placement matrix: {exc}")
             return False
 
         displacement = min(
@@ -7542,10 +7516,8 @@ class AngularLineScript(BaseScriptObject):
             if depth >= max_depth:
                 continue
             try:
-                children = (
-                    AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
-                        current, True
-                    )
+                children = AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
+                    current, True
                 )
             except Exception:
                 continue
@@ -7828,9 +7800,7 @@ class AngularLineScript(BaseScriptObject):
         print("[SELECT][ANGULAR] Continua colocacion individual")
         return True
 
-    def _enter_individual_angular_edit_mode(
-        self, result: AngularSelectResult
-    ) -> bool:
+    def _enter_individual_angular_edit_mode(self, result: AngularSelectResult) -> bool:
         """
         Tras Seleccionar: carga el PPG en la paleta y prepara edicion
         (paleta + handles). La sesion sigue en CREATE multi-placement.
@@ -7992,7 +7962,9 @@ class AngularLineScript(BaseScriptObject):
             return False
         try:
             if AllplanGeo.CalcLength(AllplanGeo.Line3D(p0, p1)) < 0.1:
-                print("[SELECT][ANGULAR] Linea invalida en paleta (puntos coincidentes)")
+                print(
+                    "[SELECT][ANGULAR] Linea invalida en paleta (puntos coincidentes)"
+                )
                 return False
         except Exception:
             return False
@@ -8026,7 +7998,9 @@ class AngularLineScript(BaseScriptObject):
             if start is not None and end is not None:
                 return AllplanGeo.Line3D(start, end)
 
-        if hasattr(self.build_ele, "PuntoInicial") and hasattr(self.build_ele, "PuntoFinal"):
+        if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+            self.build_ele, "PuntoFinal"
+        ):
             p0 = getattr(self.build_ele.PuntoInicial, "value", None)
             p1 = getattr(self.build_ele.PuntoFinal, "value", None)
             if p0 is not None and p1 is not None:
@@ -8057,7 +8031,9 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(self.build_ele, "CaraNormalZ"):
             nz = getattr(self.build_ele.CaraNormalZ, "value", None)
         if nx is not None and ny is not None and nz is not None:
-            normal = normalize_vector(AllplanGeo.Vector3D(float(nx), float(ny), float(nz)))
+            normal = normalize_vector(
+                AllplanGeo.Vector3D(float(nx), float(ny), float(nz))
+            )
             if normal.GetLength() > 1e-6:
                 return normal
         return None
@@ -8202,7 +8178,9 @@ class AngularLineScript(BaseScriptObject):
                     break
             if new_pyp is None:
                 for element in created_elements:
-                    if AllplanBaseElements.PythonPartService.IsPythonPartElement(element):
+                    if AllplanBaseElements.PythonPartService.IsPythonPartElement(
+                        element
+                    ):
                         new_pyp = element
                         break
 
@@ -8289,8 +8267,10 @@ class AngularLineScript(BaseScriptObject):
             return False
         try:
             line = getattr(self.line_result, "input_line", None)
-            if line and hasattr(self.build_ele, "PuntoInicial") and hasattr(
-                self.build_ele, "PuntoFinal"
+            if (
+                line
+                and hasattr(self.build_ele, "PuntoInicial")
+                and hasattr(self.build_ele, "PuntoFinal")
             ):
                 self.build_ele.PuntoInicial.value = AllplanGeo.Point3D(
                     line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
@@ -9109,7 +9089,9 @@ class AngularLineScript(BaseScriptObject):
 
         overlay = self._get_inline_selection_preview_overlay()
         if not overlay:
-            print("[SELECT][ANGULAR] Sin linea auxiliar: no hay eje PuntoInicial/PuntoFinal")
+            print(
+                "[SELECT][ANGULAR] Sin linea auxiliar: no hay eje PuntoInicial/PuntoFinal"
+            )
             return False
 
         doc = self._get_inline_preview_document()
@@ -9523,7 +9505,10 @@ class AngularLineScript(BaseScriptObject):
         # Detectar modo
         print("[MODE]", "EDIT" if is_modify else "CREATE")
 
-        if getattr(self, "_pending_resume_position_after_deselect", False) and not is_modify:
+        if (
+            getattr(self, "_pending_resume_position_after_deselect", False)
+            and not is_modify
+        ):
             self._pending_resume_position_after_deselect = False
             self.state = SELECTING_POSITION
             self.preview_active = False
@@ -9537,9 +9522,7 @@ class AngularLineScript(BaseScriptObject):
                 "[SELECT][ANGULAR] Marco/handles/cotas retirados; "
                 "colocacion individual reanudada"
             )
-            return CreateElementResult(
-                elements=[], handles=[], preview_elements=[]
-            )
+            return CreateElementResult(elements=[], handles=[], preview_elements=[])
 
         if getattr(self, "_inline_selected_angular_active", False) and not is_modify:
             result = self._execute_inline_selection_preview()
@@ -10218,7 +10201,9 @@ class AngularLineScript(BaseScriptObject):
                 if existing_group_hash:
                     self._group_hash_from_params = existing_group_hash
                     self._current_group_hash = existing_group_hash
-                    print(f"[EDIT] Hash fallback desde build_ele: {existing_group_hash[:20]}...")
+                    print(
+                        f"[EDIT] Hash fallback desde build_ele: {existing_group_hash[:20]}..."
+                    )
             except Exception as e:
                 print(f"[EDIT] ERROR al obtener hash existente: {e}")
         print("[EDIT] ==========================================================")
