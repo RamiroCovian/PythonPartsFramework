@@ -105,6 +105,23 @@ def _make_angular_selection_aux_properties(
     return props
 
 
+def _geometry_from_model_element(model_element: Any):
+    """Geometria 3D extraible de un ModelElement3D (preview/seleccion)."""
+    if model_element is None:
+        return None
+    geo = getattr(model_element, "GeometryObject", None) or getattr(
+        model_element, "Geometry", None
+    )
+    if geo is not None:
+        return geo
+    if hasattr(model_element, "GetGeometry"):
+        try:
+            return model_element.GetGeometry()
+        except Exception:
+            return None
+    return None
+
+
 def _offset_point3d(
     point: AllplanGeo.Point3D, direction: AllplanGeo.Vector3D, distance_mm: float
 ) -> AllplanGeo.Point3D:
