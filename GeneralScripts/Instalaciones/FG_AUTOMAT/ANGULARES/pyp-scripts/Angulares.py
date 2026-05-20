@@ -42,17 +42,6 @@ from HandleParameterType import HandleParameterType
 from HandleDirection import HandleDirection
 from BuildingElementAttributeList import BuildingElementAttributeList
 
-try:
-    from Instalaciones.ElementosDefinidos import (
-        draw_selected_defined_element_preview,
-        find_hover_entry,
-    )
-except ImportError:
-    from ElementosDefinidos.interaction import (
-        draw_selected_defined_element_preview,
-        find_hover_entry,
-    )
-
 HOLE_DIAMETER = 14.0
 HOLE_RADIUS = HOLE_DIAMETER / 2.0
 
@@ -66,6 +55,180 @@ ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
 ANGULAR_EVENT_SELECT_EXISTING = 1048
 ANGULAR_EVENT_DESELECT_EXISTING = 1049
+ANGULAR_OTHER_EXECUTION_MSG = (
+    "No se puede seleccionar un angular colocado en otra ejecución.\n\n"
+    "Solo puede editar angulares colocados en la ejecución actual.\n\n"
+    "Para modificar uno anterior, cierre la ejecución actual y abra ese PythonPart."
+)
+
+ANGULAR_SELECTION_AUX_COLOR = 3
+ANGULAR_SELECTION_AUX_PEN = 15
+ANGULAR_SELECTION_AUX_OUTWARD_MM = 120.0
+ANGULAR_SELECTION_AUX_BRACKET_MM = 200.0
+ANGULAR_SELECTION_AUX_PARALLEL_MM = 70.0
+
+
+def _find_nearest_angular_record_index(
+    point: Any, entries: list[dict], tolerance_mm: float = 40.0
+) -> int:
+    """Indice del registro cuyo campo ``pos`` esta mas cerca del punto (mm)."""
+    if point is None or not hasattr(point, "X") or not entries:
+        return -1
+    tol_sq = float(tolerance_mm or 0.0) ** 2
+    best_idx = -1
+    best_dist = None
+    for idx, entry in enumerate(entries):
+        pos = entry.get("pos")
+        if pos is None or not hasattr(pos, "X"):
+            continue
+        dx = float(pos.X) - float(point.X)
+        dy = float(pos.Y) - float(point.Y)
+        dz = float(getattr(pos, "Z", 0.0)) - float(getattr(point, "Z", 0.0))
+        dist_sq = dx * dx + dy * dy + dz * dz
+        if dist_sq <= tol_sq and (best_dist is None or dist_sq < best_dist):
+            best_idx = idx
+            best_dist = dist_sq
+    return best_idx
+
+
+def _make_angular_selection_aux_properties(
+    color: int = ANGULAR_SELECTION_AUX_COLOR,
+    pen: int = ANGULAR_SELECTION_AUX_PEN,
+):
+    """Propiedades visibles para las lineas auxiliares de seleccion."""
+    props = AllplanBaseElements.CommonProperties()
+    try:
+        props.GetGlobalProperties()
+    except Exception:
+        pass
+    props.Color = color
+    props.Pen = pen
+    props.ColorByLayer = False
+    props.PenByLayer = False
+    props.StrokeByLayer = False
+    props.Construction = True
+    return props
+
+
+def _geometry_from_model_element(model_element: Any):
+    """Geometria 3D extraible de un ModelElement3D (preview/seleccion)."""
+    if model_element is None:
+        return None
+    geo = getattr(model_element, "GeometryObject", None) or getattr(
+        model_element, "Geometry", None
+    )
+    if geo is not None:
+        return geo
+    if hasattr(model_element, "GetGeometry"):
+        try:
+            return model_element.GetGeometry()
+        except Exception:
+            return None
+    return None
+
+
+def _offset_point3d(
+    point: AllplanGeo.Point3D, direction: AllplanGeo.Vector3D, distance_mm: float
+) -> AllplanGeo.Point3D:
+    return AllplanGeo.Point3D(
+        point.X + direction.X * distance_mm,
+        point.Y + direction.Y * distance_mm,
+        point.Z + direction.Z * distance_mm,
+    )
+
+
+def _append_aux_line(
+    elements: list[Any],
+    props: Any,
+    p0: AllplanGeo.Point3D,
+    p1: AllplanGeo.Point3D,
+) -> None:
+    try:
+        if AllplanGeo.CalcLength(AllplanGeo.Line3D(p0, p1)) < 0.5:
+            return
+    except Exception:
+        return
+    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(p0, p1)))
+
+
+def _build_angular_selection_auxiliary_elements(
+    line: AllplanGeo.Line3D | None,
+    outward: AllplanGeo.Vector3D | None = None,
+    color: int = ANGULAR_SELECTION_AUX_COLOR,
+    pen: int = ANGULAR_SELECTION_AUX_PEN,
+) -> list[Any]:
+    """
+    Marco auxiliar de seleccion: eje, paralelas y escuadras en extremos.
+    No modifica el color del angular; solo indica que esta seleccionado.
+    """
+    if line is None:
+        return []
+
+    props = _make_angular_selection_aux_properties(color=color, pen=pen)
+    start = AllplanGeo.Point3D(
+        line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
+    )
+    end = AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z)
+
+    outward_norm = normalize_vector(outward) if outward is not None else None
+    if outward_norm is not None and outward_norm.GetLength() > 1e-6:
+        start = _offset_point3d(start, outward_norm, ANGULAR_SELECTION_AUX_OUTWARD_MM)
+        end = _offset_point3d(end, outward_norm, ANGULAR_SELECTION_AUX_OUTWARD_MM)
+
+    axis_vec = normalize_vector(
+        AllplanGeo.Vector3D(end.X - start.X, end.Y - start.Y, end.Z - start.Z)
+    )
+    if axis_vec.GetLength() < 1e-6:
+        return []
+
+    if outward_norm is not None and outward_norm.GetLength() > 1e-6:
+        lateral = normalize_vector(vector_cross(axis_vec, outward_norm))
+    else:
+        lateral = normalize_vector(vector_cross(axis_vec, AllplanGeo.Vector3D(0.0, 0.0, 1.0)))
+    if lateral.GetLength() < 1e-6:
+        lateral = normalize_vector(vector_cross(axis_vec, AllplanGeo.Vector3D(0.0, 1.0, 0.0)))
+    vertical = normalize_vector(vector_cross(axis_vec, lateral))
+
+    guides: list[Any] = []
+    _append_aux_line(guides, props, start, end)
+
+    parallel_offset = ANGULAR_SELECTION_AUX_PARALLEL_MM
+    for sign in (-1.0, 1.0):
+        off = sign * parallel_offset
+        p0 = _offset_point3d(start, lateral, off)
+        p1 = _offset_point3d(end, lateral, off)
+        _append_aux_line(guides, props, p0, p1)
+
+    bracket = ANGULAR_SELECTION_AUX_BRACKET_MM
+    for anchor in (start, end):
+        corner_a = _offset_point3d(anchor, lateral, bracket)
+        corner_b = _offset_point3d(anchor, vertical, bracket)
+        corner_c = _offset_point3d(corner_a, vertical, bracket)
+        _append_aux_line(guides, props, anchor, corner_a)
+        _append_aux_line(guides, props, anchor, corner_b)
+        _append_aux_line(guides, props, corner_a, corner_c)
+        _append_aux_line(guides, props, corner_b, corner_c)
+
+    mid = AllplanGeo.Point3D(
+        (start.X + end.X) / 2.0,
+        (start.Y + end.Y) / 2.0,
+        (start.Z + end.Z) / 2.0,
+    )
+    cross_half = bracket * 0.65
+    _append_aux_line(
+        guides,
+        props,
+        _offset_point3d(mid, lateral, -cross_half),
+        _offset_point3d(mid, lateral, cross_half),
+    )
+    _append_aux_line(
+        guides,
+        props,
+        _offset_point3d(mid, vertical, -cross_half),
+        _offset_point3d(mid, vertical, cross_half),
+    )
+    return guides
+
 
 # Parámetros del .pyp que deben viajar en SavedState y en param_list del grupo para que EDIT
 # no pierda muro/cara/ejes (si no, la geometría se recalcula con contexto incompleto).
@@ -2739,6 +2902,14 @@ class ExistingAngularSelectInteractor(BaseScriptObjectInteractor):
                     None, input_point
                 )
                 if pyp_element is not None:
+                    record_index = (
+                        self.owner._find_created_angular_record_index_for_element(
+                            pyp_element
+                        )
+                    )
+                    if record_index is None:
+                        self.owner._warn_angular_from_other_execution()
+                        return True
                     record_index, _record = (
                         self.owner._register_or_refresh_angular_record_from_ppg(
                             pyp_element, param_list, input_point=input_point
@@ -2765,6 +2936,13 @@ class ExistingAngularSelectInteractor(BaseScriptObjectInteractor):
         fresh_params = self.owner._read_angular_param_list_from_element(pyp_element)
         if fresh_params:
             param_list = fresh_params
+
+        record_index = self.owner._find_created_angular_record_index_for_element(
+            pyp_element
+        )
+        if record_index is None:
+            self.owner._warn_angular_from_other_execution()
+            return True
 
         record_index, _record = self.owner._register_or_refresh_angular_record_from_ppg(
             pyp_element, param_list, input_point=input_point
@@ -2889,6 +3067,8 @@ class AngularLineScript(BaseScriptObject):
         self._created_angular_records = []
         self._angular_record_selected_index = None
         self._inline_last_execute_result = None
+        self._pending_resume_position_after_deselect = False
+        self._resume_after_deselect_inline = False
 
         if self.is_modification_mode:
             self._load_existing_points()
@@ -5101,6 +5281,17 @@ class AngularLineScript(BaseScriptObject):
 
     def start_next_input(self):
         """Gestiona la transición entre interactors"""
+        if getattr(self, "_resume_after_deselect_inline", False):
+            self._resume_after_deselect_inline = False
+            self._clear_framework_handles_and_controls()
+            self._reset_coord_input_after_inline_edit()
+            self._resume_individual_position_input(self._get_active_coord_input())
+            print(
+                "[SELECT][ANGULAR] Colocacion individual reanudada "
+                "(tras Deseleccionar)"
+            )
+            return
+
         if self.state == SELECTING_WALL:
             if self._is_individual_distribution():
                 if self.wall_select_result.is_selected:
@@ -5584,6 +5775,209 @@ class AngularLineScript(BaseScriptObject):
 
         return preview_line
 
+    def _ensure_preview_attribute_ids(self) -> None:
+        """IDs de atributos para preview/create sin depender de un execute() previo."""
+        if getattr(self, "_preview_attribute_ids_ready", False):
+            return
+        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_pare"
+        )
+        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "PMP_WALL_ID"
+        )
+        self.attr_pmp_fg_ang_detall_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_DETALL"
+            )
+        )
+        self.attr_pmp_fg_ang_forats_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_FORATS"
+            )
+        )
+        self.attr_pmp_fg_ang_nom_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_NOM"
+            )
+        )
+        self.attr_pmp_fg_angular_neopre_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANGULAR_NEOPRE"
+            )
+        )
+        self.attr_pmp_fg_ang_neopre_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_NEOPRE"
+            )
+        )
+        self._preview_attribute_ids_ready = True
+
+    def _apply_angular_preview_display_properties(
+        self, elements: list[Any]
+    ) -> list[Any]:
+        """Misma geometria que el angular final; capa de preview (Construction)."""
+        preview_elements: list[Any] = []
+        for element in elements or []:
+            geo = _geometry_from_model_element(element)
+            if geo is None:
+                continue
+            props = AllplanBaseElements.CommonProperties()
+            try:
+                if hasattr(element, "GetCommonProperties"):
+                    props = element.GetCommonProperties()
+                else:
+                    props.GetGlobalProperties()
+            except Exception:
+                props.GetGlobalProperties()
+            props.Construction = True
+            props.ColorByLayer = False
+            props.PenByLayer = False
+            preview_elements.append(
+                AllplanBasisElements.ModelElement3D(props, geo)
+            )
+        return preview_elements
+
+    def _prepare_line_for_distribution_preview(
+        self, line: AllplanGeo.Line3D
+    ) -> AllplanGeo.Line3D:
+        """Alinea la guia de preview con la misma logica que preview_line_function."""
+        if not line:
+            return line
+
+        self._update_incremental_growth()
+
+        if (
+            not self.is_free_mode
+            and self.face_polygon
+            and self.face_normal
+            and self.face_point
+        ):
+            if self._is_individual_distribution():
+                line = self._project_line_to_individual_vertical_face(line)
+            else:
+                projected_line = project_line_on_face(
+                    line, self.face_point, self.face_normal
+                )
+                line = clamp_line_to_face_bounds(
+                    projected_line, self.face_polygon, self.face_normal
+                )
+
+        try:
+            angular_key = (
+                self.build_ele.TipoAngular.value
+                if hasattr(self.build_ele, "TipoAngular")
+                else None
+            )
+            if angular_key and angular_key in ANGULAR_CATALOG:
+                definition = ANGULAR_CATALOG[angular_key]
+                piece_length = definition.get(
+                    "piece_length", definition.get("length", 0.0)
+                )
+                separation = 10.0
+                if hasattr(self.build_ele, "SeparacionAngulares"):
+                    try:
+                        separation = max(
+                            0.0, float(self.build_ele.SeparacionAngulares.value)
+                        )
+                    except (ValueError, TypeError):
+                        pass
+                if piece_length > 0:
+                    if self._is_individual_distribution():
+                        line = set_line_length(line, piece_length)
+                    else:
+                        line = adjust_group_line_to_occupied_length(
+                            line, piece_length, separation
+                        )
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        return line
+
+    def _build_distribution_angular_preview_from_line(
+        self, line: AllplanGeo.Line3D
+    ) -> list[Any]:
+        """Preview 3D real (Individual o Grupal) a partir de la linea guia."""
+        if not line:
+            return []
+        try:
+            if AllplanGeo.CalcLength(line) < 0.1:
+                return []
+        except Exception:
+            return []
+
+        distribution_type = self._get_distribution_type()
+        if distribution_type not in (DISTRIBUTION_INDIVIDUAL, DISTRIBUTION_GROUP):
+            return []
+
+        angular_key = (
+            getattr(self.build_ele.TipoAngular, "value", "").strip()
+            if hasattr(self.build_ele, "TipoAngular")
+            else ""
+        )
+        definition = ANGULAR_CATALOG.get(angular_key)
+        if not definition:
+            return []
+
+        rot_val = (
+            getattr(self.build_ele.RotacionManual, "value", 0.0)
+            if hasattr(self.build_ele, "RotacionManual")
+            else 0.0
+        )
+        rotation_deg = (
+            rot_val.GetDeg()
+            if hasattr(rot_val, "GetDeg")
+            else float(rot_val) if rot_val is not None else 0.0
+        )
+        invert_side = (
+            bool(getattr(self.build_ele.InvertirAngular, "value", False))
+            if hasattr(self.build_ele, "InvertirAngular")
+            else False
+        )
+        try:
+            separation = max(
+                0.0,
+                float(getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0),
+            )
+        except (ValueError, TypeError):
+            separation = 10.0
+
+        start_point = AllplanGeo.Point3D(
+            line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
+        )
+        end_point = AllplanGeo.Point3D(
+            line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
+        )
+
+        geometries, edges = self._create_geometries_for_distribution(
+            distribution_type=distribution_type,
+            definition=definition,
+            start_point=start_point,
+            end_point=end_point,
+            invert_side=invert_side,
+            rotation_deg=rotation_deg,
+            gap=separation,
+        )
+        if not geometries:
+            return []
+
+        self._ensure_preview_attribute_ids()
+        wall_pare = ""
+        if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, "value"):
+            wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
+
+        model_elements = self.create_angulars(
+            geometries, edges, definition, pmp_pare=wall_pare or None
+        )
+        return self._apply_angular_preview_display_properties(model_elements)
+
+    def _build_individual_angular_preview_from_line(
+        self, line: AllplanGeo.Line3D
+    ) -> list[Any]:
+        """Preview 3D del angular individual."""
+        if not self._is_individual_distribution():
+            return []
+        return self._build_distribution_angular_preview_from_line(line)
+
     def _start_position_input(self):
         """Inicia el tercer click: posición final del angular individual."""
         self.position_result = PointInteractorResult()
@@ -5595,9 +5989,7 @@ class AngularLineScript(BaseScriptObject):
         )
 
     def preview_position_function(self):
-        """Preview de la línea interna que se creará desde el punto clicado."""
-        self._draw_inline_selected_angular_preview()
-
+        """Preview del angular completo en la posicion indicada (no solo el eje)."""
         point = self.position_result.input_point
         if not point:
             return
@@ -5607,12 +5999,24 @@ class AngularLineScript(BaseScriptObject):
             return
 
         preview_line = self._build_individual_centered_preview_line(line)
-        model_list = ModelEleList()
-        model_list.append_geometry_3d(preview_line)
-        if model_list:
+        preview_elements = self._build_distribution_angular_preview_from_line(
+            preview_line
+        )
+
+        doc = self._get_inline_preview_document()
+        matrix = AllplanGeo.Matrix3D()
+        if preview_elements:
             AllplanBaseElements.DrawElementPreview(
-                self.document, AllplanGeo.Matrix3D(), model_list, True, None
+                doc, matrix, preview_elements, True, None
             )
+        elif preview_line:
+            model_list = ModelEleList()
+            model_list.append_geometry_3d(preview_line)
+            AllplanBaseElements.DrawElementPreview(
+                doc, matrix, model_list, True, None
+            )
+
+        self._draw_inline_selected_angular_preview(clear_before=False)
 
     def _process_position_input(self):
         """Convierte el tercer click en línea interna y procesa la pieza."""
@@ -6085,6 +6489,12 @@ class AngularLineScript(BaseScriptObject):
             )
             return existing_idx, self._created_angular_records[existing_idx]
 
+        if getattr(self, "state", None) == SELECTING_EXISTING_ANGULAR:
+            print(
+                "[SELECT][ANGULAR] PPG ignorado: no pertenece a la ejecucion actual"
+            )
+            return None, None
+
         self._created_angular_records.append(record)
         new_idx = len(self._created_angular_records) - 1
         print(
@@ -6092,6 +6502,22 @@ class AngularLineScript(BaseScriptObject):
             f"total={len(self._created_angular_records)}"
         )
         return new_idx, record
+
+    def _warn_angular_from_other_execution(self) -> None:
+        """Aviso al usuario: Seleccionar solo angulares de la ejecucion en curso."""
+        print(
+            "[SELECT][ANGULAR] Rechazado: angular de otra ejecucion "
+            "(solo angulares colocados en esta sesion)"
+        )
+        try:
+            AllplanUtil.ShowMessageBox(
+                ANGULAR_OTHER_EXECUTION_MSG, AllplanUtil.MB_OK
+            )
+        except Exception as exc:
+            print(
+                f"[SELECT][ANGULAR] No se pudo mostrar el cuadro de aviso: {exc}"
+            )
+            print(ANGULAR_OTHER_EXECUTION_MSG)
 
     def _remember_created_individual_angular(
         self, created_elements, model_ele_list=None
@@ -7302,12 +7728,12 @@ class AngularLineScript(BaseScriptObject):
         )
 
     def _find_created_angular_record_at_point(self, point):
-        """Busca el angular creado en esta ejecucion siguiendo el patron ElementosDefinidos."""
+        """Busca el angular creado en esta sesion por proximidad al centro o al segmento."""
         if point is None:
             return None, None
 
         records = getattr(self, "_created_angular_records", []) or []
-        idx_hit = find_hover_entry(point, records, 300.0)
+        idx_hit = _find_nearest_angular_record_index(point, records, 300.0)
         if idx_hit != -1:
             print(f"[SELECT][ANGULAR] Seleccion por centro indice={idx_hit}")
             return idx_hit, records[idx_hit]
@@ -7383,14 +7809,24 @@ class AngularLineScript(BaseScriptObject):
 
     def _deselect_inline_angular(self) -> bool:
         """Boton Deseleccionar: termina edicion y vuelve a colocar angulares."""
-        if getattr(self, "_inline_selected_angular_active", False):
+        had_inline = getattr(self, "_inline_selected_angular_active", False)
+        if had_inline:
+            self._clear_inline_selection_visual()
             self._leave_individual_angular_edit_mode()
         else:
             print("[SELECT][ANGULAR] No hay angular en edicion")
+
         self.angular_select_result = AngularSelectResult()
-        resumed = self._resume_individual_position_input(self._get_active_coord_input())
+        self.line_result = LineInteractorResult()
+        self.position_result = PointInteractorResult()
+        self.state = SELECTING_POSITION
+        self.preview_active = False
+        # Sin interactor aqui: el framework debe ejecutar execute() vacio y borrar
+        # marco/handles antes de reanudar el tercer click.
+        self.script_object_interactor = None
+        self._pending_resume_position_after_deselect = True
         print("[SELECT][ANGULAR] Continua colocacion individual")
-        return resumed
+        return True
 
     def _enter_individual_angular_edit_mode(
         self, result: AngularSelectResult
@@ -7462,6 +7898,63 @@ class AngularLineScript(BaseScriptObject):
             traceback.print_exc()
             return False
 
+    def _clear_framework_handles_and_controls(self) -> None:
+        """Quita handles nativos y cotas dinamicas (p. ej. 460.0) del input."""
+        try:
+            AllplanIFW.HandleService().RemoveHandles()
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] RemoveHandles: {exc}")
+        try:
+            AllplanIFW.BuildingElementInputControls().CloseControls()
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] CloseControls: {exc}")
+
+    def _reset_coord_input_after_inline_edit(self) -> None:
+        """Sale del modo 'Seleccione el handle' y de la abscisa de edicion."""
+        coord_input = self._get_active_coord_input()
+        if coord_input is None:
+            return
+        try:
+            zero = AllplanGeo.Point3D(0.0, 0.0, 0.0)
+            coord_input.SetAbscissaElement(
+                AllplanGeo.Line3D(zero, zero), AllplanGeo.Matrix3D()
+            )
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] Limpiar abscisa: {exc}")
+
+    def _clear_inline_selection_visual(self) -> None:
+        """Borra marco auxiliar y preview 3D del angular en edicion inline."""
+        self._clear_framework_handles_and_controls()
+        doc = self._get_inline_preview_document()
+        if doc is None:
+            return
+
+        to_clear: list[Any] = []
+        cached = getattr(self, "_inline_last_execute_result", None)
+        if cached is not None:
+            to_clear.extend(list(cached.elements or []))
+            to_clear.extend(list(cached.preview_elements or []))
+        session_elements = getattr(self, "elements", None) or []
+        if session_elements:
+            to_clear.extend(list(session_elements))
+
+        aux_overlay = self._get_inline_selection_preview_overlay()
+        if aux_overlay:
+            to_clear.extend(aux_overlay)
+
+        if not to_clear:
+            return
+
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                doc, AllplanGeo.Matrix3D(), to_clear, True, None
+            )
+            print(
+                f"[SELECT][ANGULAR] Preview inline limpiado ({len(to_clear)} elementos)"
+            )
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] Error limpiando preview inline: {exc}")
+
     def _leave_individual_angular_edit_mode(self) -> None:
         """Sale del modo edicion de un PPG colocado (sin tocar el modelo)."""
         if getattr(self, "_inline_selected_angular_active", False):
@@ -7477,6 +7970,7 @@ class AngularLineScript(BaseScriptObject):
         self.modification_ele_list = getattr(
             self, "_inline_original_modification_ele_list", None
         )
+        self.elements = []
 
     def _finish_inline_angular_edit(self) -> None:
         """Alias: al colocar otro angular se sale del modo edicion."""
@@ -7508,14 +8002,83 @@ class AngularLineScript(BaseScriptObject):
         )
         return True
 
-    def _refresh_inline_execute_cache(self) -> None:
-        """Cache para execute() del framework: no borrar el PPG en preview."""
-        handles = self._build_inline_edit_handles_result().handles
-        model_list = None
+    def _rebuild_session_preview_model_elements(self) -> list[Any]:
+        """ModelElement3D actuales para resaltar el angular en edicion inline."""
+        if not self._sync_line_from_build_ele_points():
+            return []
+        line = getattr(self.line_result, "input_line", None)
+        if not line:
+            return []
+        return self._build_distribution_angular_preview_from_line(line)
+
+    def _get_inline_selection_axis_line(self) -> AllplanGeo.Line3D | None:
+        """Segmento del angular seleccionado para las lineas auxiliares."""
+        line = getattr(self.line_result, "input_line", None)
+        if line:
+            return line
+
         idx = getattr(self, "_angular_record_selected_index", None)
         records = getattr(self, "_created_angular_records", []) or []
         if idx is not None and 0 <= idx < len(records):
-            model_list = records[idx].get("model_list")
+            record = records[idx]
+            start = record.get("start")
+            end = record.get("end")
+            if start is not None and end is not None:
+                return AllplanGeo.Line3D(start, end)
+
+        if hasattr(self.build_ele, "PuntoInicial") and hasattr(self.build_ele, "PuntoFinal"):
+            p0 = getattr(self.build_ele.PuntoInicial, "value", None)
+            p1 = getattr(self.build_ele.PuntoFinal, "value", None)
+            if p0 is not None and p1 is not None:
+                try:
+                    axis = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(p0.X, p0.Y, p0.Z),
+                        AllplanGeo.Point3D(p1.X, p1.Y, p1.Z),
+                    )
+                    if AllplanGeo.CalcLength(axis) > 0.1:
+                        return axis
+                except Exception:
+                    pass
+        return None
+
+    def _get_inline_selection_outward_vector(self) -> AllplanGeo.Vector3D | None:
+        """Direccion para sacar las guias del muro y que se vean en planta/3D."""
+        face_normal = getattr(self, "face_normal", None)
+        if face_normal is not None:
+            normal = normalize_vector(face_normal)
+            if normal.GetLength() > 1e-6:
+                return normal
+
+        nx = ny = nz = None
+        if hasattr(self.build_ele, "CaraNormalX"):
+            nx = getattr(self.build_ele.CaraNormalX, "value", None)
+        if hasattr(self.build_ele, "CaraNormalY"):
+            ny = getattr(self.build_ele.CaraNormalY, "value", None)
+        if hasattr(self.build_ele, "CaraNormalZ"):
+            nz = getattr(self.build_ele.CaraNormalZ, "value", None)
+        if nx is not None and ny is not None and nz is not None:
+            normal = normalize_vector(AllplanGeo.Vector3D(float(nx), float(ny), float(nz)))
+            if normal.GetLength() > 1e-6:
+                return normal
+        return None
+
+    def _get_inline_selection_preview_overlay(self) -> list[Any]:
+        """Solo lineas auxiliares (acuse visual de seleccion)."""
+        return _build_angular_selection_auxiliary_elements(
+            self._get_inline_selection_axis_line(),
+            self._get_inline_selection_outward_vector(),
+        )
+
+    def _build_inline_selection_create_result(
+        self,
+        model_list: list[Any] | None = None,
+    ) -> CreateElementResult:
+        """
+        Resultado de execute() en edicion inline: PPG en elements (si existe)
+        y marco auxiliar siempre en preview_elements (o en elements si no hay PPG).
+        """
+        overlay = self._get_inline_selection_preview_overlay()
+        handles = self._build_inline_edit_handles_result().handles
         connect_to_ele = ConnectToElements()
         if hasattr(self.build_ele, "MuroGUID") and getattr(
             self.build_ele.MuroGUID, "value", None
@@ -7523,15 +8086,59 @@ class AngularLineScript(BaseScriptObject):
             mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
             if mg:
                 connect_to_ele.connection_elements.append(mg)
-        if model_list:
-            self._inline_last_execute_result = CreateElementResult(
-                elements=model_list,
-                handles=handles,
-                placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-                connect_to_ele=connect_to_ele,
-                uuid_parameter_name="PythonPartUUID",
-                multi_placement=True,
-            )
+
+        base_elements = list(model_list or [])
+        preview_overlay = list(overlay)
+        if not base_elements and preview_overlay:
+            base_elements = list(preview_overlay)
+            preview_overlay = []
+
+        return CreateElementResult(
+            elements=base_elements,
+            handles=handles,
+            preview_elements=preview_overlay,
+            placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
+            connect_to_ele=connect_to_ele,
+            uuid_parameter_name="PythonPartUUID",
+            multi_placement=True,
+        )
+
+    def _refresh_inline_execute_cache(self) -> None:
+        """Cache para execute(): nunca vacio mientras hay seleccion activa."""
+        self.elements = self._rebuild_session_preview_model_elements()
+        model_list = None
+        idx = getattr(self, "_angular_record_selected_index", None)
+        records = getattr(self, "_created_angular_records", []) or []
+        if idx is not None and 0 <= idx < len(records):
+            model_list = records[idx].get("model_list")
+
+        self._inline_last_execute_result = self._build_inline_selection_create_result(
+            model_list
+        )
+        cached = self._inline_last_execute_result
+        print(
+            "[SELECT][ANGULAR] Cache inline actualizado: "
+            f"elements={len(cached.elements)} "
+            f"preview_aux={len(cached.preview_elements)}"
+        )
+
+    def _execute_inline_selection_preview(self) -> CreateElementResult:
+        """Regenera el marco auxiliar en cada execute() (posicion/parametros actuales)."""
+        model_list = None
+        cached = getattr(self, "_inline_last_execute_result", None)
+        if cached is not None and cached.elements:
+            model_list = list(cached.elements)
+
+        idx = getattr(self, "_angular_record_selected_index", None)
+        records = getattr(self, "_created_angular_records", []) or []
+        if idx is not None and 0 <= idx < len(records):
+            record_model_list = records[idx].get("model_list")
+            if record_model_list:
+                model_list = list(record_model_list)
+
+        result = self._build_inline_selection_create_result(model_list)
+        self._inline_last_execute_result = result
+        return result
 
     def _apply_inline_edit_to_model(self, coord_input=None) -> bool:
         """Sustituye el PPG seleccionado en el dibujo (MODIFY + transaccion)."""
@@ -7692,6 +8299,8 @@ class AngularLineScript(BaseScriptObject):
                     line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
                 )
             self._apply_inline_edit_to_model()
+            self._refresh_inline_execute_cache()
+            self._draw_inline_selected_angular_preview()
             return True
         except Exception as exc:
             print(f"[SELECT][ANGULAR] Error ({property_name}): {exc}")
@@ -7729,6 +8338,8 @@ class AngularLineScript(BaseScriptObject):
         records[idx]["end"] = AllplanGeo.Point3D(
             line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
         )
+        self.elements = self._rebuild_session_preview_model_elements()
+        self._refresh_inline_execute_cache()
 
         print("[SELECT][ANGULAR] Registro inline sincronizado desde MODIFY")
 
@@ -7809,65 +8420,22 @@ class AngularLineScript(BaseScriptObject):
         )
 
     def preview_line_function(self, line: AllplanGeo.Line3D) -> ModelEleList:
-        """Función de preview para la línea.
-
-        Si hay una cara seleccionada y no está en modo libre, proyecta y recorta la línea a los límites.
-        Si el crecimiento incremental está activado, ajusta la línea según incrementos.
-        """
+        """Preview 3D de todos los angulares a lo largo de la linea (Grupal/Individual)."""
         if not line:
             return ModelEleList()
 
-        self._update_incremental_growth()
-
-        if (
-            not self.is_free_mode
-            and self.face_polygon
-            and self.face_normal
-            and self.face_point
-        ):
-            if self._is_individual_distribution():
-                line = self._project_line_to_individual_vertical_face(line)
-            else:
-                projected_line = project_line_on_face(
-                    line, self.face_point, self.face_normal
-                )
-                line = clamp_line_to_face_bounds(
-                    projected_line, self.face_polygon, self.face_normal
-                )
-
-        try:
-            angular_key = (
-                self.build_ele.TipoAngular.value
-                if hasattr(self.build_ele, "TipoAngular")
-                else None
-            )
-            if angular_key and angular_key in ANGULAR_CATALOG:
-                definition = ANGULAR_CATALOG[angular_key]
-                piece_length = definition.get(
-                    "piece_length", definition.get("length", 0.0)
-                )
-
-                separation = 10.0
-                if hasattr(self.build_ele, "SeparacionAngulares"):
-                    try:
-                        separation = max(
-                            0.0, float(self.build_ele.SeparacionAngulares.value)
-                        )
-                    except (ValueError, TypeError):
-                        pass
-
-                if piece_length > 0:
-                    if self._get_distribution_type() == DISTRIBUTION_INDIVIDUAL:
-                        line = set_line_length(line, piece_length)
-                    else:
-                        line = adjust_group_line_to_occupied_length(
-                            line, piece_length, separation
-                        )
-        except (ValueError, TypeError, AttributeError):
-            pass
+        prepared_line = self._prepare_line_for_distribution_preview(line)
+        preview_elements = self._build_distribution_angular_preview_from_line(
+            prepared_line
+        )
+        if preview_elements:
+            model_list = ModelEleList()
+            model_list.extend(preview_elements)
+            return model_list
 
         model_list = ModelEleList()
-        model_list.append_geometry_3d(line)
+        if prepared_line:
+            model_list.append_geometry_3d(prepared_line)
         return model_list
 
     def _prepare_line(self, line: AllplanGeo.Line3D) -> tuple[AllplanGeo.Line3D, dict]:
@@ -8322,12 +8890,12 @@ class AngularLineScript(BaseScriptObject):
         if name == "ValorZIndividual" and self._sync_individual_line_to_z_value():
             if getattr(self, "_inline_selected_angular_active", False):
                 self._commit_inline_palette_change(name)
-                return True
+                return False
             return False
 
         if getattr(self, "_inline_selected_angular_active", False) and should_reexecute:
             self._commit_inline_palette_change(name)
-            return True
+            return False
 
         if self.script_object_interactor is not None:
             return True
@@ -8498,13 +9066,31 @@ class AngularLineScript(BaseScriptObject):
         return self.execute()
 
     def on_preview_draw(self):
-        self._draw_inline_selected_angular_preview()
+        if getattr(self, "_inline_selected_angular_active", False):
+            self._draw_inline_selected_angular_preview(clear_before=False)
+            return
+
         if self.preview_active and self.line_result.input_line:
-            model_list = ModelEleList()
-            model_list.append_geometry_3d(self.line_result.input_line)
-            AllplanBaseElements.DrawElementPreview(
-                self.document, AllplanGeo.Matrix3D(), model_list, True, None
+            prepared_line = self._prepare_line_for_distribution_preview(
+                self.line_result.input_line
             )
+            preview_elements = self._build_distribution_angular_preview_from_line(
+                prepared_line
+            )
+            if preview_elements:
+                AllplanBaseElements.DrawElementPreview(
+                    self.document,
+                    AllplanGeo.Matrix3D(),
+                    preview_elements,
+                    True,
+                    None,
+                )
+            elif prepared_line:
+                model_list = ModelEleList()
+                model_list.append_geometry_3d(prepared_line)
+                AllplanBaseElements.DrawElementPreview(
+                    self.document, AllplanGeo.Matrix3D(), model_list, True, None
+                )
 
     def _get_inline_preview_document(self):
         """Obtiene el documento de vista activo para previews interactivos."""
@@ -8516,75 +9102,25 @@ class AngularLineScript(BaseScriptObject):
                 pass
         return self.document
 
-    def _draw_inline_selected_angular_preview(self) -> bool:
-        """Dibuja una segunda pasada visual para diferenciar el angular seleccionado."""
+    def _draw_inline_selected_angular_preview(self, clear_before: bool = False) -> bool:
+        """Refuerzo visual del marco auxiliar (encima del preview del framework)."""
         if not getattr(self, "_inline_selected_angular_active", False):
             return False
 
-        idx = getattr(self, "_angular_record_selected_index", None)
-        records = getattr(self, "_created_angular_records", []) or []
-        record = None
-        if idx is not None and 0 <= idx < len(records):
-            record = records[idx]
+        overlay = self._get_inline_selection_preview_overlay()
+        if not overlay:
+            print("[SELECT][ANGULAR] Sin linea auxiliar: no hay eje PuntoInicial/PuntoFinal")
+            return False
 
         doc = self._get_inline_preview_document()
-        drew_highlight = False
-        if record:
-            model_list = record.get("model_list")
-            if model_list:
-                drew_highlight = draw_selected_defined_element_preview(
-                    doc,
-                    AllplanGeo.Matrix3D(),
-                    model_list,
-                    base_props=None,
-                )
-
-        line = None
-        if record and record.get("start") and record.get("end"):
-            line = AllplanGeo.Line3D(record.get("start"), record.get("end"))
-        elif getattr(self.line_result, "input_line", None):
-            line = self.line_result.input_line
-        if not line:
-            return drew_highlight
-
-        props = AllplanBaseElements.CommonProperties()
-        props.GetGlobalProperties()
-        props.Color = 6
-        props.Pen = 5
-        props.ColorByLayer = False
-        props.PenByLayer = False
-        props.Construction = True
-
-        marker_start = AllplanGeo.Point3D(
-            line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z + 80.0
-        )
-        marker_end = AllplanGeo.Point3D(
-            line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z + 80.0
-        )
-        marker_line = AllplanGeo.Line3D(marker_start, marker_end)
-
-        tick_len = 70.0
-        fallback = [
-            AllplanBasisElements.ModelElement3D(props, marker_line),
-            AllplanBasisElements.ModelElement3D(
-                props,
-                AllplanGeo.Line3D(
-                    AllplanGeo.Point3D(marker_start.X, marker_start.Y, marker_start.Z - tick_len / 2.0),
-                    AllplanGeo.Point3D(marker_start.X, marker_start.Y, marker_start.Z + tick_len / 2.0),
-                ),
-            ),
-            AllplanBasisElements.ModelElement3D(
-                props,
-                AllplanGeo.Line3D(
-                    AllplanGeo.Point3D(marker_end.X, marker_end.Y, marker_end.Z - tick_len / 2.0),
-                    AllplanGeo.Point3D(marker_end.X, marker_end.Y, marker_end.Z + tick_len / 2.0),
-                ),
-            ),
-        ]
-        AllplanBaseElements.DrawElementPreview(
-            doc, AllplanGeo.Matrix3D(), fallback, False, None
-        )
-        return True
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                doc, AllplanGeo.Matrix3D(), overlay, clear_before, None
+            )
+            return True
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] Error dibujando lineas auxiliares: {exc}")
+            return False
 
     def get_or_create_layer_in_group(
         self, group_name: str, short_name: str, long_name: str
@@ -8987,19 +9523,32 @@ class AngularLineScript(BaseScriptObject):
         # Detectar modo
         print("[MODE]", "EDIT" if is_modify else "CREATE")
 
-        if getattr(self, "_inline_selected_angular_active", False) and not is_modify:
-            cached = getattr(self, "_inline_last_execute_result", None)
-            if cached is not None and cached.elements:
-                print(
-                    "[EXECUTE] Edicion inline: se reutiliza ultimo resultado "
-                    f"({len(cached.elements)} elementos, evita borrado en preview)"
-                )
-                return cached
+        if getattr(self, "_pending_resume_position_after_deselect", False) and not is_modify:
+            self._pending_resume_position_after_deselect = False
+            self.state = SELECTING_POSITION
+            self.preview_active = False
+            self._clear_framework_handles_and_controls()
+            self._reset_coord_input_after_inline_edit()
+            # Vacia el resultado del framework (sin handles) y luego reanuda el
+            # tercer click en el mismo hilo, tras quitar handles/cotas.
+            self._resume_after_deselect_inline = True
+            self.start_next_input()
             print(
-                "[EXECUTE] Edicion inline: sin cache; resultado vacio "
-                "(cambios solo via _replace_inline_selected_angular)"
+                "[SELECT][ANGULAR] Marco/handles/cotas retirados; "
+                "colocacion individual reanudada"
             )
-            return CreateElementResult()
+            return CreateElementResult(
+                elements=[], handles=[], preview_elements=[]
+            )
+
+        if getattr(self, "_inline_selected_angular_active", False) and not is_modify:
+            result = self._execute_inline_selection_preview()
+            print(
+                "[EXECUTE] Edicion inline: marco auxiliar persistente "
+                f"(elements={len(result.elements)}, "
+                f"preview_aux={len(result.preview_elements)})"
+            )
+            return result
 
         self.is_editing_existing = is_modify
 
