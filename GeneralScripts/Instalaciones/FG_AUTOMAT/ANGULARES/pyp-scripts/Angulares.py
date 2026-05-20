@@ -5725,6 +5725,144 @@ class AngularLineScript(BaseScriptObject):
 
         return preview_line
 
+    def _ensure_preview_attribute_ids(self) -> None:
+        """IDs de atributos para preview/create sin depender de un execute() previo."""
+        if getattr(self, "_preview_attribute_ids_ready", False):
+            return
+        self.attr_pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_pare"
+        )
+        self.attr_pmp_wall_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "PMP_WALL_ID"
+        )
+        self.attr_pmp_fg_ang_detall_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_DETALL"
+            )
+        )
+        self.attr_pmp_fg_ang_forats_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_FORATS"
+            )
+        )
+        self.attr_pmp_fg_ang_nom_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_NOM"
+            )
+        )
+        self.attr_pmp_fg_angular_neopre_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANGULAR_NEOPRE"
+            )
+        )
+        self.attr_pmp_fg_ang_neopre_id = (
+            AllplanBaseElements.AttributeService.GetAttributeID(
+                self.document, "PMP_FG_ANG_NEOPRE"
+            )
+        )
+        self._preview_attribute_ids_ready = True
+
+    def _apply_individual_preview_display_properties(
+        self, elements: list[Any]
+    ) -> list[Any]:
+        """Misma geometria que el angular final; capa de preview (Construction)."""
+        preview_elements: list[Any] = []
+        for element in elements or []:
+            geo = _geometry_from_model_element(element)
+            if geo is None:
+                continue
+            props = AllplanBaseElements.CommonProperties()
+            try:
+                if hasattr(element, "GetCommonProperties"):
+                    props = element.GetCommonProperties()
+                else:
+                    props.GetGlobalProperties()
+            except Exception:
+                props.GetGlobalProperties()
+            props.Construction = True
+            props.ColorByLayer = False
+            props.PenByLayer = False
+            preview_elements.append(
+                AllplanBasisElements.ModelElement3D(props, geo)
+            )
+        return preview_elements
+
+    def _build_individual_angular_preview_from_line(
+        self, line: AllplanGeo.Line3D
+    ) -> list[Any]:
+        """Preview 3D del angular individual (geometria real, no solo el eje)."""
+        if not line:
+            return []
+        try:
+            if AllplanGeo.CalcLength(line) < 0.1:
+                return []
+        except Exception:
+            return []
+
+        if not self._is_individual_distribution():
+            return []
+
+        angular_key = (
+            getattr(self.build_ele.TipoAngular, "value", "").strip()
+            if hasattr(self.build_ele, "TipoAngular")
+            else ""
+        )
+        definition = ANGULAR_CATALOG.get(angular_key)
+        if not definition:
+            return []
+
+        rot_val = (
+            getattr(self.build_ele.RotacionManual, "value", 0.0)
+            if hasattr(self.build_ele, "RotacionManual")
+            else 0.0
+        )
+        rotation_deg = (
+            rot_val.GetDeg()
+            if hasattr(rot_val, "GetDeg")
+            else float(rot_val) if rot_val is not None else 0.0
+        )
+        invert_side = (
+            bool(getattr(self.build_ele.InvertirAngular, "value", False))
+            if hasattr(self.build_ele, "InvertirAngular")
+            else False
+        )
+        try:
+            separation = max(
+                0.0,
+                float(getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0),
+            )
+        except (ValueError, TypeError):
+            separation = 10.0
+
+        start_point = AllplanGeo.Point3D(
+            line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
+        )
+        end_point = AllplanGeo.Point3D(
+            line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
+        )
+
+        geometries, edges = self._create_geometries_for_distribution(
+            distribution_type=DISTRIBUTION_INDIVIDUAL,
+            definition=definition,
+            start_point=start_point,
+            end_point=end_point,
+            invert_side=invert_side,
+            rotation_deg=rotation_deg,
+            gap=separation,
+        )
+        if not geometries:
+            return []
+
+        self._ensure_preview_attribute_ids()
+        wall_pare = ""
+        if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, "value"):
+            wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
+
+        model_elements = self.create_angulars(
+            geometries, edges, definition, pmp_pare=wall_pare or None
+        )
+        return self._apply_individual_preview_display_properties(model_elements)
+
     def _start_position_input(self):
         """Inicia el tercer click: posición final del angular individual."""
         self.position_result = PointInteractorResult()
@@ -5736,7 +5874,7 @@ class AngularLineScript(BaseScriptObject):
         )
 
     def preview_position_function(self):
-        """Preview de la línea interna que se creará desde el punto clicado."""
+        """Preview del angular completo en la posicion indicada (no solo el eje)."""
         point = self.position_result.input_point
         if not point:
             return
@@ -5746,14 +5884,24 @@ class AngularLineScript(BaseScriptObject):
             return
 
         preview_line = self._build_individual_centered_preview_line(line)
-        model_list = ModelEleList()
-        model_list.append_geometry_3d(preview_line)
-        if model_list:
+        preview_elements = self._build_individual_angular_preview_from_line(
+            preview_line
+        )
+
+        doc = self._get_inline_preview_document()
+        matrix = AllplanGeo.Matrix3D()
+        if preview_elements:
             AllplanBaseElements.DrawElementPreview(
-                self.document, AllplanGeo.Matrix3D(), model_list, True, None
+                doc, matrix, preview_elements, True, None
+            )
+        elif preview_line:
+            model_list = ModelEleList()
+            model_list.append_geometry_3d(preview_line)
+            AllplanBaseElements.DrawElementPreview(
+                doc, matrix, model_list, True, None
             )
 
-        self._draw_inline_selected_angular_preview()
+        self._draw_inline_selected_angular_preview(clear_before=False)
 
     def _process_position_input(self):
         """Convierte el tercer click en línea interna y procesa la pieza."""
@@ -7656,64 +7804,7 @@ class AngularLineScript(BaseScriptObject):
         line = getattr(self.line_result, "input_line", None)
         if not line:
             return []
-
-        tipo_angular_key = (
-            getattr(self.build_ele.TipoAngular, "value", "").strip()
-            if hasattr(self.build_ele, "TipoAngular")
-            else ""
-        )
-        definition = ANGULAR_CATALOG.get(tipo_angular_key)
-        if not definition:
-            return []
-
-        try:
-            separation = max(
-                0.0,
-                float(getattr(self.build_ele.SeparacionAngulares, "value", 10.0) or 10.0),
-            )
-        except (ValueError, TypeError):
-            separation = 10.0
-
-        rot_val = (
-            getattr(self.build_ele.RotacionManual, "value", 0.0)
-            if hasattr(self.build_ele, "RotacionManual")
-            else 0.0
-        )
-        rotation_deg = (
-            rot_val.GetDeg()
-            if hasattr(rot_val, "GetDeg")
-            else float(rot_val) if rot_val is not None else 0.0
-        )
-        invert_side = (
-            bool(getattr(self.build_ele.InvertirAngular, "value", False))
-            if hasattr(self.build_ele, "InvertirAngular")
-            else False
-        )
-
-        start_point = AllplanGeo.Point3D(
-            line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
-        )
-        end_point = AllplanGeo.Point3D(
-            line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
-        )
-
-        geometries, edges = self._create_geometries_for_distribution(
-            distribution_type=self._get_distribution_type(),
-            definition=definition,
-            start_point=start_point,
-            end_point=end_point,
-            invert_side=invert_side,
-            rotation_deg=rotation_deg,
-            gap=separation,
-        )
-        if not geometries:
-            return []
-
-        wall_pare = ""
-        if hasattr(self.build_ele, "pmp_pare") and hasattr(self.build_ele.pmp_pare, "value"):
-            wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
-
-        return self.create_angulars(geometries, edges, definition, pmp_pare=wall_pare or None)
+        return self._build_individual_angular_preview_from_line(line)
 
     def _get_inline_selection_axis_line(self) -> AllplanGeo.Line3D | None:
         """Segmento del angular seleccionado para las lineas auxiliares."""
