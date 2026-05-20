@@ -61,6 +61,12 @@ MAX_HANDLE_DISTANCE = 100000.0
 
 NEO_LAYER = "PMP_NEOPRENS"
 
+# Atributo estandar Allplan "IFC ID" (AttributeIdEnums.IFC_ID)
+IFC_ID_ATTRIBUTE_ID = 683
+
+# Valor de pmp_pare cuando el host no tiene IFC ID (683)
+PMP_PARE_SIN_IFC = "SIN_IFC"
+
 
 def neo_log(message: str) -> None:
     """Log estable para depurar el flujo multi-colocacion en Allplan."""
@@ -84,6 +90,109 @@ def resolve_attribute_id(document, *candidate_names: str) -> int:
         except Exception:
             continue
     return 0
+
+
+def _iter_attribute_id_value_pairs(attrs) -> list[tuple[int, Any]]:
+    """Normaliza atributos devueltos por GetAttributes o ElementsAttributeService."""
+    pairs: list[tuple[int, Any]] = []
+    if not attrs:
+        return pairs
+    if isinstance(attrs, dict):
+        for attr_id, attr_value in attrs.items():
+            try:
+                pairs.append((int(attr_id), attr_value))
+            except (TypeError, ValueError):
+                continue
+        return pairs
+    for attr in attrs:
+        try:
+            attr_id = getattr(attr, "Id", None)
+            if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                attr_id, attr_value = attr[0], attr[1]
+            else:
+                attr_value = getattr(attr, "Value", None)
+            if attr_id is not None:
+                pairs.append((int(attr_id), attr_value))
+        except Exception:
+            continue
+    return pairs
+
+
+def _ifc_id_from_attribute_pairs(pairs: list[tuple[int, Any]]) -> str | None:
+    for attr_id, attr_value in pairs:
+        if attr_id == IFC_ID_ATTRIBUTE_ID and attr_value is not None:
+            value = str(attr_value).strip()
+            if value:
+                return value
+    return None
+
+
+def build_host_element_selection_query() -> AllplanIFW.SelectionQuery:
+    """Tipos seleccionables como soporte del neopreno (muros, losas, solidos 3D, etc.)."""
+    type_uuids = (
+        AllplanEleAdapter.Volume3D_TypeUUID,
+        AllplanEleAdapter.Area3D_TypeUUID,
+        AllplanEleAdapter.BRep3D_Volume_TypeUUID,
+        AllplanEleAdapter.ArchitectureVolume3D_TypeUUID,
+        AllplanEleAdapter.ArchitectureBRep3D_Volume_TypeUUID,
+        AllplanEleAdapter.Wall_TypeUUID,
+        AllplanEleAdapter.WallTier_TypeUUID,
+        AllplanEleAdapter.Column_TypeUUID,
+        AllplanEleAdapter.Beam_TypeUUID,
+        AllplanEleAdapter.Slab_TypeUUID,
+        AllplanEleAdapter.PythonPart_TypeUUID,
+        AllplanEleAdapter.PythonPartGroup_TypeUUID,
+    )
+    return AllplanIFW.SelectionQuery(
+        [AllplanIFW.QueryTypeID(uuid) for uuid in type_uuids]
+    )
+
+
+def get_element_ifc_id(element, try_parent: bool = True) -> str | None:
+    """Lee el IFC ID (atributo 683) de cualquier elemento del modelo (muro, solido 3D, etc.)."""
+    if not element:
+        return None
+    if hasattr(element, "IsNull") and element.IsNull():
+        return None
+
+    read_state = AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
+
+    try:
+        service_attrs = AllplanBaseElements.ElementsAttributeService.GetAttributes(
+            element, read_state
+        )
+        ifc_value = _ifc_id_from_attribute_pairs(
+            _iter_attribute_id_value_pairs(service_attrs)
+        )
+        if ifc_value:
+            return ifc_value
+    except Exception:
+        pass
+
+    try:
+        element_attrs = element.GetAttributes(read_state)
+        ifc_value = _ifc_id_from_attribute_pairs(
+            _iter_attribute_id_value_pairs(element_attrs)
+        )
+        if ifc_value:
+            return ifc_value
+    except Exception:
+        pass
+
+    if try_parent and hasattr(element, "GetParentElement"):
+        try:
+            parent = element.GetParentElement()
+            if parent and hasattr(parent, "IsValid") and parent.IsValid():
+                return get_element_ifc_id(parent, try_parent=False)
+        except Exception:
+            pass
+
+    return None
+
+
+def get_wall_ifc_id(wall_element) -> str | None:
+    """Alias retrocompatible: obtiene IFC ID del elemento host."""
+    return get_element_ifc_id(wall_element, try_parent=True)
 
 
 neo_log(f"module loaded: {__file__}")
@@ -1391,58 +1500,6 @@ def get_wall_placement_matrix(wall_element) -> AllplanGeo.Matrix3D | None:
     return placement_matrix
 
 
-def get_wall_ifc_id(wall_element) -> str | None:
-    """Obtiene el nombre del muro desde el atributo Material (id 508) o buscando en todos los atributos.
-
-    El nombre esta separado por $, por ejemplo "AP$PV_!0" → nombre = "AP"
-    (la parte antes del primer $).
-
-    Args:
-        wall_element: Elemento del muro
-
-    Returns:
-        Nombre del muro (parte antes del $) o None si no se encuentra
-    """
-
-    if not wall_element:
-        return None
-
-    try:
-        from DocumentManager import DocumentManager
-
-        doc = DocumentManager.get_instance().document
-
-        attrs = wall_element.GetAttributes(
-            AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
-        )
-        material_value_from_508 = None
-        for attr in attrs:
-            try:
-                attr_id = getattr(attr, "Id", None)
-                if (
-                    attr_id is None
-                    and isinstance(attr, (tuple, list))
-                    and len(attr) >= 2
-                ):
-                    attr_id = attr[0]
-                    attr_value = attr[1]
-                else:
-                    attr_value = getattr(attr, "Value", None)
-
-                if attr_id == 683:
-                    material_value_from_508 = (
-                        str(attr_value).strip() if attr_value else ""
-                    )
-                    return material_value_from_508
-            except Exception:
-                continue
-
-    except Exception:
-        pass
-
-    return None
-
-
 class WallSelectResult:
     def __init__(self):
         self.element = None
@@ -1458,7 +1515,7 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
     def __init__(
         self,
         result: WallSelectResult,
-        prompt_msg: str = "Seleccione el muro",
+        prompt_msg: str = "Seleccione el elemento (cara)",
         script_object=None,
     ):
         self.result = result
@@ -1466,18 +1523,7 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
         self.prompt_msg = prompt_msg
         self.script_object = script_object
 
-        self.sel_query = AllplanIFW.SelectionQuery(
-            [
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Volume3D_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Area3D_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Wall_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.WallTier_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Column_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Beam_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Slab_TypeUUID),
-            ]
-        )
-
+        self.sel_query = build_host_element_selection_query()
         self.element_filter = AllplanIFW.ElementSelectFilterSetting(
             self.sel_query, True
         )
@@ -1599,24 +1645,13 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
     def __init__(
         self,
         result: SolidFaceSelectResult,
-        prompt_msg: str = "Seleccione la cara del solido",
+        prompt_msg: str = "Seleccione la cara del elemento",
     ):
         self.result = result
         self.coord_input = None
         self.prompt_msg = prompt_msg
 
-        self.sel_query = AllplanIFW.SelectionQuery(
-            [
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Volume3D_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Area3D_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Wall_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.WallTier_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Column_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Beam_TypeUUID),
-                AllplanIFW.QueryTypeID(AllplanEleAdapter.Slab_TypeUUID),
-            ]
-        )
-
+        self.sel_query = build_host_element_selection_query()
         self.element_filter = AllplanIFW.ElementSelectFilterSetting(
             self.sel_query, True
         )
@@ -1952,7 +1987,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self._restored_from_saved_state:
             self.is_free_mode = self._get_free_mode()
 
-        neo_log(f"init version={NEOPRENOS_SCRIPT_VERSION} modify={self.is_modification_mode}")
+        neo_log(
+            f"init version={NEOPRENOS_SCRIPT_VERSION} modify={self.is_modification_mode}"
+        )
         self._update_parameter_visibility()
 
     def _get_free_mode(self) -> bool:
@@ -1968,6 +2005,50 @@ class NeoprenosScriptObject(BaseScriptObject):
     def _get_allow_line_pickup(self) -> bool:
         """Siempre activo: tomar linea completa del muro (sin control en paleta)."""
         return True
+
+    def _resolve_host_pmp_pare(self) -> str:
+        """Obtiene pmp_pare desde IFC ID (683) del elemento host seleccionado."""
+        if getattr(self, "wall_ifc_id", None):
+            cached = str(self.wall_ifc_id).strip()
+            if cached:
+                return cached
+
+        host_candidates: list = []
+        if getattr(self, "ref_face_element", None):
+            host_candidates.append(self.ref_face_element)
+        if getattr(self, "detected_wall", None):
+            host_candidates.append(self.detected_wall)
+        solid_info = getattr(self, "solid_info", None)
+        if isinstance(solid_info, dict) and solid_info.get("element"):
+            host_candidates.append(solid_info["element"])
+        if (
+            getattr(self, "wall_select_result", None)
+            and self.wall_select_result.element
+        ):
+            host_candidates.append(self.wall_select_result.element)
+        if (
+            getattr(self, "face_select_result", None)
+            and self.face_select_result.element
+        ):
+            host_candidates.append(self.face_select_result.element)
+
+        seen_guids: set[str] = set()
+        for element in host_candidates:
+            if not element or (hasattr(element, "IsNull") and element.IsNull()):
+                continue
+            try:
+                element_guid = str(element.GetModelElementUUID())
+                if element_guid in seen_guids:
+                    continue
+                seen_guids.add(element_guid)
+            except Exception:
+                pass
+            ifc_id = get_element_ifc_id(element, try_parent=True)
+            if ifc_id:
+                self.wall_ifc_id = ifc_id
+                return ifc_id
+
+        return PMP_PARE_SIN_IFC
 
     def _init_pmp_attribute_ids(self) -> None:
         """Resuelve IDs de PMP_PARE y PMP_WALL_ID (mismo criterio que Angulares / Neoprenos1)."""
@@ -2908,7 +2989,9 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.interactor_state = SELECTING_WALL
             neo_log("start_input: esperando seleccion de muro")
             self.script_object_interactor = WallSelectInteractor(
-                self.wall_select_result, "Seleccione el muro", script_object=self
+                self.wall_select_result,
+                "Seleccione el elemento (cara)",
+                script_object=self,
             )
             coord_input_to_use = (
                 self._saved_coord_input if self._saved_coord_input else self.coord_input
@@ -3024,7 +3107,8 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.ref_face_element = selected_element
         self.ref_face_polygon = self.face_polygon
 
-        self.wall_ifc_id = get_wall_ifc_id(selected_element)
+        self.wall_ifc_id = get_element_ifc_id(selected_element, try_parent=True)
+        neo_log(f"_process_wall_selection: ifc_id={self.wall_ifc_id or '(vacío)'}")
 
         if hasattr(self.build_ele, "MuroConnection"):
             self.build_ele.MuroConnection.value.element = selected_element
@@ -3107,25 +3191,22 @@ class NeoprenosScriptObject(BaseScriptObject):
         except Exception:
             pass
 
-        wall_element_to_check = (
-            self.parent_element if self.parent_element else selected_element
-        )
-        self.wall_ifc_id = get_wall_ifc_id(wall_element_to_check)
+        host_element = selected_element
+        if self.parent_element and not self.parent_element.IsNull():
+            host_element = self.parent_element
 
-        if not self.is_free_mode and wall_element_to_check:
-            try:
-                element_type = wall_element_to_check.GetElementType()
-                is_wall = hasattr(element_type, "TypeUUID") and (
-                    element_type.TypeUUID == AllplanEleAdapter.Wall_TypeUUID
-                    or element_type.TypeUUID == AllplanEleAdapter.WallTier_TypeUUID
-                )
-                if is_wall:
-                    self.detected_wall = wall_element_to_check
-                    self.detected_wall_guid = str(
-                        wall_element_to_check.GetModelElementUUID()
-                    )
-            except Exception:
-                pass
+        self.wall_ifc_id = get_element_ifc_id(selected_element, try_parent=True)
+        if not self.wall_ifc_id and self.parent_element:
+            self.wall_ifc_id = get_element_ifc_id(self.parent_element, try_parent=False)
+
+        if host_element and not host_element.IsNull():
+            self.detected_wall = host_element
+            self.detected_wall_guid = str(host_element.GetModelElementUUID())
+
+        neo_log(
+            f"_process_solid_selection: ifc_id={self.wall_ifc_id or '(vacío)'} "
+            f"host_guid={self.detected_wall_guid or '(sin host)'}"
+        )
 
         if hasattr(self.build_ele, "SolidoConnection"):
             self.build_ele.SolidoConnection.value.element = selected_element
@@ -3621,19 +3702,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         else:
             z_unique = random.random() * 3600
 
-        wall_pare = None
-        wall = self.detected_wall if hasattr(self, "detected_wall") else None
-        if wall:
-            try:
-                wall_pare = get_wall_ifc_id(wall)
-            except Exception as e:
-                pass
-
-        if not wall_pare:
-            if hasattr(self, "wall_ifc_id") and self.wall_ifc_id:
-                wall_pare = self.wall_ifc_id
-            else:
-                wall_pare = "MURO_NO_DEFINIDO"
+        wall_pare = self._resolve_host_pmp_pare()
 
         if not self.is_editing_existing:
             if hasattr(self.build_ele, "pmp_pare") and hasattr(
@@ -4233,10 +4302,8 @@ class NeoprenosScriptObject(BaseScriptObject):
             if noiguid:
                 visited.add(noiguid)
             try:
-                parent = (
-                    AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
-                        current
-                    )
+                parent = AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                    current
                 )
             except Exception:
                 parent = None
@@ -4258,9 +4325,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         if length_sq <= 1e-9:
             return point.GetDistance(start)
         t = max(0.0, min(1.0, (wx * vx + wy * vy + wz * vz) / length_sq))
-        proj = AllplanGeo.Point3D(
-            start.X + t * vx, start.Y + t * vy, start.Z + t * vz
-        )
+        proj = AllplanGeo.Point3D(start.X + t * vx, start.Y + t * vy, start.Z + t * vz)
         return point.GetDistance(proj)
 
     def _find_created_neopreno_record_at_point(self, point):
@@ -4301,16 +4366,16 @@ class NeoprenosScriptObject(BaseScriptObject):
             start = AllplanGeo.Point3D(
                 line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
             )
-            end = AllplanGeo.Point3D(
-                line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
-            )
+            end = AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z)
         elif not isinstance(start, AllplanGeo.Point3D) or not isinstance(
             end, AllplanGeo.Point3D
         ):
             start = None
             end = None
         pos = None
-        if isinstance(start, AllplanGeo.Point3D) and isinstance(end, AllplanGeo.Point3D):
+        if isinstance(start, AllplanGeo.Point3D) and isinstance(
+            end, AllplanGeo.Point3D
+        ):
             pos = AllplanGeo.Point3D(
                 (start.X + end.X) / 2.0,
                 (start.Y + end.Y) / 2.0,
@@ -4351,8 +4416,10 @@ class NeoprenosScriptObject(BaseScriptObject):
         record = self._build_neopreno_record_from_ppg(
             pyp_element, full_param_list, model_ele_list=model_ele_list, line=line
         )
-        if record.get("pos") is None and input_point is not None and hasattr(
-            input_point, "X"
+        if (
+            record.get("pos") is None
+            and input_point is not None
+            and hasattr(input_point, "X")
         ):
             record["pos"] = AllplanGeo.Point3D(
                 input_point.X, input_point.Y, input_point.Z
@@ -4391,9 +4458,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 params[key] = attr.value
         return create_params_list_from_dict(params)
 
-    def _remember_created_neopreno(
-        self, created_elements, model_ele_list=None
-    ) -> None:
+    def _remember_created_neopreno(self, created_elements, model_ele_list=None) -> None:
         line = getattr(self.line_result, "input_line", None)
         if not line:
             return
@@ -4412,7 +4477,9 @@ class NeoprenosScriptObject(BaseScriptObject):
                 (
                     element
                     for element in created_elements
-                    if AllplanBaseElements.PythonPartService.IsPythonPartElement(element)
+                    if AllplanBaseElements.PythonPartService.IsPythonPartElement(
+                        element
+                    )
                 ),
                 None,
             )
@@ -4446,10 +4513,8 @@ class NeoprenosScriptObject(BaseScriptObject):
                         is_group = False
                         is_part = False
                         try:
-                            is_group = (
-                                AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
-                                    current
-                                )
+                            is_group = AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
+                                current
                             )
                             is_part = (
                                 not is_group
@@ -4479,10 +4544,8 @@ class NeoprenosScriptObject(BaseScriptObject):
                             except Exception:
                                 pass
                         try:
-                            parent = (
-                                AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
-                                    current
-                                )
+                            parent = AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                                current
                             )
                         except Exception:
                             parent = None
@@ -4550,7 +4613,9 @@ class NeoprenosScriptObject(BaseScriptObject):
                 uuid_parameter_name=result.uuid_parameter_name,
                 elements_to_delete=result.elements_to_delete,
             )
-            self._remember_created_neopreno(created_elements, model_ele_list=result.elements)
+            self._remember_created_neopreno(
+                created_elements, model_ele_list=result.elements
+            )
             neo_log(f"neopreno materializado: {len(created_elements)} elementos")
             return True
         except Exception as exc:
@@ -4837,7 +4902,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         if p0_restored is not None and p1_restored is not None:
             start_point = current_start if current_start is not None else p0_restored
             end_point = current_end if current_end is not None else p1_restored
-            wall_pare = (state.get("pmp_pare") or "").strip() or "SIN_PARE"
+            wall_pare = (state.get("pmp_pare") or "").strip() or PMP_PARE_SIN_IFC
             ancho = (
                 get_neopreno_width(self.build_ele)
                 if hasattr(self.build_ele, "Ancho")
@@ -4872,7 +4937,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                     else ""
                 )
             if not wall_pare:
-                wall_pare = "SIN_PARE"
+                wall_pare = PMP_PARE_SIN_IFC
             if hasattr(self.build_ele, "Ancho"):
                 ancho = get_neopreno_width(self.build_ele)
             if hasattr(self.build_ele, "GrosorSeleccionado"):
@@ -5346,9 +5411,10 @@ class NeoprenosScriptObject(BaseScriptObject):
         if pmp_pare is None:
             pmp_pare = ""
 
-        if getattr(self, "attr_pmp_pare_id", 0) <= 0 or getattr(
-            self, "attr_pmp_wall_id", 0
-        ) <= 0:
+        if (
+            getattr(self, "attr_pmp_pare_id", 0) <= 0
+            or getattr(self, "attr_pmp_wall_id", 0) <= 0
+        ):
             self._init_pmp_attribute_ids()
 
         attr_id = getattr(self, "attr_pmp_pare_id", 0)
@@ -5412,9 +5478,10 @@ class NeoprenosScriptObject(BaseScriptObject):
                     )
                     common_props.Layer = layer_id
 
-                if getattr(self, "attr_pmp_pare_id", 0) <= 0 or getattr(
-                    self, "attr_pmp_wall_id", 0
-                ) <= 0:
+                if (
+                    getattr(self, "attr_pmp_pare_id", 0) <= 0
+                    or getattr(self, "attr_pmp_wall_id", 0) <= 0
+                ):
                     self._init_pmp_attribute_ids()
 
                 attr_list = BuildingElementAttributeList()
@@ -5440,37 +5507,64 @@ class NeoprenosScriptObject(BaseScriptObject):
                     "Stroke": common_props.Stroke,
                 }
 
-                line = self.line_result.input_line if self.line_result and self.line_result.input_line else None
+                line = (
+                    self.line_result.input_line
+                    if self.line_result and self.line_result.input_line
+                    else None
+                )
                 if line:
-                    params.update({
-                        "StartX": line.StartPoint.X,
-                        "StartY": line.StartPoint.Y,
-                        "StartZ": line.StartPoint.Z,
-                        "EndX": line.EndPoint.X,
-                        "EndY": line.EndPoint.Y,
-                        "EndZ": line.EndPoint.Z,
-                    })
+                    params.update(
+                        {
+                            "StartX": line.StartPoint.X,
+                            "StartY": line.StartPoint.Y,
+                            "StartZ": line.StartPoint.Z,
+                            "EndX": line.EndPoint.X,
+                            "EndY": line.EndPoint.Y,
+                            "EndZ": line.EndPoint.Z,
+                        }
+                    )
 
-                params["Ancho"] = get_neopreno_width(self.build_ele) if hasattr(self.build_ele, "Ancho") else 50.0
-                params["Grosor"] = get_selected_thickness(self.build_ele) if hasattr(self.build_ele, "GrosorSeleccionado") else 5.0
+                params["Ancho"] = (
+                    get_neopreno_width(self.build_ele)
+                    if hasattr(self.build_ele, "Ancho")
+                    else 50.0
+                )
+                params["Grosor"] = (
+                    get_selected_thickness(self.build_ele)
+                    if hasattr(self.build_ele, "GrosorSeleccionado")
+                    else 5.0
+                )
                 params["FreeMode"] = bool(getattr(self, "is_free_mode", False))
 
                 rot = 0.0
                 if hasattr(self.build_ele, "RotacionManual"):
                     rot_val = getattr(self.build_ele.RotacionManual, "value", None)
                     if rot_val is not None:
-                        rot = rot_val.GetDeg() if hasattr(rot_val, "GetDeg") else float(rot_val)
+                        rot = (
+                            rot_val.GetDeg()
+                            if hasattr(rot_val, "GetDeg")
+                            else float(rot_val)
+                        )
                 params["RotacionManual"] = rot
 
                 invertido = False
                 if hasattr(self.build_ele, "InvertirGrosor"):
                     val = getattr(self.build_ele.InvertirGrosor, "value", None)
                     if val is not None:
-                        invertido = bool(val) if isinstance(val, bool) else str(val).lower() in ("true", "1", "yes")
+                        invertido = (
+                            bool(val)
+                            if isinstance(val, bool)
+                            else str(val).lower() in ("true", "1", "yes")
+                        )
                 params["InvertirGrosor"] = invertido
 
                 hash_params = {
-                    key: round(float(value), 6) if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+                    key: (
+                        round(float(value), 6)
+                        if isinstance(value, (int, float))
+                        and not isinstance(value, bool)
+                        else value
+                    )
                     for key, value in params.items()
                 }
 
