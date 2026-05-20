@@ -55,6 +55,11 @@ ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
 ANGULAR_EVENT_SELECT_EXISTING = 1048
 ANGULAR_EVENT_DESELECT_EXISTING = 1049
+ANGULAR_OTHER_EXECUTION_MSG = (
+    "No se puede seleccionar un angular colocado en otra ejecución.\n\n"
+    "Solo puede editar angulares colocados en la ejecución actual.\n\n"
+    "Para modificar uno anterior, cierre la ejecución actual y abra ese PythonPart."
+)
 
 ANGULAR_SELECTION_AUX_COLOR = 3
 ANGULAR_SELECTION_AUX_PEN = 15
@@ -2897,6 +2902,14 @@ class ExistingAngularSelectInteractor(BaseScriptObjectInteractor):
                     None, input_point
                 )
                 if pyp_element is not None:
+                    record_index = (
+                        self.owner._find_created_angular_record_index_for_element(
+                            pyp_element
+                        )
+                    )
+                    if record_index is None:
+                        self.owner._warn_angular_from_other_execution()
+                        return True
                     record_index, _record = (
                         self.owner._register_or_refresh_angular_record_from_ppg(
                             pyp_element, param_list, input_point=input_point
@@ -2923,6 +2936,13 @@ class ExistingAngularSelectInteractor(BaseScriptObjectInteractor):
         fresh_params = self.owner._read_angular_param_list_from_element(pyp_element)
         if fresh_params:
             param_list = fresh_params
+
+        record_index = self.owner._find_created_angular_record_index_for_element(
+            pyp_element
+        )
+        if record_index is None:
+            self.owner._warn_angular_from_other_execution()
+            return True
 
         record_index, _record = self.owner._register_or_refresh_angular_record_from_ppg(
             pyp_element, param_list, input_point=input_point
@@ -6456,6 +6476,12 @@ class AngularLineScript(BaseScriptObject):
             )
             return existing_idx, self._created_angular_records[existing_idx]
 
+        if getattr(self, "state", None) == SELECTING_EXISTING_ANGULAR:
+            print(
+                "[SELECT][ANGULAR] PPG ignorado: no pertenece a la ejecucion actual"
+            )
+            return None, None
+
         self._created_angular_records.append(record)
         new_idx = len(self._created_angular_records) - 1
         print(
@@ -6463,6 +6489,22 @@ class AngularLineScript(BaseScriptObject):
             f"total={len(self._created_angular_records)}"
         )
         return new_idx, record
+
+    def _warn_angular_from_other_execution(self) -> None:
+        """Aviso al usuario: Seleccionar solo angulares de la ejecucion en curso."""
+        print(
+            "[SELECT][ANGULAR] Rechazado: angular de otra ejecucion "
+            "(solo angulares colocados en esta sesion)"
+        )
+        try:
+            AllplanUtil.ShowMessageBox(
+                ANGULAR_OTHER_EXECUTION_MSG, AllplanUtil.MB_OK
+            )
+        except Exception as exc:
+            print(
+                f"[SELECT][ANGULAR] No se pudo mostrar el cuadro de aviso: {exc}"
+            )
+            print(ANGULAR_OTHER_EXECUTION_MSG)
 
     def _remember_created_individual_angular(
         self, created_elements, model_ele_list=None
