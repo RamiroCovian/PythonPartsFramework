@@ -3067,6 +3067,8 @@ class AngularLineScript(BaseScriptObject):
         self._created_angular_records = []
         self._angular_record_selected_index = None
         self._inline_last_execute_result = None
+        self._pending_resume_position_after_deselect = False
+        self._resume_after_deselect_inline = False
 
         if self.is_modification_mode:
             self._load_existing_points()
@@ -5279,6 +5281,17 @@ class AngularLineScript(BaseScriptObject):
 
     def start_next_input(self):
         """Gestiona la transición entre interactors"""
+        if getattr(self, "_resume_after_deselect_inline", False):
+            self._resume_after_deselect_inline = False
+            self._clear_framework_handles_and_controls()
+            self._reset_coord_input_after_inline_edit()
+            self._resume_individual_position_input(self._get_active_coord_input())
+            print(
+                "[SELECT][ANGULAR] Colocacion individual reanudada "
+                "(tras Deseleccionar)"
+            )
+            return
+
         if self.state == SELECTING_WALL:
             if self._is_individual_distribution():
                 if self.wall_select_result.is_selected:
@@ -7796,14 +7809,24 @@ class AngularLineScript(BaseScriptObject):
 
     def _deselect_inline_angular(self) -> bool:
         """Boton Deseleccionar: termina edicion y vuelve a colocar angulares."""
-        if getattr(self, "_inline_selected_angular_active", False):
+        had_inline = getattr(self, "_inline_selected_angular_active", False)
+        if had_inline:
+            self._clear_inline_selection_visual()
             self._leave_individual_angular_edit_mode()
         else:
             print("[SELECT][ANGULAR] No hay angular en edicion")
+
         self.angular_select_result = AngularSelectResult()
-        resumed = self._resume_individual_position_input(self._get_active_coord_input())
+        self.line_result = LineInteractorResult()
+        self.position_result = PointInteractorResult()
+        self.state = SELECTING_POSITION
+        self.preview_active = False
+        # Sin interactor aqui: el framework debe ejecutar execute() vacio y borrar
+        # marco/handles antes de reanudar el tercer click.
+        self.script_object_interactor = None
+        self._pending_resume_position_after_deselect = True
         print("[SELECT][ANGULAR] Continua colocacion individual")
-        return resumed
+        return True
 
     def _enter_individual_angular_edit_mode(
         self, result: AngularSelectResult
@@ -7875,6 +7898,63 @@ class AngularLineScript(BaseScriptObject):
             traceback.print_exc()
             return False
 
+    def _clear_framework_handles_and_controls(self) -> None:
+        """Quita handles nativos y cotas dinamicas (p. ej. 460.0) del input."""
+        try:
+            AllplanIFW.HandleService().RemoveHandles()
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] RemoveHandles: {exc}")
+        try:
+            AllplanIFW.BuildingElementInputControls().CloseControls()
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] CloseControls: {exc}")
+
+    def _reset_coord_input_after_inline_edit(self) -> None:
+        """Sale del modo 'Seleccione el handle' y de la abscisa de edicion."""
+        coord_input = self._get_active_coord_input()
+        if coord_input is None:
+            return
+        try:
+            zero = AllplanGeo.Point3D(0.0, 0.0, 0.0)
+            coord_input.SetAbscissaElement(
+                AllplanGeo.Line3D(zero, zero), AllplanGeo.Matrix3D()
+            )
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] Limpiar abscisa: {exc}")
+
+    def _clear_inline_selection_visual(self) -> None:
+        """Borra marco auxiliar y preview 3D del angular en edicion inline."""
+        self._clear_framework_handles_and_controls()
+        doc = self._get_inline_preview_document()
+        if doc is None:
+            return
+
+        to_clear: list[Any] = []
+        cached = getattr(self, "_inline_last_execute_result", None)
+        if cached is not None:
+            to_clear.extend(list(cached.elements or []))
+            to_clear.extend(list(cached.preview_elements or []))
+        session_elements = getattr(self, "elements", None) or []
+        if session_elements:
+            to_clear.extend(list(session_elements))
+
+        aux_overlay = self._get_inline_selection_preview_overlay()
+        if aux_overlay:
+            to_clear.extend(aux_overlay)
+
+        if not to_clear:
+            return
+
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                doc, AllplanGeo.Matrix3D(), to_clear, True, None
+            )
+            print(
+                f"[SELECT][ANGULAR] Preview inline limpiado ({len(to_clear)} elementos)"
+            )
+        except Exception as exc:
+            print(f"[SELECT][ANGULAR] Error limpiando preview inline: {exc}")
+
     def _leave_individual_angular_edit_mode(self) -> None:
         """Sale del modo edicion de un PPG colocado (sin tocar el modelo)."""
         if getattr(self, "_inline_selected_angular_active", False):
@@ -7890,6 +7970,7 @@ class AngularLineScript(BaseScriptObject):
         self.modification_ele_list = getattr(
             self, "_inline_original_modification_ele_list", None
         )
+        self.elements = []
 
     def _finish_inline_angular_edit(self) -> None:
         """Alias: al colocar otro angular se sale del modo edicion."""
@@ -9441,6 +9522,24 @@ class AngularLineScript(BaseScriptObject):
 
         # Detectar modo
         print("[MODE]", "EDIT" if is_modify else "CREATE")
+
+        if getattr(self, "_pending_resume_position_after_deselect", False) and not is_modify:
+            self._pending_resume_position_after_deselect = False
+            self.state = SELECTING_POSITION
+            self.preview_active = False
+            self._clear_framework_handles_and_controls()
+            self._reset_coord_input_after_inline_edit()
+            # Vacia el resultado del framework (sin handles) y luego reanuda el
+            # tercer click en el mismo hilo, tras quitar handles/cotas.
+            self._resume_after_deselect_inline = True
+            self.start_next_input()
+            print(
+                "[SELECT][ANGULAR] Marco/handles/cotas retirados; "
+                "colocacion individual reanudada"
+            )
+            return CreateElementResult(
+                elements=[], handles=[], preview_elements=[]
+            )
 
         if getattr(self, "_inline_selected_angular_active", False) and not is_modify:
             result = self._execute_inline_selection_preview()
