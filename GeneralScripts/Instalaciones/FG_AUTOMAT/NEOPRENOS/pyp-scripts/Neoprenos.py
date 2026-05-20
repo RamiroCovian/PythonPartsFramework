@@ -49,6 +49,11 @@ SELECTING_EXISTING_NEOPRENO = 4
 NEOPRENOS_SCRIPT_VERSION = "1.1.0-seleccionar-insert-matrix"
 NEOPRENO_EVENT_SELECT_EXISTING = 1050
 NEOPRENO_EVENT_DESELECT_EXISTING = 1051
+NEOPRENO_OTHER_EXECUTION_MSG = (
+    "No se puede seleccionar un neopreno colocado en otra ejecución.\n\n"
+    "Solo puede editar neoprenos colocados en la ejecución actual.\n\n"
+    "Para modificar uno anterior, cierre la ejecución actual y abra ese PythonPart."
+)
 
 NEOPRENO_CHECKBOX_PARAM_KEYS: tuple[str, ...] = (
     "neopreno_libre",
@@ -1838,6 +1843,14 @@ class ExistingNeoprenoSelectInteractor(BaseScriptObjectInteractor):
                     None, input_point
                 )
                 if pyp_element is not None:
+                    record_index = (
+                        self.owner._find_created_neopreno_record_index_for_element(
+                            pyp_element
+                        )
+                    )
+                    if record_index is None:
+                        self.owner._warn_neopreno_from_other_execution()
+                        return True
                     record_index, _ = (
                         self.owner._register_or_refresh_neopreno_record_from_ppg(
                             pyp_element, param_list, input_point=input_point
@@ -1862,6 +1875,13 @@ class ExistingNeoprenoSelectInteractor(BaseScriptObjectInteractor):
         fresh_params = self.owner._read_neopreno_param_list_from_element(pyp_element)
         if fresh_params:
             param_list = fresh_params
+
+        record_index = self.owner._find_created_neopreno_record_index_for_element(
+            pyp_element
+        )
+        if record_index is None:
+            self.owner._warn_neopreno_from_other_execution()
+            return True
 
         record_index, _ = self.owner._register_or_refresh_neopreno_record_from_ppg(
             pyp_element, param_list, input_point=input_point
@@ -4428,9 +4448,32 @@ class NeoprenosScriptObject(BaseScriptObject):
         if existing_idx is not None:
             self._created_neopreno_records[existing_idx].update(record)
             return existing_idx, self._created_neopreno_records[existing_idx]
+
+        if getattr(self, "interactor_state", None) == SELECTING_EXISTING_NEOPRENO:
+            print(
+                "[SELECT][NEOPRENO] PPG ignorado: no pertenece a la ejecucion actual"
+            )
+            return None, None
+
         self._created_neopreno_records.append(record)
         new_idx = len(self._created_neopreno_records) - 1
         return new_idx, record
+
+    def _warn_neopreno_from_other_execution(self) -> None:
+        """Aviso al usuario: Seleccionar solo neoprenos de la ejecucion en curso."""
+        print(
+            "[SELECT][NEOPRENO] Rechazado: neopreno de otra ejecucion "
+            "(solo neoprenos colocados en esta sesion)"
+        )
+        try:
+            AllplanUtil.ShowMessageBox(
+                NEOPRENO_OTHER_EXECUTION_MSG, AllplanUtil.MB_OK
+            )
+        except Exception as exc:
+            print(
+                f"[SELECT][NEOPRENO] No se pudo mostrar el cuadro de aviso: {exc}"
+            )
+            print(NEOPRENO_OTHER_EXECUTION_MSG)
 
     def _build_current_inline_param_list(self) -> list:
         params: dict[str, Any] = {}
