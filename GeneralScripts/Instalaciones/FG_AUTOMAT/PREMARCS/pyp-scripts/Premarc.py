@@ -584,6 +584,34 @@ def create_script_object(
     return PremarcScriptObject(build_ele, script_object_data)
 
 
+def _geometry_from_model_element(model_element: Any):
+    if model_element is None:
+        return None
+    geo = getattr(model_element, "GeometryObject", None) or getattr(
+        model_element, "Geometry", None
+    )
+    if geo is not None:
+        return geo
+    if hasattr(model_element, "GetGeometry"):
+        try:
+            return model_element.GetGeometry()
+        except Exception:
+            return None
+    return None
+
+
+def _common_props_from_model_element(model_element: Any):
+    props = AllplanBaseElements.CommonProperties()
+    try:
+        if hasattr(model_element, "GetCommonProperties"):
+            props = model_element.GetCommonProperties()
+        else:
+            props.GetGlobalProperties()
+    except Exception:
+        props.GetGlobalProperties()
+    return props
+
+
 class WallSelectResult:
     def __init__(self):
         self.element = None
@@ -905,6 +933,9 @@ class PremarcScriptObject(BaseScriptObject):
 
         self.interactor_state = STOPPED
         self.handle_list = []
+        self._pending_premarc_points = []
+        self._has_confirmed_placement = False
+        self._final_creation_cancelled_by_user = False
         self._create_union_frames = False  # Flag para controlar el comportamiento
         self._in_placement_preview = (
             False  # True solo durante preview del punto (sin XPS/accesorios/ampits)
@@ -1587,6 +1618,7 @@ class PremarcScriptObject(BaseScriptObject):
             if self.point_result.input_point != PointInteractorResult():
                 self.placement_pnt = self.point_result.input_point
                 self._rebuild_placement_mat()
+                self._has_confirmed_placement = True
 
                 # self.build_ele.PlacementPntX.value = self.placement_pnt.X
                 # self.build_ele.PlacementPntY.value = self.placement_pnt.Y
@@ -1608,6 +1640,7 @@ class PremarcScriptObject(BaseScriptObject):
     def _start_placement_point_input(self):
         """Inicia el input de punto conservando el muro seleccionado."""
         self.point_result = PointInteractorResult()
+        self._has_confirmed_placement = False
         self.interactor_state = PLACING_POINT
         self.script_object_interactor = PointInteractor(
             interactor_result=self.point_result,
@@ -1618,6 +1651,8 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _commit_current_premarc_before_next_placement(self) -> bool:
         """Materializa el premarco configurado antes de pedir una nueva posicion."""
+        return self._queue_current_premarc_for_later_creation()
+
         self.update_params()
 
         if self.placement_pnt == AllplanGeo.Point3D():
@@ -1656,12 +1691,155 @@ class PremarcScriptObject(BaseScriptObject):
         print("[Premarc] Premarco confirmado; habilitando nueva posicion")
         return True
 
+    def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
+        return AllplanGeo.Point3D(point.X, point.Y, point.Z)
+
+    def _queue_current_premarc_for_later_creation(self) -> bool:
+        """Guarda el punto confirmado y deja la creacion real para el cierre."""
+        if not self._has_confirmed_placement:
+            print("[Premarc] No hay premarco confirmado para agregar a la cola")
+            return True
+
+        if not self.selected_wall:
+            PythonUtility.ShowMessageBox(
+                "Seleccione un muro antes de posicionar otro premarco.",
+                PythonUtility.MB_OK,
+            )
+            return False
+
+        if self.placement_pnt == AllplanGeo.Point3D():
+            print("[Premarc] Punto confirmado invalido; no se agrega a la cola")
+            return True
+
+        self._pending_premarc_points.append(self._copy_point3d(self.placement_pnt))
+        self.placement_pnt = AllplanGeo.Point3D()
+        self._has_confirmed_placement = False
+        if hasattr(self.build_ele, "opening_guid"):
+            self.build_ele.opening_guid.value = ""
+
+        print(
+            f"[Premarc] Premarco agregado a la cola: {len(self._pending_premarc_points)} pendiente(s)"
+        )
+        return True
+
+    def _validate_before_final_creation(self) -> bool:
+        self._final_creation_cancelled_by_user = False
+        self.update_params()
+
+        if not self.selected_wall and not self.is_modification_mode:
+            PythonUtility.ShowMessageBox(
+                "Seleccione un muro antes de generar los premarcos.",
+                PythonUtility.MB_OK,
+            )
+            return False
+
+        if self.build_ele.enable_manual_thickness.value:
+            self.save_color_manual_thickness()
+        if self.build_ele.EnableManualEncaje.value and not self.disable_save_encaje:
+            self.save_manual_encaje()
+
+        if self.check_falcas_and_persianas():
+            resp = PythonUtility.ShowMessageBox(
+                f"Selecciono Falcas, pero no hay persianas.\n" "Â¿Desea continuar?",
+                PythonUtility.MB_OKCANCEL,
+            )
+            if resp == PythonUtility.IDCANCEL:
+                self._final_creation_cancelled_by_user = True
+                return False
+
+        return True
+
+    def _create_pending_premarcs(self) -> bool:
+        if self._has_confirmed_placement:
+            if not self._queue_current_premarc_for_later_creation():
+                return False
+
+        if not self._pending_premarc_points:
+            print("[Premarc] No hay premarcos pendientes para generar")
+            return False
+
+        if not self._validate_before_final_creation():
+            return False
+
+        pending_points = list(self._pending_premarc_points)
+        self._pending_premarc_points = []
+
+        for index, point in enumerate(pending_points, start=1):
+            self.placement_pnt = self._copy_point3d(point)
+            if hasattr(self.build_ele, "opening_guid"):
+                self.build_ele.opening_guid.value = ""
+
+            print(
+                f"[Premarc] Generando premarco {index}/{len(pending_points)} en "
+                f"({point.X:.1f}, {point.Y:.1f}, {point.Z:.1f})"
+            )
+            if self.selected_wall:
+                self._create_wall_opening()
+            self._create_union_frames = True
+            self._execute()
+
+        self.placement_pnt = AllplanGeo.Point3D()
+        self._has_confirmed_placement = False
+        if hasattr(self.build_ele, "opening_guid"):
+            self.build_ele.opening_guid.value = ""
+
+        return True
+
+    def _append_preview_model_at_current_matrix(self, preview_elements, local_model):
+        for element in local_model or []:
+            geo = _geometry_from_model_element(element)
+            if geo is None:
+                continue
+            try:
+                geo = AllplanGeo.Transform(geo, self.placement_mat)
+            except Exception as e:
+                print(f"[Premarc] No se pudo transformar preview acumulado: {e}")
+                continue
+            preview_elements.append(
+                AllplanBasisElements.ModelElement3D(
+                    _common_props_from_model_element(element), geo
+                )
+            )
+
+    def _create_accumulated_placement_preview(self, active_point):
+        confirmed_pnt = self.placement_pnt
+        confirmed_mat = self.placement_mat
+        confirmed_preview_flag = self._in_placement_preview
+        preview_elements = []
+
+        try:
+            self._in_placement_preview = True
+
+            for point in self._pending_premarc_points:
+                self.placement_pnt = self._copy_point3d(point)
+                self._rebuild_placement_mat()
+                local_model = self._create_premarc_placement_preview_only()
+                self._append_preview_model_at_current_matrix(
+                    preview_elements, local_model
+                )
+
+            if active_point and active_point != PointInteractorResult():
+                self.placement_pnt = active_point
+                self._rebuild_placement_mat()
+                local_model = self._create_premarc_placement_preview_only()
+                self._append_preview_model_at_current_matrix(
+                    preview_elements, local_model
+                )
+        finally:
+            self._in_placement_preview = confirmed_preview_flag
+            self.placement_pnt = confirmed_pnt
+            self.placement_mat = confirmed_mat
+
+        return preview_elements
+
     def on_control_event(self, event_id: int):
         # Reiniciar vector_length para recalcular con los nuevos puntos
         if event_id == 1000:
             self.build_ele.SelectionWall.value = "No seleccionado"
             self.wall_select_result = WallSelectResult()
             self.selected_wall = None
+            self._pending_premarc_points = []
+            self._has_confirmed_placement = False
             self.interactor_state = SELECTING_WALL
             self.script_object_interactor = WallSelectInteractor(
                 self.wall_select_result, "Seleccione el muro donde colocar el premarco"
@@ -1672,7 +1850,7 @@ class PremarcScriptObject(BaseScriptObject):
             if self.is_modification_mode:
                 return False
 
-            if not self._commit_current_premarc_before_next_placement():
+            if not self._queue_current_premarc_for_later_creation():
                 return True
 
             if not self.selected_wall:
@@ -1886,6 +2064,20 @@ class PremarcScriptObject(BaseScriptObject):
             return CreateElementResult([])
         if not self.selected_wall and not self.is_modification_mode:
             return CreateElementResult([])
+
+        if (
+            not self.is_modification_mode
+            and self._pending_premarc_points
+            and self._has_confirmed_placement
+        ):
+            preview_elements = self._create_accumulated_placement_preview(
+                self.placement_pnt
+            )
+            return CreateElementResult(
+                elements=preview_elements,
+                handles=[],
+                placement_point=AllplanGeo.Point3D(),
+            )
 
         self._rebuild_placement_mat()
 
@@ -2618,6 +2810,21 @@ class PremarcScriptObject(BaseScriptObject):
         """Función de cancelación: se llama cuando el usuario cancela la operación."""
         print("ON_CANCEL_FUNCTION\n\n\n")
 
+        if self.interactor_state == SELECTING_WALL:
+            self.script_object_interactor = None
+            self.interactor_state = STOPPED
+            return OnCancelFunctionResult.CANCEL_INPUT
+
+        if self.interactor_state == PLACING_POINT:
+            self.script_object_interactor = None
+            self.interactor_state = STOPPED
+
+        if self.script_object_interactor is None:
+            self._create_pending_premarcs()
+            if self._final_creation_cancelled_by_user:
+                return OnCancelFunctionResult.CONTINUE_INPUT
+            return OnCancelFunctionResult.CANCEL_INPUT
+
         self.update_params()
         if self.build_ele.enable_manual_thickness.value:
             self.save_color_manual_thickness()
@@ -2685,17 +2892,12 @@ class PremarcScriptObject(BaseScriptObject):
         return OnCancelFunctionResult.CANCEL_INPUT
 
     def draw_placement_preview(self):
-        self.placement_pnt = self.point_result.input_point
-        self._rebuild_placement_mat()
-        self._in_placement_preview = True
-
-        try:
-            preview_model = self.create_premarc()
-        finally:
-            self._in_placement_preview = False
+        preview_model = self._create_accumulated_placement_preview(
+            self.point_result.input_point
+        )
 
         AllplanBaseElements.DrawElementPreview(
-            self.document, self.placement_mat, preview_model, False, None
+            self.document, AllplanGeo.Matrix3D(), preview_model, False, None
         )
 
     def get_data_endpoint(self, at1value: str) -> dict:
