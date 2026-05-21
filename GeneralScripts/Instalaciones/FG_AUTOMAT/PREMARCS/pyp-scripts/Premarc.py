@@ -1577,14 +1577,7 @@ class PremarcScriptObject(BaseScriptObject):
                         pass
 
                 # Pasar al segundo interactor
-                self.point_result = PointInteractorResult()
-                self.interactor_state = PLACING_POINT
-                self.script_object_interactor = PointInteractor(
-                    interactor_result=self.point_result,
-                    is_first_input=True,
-                    request_text="Posicionar Premarco",
-                    preview_function=self.draw_placement_preview,
-                )
+                self._start_placement_point_input()
             else:
                 # El usuario canceló sin seleccionar muro
                 self.script_object_interactor = None
@@ -1612,6 +1605,57 @@ class PremarcScriptObject(BaseScriptObject):
             self.script_object_interactor = None
             self.interactor_state = STOPPED
 
+    def _start_placement_point_input(self):
+        """Inicia el input de punto conservando el muro seleccionado."""
+        self.point_result = PointInteractorResult()
+        self.interactor_state = PLACING_POINT
+        self.script_object_interactor = PointInteractor(
+            interactor_result=self.point_result,
+            is_first_input=True,
+            request_text="Posicionar Premarco",
+            preview_function=self.draw_placement_preview,
+        )
+
+    def _commit_current_premarc_before_next_placement(self) -> bool:
+        """Materializa el premarco configurado antes de pedir una nueva posicion."""
+        self.update_params()
+
+        if self.placement_pnt == AllplanGeo.Point3D():
+            print("[Premarc] No hay premarco posicionado para confirmar")
+            return True
+
+        if not self.selected_wall:
+            PythonUtility.ShowMessageBox(
+                "Seleccione un muro antes de posicionar otro premarco.",
+                PythonUtility.MB_OK,
+            )
+            return False
+
+        if self.build_ele.enable_manual_thickness.value:
+            self.save_color_manual_thickness()
+        if self.build_ele.EnableManualEncaje.value and not self.disable_save_encaje:
+            self.save_manual_encaje()
+
+        if self.check_falcas_and_persianas():
+            resp = PythonUtility.ShowMessageBox(
+                f"Selecciono Falcas, pero no hay persianas.\n" "¿Desea continuar?",
+                PythonUtility.MB_OKCANCEL,
+            )
+            if resp == PythonUtility.IDCANCEL:
+                return False
+
+        self._create_wall_opening()
+        self._create_union_frames = True
+        self._execute()
+
+        # El siguiente ciclo debe empezar sin punto activo ni GUID de opening heredado.
+        self.placement_pnt = AllplanGeo.Point3D()
+        if hasattr(self.build_ele, "opening_guid"):
+            self.build_ele.opening_guid.value = ""
+
+        print("[Premarc] Premarco confirmado; habilitando nueva posicion")
+        return True
+
     def on_control_event(self, event_id: int):
         # Reiniciar vector_length para recalcular con los nuevos puntos
         if event_id == 1000:
@@ -1623,6 +1667,21 @@ class PremarcScriptObject(BaseScriptObject):
                 self.wall_select_result, "Seleccione el muro donde colocar el premarco"
             )
             self.script_object_interactor.start_input(self.coord_input)
+            return True
+        elif event_id == 1001:
+            if self.is_modification_mode:
+                return False
+
+            if not self._commit_current_premarc_before_next_placement():
+                return True
+
+            if not self.selected_wall:
+                self.start_input()
+            else:
+                self._start_placement_point_input()
+
+            if self.script_object_interactor:
+                self.script_object_interactor.start_input(self.coord_input)
             return True
         else:
             return False

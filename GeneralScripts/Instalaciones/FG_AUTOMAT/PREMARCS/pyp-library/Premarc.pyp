@@ -56,6 +56,18 @@
             <ValueType>CheckBox</ValueType>
         </Parameter>
 
+        <Parameter>
+            <Name>NextPremarcPlacementRow</Name>
+            <Text>Colocación</Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>NextPremarcPlacement</Name>
+                <Text>Posicionar otro premarco</Text>
+                <EventId>1001</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
 
         <Parameter>
             <Name>medidas</Name>
