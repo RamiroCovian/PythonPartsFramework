@@ -405,8 +405,7 @@
             <Parameter>
                 <Name>PassamaOptions</Name>
                 <Text>Opciones Passama</Text>
-                <TextDyn>valueListaPassama[$list_row] if valueListaPassama and
-                    len(valueListaPassama) > $list_row else ""</TextDyn>
+                <TextDyn>valueListaPassama[$list_row] if valueListaPassama and len(valueListaPassama) > $list_row else ""</TextDyn>
                 <Value>[False, False, False, False, False]</Value>
                 <ValueType>CheckBox</ValueType>
                 <Dimensions>len(valueListaPassama) if valueListaPassama else 0</Dimensions>
@@ -491,8 +490,7 @@
             <Parameter>
                 <Name>RebajesOptions</Name>
                 <Text>Opciones Rebajes</Text>
-                <TextDyn>valueListaRebajes[$list_row] if valueListaRebajes and
-                    len(valueListaRebajes) > $list_row else ""</TextDyn>
+                <TextDyn>valueListaRebajes[$list_row] if valueListaRebajes and len(valueListaRebajes) > $list_row else ""</TextDyn>
                 <Value>[False, False, False, False, False, False, False]</Value>
                 <ValueType>CheckBox</ValueType>
                 <Dimensions>len(valueListaRebajes) if valueListaRebajes else 0</Dimensions>
