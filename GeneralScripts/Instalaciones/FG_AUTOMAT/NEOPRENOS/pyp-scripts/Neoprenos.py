@@ -54,6 +54,10 @@ NEOPRENO_OTHER_EXECUTION_MSG = (
     "Solo puede editar neoprenos colocados en la ejecución actual.\n\n"
     "Para modificar uno anterior, cierre la ejecución actual y abra ese PythonPart."
 )
+NEOPRENO_PARENT_NOT_IDENTIFIABLE_MSG = (
+    "Ha seleccionado un elemento padre no identificable.\n\n"
+    "El atributo PMP_PARE quedará vacío."
+)
 
 NEOPRENO_CHECKBOX_PARAM_KEYS: tuple[str, ...] = (
     "neopreno_libre",
@@ -68,9 +72,6 @@ NEO_LAYER = "PMP_NEOPRENS"
 
 # Atributo estandar Allplan "IFC ID" (AttributeIdEnums.IFC_ID)
 IFC_ID_ATTRIBUTE_ID = 683
-
-# Valor de pmp_pare cuando el host no tiene IFC ID (683)
-PMP_PARE_SIN_IFC = "SIN_IFC"
 
 
 def neo_log(message: str) -> None:
@@ -1934,6 +1935,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.detected_wall = None
         self.detected_wall_guid = None
         self.wall_ifc_id = None
+        self._unidentifiable_parent_warned = False
         self.parent_element = None
         self.face_point = None
         self.face_normal = None
@@ -2053,9 +2055,11 @@ class NeoprenosScriptObject(BaseScriptObject):
             host_candidates.append(self.face_select_result.element)
 
         seen_guids: set[str] = set()
+        had_host = False
         for element in host_candidates:
             if not element or (hasattr(element, "IsNull") and element.IsNull()):
                 continue
+            had_host = True
             try:
                 element_guid = str(element.GetModelElementUUID())
                 if element_guid in seen_guids:
@@ -2068,7 +2072,25 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self.wall_ifc_id = ifc_id
                 return ifc_id
 
-        return PMP_PARE_SIN_IFC
+        if had_host:
+            self._warn_unidentifiable_parent_element()
+        return ""
+
+    def _warn_unidentifiable_parent_element(self) -> None:
+        """Aviso al usuario: el elemento padre no tiene IFC ID identificable."""
+        if getattr(self, "_unidentifiable_parent_warned", False):
+            return
+        self._unidentifiable_parent_warned = True
+        neo_log(
+            "_warn_unidentifiable_parent_element: host sin IFC ID (683) -> PMP_PARE vacío"
+        )
+        try:
+            AllplanUtil.ShowMessageBox(
+                NEOPRENO_PARENT_NOT_IDENTIFIABLE_MSG, AllplanUtil.MB_OK
+            )
+        except Exception as exc:
+            print(f"[NEOPRENOS] No se pudo mostrar el cuadro de aviso: {exc}")
+            print(NEOPRENO_PARENT_NOT_IDENTIFIABLE_MSG)
 
     def _init_pmp_attribute_ids(self) -> None:
         """Resuelve IDs de PMP_PARE y PMP_WALL_ID (mismo criterio que Angulares / Neoprenos1)."""
@@ -2977,6 +2999,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.detected_wall = None
         self.detected_wall_guid = None
         self.wall_ifc_id = None
+        self._unidentifiable_parent_warned = False
         self.parent_element = None
         self.face_point = None
         self.face_normal = None
@@ -3129,6 +3152,8 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         self.wall_ifc_id = get_element_ifc_id(selected_element, try_parent=True)
         neo_log(f"_process_wall_selection: ifc_id={self.wall_ifc_id or '(vacío)'}")
+        if not self.wall_ifc_id:
+            self._warn_unidentifiable_parent_element()
 
         if hasattr(self.build_ele, "MuroConnection"):
             self.build_ele.MuroConnection.value.element = selected_element
@@ -3227,6 +3252,8 @@ class NeoprenosScriptObject(BaseScriptObject):
             f"_process_solid_selection: ifc_id={self.wall_ifc_id or '(vacío)'} "
             f"host_guid={self.detected_wall_guid or '(sin host)'}"
         )
+        if not self.wall_ifc_id:
+            self._warn_unidentifiable_parent_element()
 
         if hasattr(self.build_ele, "SolidoConnection"):
             self.build_ele.SolidoConnection.value.element = selected_element
@@ -4450,9 +4477,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             return existing_idx, self._created_neopreno_records[existing_idx]
 
         if getattr(self, "interactor_state", None) == SELECTING_EXISTING_NEOPRENO:
-            print(
-                "[SELECT][NEOPRENO] PPG ignorado: no pertenece a la ejecucion actual"
-            )
+            print("[SELECT][NEOPRENO] PPG ignorado: no pertenece a la ejecucion actual")
             return None, None
 
         self._created_neopreno_records.append(record)
@@ -4466,13 +4491,9 @@ class NeoprenosScriptObject(BaseScriptObject):
             "(solo neoprenos colocados en esta sesion)"
         )
         try:
-            AllplanUtil.ShowMessageBox(
-                NEOPRENO_OTHER_EXECUTION_MSG, AllplanUtil.MB_OK
-            )
+            AllplanUtil.ShowMessageBox(NEOPRENO_OTHER_EXECUTION_MSG, AllplanUtil.MB_OK)
         except Exception as exc:
-            print(
-                f"[SELECT][NEOPRENO] No se pudo mostrar el cuadro de aviso: {exc}"
-            )
+            print(f"[SELECT][NEOPRENO] No se pudo mostrar el cuadro de aviso: {exc}")
             print(NEOPRENO_OTHER_EXECUTION_MSG)
 
     def _build_current_inline_param_list(self) -> list:
@@ -4945,7 +4966,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         if p0_restored is not None and p1_restored is not None:
             start_point = current_start if current_start is not None else p0_restored
             end_point = current_end if current_end is not None else p1_restored
-            wall_pare = (state.get("pmp_pare") or "").strip() or PMP_PARE_SIN_IFC
+            wall_pare = (state.get("pmp_pare") or "").strip()
+            if wall_pare == "SIN_IFC":
+                wall_pare = ""
             ancho = (
                 get_neopreno_width(self.build_ele)
                 if hasattr(self.build_ele, "Ancho")
@@ -4979,8 +5002,10 @@ class NeoprenosScriptObject(BaseScriptObject):
                     if self.build_ele.pmp_pare.value
                     else ""
                 )
+            if wall_pare == "SIN_IFC":
+                wall_pare = ""
             if not wall_pare:
-                wall_pare = PMP_PARE_SIN_IFC
+                wall_pare = self._resolve_host_pmp_pare()
             if hasattr(self.build_ele, "Ancho"):
                 ancho = get_neopreno_width(self.build_ele)
             if hasattr(self.build_ele, "GrosorSeleccionado"):
