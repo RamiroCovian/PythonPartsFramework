@@ -73,6 +73,13 @@ NEO_LAYER = "PMP_NEOPRENS"
 # Atributo estandar Allplan "IFC ID" (AttributeIdEnums.IFC_ID)
 IFC_ID_ATTRIBUTE_ID = 683
 
+# Marco auxiliar de seleccion (mismos valores que Angulares.py)
+NEOPRENO_SELECTION_AUX_COLOR = 3
+NEOPRENO_SELECTION_AUX_PEN = 15
+NEOPRENO_SELECTION_AUX_OUTWARD_MM = 0.0
+NEOPRENO_SELECTION_AUX_CROSS_HALF_MM = 120.0
+NEOPRENO_SELECTION_AUX_PARALLEL_MM = 0.0
+
 
 def neo_log(message: str) -> None:
     """Log estable para depurar el flujo multi-colocacion en Allplan."""
@@ -460,6 +467,135 @@ def vector_scale(vector: AllplanGeo.Vector3D, factor: float) -> AllplanGeo.Vecto
 
 def vector_dot(v1: AllplanGeo.Vector3D, v2: AllplanGeo.Vector3D) -> float:
     return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z
+
+
+def _normalize_vector_selection(vector: AllplanGeo.Vector3D) -> AllplanGeo.Vector3D:
+    """Normaliza como Angulares.normalize_vector (marco auxiliar de seleccion)."""
+    length = vector.GetLength()
+    if length < 1e-6:
+        return AllplanGeo.Vector3D(0.0, 0.0, 0.0)
+    inv = 1.0 / length
+    return AllplanGeo.Vector3D(vector.X * inv, vector.Y * inv, vector.Z * inv)
+
+
+def _make_neopreno_selection_aux_properties(
+    color: int = NEOPRENO_SELECTION_AUX_COLOR,
+    pen: int = NEOPRENO_SELECTION_AUX_PEN,
+):
+    """Propiedades visibles para las lineas auxiliares de seleccion."""
+    props = AllplanBaseElements.CommonProperties()
+    try:
+        props.GetGlobalProperties()
+    except Exception:
+        pass
+    props.Color = color
+    props.Pen = pen
+    props.ColorByLayer = False
+    props.PenByLayer = False
+    props.StrokeByLayer = False
+    props.Construction = True
+    return props
+
+
+def _offset_point3d_selection(
+    point: AllplanGeo.Point3D, direction: AllplanGeo.Vector3D, distance_mm: float
+) -> AllplanGeo.Point3D:
+    return AllplanGeo.Point3D(
+        point.X + direction.X * distance_mm,
+        point.Y + direction.Y * distance_mm,
+        point.Z + direction.Z * distance_mm,
+    )
+
+
+def _append_neopreno_aux_line(
+    elements: list[Any],
+    props: Any,
+    p0: AllplanGeo.Point3D,
+    p1: AllplanGeo.Point3D,
+) -> None:
+    try:
+        if AllplanGeo.CalcLength(AllplanGeo.Line3D(p0, p1)) < 0.5:
+            return
+    except Exception:
+        return
+    elements.append(
+        AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(p0, p1))
+    )
+
+
+def _build_neopreno_selection_auxiliary_elements(
+    line: AllplanGeo.Line3D | None,
+    outward: AllplanGeo.Vector3D | None = None,
+    color: int = NEOPRENO_SELECTION_AUX_COLOR,
+    pen: int = NEOPRENO_SELECTION_AUX_PEN,
+) -> list[Any]:
+    """
+    Marco auxiliar de seleccion: eje, paralelas y cruz central (sin escuadras).
+    Copia de Angulares._build_angular_selection_auxiliary_elements.
+    """
+    if line is None:
+        return []
+
+    props = _make_neopreno_selection_aux_properties(color=color, pen=pen)
+    start = AllplanGeo.Point3D(line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z)
+    end = AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z)
+
+    outward_norm = (
+        _normalize_vector_selection(outward) if outward is not None else None
+    )
+    if outward_norm is not None and outward_norm.GetLength() > 1e-6:
+        outward_mm = float(NEOPRENO_SELECTION_AUX_OUTWARD_MM)
+        if abs(outward_mm) > 0.01:
+            start = _offset_point3d_selection(start, outward_norm, outward_mm)
+            end = _offset_point3d_selection(end, outward_norm, outward_mm)
+
+    axis_vec = _normalize_vector_selection(
+        AllplanGeo.Vector3D(end.X - start.X, end.Y - start.Y, end.Z - start.Z)
+    )
+    if axis_vec.GetLength() < 1e-6:
+        return []
+
+    if outward_norm is not None and outward_norm.GetLength() > 1e-6:
+        lateral = _normalize_vector_selection(cross_product(axis_vec, outward_norm))
+    else:
+        lateral = _normalize_vector_selection(
+            cross_product(axis_vec, AllplanGeo.Vector3D(0.0, 0.0, 1.0))
+        )
+    if lateral.GetLength() < 1e-6:
+        lateral = _normalize_vector_selection(
+            cross_product(axis_vec, AllplanGeo.Vector3D(0.0, 1.0, 0.0))
+        )
+    vertical = _normalize_vector_selection(cross_product(axis_vec, lateral))
+
+    guides: list[Any] = []
+    _append_neopreno_aux_line(guides, props, start, end)
+
+    parallel_offset = NEOPRENO_SELECTION_AUX_PARALLEL_MM
+    for sign in (-1.0, 1.0):
+        off = sign * parallel_offset
+        p0 = _offset_point3d_selection(start, lateral, off)
+        p1 = _offset_point3d_selection(end, lateral, off)
+        _append_neopreno_aux_line(guides, props, p0, p1)
+
+    mid = AllplanGeo.Point3D(
+        (start.X + end.X) / 2.0,
+        (start.Y + end.Y) / 2.0,
+        (start.Z + end.Z) / 2.0,
+    )
+    cross_half = float(NEOPRENO_SELECTION_AUX_CROSS_HALF_MM)
+    _append_neopreno_aux_line(
+        guides,
+        props,
+        _offset_point3d_selection(mid, lateral, -cross_half),
+        _offset_point3d_selection(mid, lateral, cross_half),
+    )
+    _append_neopreno_aux_line(
+        guides,
+        props,
+        _offset_point3d_selection(mid, vertical, -cross_half),
+        _offset_point3d_selection(mid, vertical, cross_half),
+    )
+    return guides
 
 
 def rotate_vector_around_axis(
@@ -3537,6 +3673,26 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self.script_object_interactor:
             self.script_object_interactor.on_mouse_leave()
 
+    def on_preview_draw(self):
+        if getattr(self, "_inline_selected_neopreno_active", False):
+            self._draw_inline_selected_neopreno_preview(clear_before=False)
+            return
+
+        if (
+            self.line_result
+            and self.line_result.input_line
+            and self.interactor_state == SELECTING_LINE
+        ):
+            preview_elements = self.draw_neopreno_preview(self.line_result.input_line)
+            if preview_elements:
+                AllplanBaseElements.DrawElementPreview(
+                    self.document,
+                    AllplanGeo.Matrix3D(),
+                    preview_elements,
+                    True,
+                    None,
+                )
+
     def modify_element_property(self, name: str, _value: Any) -> bool:
         """Maneja cambios en propiedades del elemento."""
         editable_config_changed = name in (
@@ -3625,11 +3781,13 @@ class NeoprenosScriptObject(BaseScriptObject):
             )
 
         if getattr(self, "_inline_selected_neopreno_active", False) and not is_modify:
-            cached = getattr(self, "_inline_last_execute_result", None)
-            if cached is not None and cached.elements:
-                neo_log("execute: edicion inline, reutiliza cache")
-                return cached
-            return CreateElementResult()
+            result = self._execute_inline_selection_preview()
+            neo_log(
+                "execute: edicion inline "
+                f"elements={len(result.elements)} "
+                f"preview_aux={len(result.preview_elements)}"
+            )
+            return result
 
         self.is_editing_existing = is_modify
         neo_log(
@@ -4725,6 +4883,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def _deselect_inline_neopreno(self) -> bool:
         if getattr(self, "_inline_selected_neopreno_active", False):
+            self._clear_inline_selection_visual()
             self._leave_inline_neopreno_edit_mode()
         self.neopreno_select_result = NeoprenoSelectResult()
         return self._resume_neopreno_line_input(self._get_active_coord_input())
@@ -4764,7 +4923,10 @@ class NeoprenosScriptObject(BaseScriptObject):
             self._apply_face_context_from_build_ele_only()
             self._ensure_line_result_from_build_ele_for_modify()
             self._sync_line_from_build_ele_points()
+            if result.record_index is not None:
+                self._sync_neopreno_record_geometry_from_line(result.record_index)
             self._refresh_inline_execute_cache()
+            self._draw_inline_selected_neopreno_preview()
             print("[SELECT][NEOPRENO] Edicion inline activa")
             return True
         except Exception as exc:
@@ -4776,6 +4938,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._inline_modification_ele_list = None
         self._neopreno_record_selected_index = None
         self._inline_last_execute_result = None
+        self.elements = []
         self.is_modification_mode = getattr(
             self, "_inline_original_modification_mode", False
         )
@@ -4810,13 +4973,108 @@ class NeoprenosScriptObject(BaseScriptObject):
         )
         return CreateElementResult(elements=[], handles=handles)
 
-    def _refresh_inline_execute_cache(self) -> None:
-        handles = self._build_inline_edit_handles_result().handles
-        model_list = None
+    def _sync_neopreno_record_geometry_from_line(self, record_index: int) -> None:
+        """Actualiza start/end/pos del registro desde line_result tras cargar el PPG."""
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if record_index is None or record_index < 0 or record_index >= len(records):
+            return
+        line = getattr(self.line_result, "input_line", None)
+        if not line:
+            return
+        records[record_index]["start"] = AllplanGeo.Point3D(
+            line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z
+        )
+        records[record_index]["end"] = AllplanGeo.Point3D(
+            line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
+        )
+        records[record_index]["pos"] = AllplanGeo.Point3D(
+            (line.StartPoint.X + line.EndPoint.X) / 2.0,
+            (line.StartPoint.Y + line.EndPoint.Y) / 2.0,
+            (line.StartPoint.Z + line.EndPoint.Z) / 2.0,
+        )
+
+    def _get_inline_preview_document(self):
+        """Documento de vista activo para previews interactivos."""
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            try:
+                return coord_input.GetInputViewDocument()
+            except Exception:
+                pass
+        return self.document
+
+    def _get_inline_selection_axis_line(self) -> AllplanGeo.Line3D | None:
+        """Segmento del neopreno seleccionado para las lineas auxiliares."""
+        line = getattr(self.line_result, "input_line", None)
+        if line:
+            return line
+
         idx = getattr(self, "_neopreno_record_selected_index", None)
         records = getattr(self, "_created_neopreno_records", []) or []
         if idx is not None and 0 <= idx < len(records):
-            model_list = records[idx].get("model_list")
+            record = records[idx]
+            start = record.get("start")
+            end = record.get("end")
+            if start is not None and end is not None:
+                return AllplanGeo.Line3D(start, end)
+
+        if hasattr(self.build_ele, "PuntoInicial") and hasattr(
+            self.build_ele, "PuntoFinal"
+        ):
+            p0 = getattr(self.build_ele.PuntoInicial, "value", None)
+            p1 = getattr(self.build_ele.PuntoFinal, "value", None)
+            if p0 is not None and p1 is not None:
+                try:
+                    axis = AllplanGeo.Line3D(
+                        AllplanGeo.Point3D(p0.X, p0.Y, p0.Z),
+                        AllplanGeo.Point3D(p1.X, p1.Y, p1.Z),
+                    )
+                    if AllplanGeo.CalcLength(axis) > 0.1:
+                        return axis
+                except Exception:
+                    pass
+        return None
+
+    def _get_inline_selection_outward_vector(self) -> AllplanGeo.Vector3D | None:
+        """Direccion para sacar las guias del muro y que se vean en planta/3D."""
+        face_normal = getattr(self, "face_normal", None)
+        if face_normal is not None:
+            normal = _normalize_vector_selection(face_normal)
+            if normal.GetLength() > 1e-6:
+                return normal
+
+        nx = ny = nz = None
+        if hasattr(self.build_ele, "CaraNormalX"):
+            nx = getattr(self.build_ele.CaraNormalX, "value", None)
+        if hasattr(self.build_ele, "CaraNormalY"):
+            ny = getattr(self.build_ele.CaraNormalY, "value", None)
+        if hasattr(self.build_ele, "CaraNormalZ"):
+            nz = getattr(self.build_ele.CaraNormalZ, "value", None)
+        if nx is not None and ny is not None and nz is not None:
+            normal = _normalize_vector_selection(
+                AllplanGeo.Vector3D(float(nx), float(ny), float(nz))
+            )
+            if normal.GetLength() > 1e-6:
+                return normal
+        return None
+
+    def _get_inline_selection_preview_overlay(self) -> list[Any]:
+        """Solo lineas auxiliares (acuse visual de seleccion)."""
+        return _build_neopreno_selection_auxiliary_elements(
+            self._get_inline_selection_axis_line(),
+            self._get_inline_selection_outward_vector(),
+        )
+
+    def _build_inline_selection_create_result(
+        self,
+        model_list: list[Any] | None = None,
+    ) -> CreateElementResult:
+        """
+        Resultado de execute() en edicion inline: PPG en elements (si existe)
+        y marco auxiliar siempre en preview_elements (o en elements si no hay PPG).
+        """
+        overlay = self._get_inline_selection_preview_overlay()
+        handles = self._build_inline_edit_handles_result().handles
         connect_to_ele = ConnectToElements()
         if hasattr(self.build_ele, "MuroGUID") and getattr(
             self.build_ele.MuroGUID, "value", None
@@ -4824,15 +5082,140 @@ class NeoprenosScriptObject(BaseScriptObject):
             mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
             if mg:
                 connect_to_ele.connection_elements.append(mg)
-        if model_list:
-            self._inline_last_execute_result = CreateElementResult(
-                elements=model_list,
-                handles=handles,
-                placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-                connect_to_ele=connect_to_ele,
-                uuid_parameter_name="PythonPartUUID",
-                multi_placement=True,
+
+        base_elements = list(model_list or [])
+        preview_overlay = list(overlay)
+        if not base_elements and preview_overlay:
+            base_elements = list(preview_overlay)
+            preview_overlay = []
+
+        return CreateElementResult(
+            elements=base_elements,
+            handles=handles,
+            preview_elements=preview_overlay,
+            placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
+            connect_to_ele=connect_to_ele,
+            uuid_parameter_name="PythonPartUUID",
+            multi_placement=True,
+        )
+
+    def _rebuild_session_preview_model_elements(self) -> list[Any]:
+        """ModelElement3D de preview del neopreno en edicion inline."""
+        if not self._sync_line_from_build_ele_points():
+            return []
+        line = getattr(self.line_result, "input_line", None)
+        if not line:
+            return []
+        preview = self.draw_neopreno_preview(line)
+        if not preview:
+            return []
+        try:
+            return list(preview)
+        except TypeError:
+            return preview if isinstance(preview, list) else []
+
+    def _refresh_inline_execute_cache(self) -> None:
+        """Cache para execute(): nunca vacio mientras hay seleccion activa."""
+        self.elements = self._rebuild_session_preview_model_elements()
+        model_list = None
+        idx = getattr(self, "_neopreno_record_selected_index", None)
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if idx is not None and 0 <= idx < len(records):
+            model_list = records[idx].get("model_list")
+
+        self._inline_last_execute_result = self._build_inline_selection_create_result(
+            model_list
+        )
+        cached = self._inline_last_execute_result
+        neo_log(
+            "_refresh_inline_execute_cache: "
+            f"elements={len(cached.elements)} "
+            f"preview_aux={len(cached.preview_elements)}"
+        )
+
+    def _execute_inline_selection_preview(self) -> CreateElementResult:
+        """Regenera el marco auxiliar en cada execute() (posicion/parametros actuales)."""
+        model_list = None
+        cached = getattr(self, "_inline_last_execute_result", None)
+        if cached is not None and cached.elements:
+            model_list = list(cached.elements)
+
+        idx = getattr(self, "_neopreno_record_selected_index", None)
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if idx is not None and 0 <= idx < len(records):
+            record_model_list = records[idx].get("model_list")
+            if record_model_list:
+                model_list = list(record_model_list)
+
+        result = self._build_inline_selection_create_result(model_list)
+        self._inline_last_execute_result = result
+        return result
+
+    def _draw_inline_selected_neopreno_preview(self, clear_before: bool = False) -> bool:
+        """Refuerzo visual del marco auxiliar (encima del preview del framework)."""
+        if not getattr(self, "_inline_selected_neopreno_active", False):
+            return False
+
+        overlay = self._get_inline_selection_preview_overlay()
+        if not overlay:
+            print(
+                "[SELECT][NEOPRENO] Sin linea auxiliar: no hay eje PuntoInicial/PuntoFinal"
             )
+            return False
+
+        doc = self._get_inline_preview_document()
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                doc, AllplanGeo.Matrix3D(), overlay, clear_before, None
+            )
+            return True
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error dibujando lineas auxiliares: {exc}")
+            return False
+
+    def _clear_framework_handles_and_controls(self) -> None:
+        """Quita handles nativos y cotas dinamicas del input."""
+        try:
+            AllplanIFW.HandleService().RemoveHandles()
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] RemoveHandles: {exc}")
+        try:
+            AllplanIFW.BuildingElementInputControls().CloseControls()
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] CloseControls: {exc}")
+
+    def _clear_inline_selection_visual(self) -> None:
+        """Borra marco auxiliar y preview 3D del neopreno en edicion inline."""
+        self._clear_framework_handles_and_controls()
+        doc = self._get_inline_preview_document()
+        if doc is None:
+            return
+
+        to_clear: list[Any] = []
+        cached = getattr(self, "_inline_last_execute_result", None)
+        if cached is not None:
+            to_clear.extend(list(cached.elements or []))
+            to_clear.extend(list(cached.preview_elements or []))
+        session_elements = getattr(self, "elements", None) or []
+        if session_elements:
+            to_clear.extend(list(session_elements))
+
+        aux_overlay = self._get_inline_selection_preview_overlay()
+        if aux_overlay:
+            to_clear.extend(aux_overlay)
+
+        if not to_clear:
+            return
+
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                doc, AllplanGeo.Matrix3D(), to_clear, True, None
+            )
+            print(
+                f"[SELECT][NEOPRENO] Preview inline limpiado ({len(to_clear)} elementos)"
+            )
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error limpiando preview inline: {exc}")
 
     def _apply_inline_edit_to_model(self, coord_input=None) -> bool:
         if not getattr(self, "_inline_selected_neopreno_active", False):
@@ -4924,6 +5307,11 @@ class NeoprenosScriptObject(BaseScriptObject):
                     line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z
                 )
         self._apply_inline_edit_to_model()
+        idx = getattr(self, "_neopreno_record_selected_index", None)
+        if idx is not None:
+            self._sync_neopreno_record_geometry_from_line(idx)
+        self._refresh_inline_execute_cache()
+        self._draw_inline_selected_neopreno_preview()
         return True
 
     def on_control_event(self, event_id: int):
@@ -5359,7 +5747,26 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         if getattr(self, "_inline_selected_neopreno_active", False):
             self._apply_inline_edit_to_model(self._get_active_coord_input())
-            return self.execute()
+            idx = getattr(self, "_neopreno_record_selected_index", None)
+            if idx is not None:
+                self._sync_neopreno_record_geometry_from_line(idx)
+            self._refresh_inline_execute_cache()
+            cached = getattr(self, "_inline_last_execute_result", None)
+            handles = self._build_inline_edit_handles_result().handles
+            if cached is not None and cached.elements:
+                return CreateElementResult(
+                    elements=cached.elements,
+                    handles=handles,
+                    placement_point=getattr(
+                        cached, "placement_point", AllplanGeo.Point3D(0.0, 0.0, 0.0)
+                    ),
+                    connect_to_ele=getattr(cached, "connect_to_ele", None),
+                    uuid_parameter_name=getattr(
+                        cached, "uuid_parameter_name", "PythonPartUUID"
+                    ),
+                    multi_placement=True,
+                )
+            return self._build_inline_edit_handles_result()
 
         return self.execute()
 
