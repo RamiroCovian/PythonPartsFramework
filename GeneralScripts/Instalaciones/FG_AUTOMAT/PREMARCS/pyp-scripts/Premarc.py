@@ -688,6 +688,11 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.z_unique.value = random.random() * 3600  # try solve cache
 
         self.placement_mat = AllplanGeo.Matrix3D()
+        self.placement_pnt = AllplanGeo.Point3D()
+        self.point_result = PointInteractorResult()
+        self.wall_select_result = WallSelectResult()
+        self.selected_wall = None  # guardará el BaseElementAdapter
+        self.detected_wall_thickness = 0
 
         self.val_pmp_wall_id = self.build_ele.wall_id.value
 
@@ -727,7 +732,6 @@ class PremarcScriptObject(BaseScriptObject):
                 self.wall_guid_str = state.get("wall_guid", "")
                 self._apply_premarc_saved_state(state)
 
-            self.wall_select_result = WallSelectResult()
             if self.wall_guid_str:
                 guid = AllplanEleAdapter.GUID.FromString(self.wall_guid_str)
                 adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
@@ -743,8 +747,6 @@ class PremarcScriptObject(BaseScriptObject):
                     )
                 else:
                     self.selected_wall = None  # muro eliminado, modo seguro
-            else:
-                self.selected_wall = None
 
             # If opening exists, delete it
             # guid_exists = bool(self.build_ele.opening_guid.value)
@@ -851,13 +853,6 @@ class PremarcScriptObject(BaseScriptObject):
 
         self.afegit_ampits_manual = False
         self.retall_ampits_manual = False
-
-        if not self.is_modification_mode:
-            self.placement_pnt = AllplanGeo.Point3D()
-            self.point_result = PointInteractorResult()
-            self.wall_select_result = WallSelectResult()
-            self.selected_wall = None  # guardará el BaseElementAdapter
-            self.detected_wall_thickness = 0
 
         self.interactor_state = STOPPED
         self.handle_list = []
