@@ -713,6 +713,7 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
         if self.is_modification_mode:
+            self.wall_guid_str = ""
             raw_state = self.build_ele.SavedState.value
             if raw_state:
                 # SavedState puede venir como JSON string o ya como dict
@@ -723,81 +724,8 @@ class PremarcScriptObject(BaseScriptObject):
                 else:
                     state = {}
 
-                saved_pnt = AllplanGeo.Point3D(state["X"], state["Y"], state["Z"])
-                self.placement_pnt = saved_pnt
-                self.rotation = state["rotation"]
-                self.build_ele.rotation.value = self.rotation
-                # self.placement_mat.SetRotation(
-                #     AllplanGeo.Line3D(
-                #         AllplanGeo.Point3D(saved_pnt.X, saved_pnt.Y, saved_pnt.Z),
-                #         AllplanGeo.Point3D(saved_pnt.X, saved_pnt.Y, saved_pnt.Z + 100)
-                #     ),
-                #     AllplanGeo.Angle.FromDeg(self.rotation)
-                # )
-                # self.placement_mat.SetTranslation(AllplanGeo.Vector3D(saved_pnt))
-                self.heigh = state["height"]
-                self.width = state["width"]
-                self.build_ele.heigh.value = state["height"]
-                self.build_ele.width.value = state["width"]
-                self.thickness = state["depth"]  # thickness premarc
-                self.thickness_wall = state["thickness_wall"]
-                self.build_ele.ComboBoxEncajes.value = state["encaje"]
-                self.build_ele.EnableManualEncaje.value = state["encaje_manual"]
-                self.build_ele.EncajeBase.value = state["encaje_base"]
-                self.build_ele.EncajeAltura.value = state["encaje_altura"]
-                self.build_ele.DisableTopXPS.value = state["disable_top_xps"]
-                self.build_ele.DisableBottomXPS.value = state["disable_bottom_xps"]
-                self.build_ele.DisableLeftXPS.value = state["disable_left_xps"]
-                self.build_ele.DisableRightXPS.value = state["disable_right_xps"]
-                self.build_ele.XPSthicknessInd.value = state["xps_thickness_index"]
-                self.build_ele.XPSthickness.value = state["xps_thickness"]
-                self.build_ele.ComboBoxAbiertoCerrado.value = state[
-                    "ComboBoxAbiertoCerrado"
-                ]
-                self.build_ele.EnableRetallGanxo.value = state["EnableRetallGanxo"]
-                self.build_ele.Z_RetallGanxo.value = state["Z_RetallGanxo"]
-                self.build_ele.ComboBoxPendiente.value = state["ComboBoxPendiente"]
-                self.build_ele.ShowAccessorUPerimeter.value = state[
-                    "ShowAccessorUPerimeter"
-                ]
-
-                self.build_ele.PassamaOptions.value = [
-                    int(x) for x in state.get("PassamaOptions", [])
-                ]
-
-                self.build_ele.ComboBoxEncajes.value = state["ComboBoxEncajes"]
-                self.build_ele.EnableManualEncaje.value = state["EnableManualEncaje"]
-                self.build_ele.EncajeBase.value = state["EncajeBase"]
-                self.build_ele.EncajeAltura.value = state["EncajeAltura"]
-
-                self.build_ele.RebajesOptions.value = [
-                    int(x) for x in state.get("RebajesOptions", [])
-                ]
-
-                self.build_ele.ComboBoxPersianas.value = state["ComboBoxPersianas"]
-                self.build_ele.ComboBoxEscuadras.value = state["ComboBoxEscuadras"]
-                self.build_ele.ComboBoxTubos.value = state["ComboBoxTubos"]
-                self.build_ele.TypeTubos.value = state["TypeTubos"]
-                self.build_ele.CheckBoxRealSpace.value = state["CheckBoxRealSpace"]
-                self.build_ele.CheckBoxInnerSpace.value = state["CheckBoxInnerSpace"]
-                self.build_ele.thickness.value = state["thickness_manual"]
-                self.build_ele.enable_manual_thickness.value = state[
-                    "enable_manual_thickness"
-                ]
-                self.build_ele.manual_thickness.value = state["manual_thickness"]
-                self.build_ele.color_manual_thickness.value = state[
-                    "color_manual_thickness"
-                ]
-                # self.build_ele.valueListaGrosor.value = state["valueListaGrosor"]
-                self.build_ele.xps_type.value = state["xps_type"]
-                # Ampits
-                self.build_ele.fondo_ampits.value = state["fondo_ampits"]
-                self.build_ele.llarg_ampits.value = state["llarg_ampits"]
-                self.build_ele.afegit_ampits.value = state["afegit_ampits"]
-                self.build_ele.retall_ampits.value = state["retall_ampits"]
-                self.build_ele.wall_id.value = state["wall_id"]
-                self.build_ele.opening_guid.value = state.get("opening_guid", "")
                 self.wall_guid_str = state.get("wall_guid", "")
+                self._apply_premarc_saved_state(state)
 
             self.wall_select_result = WallSelectResult()
             if self.wall_guid_str:
@@ -933,7 +861,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         self.interactor_state = STOPPED
         self.handle_list = []
-        self._pending_premarc_points = []
+        self._pending_premarcs = []
         self._has_confirmed_placement = False
         self._final_creation_cancelled_by_user = False
         self._create_union_frames = False  # Flag para controlar el comportamiento
@@ -1694,6 +1622,152 @@ class PremarcScriptObject(BaseScriptObject):
     def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
         return AllplanGeo.Point3D(point.X, point.Y, point.Z)
 
+    def _build_premarc_saved_state_dict(
+        self, placement_pnt: AllplanGeo.Point3D | None = None
+    ) -> dict:
+        """Snapshot de configuración de un premarco (misma forma que SavedState)."""
+        self.update_params()
+        pnt = placement_pnt if placement_pnt is not None else self.placement_pnt
+        passama_vals = self.build_ele.PassamaOptions.value
+        rebajes_vals = self.build_ele.RebajesOptions.value
+        passama_01 = (
+            [self._saved_checkbox_01(x) for x in passama_vals] if passama_vals else []
+        )
+        rebajes_01 = (
+            [self._saved_checkbox_01(x) for x in rebajes_vals] if rebajes_vals else []
+        )
+        encaje = self.build_ele.ComboBoxEncajes.value
+        return {
+            "X": pnt.X,
+            "Y": pnt.Y,
+            "Z": pnt.Z,
+            "thickness": self.detected_wall_thickness,
+            "height": self.heigh,
+            "width": self.width,
+            "depth": self.thickness_premarc,
+            "thickness_wall": self.build_ele.thickness_wall.value,
+            "rotation": self.rotation,
+            "encaje": encaje,
+            "encaje_manual": self.build_ele.EnableManualEncaje.value,
+            "encaje_altura": self.build_ele.EncajeAltura.value,
+            "encaje_base": self.build_ele.EncajeBase.value,
+            "disable_top_xps": self.build_ele.DisableTopXPS.value,
+            "disable_bottom_xps": self.build_ele.DisableBottomXPS.value,
+            "disable_left_xps": self.build_ele.DisableLeftXPS.value,
+            "disable_right_xps": self.build_ele.DisableRightXPS.value,
+            "xps_thickness_index": self.build_ele.XPSthicknessInd.value,
+            "xps_thickness": self.build_ele.XPSthickness.value,
+            "thickness_manual": self.build_ele.thickness.value,
+            "enable_manual_thickness": self.build_ele.enable_manual_thickness.value,
+            "manual_thickness": self.build_ele.manual_thickness.value,
+            "color_manual_thickness": self.build_ele.color_manual_thickness.value,
+            "xps_type": self.build_ele.xps_type.value,
+            "wall_id": self.build_ele.wall_id.value,
+            "fondo_ampits": self.build_ele.fondo_ampits.value,
+            "llarg_ampits": self.build_ele.llarg_ampits.value,
+            "afegit_ampits": self.build_ele.afegit_ampits.value,
+            "retall_ampits": self.build_ele.retall_ampits.value,
+            "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
+            "EnableRetallGanxo": self.build_ele.EnableRetallGanxo.value,
+            "Z_RetallGanxo": self.build_ele.Z_RetallGanxo.value,
+            "ComboBoxPendiente": self.build_ele.ComboBoxPendiente.value,
+            "PassamaOptions": passama_01,
+            "ComboBoxEncajes": encaje,
+            "EnableManualEncaje": self.build_ele.EnableManualEncaje.value,
+            "EncajeBase": self.build_ele.EncajeBase.value,
+            "EncajeAltura": self.build_ele.EncajeAltura.value,
+            "RebajesOptions": rebajes_01,
+            "ComboBoxPersianas": self.build_ele.ComboBoxPersianas.value,
+            "ComboBoxEscuadras": self.build_ele.ComboBoxEscuadras.value,
+            "ComboBoxTubos": self.build_ele.ComboBoxTubos.value,
+            "TypeTubos": self.build_ele.TypeTubos.value,
+            "CheckBoxRealSpace": self.build_ele.CheckBoxRealSpace.value,
+            "CheckBoxInnerSpace": self.build_ele.CheckBoxInnerSpace.value,
+            "opening_guid": self.build_ele.opening_guid.value,
+            "wall_guid": self.wall_select_result.element_guid or "",
+            "pmp_pare": (
+                self.get_wall_material_name(self.selected_wall)
+                if self.selected_wall
+                else ""
+            ),
+            "ShowAccessorUPerimeter": self.build_ele.ShowAccessorUPerimeter.value,
+        }
+
+    def _apply_premarc_saved_state(self, state: dict) -> None:
+        """Restaura paleta e instancia desde un snapshot SavedState."""
+        if not state:
+            return
+
+        saved_pnt = AllplanGeo.Point3D(state["X"], state["Y"], state["Z"])
+        self.placement_pnt = saved_pnt
+        self.rotation = state["rotation"]
+        self.build_ele.rotation.value = self.rotation
+        self.heigh = state["height"]
+        self.width = state["width"]
+        self.build_ele.heigh.value = state["height"]
+        self.build_ele.width.value = state["width"]
+        self.thickness = state["depth"]
+        self.thickness_premarc = state["depth"]
+        self.thickness_wall = state["thickness_wall"]
+        self.build_ele.thickness_wall.value = state["thickness_wall"]
+        self.detected_wall_thickness = state.get("thickness", self.detected_wall_thickness)
+
+        encaje = state.get("ComboBoxEncajes", state.get("encaje", ""))
+        self.build_ele.ComboBoxEncajes.value = encaje
+        self.build_ele.EnableManualEncaje.value = state.get(
+            "EnableManualEncaje", state.get("encaje_manual", False)
+        )
+        self.build_ele.EncajeBase.value = state.get(
+            "EncajeBase", state.get("encaje_base", 0)
+        )
+        self.build_ele.EncajeAltura.value = state.get(
+            "EncajeAltura", state.get("encaje_altura", 0)
+        )
+        self.build_ele.DisableTopXPS.value = state["disable_top_xps"]
+        self.build_ele.DisableBottomXPS.value = state["disable_bottom_xps"]
+        self.build_ele.DisableLeftXPS.value = state["disable_left_xps"]
+        self.build_ele.DisableRightXPS.value = state["disable_right_xps"]
+        self.build_ele.XPSthicknessInd.value = state["xps_thickness_index"]
+        self.build_ele.XPSthickness.value = state["xps_thickness"]
+        self.build_ele.ComboBoxAbiertoCerrado.value = state["ComboBoxAbiertoCerrado"]
+        self.build_ele.EnableRetallGanxo.value = state["EnableRetallGanxo"]
+        self.build_ele.Z_RetallGanxo.value = state["Z_RetallGanxo"]
+        self.build_ele.ComboBoxPendiente.value = state["ComboBoxPendiente"]
+        self.build_ele.ShowAccessorUPerimeter.value = state["ShowAccessorUPerimeter"]
+        self.build_ele.PassamaOptions.value = [
+            int(x) for x in state.get("PassamaOptions", [])
+        ]
+        self.build_ele.RebajesOptions.value = [
+            int(x) for x in state.get("RebajesOptions", [])
+        ]
+        self.build_ele.ComboBoxPersianas.value = state["ComboBoxPersianas"]
+        self.build_ele.ComboBoxEscuadras.value = state["ComboBoxEscuadras"]
+        self.build_ele.ComboBoxTubos.value = state["ComboBoxTubos"]
+        self.build_ele.TypeTubos.value = state["TypeTubos"]
+        self.build_ele.CheckBoxRealSpace.value = state["CheckBoxRealSpace"]
+        self.build_ele.CheckBoxInnerSpace.value = state["CheckBoxInnerSpace"]
+        self.build_ele.thickness.value = state["thickness_manual"]
+        self.build_ele.enable_manual_thickness.value = state["enable_manual_thickness"]
+        self.build_ele.manual_thickness.value = state["manual_thickness"]
+        self.build_ele.color_manual_thickness.value = state["color_manual_thickness"]
+        self.build_ele.xps_type.value = state["xps_type"]
+        self.build_ele.fondo_ampits.value = state["fondo_ampits"]
+        self.build_ele.llarg_ampits.value = state["llarg_ampits"]
+        self.build_ele.afegit_ampits.value = state["afegit_ampits"]
+        self.build_ele.retall_ampits.value = state["retall_ampits"]
+        self.build_ele.wall_id.value = state["wall_id"]
+        self.build_ele.opening_guid.value = state.get("opening_guid", "")
+
+        if self.build_ele.enable_manual_thickness.value:
+            self.load_color_manual_thickness()
+            self.color_premarc = self.build_ele.color_manual_thickness.value
+        else:
+            thickness_key = int(self.thickness_premarc)
+            self.color_premarc = COLOR_THICKNESS_MAP[thickness_key]
+
+        self.update_params()
+        self._rebuild_placement_mat()
+
     def _queue_current_premarc_for_later_creation(self) -> bool:
         """Guarda el punto confirmado y deja la creacion real para el cierre."""
         if not self._has_confirmed_placement:
@@ -1711,14 +1785,25 @@ class PremarcScriptObject(BaseScriptObject):
             print("[Premarc] Punto confirmado invalido; no se agrega a la cola")
             return True
 
-        self._pending_premarc_points.append(self._copy_point3d(self.placement_pnt))
+        self.update_params()
+        self.thickness_premarc = (
+            self.build_ele.manual_thickness.value
+            if self.build_ele.enable_manual_thickness.value
+            else self.build_ele.thickness.value
+        )
+        self._pending_premarcs.append(
+            {
+                "point": self._copy_point3d(self.placement_pnt),
+                "state": self._build_premarc_saved_state_dict(self.placement_pnt),
+            }
+        )
         self.placement_pnt = AllplanGeo.Point3D()
         self._has_confirmed_placement = False
         if hasattr(self.build_ele, "opening_guid"):
             self.build_ele.opening_guid.value = ""
 
         print(
-            f"[Premarc] Premarco agregado a la cola: {len(self._pending_premarc_points)} pendiente(s)"
+            f"[Premarc] Premarco agregado a la cola: {len(self._pending_premarcs)} pendiente(s)"
         )
         return True
 
@@ -1754,23 +1839,25 @@ class PremarcScriptObject(BaseScriptObject):
             if not self._queue_current_premarc_for_later_creation():
                 return False
 
-        if not self._pending_premarc_points:
+        if not self._pending_premarcs:
             print("[Premarc] No hay premarcos pendientes para generar")
             return False
 
         if not self._validate_before_final_creation():
             return False
 
-        pending_points = list(self._pending_premarc_points)
-        self._pending_premarc_points = []
+        pending_items = list(self._pending_premarcs)
+        self._pending_premarcs = []
 
-        for index, point in enumerate(pending_points, start=1):
+        for index, item in enumerate(pending_items, start=1):
+            point = item["point"]
+            self._apply_premarc_saved_state(item["state"])
             self.placement_pnt = self._copy_point3d(point)
             if hasattr(self.build_ele, "opening_guid"):
                 self.build_ele.opening_guid.value = ""
 
             print(
-                f"[Premarc] Generando premarco {index}/{len(pending_points)} en "
+                f"[Premarc] Generando premarco {index}/{len(pending_items)} en "
                 f"({point.X:.1f}, {point.Y:.1f}, {point.Z:.1f})"
             )
             if self.selected_wall:
@@ -1802,23 +1889,33 @@ class PremarcScriptObject(BaseScriptObject):
             )
 
     def _create_accumulated_placement_preview(self, active_point):
-        confirmed_pnt = self.placement_pnt
-        confirmed_mat = self.placement_mat
-        confirmed_preview_flag = self._in_placement_preview
+        """Preview de premarcos en cola + el activo (confirmado o bajo el cursor)."""
+        saved_pnt = self.placement_pnt
+        saved_mat = self.placement_mat
+        saved_preview_flag = self._in_placement_preview
+        working_state = None
+        if saved_pnt != AllplanGeo.Point3D():
+            working_state = self._build_premarc_saved_state_dict(saved_pnt)
         preview_elements = []
 
         try:
             self._in_placement_preview = True
 
-            for point in self._pending_premarc_points:
-                self.placement_pnt = self._copy_point3d(point)
-                self._rebuild_placement_mat()
+            for item in self._pending_premarcs:
+                self._apply_premarc_saved_state(item["state"])
+                self.placement_pnt = self._copy_point3d(item["point"])
                 local_model = self._create_premarc_placement_preview_only()
                 self._append_preview_model_at_current_matrix(
                     preview_elements, local_model
                 )
 
-            if active_point and active_point != PointInteractorResult():
+            if working_state:
+                self._apply_premarc_saved_state(working_state)
+                local_model = self._create_premarc_placement_preview_only()
+                self._append_preview_model_at_current_matrix(
+                    preview_elements, local_model
+                )
+            elif active_point and active_point != PointInteractorResult():
                 self.placement_pnt = active_point
                 self._rebuild_placement_mat()
                 local_model = self._create_premarc_placement_preview_only()
@@ -1826,9 +1923,12 @@ class PremarcScriptObject(BaseScriptObject):
                     preview_elements, local_model
                 )
         finally:
-            self._in_placement_preview = confirmed_preview_flag
-            self.placement_pnt = confirmed_pnt
-            self.placement_mat = confirmed_mat
+            self._in_placement_preview = saved_preview_flag
+            if working_state:
+                self._apply_premarc_saved_state(working_state)
+            else:
+                self.placement_pnt = saved_pnt
+                self.placement_mat = saved_mat
 
         return preview_elements
 
@@ -1838,7 +1938,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.build_ele.SelectionWall.value = "No seleccionado"
             self.wall_select_result = WallSelectResult()
             self.selected_wall = None
-            self._pending_premarc_points = []
+            self._pending_premarcs = []
             self._has_confirmed_placement = False
             self.interactor_state = SELECTING_WALL
             self.script_object_interactor = WallSelectInteractor(
@@ -2060,24 +2160,24 @@ class PremarcScriptObject(BaseScriptObject):
             else self.build_ele.thickness.value
         )
 
-        if self.placement_pnt == AllplanGeo.Point3D():
-            return CreateElementResult([])
         if not self.selected_wall and not self.is_modification_mode:
             return CreateElementResult([])
 
-        if (
-            not self.is_modification_mode
-            and self._pending_premarc_points
-            and self._has_confirmed_placement
-        ):
-            preview_elements = self._create_accumulated_placement_preview(
+        if not self.is_modification_mode and self._pending_premarcs:
+            active_point = (
                 self.placement_pnt
+                if self.placement_pnt != AllplanGeo.Point3D()
+                else None
             )
+            preview_elements = self._create_accumulated_placement_preview(active_point)
             return CreateElementResult(
                 elements=preview_elements,
                 handles=[],
                 placement_point=AllplanGeo.Point3D(),
             )
+
+        if self.placement_pnt == AllplanGeo.Point3D():
+            return CreateElementResult([])
 
         self._rebuild_placement_mat()
 
@@ -2685,76 +2785,10 @@ class PremarcScriptObject(BaseScriptObject):
         if not individual_pythonparts:
             raise Exception("No se pudieron crear PythonParts individuales")
 
-        passama_vals = self.build_ele.PassamaOptions.value
-        rebajes_vals = self.build_ele.RebajesOptions.value
-        passama_01 = (
-            [self._saved_checkbox_01(x) for x in passama_vals] if passama_vals else []
-        )
-        rebajes_01 = (
-            [self._saved_checkbox_01(x) for x in rebajes_vals] if rebajes_vals else []
-        )
-
         global_params = {
             "TotalElements": len(self.elements),
             "SavedState": json.dumps(
-                {
-                    "X": self.placement_pnt.X,
-                    "Y": self.placement_pnt.Y,
-                    "Z": self.placement_pnt.Z,
-                    "thickness": self.detected_wall_thickness,
-                    "height": self.heigh,
-                    "width": self.width,
-                    "depth": self.thickness_premarc,
-                    "thickness_wall": self.build_ele.thickness_wall.value,
-                    "rotation": self.rotation,
-                    "encaje": self.build_ele.ComboBoxEncajes.value,
-                    "encaje_manual": self.build_ele.EncajeBase.value,
-                    "encaje_altura": self.build_ele.EncajeAltura.value,
-                    "encaje_base": self.build_ele.EncajeBase.value,
-                    ###
-                    "disable_top_xps": self.build_ele.DisableTopXPS.value,
-                    "disable_bottom_xps": self.build_ele.DisableBottomXPS.value,
-                    "disable_left_xps": self.build_ele.DisableLeftXPS.value,
-                    "disable_right_xps": self.build_ele.DisableRightXPS.value,
-                    "xps_thickness_index": self.build_ele.XPSthicknessInd.value,
-                    "xps_thickness": self.build_ele.XPSthickness.value,
-                    "thickness_manual": self.build_ele.thickness.value,
-                    "enable_manual_thickness": self.build_ele.enable_manual_thickness.value,
-                    "manual_thickness": self.build_ele.manual_thickness.value,
-                    "color_manual_thickness": self.build_ele.color_manual_thickness.value,
-                    # "valueListaGrosor": self.build_ele.valueListaGrosor.value,
-                    "xps_type": self.build_ele.xps_type.value,
-                    "wall_id": self.build_ele.wall_id.value,
-                    "fondo_ampits": self.build_ele.fondo_ampits.value,
-                    "llarg_ampits": self.build_ele.llarg_ampits.value,
-                    "afegit_ampits": self.build_ele.afegit_ampits.value,
-                    "retall_ampits": self.build_ele.retall_ampits.value,
-                    "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
-                    "EnableRetallGanxo": self.build_ele.EnableRetallGanxo.value,
-                    "Z_RetallGanxo": self.build_ele.Z_RetallGanxo.value,
-                    "ComboBoxPendiente": self.build_ele.ComboBoxPendiente.value,
-                    "PassamaOptions": passama_01,  ##
-                    "ComboBoxEncajes": self.build_ele.ComboBoxEncajes.value,
-                    "EnableManualEncaje": self.build_ele.EnableManualEncaje.value,
-                    "EncajeBase": self.build_ele.EncajeBase.value,
-                    "EncajeAltura": self.build_ele.EncajeAltura.value,
-                    "RebajesOptions": rebajes_01,
-                    "ComboBoxPersianas": self.build_ele.ComboBoxPersianas.value,
-                    "ComboBoxEscuadras": self.build_ele.ComboBoxEscuadras.value,
-                    "ComboBoxTubos": self.build_ele.ComboBoxTubos.value,
-                    "TypeTubos": self.build_ele.TypeTubos.value,
-                    "CheckBoxRealSpace": self.build_ele.CheckBoxRealSpace.value,
-                    "CheckBoxInnerSpace": self.build_ele.CheckBoxInnerSpace.value,
-                    "opening_guid": self.build_ele.opening_guid.value,
-                    "wall_guid": self.wall_select_result.element_guid or "",
-                    "pmp_pare": (
-                        self.get_wall_material_name(self.selected_wall)
-                        if self.selected_wall
-                        else ""
-                    ),
-                    "ShowAccessorUPerimeter": self.build_ele.ShowAccessorUPerimeter.value,
-                    # Attributes
-                }
+                self._build_premarc_saved_state_dict(self.placement_pnt)
             ),
         }
 
