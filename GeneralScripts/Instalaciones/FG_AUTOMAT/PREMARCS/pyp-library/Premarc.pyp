@@ -644,14 +644,14 @@
 
 
         <!-- Datos persistentes para modo modificación -->
-        <!-- <Parameter>
+        <Parameter>
             <Name>PlacementPnt</Name>
             <Text>Punto de Colocación</Text>
-            <Value></Value>
-            <ValueType>String</ValueType>
+            <Value>Point3D(0,0,0)</Value>
+            <ValueType>Point3D</ValueType>
             <Visible>False</Visible>
             <Persistent>Model</Persistent>
-        </Parameter> -->
+        </Parameter>
 
         <Parameter>
             <Name>SavedState</Name>

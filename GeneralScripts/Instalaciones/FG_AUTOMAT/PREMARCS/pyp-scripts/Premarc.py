@@ -538,15 +538,18 @@ VAL_PMP_FG_AMPIT_DETAIL_MATERIAL = "MATERIAL_1"
 ID_PMP_WALL_ID = 683
 
 
-def create_element_hash(element_type: str, **params) -> str:
-    # Generar un número random largo para asegurar unicidad
-    # Usar un rango muy grande (10^15 a 10^16-1) para minimizar colisiones
-    random_number = random.randint(10**15, 10**16 - 1)
-    # Crear string de parámetros ordenados alfabéticamente para consistencia
+def create_element_hash(element_type: str, stable: bool = False, **params) -> str:
+    # En modificacion debe ser estable para no perder relaciones del PPG.
     param_items = sorted(params.items())
-    param_string = f"{element_type}_random{random_number}_" + "_".join(
-        f"{k}={v}" for k, v in param_items
-    )
+    if stable:
+        param_string = element_type + "_" + "_".join(
+            f"{k}={v}" for k, v in param_items
+        )
+    else:
+        random_number = random.randint(10**15, 10**16 - 1)
+        param_string = f"{element_type}_random{random_number}_" + "_".join(
+            f"{k}={v}" for k, v in param_items
+        )
 
     # Generar hash
     hash_val = hashlib.sha224(param_string.encode("utf-8")).hexdigest()
@@ -565,8 +568,20 @@ def create_params_list_from_dict(params: dict) -> List[str]:
     """
     param_list = []
     for key, value in sorted(params.items()):
+        if key == "z_unique":
+            try:
+                value = int(float(value))
+            except (TypeError, ValueError):
+                value = 0
         param_list.append(f"{key} = {value}\n")
     return param_list
+
+
+def z_unique_as_int(value) -> int:
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def check_allplan_version(build_ele, version):
@@ -685,7 +700,10 @@ class PremarcScriptObject(BaseScriptObject):
 
         self.build_ele = build_ele
 
-        self.build_ele.z_unique.value = random.random() * 3600  # try solve cache
+        z_unique = z_unique_as_int(getattr(self.build_ele.z_unique, "value", 0))
+        if z_unique <= 0 or not self.is_modification_mode:
+            z_unique = int(random.random() * 3600)
+        self.build_ele.z_unique.value = z_unique
 
         self.placement_mat = AllplanGeo.Matrix3D()
         self.placement_pnt = AllplanGeo.Point3D()
@@ -732,21 +750,7 @@ class PremarcScriptObject(BaseScriptObject):
                 self.wall_guid_str = state.get("wall_guid", "")
                 self._apply_premarc_saved_state(state)
 
-            if self.wall_guid_str:
-                guid = AllplanEleAdapter.GUID.FromString(self.wall_guid_str)
-                adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
-                    guid, self.document
-                )
-                if not adapter.IsNull():
-                    self.wall_select_result.element = adapter
-                    self.wall_select_result.element_guid = self.wall_guid_str
-                    self.wall_select_result.is_selected = True
-                    self.selected_wall = adapter
-                    self.detected_wall_thickness = self._get_wall_thickness(
-                        self.selected_wall
-                    )
-                else:
-                    self.selected_wall = None  # muro eliminado, modo seguro
+            self._reset_wall_selection_for_modification(self.wall_guid_str)
 
             # If opening exists, delete it
             # guid_exists = bool(self.build_ele.opening_guid.value)
@@ -771,7 +775,9 @@ class PremarcScriptObject(BaseScriptObject):
         self.session = requests.Session()
         # self.login_to_api() #TODO: Descomentar esta linea antes de entregar a Arnau
 
-        self.build_ele.SelectionWall.value = "No seleccionado"
+        self.build_ele.SelectionWall.value = (
+            "Seleccionado" if self.selected_wall else "No seleccionado"
+        )
         self.thickness_premarc = (
             self.build_ele.manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
@@ -860,6 +866,8 @@ class PremarcScriptObject(BaseScriptObject):
         self._has_confirmed_placement = False
         self._final_creation_cancelled_by_user = False
         self._create_union_frames = False  # Flag para controlar el comportamiento
+        self._should_recreate_opening_after_handle = False
+        self._placement_handle_start_pnt = None
         self._in_placement_preview = (
             False  # True solo durante preview del punto (sin XPS/accesorios/ampits)
         )
@@ -1505,14 +1513,13 @@ class PremarcScriptObject(BaseScriptObject):
         if self.interactor_state == SELECTING_WALL:
             if self.wall_select_result.is_selected:
                 # Guardar adapter del muro — disponible en execute()
-                self.selected_wall = self.wall_select_result.element
+                self._set_selected_wall_adapter(
+                    self.wall_select_result.element,
+                    self.wall_select_result.element_guid,
+                )
                 print(
                     f"[Premarc] Muro seleccionado: {self.wall_select_result.element_guid}"
                 )
-                self.detected_wall_thickness = self._get_wall_thickness(
-                    self.selected_wall
-                )
-                self.build_ele.SelectionWall.value = "Seleccionado"
 
                 wall_angle = self._get_wall_rotation_deg(self.selected_wall)
                 self.rotation = wall_angle
@@ -1540,6 +1547,7 @@ class PremarcScriptObject(BaseScriptObject):
         elif self.interactor_state == PLACING_POINT:
             if self.point_result.input_point != PointInteractorResult():
                 self.placement_pnt = self.point_result.input_point
+                self._sync_placement_point_parameter()
                 self._rebuild_placement_mat()
                 self._has_confirmed_placement = True
 
@@ -1617,6 +1625,108 @@ class PremarcScriptObject(BaseScriptObject):
     def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
         return AllplanGeo.Point3D(point.X, point.Y, point.Z)
 
+    def _transform_model_element_list(
+        self, elements_list: list, matrix: AllplanGeo.Matrix3D
+    ) -> list:
+        """Transforma elementos locales a coordenadas reales para modificar PPG."""
+        transformed = []
+        for element in elements_list or []:
+            geo = _geometry_from_model_element(element)
+            if geo is None:
+                continue
+            try:
+                geo = AllplanGeo.Transform(geo, matrix)
+            except Exception as exc:
+                print(f"[Premarc] No se pudo transformar geometria en edicion: {exc}")
+                continue
+            transformed.append(
+                AllplanBasisElements.ModelElement3D(
+                    _common_props_from_model_element(element), geo
+                )
+            )
+        return transformed
+
+    def _set_selected_wall_adapter(self, wall_adapter, wall_guid_str: str = "") -> bool:
+        """Restaura la seleccion del muro y mantiene la relacion con el PPG."""
+        if wall_adapter is None or wall_adapter.IsNull():
+            return False
+
+        guid_str = wall_guid_str or str(wall_adapter.GetModelElementUUID())
+        self.wall_guid_str = guid_str
+        self.wall_select_result.element = wall_adapter
+        self.wall_select_result.element_guid = guid_str
+        self.wall_select_result.is_selected = True
+        self.selected_wall = wall_adapter
+        self.detected_wall_thickness = self._get_wall_thickness(wall_adapter)
+        self.build_ele.SelectionWall.value = "Seleccionado"
+        self.build_ele.SavedWallThickness.value = self.detected_wall_thickness
+        print(f"[Premarc] Muro restaurado/seleccionado: {guid_str}")
+        return True
+
+    def _try_restore_wall_from_guid(self, wall_guid_str: str) -> bool:
+        if not wall_guid_str:
+            return False
+        try:
+            wall_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                AllplanEleAdapter.GUID.FromString(wall_guid_str),
+                self.coord_input.GetInputViewDocument(),
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo leer wall_guid guardado: {exc}")
+            return False
+        return self._set_selected_wall_adapter(wall_adapter, wall_guid_str)
+
+    def _try_restore_wall_from_opening(self) -> bool:
+        opening_guid_str = str(getattr(self.build_ele.opening_guid, "value", "") or "")
+        if not opening_guid_str:
+            return False
+        try:
+            opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                AllplanEleAdapter.GUID.FromString(opening_guid_str),
+                self.coord_input.GetInputViewDocument(),
+            )
+            if opening_adapter.IsNull():
+                return False
+            wall_adapter = (
+                AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                    opening_adapter
+                )
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo restaurar muro desde opening: {exc}")
+            return False
+        return self._set_selected_wall_adapter(wall_adapter)
+
+    def _reset_wall_selection_for_modification(self, wall_guid_str: str) -> None:
+        self.wall_select_result = WallSelectResult()
+        self.selected_wall = None
+
+        if self._try_restore_wall_from_guid(wall_guid_str):
+            return
+
+        if self._try_restore_wall_from_opening():
+            return
+
+        self.build_ele.SelectionWall.value = "No seleccionado"
+        if self.build_ele.SavedWallThickness.value:
+            self.detected_wall_thickness = self.build_ele.SavedWallThickness.value
+        print("[Premarc] No se pudo restaurar el muro del premarco")
+
+    def _get_existing_group_hash(self) -> str:
+        if hasattr(self.build_ele, "get_hash"):
+            try:
+                existing_hash = self.build_ele.get_hash()
+                if existing_hash:
+                    return str(existing_hash)
+            except Exception as exc:
+                print(f"[Premarc] No se pudo leer hash existente: {exc}")
+        return ""
+
+    def _sync_placement_point_parameter(self) -> None:
+        """Keep the hidden handle parameter aligned with the active insertion point."""
+        if hasattr(self.build_ele, "PlacementPnt"):
+            self.build_ele.PlacementPnt.value = self._copy_point3d(self.placement_pnt)
+
     def _build_premarc_saved_state_dict(
         self, placement_pnt: AllplanGeo.Point3D | None = None
     ) -> dict:
@@ -1679,7 +1789,15 @@ class PremarcScriptObject(BaseScriptObject):
             "CheckBoxRealSpace": self.build_ele.CheckBoxRealSpace.value,
             "CheckBoxInnerSpace": self.build_ele.CheckBoxInnerSpace.value,
             "opening_guid": self.build_ele.opening_guid.value,
-            "wall_guid": self.wall_select_result.element_guid or "",
+            "wall_guid": (
+                self.wall_select_result.element_guid
+                or getattr(self, "wall_guid_str", "")
+                or (
+                    str(self.selected_wall.GetModelElementUUID())
+                    if self.selected_wall
+                    else ""
+                )
+            ),
             "pmp_pare": (
                 self.get_wall_material_name(self.selected_wall)
                 if self.selected_wall
@@ -1762,6 +1880,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         self.update_params()
         self._rebuild_placement_mat()
+        self._sync_placement_point_parameter()
 
     def _queue_current_premarc_for_later_creation(self) -> bool:
         """Guarda el punto confirmado y deja la creacion real para el cierre."""
@@ -2067,11 +2186,36 @@ class PremarcScriptObject(BaseScriptObject):
         self, handle_prop: HandleProperties, input_pnt: AllplanGeo.Point3D
     ) -> CreateElementResult:
 
+        if handle_prop.handle_id == "PlacementHandle":
+            if self._placement_handle_start_pnt is None:
+                self._placement_handle_start_pnt = self._copy_point3d(self.placement_pnt)
+
+            self.placement_pnt = self._placement_handle_start_pnt + AllplanGeo.Vector3D(
+                input_pnt
+            )
+            self._sync_placement_point_parameter()
+            self._rebuild_placement_mat()
+            self._should_recreate_opening_after_handle = self.is_modification_mode
+            return self.execute()
+
         HandlePropertiesService.update_property_value(
             self.build_ele, handle_prop, input_pnt
         )
 
         return self.execute()
+
+    def on_handle_input_done(self, handle_prop: HandleProperties) -> bool:
+        if handle_prop.handle_id != "PlacementHandle":
+            return False
+
+        self._placement_handle_start_pnt = None
+
+        if not self._should_recreate_opening_after_handle:
+            return False
+
+        self._should_recreate_opening_after_handle = False
+        self._recreate_wall_opening()
+        return True
 
     def _create_union_frame_elements(self):
         """
@@ -2148,7 +2292,10 @@ class PremarcScriptObject(BaseScriptObject):
         # print(f"Input data: {input_data}")
         # self.crearListaAbiertoCerrado()
         # self.load_radio_buttons_pendent()
-        self.build_ele.z_unique.value = random.random() * 3600
+        z_unique = z_unique_as_int(self.build_ele.z_unique.value)
+        if z_unique <= 0 or not self.is_modification_mode:
+            z_unique = int(random.random() * 3600)
+        self.build_ele.z_unique.value = z_unique
         self.thickness_premarc = (
             self.build_ele.manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
@@ -2178,12 +2325,6 @@ class PremarcScriptObject(BaseScriptObject):
 
         premarc_elements = self.create_premarcs_group()
 
-        # En modification mode: borrar el opening.
-        if self.is_modification_mode:
-            opening_guid_str = self.build_ele.opening_guid.value
-            if opening_guid_str:
-                self._delete_wall_opening()
-
         return CreateElementResult(
             elements=premarc_elements,
             handles=self.handle_list,
@@ -2200,7 +2341,10 @@ class PremarcScriptObject(BaseScriptObject):
         embebida en placement_matrix de cada PythonPart individual (igual que
         hace el framework en execute() vía insert_matrix + placement_matrix).
         Usar placement_mat aquí causaría doble rotación."""
-        self.build_ele.z_unique.value = random.random() * 3600
+        z_unique = z_unique_as_int(self.build_ele.z_unique.value)
+        if z_unique <= 0 or not self.is_modification_mode:
+            z_unique = int(random.random() * 3600)
+        self.build_ele.z_unique.value = z_unique
         self.thickness_premarc = (
             self.build_ele.manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
@@ -2215,7 +2359,7 @@ class PremarcScriptObject(BaseScriptObject):
         self._rebuild_placement_mat()
         premarc_elements = self.create_premarcs_group()
 
-        # Traslación solo — la rotación la maneja placement_matrix dentro de cada PythonPart
+        # Geometria local: tanto creacion como modificacion necesitan la matriz de insercion.
         trans_mat = AllplanGeo.Matrix3D()
         trans_mat.SetTranslation(AllplanGeo.Vector3D(self.placement_pnt))
 
@@ -2223,7 +2367,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.document,
             trans_mat,
             premarc_elements,
-            [],
+            self.modification_ele_list if self.is_modification_mode else [],
             None,
         )
 
@@ -2273,7 +2417,7 @@ class PremarcScriptObject(BaseScriptObject):
             traceback.print_exc()
             return True  # en caso de error, permitir el opening para no bloquear
 
-    def _create_wall_opening(self):
+    def _create_wall_opening(self, modify_existing: bool = False):
         if not self.selected_wall or self.selected_wall.IsNull():
             return
         if self.placement_pnt == AllplanGeo.Point3D():
@@ -2399,12 +2543,29 @@ class PremarcScriptObject(BaseScriptObject):
             drawPlacementPreview=False,
         )
 
+        modification_list = ModificationElementList()
+        opening_guid_str = str(getattr(self.build_ele.opening_guid, "value", "") or "")
+        if modify_existing and opening_guid_str:
+            try:
+                opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                    AllplanEleAdapter.GUID.FromString(opening_guid_str),
+                    self.coord_input.GetInputViewDocument(),
+                )
+                if not opening_adapter.IsNull():
+                    modification_list = ModificationElementList([opening_adapter])
+                    print(
+                        "[Premarc] Actualizando opening existente para regenerar "
+                        "marcas de apertura"
+                    )
+            except Exception as exc:
+                print(f"[Premarc] No se pudo preparar modificacion de opening: {exc}")
+
         transaction = PythonPartTransaction(self.document)
         created_opening = transaction.execute(
             AllplanGeo.Matrix3D(),
             AllplanIFW.ViewWorldProjection(),
             [opening_element],
-            ModificationElementList(),
+            modification_list,
         )
         print("[Premarc] Opening creado OK")
         # Guardar el GUID en el parámetro del PythonPart
@@ -2422,6 +2583,16 @@ class PremarcScriptObject(BaseScriptObject):
             self.build_ele.opening_guid.value = opening_guid_str
             self._opening_created_width = llarg
             self._opening_created_heigh = alt
+
+    def _recreate_wall_opening(self):
+        if not self.selected_wall:
+            return
+
+        if self.build_ele.opening_guid.value:
+            self._create_wall_opening(modify_existing=True)
+            return
+
+        self._create_wall_opening()
 
     def _delete_wall_opening(self):
         opening_guid_str = self.build_ele.opening_guid.value
@@ -2759,6 +2930,17 @@ class PremarcScriptObject(BaseScriptObject):
         # handle_parameter_data = HandleParameterData("CubeHeight", HandleParameterType.Z_DISTANCE)
         self.handle_list = []
 
+        self._sync_placement_point_parameter()
+
+        handle_placement = HandleProperties(
+            "PlacementHandle",
+            AllplanGeo.Point3D(),
+            AllplanGeo.Point3D(),
+            [HandleParameterData("PlacementPnt", HandleParameterType.POINT)],
+            HandleDirection.XYZ_DIR,
+            info_text="Reposicionar premarco",
+        )
+
         handle_height = HandleProperties(
             "HeighHandle",
             AllplanGeo.Point3D(0, 0, self.build_ele.heigh.value),
@@ -2767,6 +2949,7 @@ class PremarcScriptObject(BaseScriptObject):
             HandleDirection.Z_DIR,
         )
 
+        self.handle_list.append(handle_placement)
         self.handle_list.append(handle_height)
 
         individual_pythonparts = self.create_individual_pythonparts_from_elements(
@@ -2780,17 +2963,27 @@ class PremarcScriptObject(BaseScriptObject):
         if not individual_pythonparts:
             raise Exception("No se pudieron crear PythonParts individuales")
 
+        saved_state_json = json.dumps(
+            self._build_premarc_saved_state_dict(self.placement_pnt)
+        )
+        self.build_ele.SavedState.value = saved_state_json
+
         global_params = {
             "TotalElements": len(self.elements),
-            "SavedState": json.dumps(
-                self._build_premarc_saved_state_dict(self.placement_pnt)
-            ),
+            "SavedState": saved_state_json,
+            "z_unique": z_unique_as_int(self.build_ele.z_unique.value),
         }
 
-        # Generar hash único para la instalación completa
-        premarc_hash = create_element_hash(
-            f"premarcos_{random.random() * 3600}", **global_params
-        )
+        if self.is_modification_mode:
+            premarc_hash = self._get_existing_group_hash()
+            if not premarc_hash:
+                premarc_hash = create_element_hash(
+                    "premarcos",
+                    stable=True,
+                    z_unique=global_params["z_unique"],
+                )
+        else:
+            premarc_hash = create_element_hash("premarcos", **global_params)
 
         # Crear lista de parámetros
         param_list = create_params_list_from_dict(global_params)
@@ -2838,6 +3031,29 @@ class PremarcScriptObject(BaseScriptObject):
     def on_cancel_function(self):
         """Función de cancelación: se llama cuando el usuario cancela la operación."""
         print("ON_CANCEL_FUNCTION\n\n\n")
+
+        if self.is_modification_mode:
+            self.script_object_interactor = None
+            self.interactor_state = STOPPED
+
+            if self.placement_pnt == AllplanGeo.Point3D():
+                print(
+                    "[Premarc] Modificación sin punto de colocación; "
+                    "se conserva el PPG"
+                )
+                return OnCancelFunctionResult.CANCEL_INPUT
+
+            self.update_params()
+            if self.build_ele.enable_manual_thickness.value:
+                self.save_color_manual_thickness()
+            if (
+                self.build_ele.EnableManualEncaje.value
+                and not self.disable_save_encaje
+            ):
+                self.save_manual_encaje()
+
+            print("[Premarc] Modificación confirmada -> CREATE_ELEMENTS")
+            return OnCancelFunctionResult.CREATE_ELEMENTS
 
         if self.interactor_state == SELECTING_WALL:
             self.script_object_interactor = None
@@ -2913,7 +3129,10 @@ class PremarcScriptObject(BaseScriptObject):
 
                 # ── SEGUNDO ESC (o modo modificación) ───────────────────────────────────
                 # opening_guid ya está en build_ele → execute() ya lo incluyó en el cache
-                self._create_wall_opening()
+                if self.is_modification_mode and self.build_ele.opening_guid.value:
+                    self._create_wall_opening(modify_existing=True)
+                elif not self.is_modification_mode or not self.build_ele.opening_guid.value:
+                    self._create_wall_opening()
                 self._create_union_frames = True
                 self._execute()
                 return OnCancelFunctionResult.CANCEL_INPUT
@@ -8321,10 +8540,18 @@ class PremarcScriptObject(BaseScriptObject):
                     "Color": common_props.Color,
                     "Pen": common_props.Pen,
                     "Stroke": common_props.Stroke,
+                    "z_unique": z_unique_as_int(self.build_ele.z_unique.value),
                 }
 
-                # 5. GENERAR hash único (SHA224)
-                hash_value = create_element_hash("element", **params)
+                if self.is_modification_mode:
+                    hash_value = create_element_hash(
+                        "premarc_element",
+                        stable=True,
+                        ElementIndex=idx,
+                        z_unique=params["z_unique"],
+                    )
+                else:
+                    hash_value = create_element_hash("element", **params)
 
                 # 6. CREAR lista de parámetros (formato: "key = value\n")
                 param_list = create_params_list_from_dict(params)
