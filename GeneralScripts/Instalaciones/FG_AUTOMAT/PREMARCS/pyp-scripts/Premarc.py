@@ -711,6 +711,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.wall_select_result = WallSelectResult()
         self.selected_wall = None  # guardará el BaseElementAdapter
         self.detected_wall_thickness = 0
+        self._opening_baseline_width = None
+        self._opening_baseline_height = None
 
         self.val_pmp_wall_id = self.build_ele.wall_id.value
 
@@ -749,6 +751,8 @@ class PremarcScriptObject(BaseScriptObject):
 
                 self.wall_guid_str = state.get("wall_guid", "")
                 self._apply_premarc_saved_state(state)
+                self._opening_baseline_width = float(state.get("width", self.width))
+                self._opening_baseline_height = float(state.get("height", self.heigh))
 
             self._reset_wall_selection_for_modification(self.wall_guid_str)
 
@@ -2594,6 +2598,50 @@ class PremarcScriptObject(BaseScriptObject):
 
         self._create_wall_opening()
 
+    def _sync_wall_opening_for_modification(self):
+        """Sincroniza el hueco con el premarco editado.
+
+        Allplan modifica bien cuando el opening crece, pero puede no reducirlo
+        al achicar el ancho/alto. En ese caso se recrea el opening.
+        """
+        if not self.selected_wall:
+            print("[Premarc] Sin muro seleccionado; no se actualiza opening")
+            return
+
+        current_w = float(self.build_ele.width.value)
+        current_h = float(self.build_ele.heigh.value)
+        baseline_w = self._opening_baseline_width
+        baseline_h = self._opening_baseline_height
+        opening_guid = self.build_ele.opening_guid.value
+
+        has_shrunk = (
+            opening_guid
+            and baseline_w is not None
+            and baseline_h is not None
+            and (current_w < baseline_w - 0.01 or current_h < baseline_h - 0.01)
+        )
+
+        if has_shrunk:
+            print(
+                "[Premarc] Opening disminuye: "
+                f"{baseline_w}x{baseline_h} -> {current_w}x{current_h}. "
+                "Recreando hueco."
+            )
+            self._delete_wall_opening()
+            self._create_wall_opening()
+            return
+
+        if opening_guid:
+            print(
+                "[Premarc] Opening crece/se mantiene: "
+                f"{baseline_w}x{baseline_h} -> {current_w}x{current_h}. "
+                "Actualizando in-place."
+            )
+            self._create_wall_opening(modify_existing=True)
+            return
+
+        self._create_wall_opening()
+
     def _delete_wall_opening(self):
         opening_guid_str = self.build_ele.opening_guid.value
         if not opening_guid_str:
@@ -3051,6 +3099,9 @@ class PremarcScriptObject(BaseScriptObject):
                 and not self.disable_save_encaje
             ):
                 self.save_manual_encaje()
+
+            if self.selected_wall:
+                self._sync_wall_opening_for_modification()
 
             print("[Premarc] Modificación confirmada -> CREATE_ELEMENTS")
             return OnCancelFunctionResult.CREATE_ELEMENTS
