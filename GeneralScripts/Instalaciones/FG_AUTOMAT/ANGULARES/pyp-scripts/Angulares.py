@@ -2004,6 +2004,7 @@ def create_tensor_solid(
     z_dir: AllplanGeo.Vector3D,
     invert_profile: bool = False,
     rotation_deg: float = 0.0,
+    rotation_y_deg: float = 0.0,
 ) -> AllplanGeo.BRep3D:
     """Crea un Tensor orientado según los ejes indicados.
 
@@ -2018,6 +2019,7 @@ def create_tensor_solid(
     Returns:
         BRep3D del tensor completo
     """
+    x_dir_rotated = x_dir
     y_dir_rotated = y_dir
     z_dir_rotated = z_dir
     if abs(rotation_deg) > 1e-6:
@@ -2026,6 +2028,14 @@ def create_tensor_solid(
         z_dir_rotated = rotate_vector_around_axis(z_dir, x_dir, rotation_rad)
         y_dir_rotated = normalize_vector(y_dir_rotated)
         z_dir_rotated = normalize_vector(z_dir_rotated)
+    if abs(rotation_y_deg) > 1e-6:
+        rotation_y_rad = math.radians(rotation_y_deg)
+        x_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(x_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
+        z_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(z_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
 
     largo_placa_x = 10.0
     ancho_placa_y = 200.0
@@ -2042,7 +2052,7 @@ def create_tensor_solid(
     distancia_semi_d_y = 65.0
     distancia_semi_d_z = 65.0
 
-    axis_principal = AllplanGeo.AxisPlacement3D(origin, x_dir, z_dir_rotated)
+    axis_principal = AllplanGeo.AxisPlacement3D(origin, x_dir_rotated, z_dir_rotated)
     placa_principal = AllplanGeo.BRep3D.CreateCuboid(
         axis_principal, ancho_placa_y, largo_placa_x, alto_placa_z
     )
@@ -2056,9 +2066,11 @@ def create_tensor_solid(
         hole_z = row["z"]
         for hole_x in row["x_positions"]:
             hole_origin = local_to_world(
-                origin, x_dir, y_dir_rotated, z_dir_rotated, hole_x, 0.0, hole_z
+                origin, x_dir_rotated, y_dir_rotated, z_dir_rotated, hole_x, 0.0, hole_z
             )
-            hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, y_dir_rotated)
+            hole_axis = AllplanGeo.AxisPlacement3D(
+                hole_origin, x_dir_rotated, y_dir_rotated
+            )
             altura_cilindro = ancho_placa_y * 2.0
             hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(
                 hole_axis, HOLE_RADIUS, altura_cilindro
@@ -2079,7 +2091,7 @@ def create_tensor_solid(
 
     hole_origin_d = local_to_world(
         origin,
-        x_dir,
+        x_dir_rotated,
         y_dir_rotated,
         z_dir_rotated,
         -ancho_placa_d_x,
@@ -2087,7 +2099,9 @@ def create_tensor_solid(
         center_z,
     )
 
-    hole_axis_d = AllplanGeo.AxisPlacement3D(hole_origin_d, y_dir_rotated, x_dir)
+    hole_axis_d = AllplanGeo.AxisPlacement3D(
+        hole_origin_d, y_dir_rotated, x_dir_rotated
+    )
 
     hole_cylinder_d = AllplanGeo.BRep3D.CreateCylinder(
         hole_axis_d, diametro_taladro_d / 2.0, ancho_placa_d_x * 2.0
@@ -2101,7 +2115,7 @@ def create_tensor_solid(
 
     big_origin = local_to_world(
         origin,
-        x_dir,
+        x_dir_rotated,
         y_dir_rotated,
         z_dir_rotated,
         -ancho_placa_d_x - eps,
@@ -2109,7 +2123,7 @@ def create_tensor_solid(
         center_z,
     )
 
-    big_axis = AllplanGeo.AxisPlacement3D(big_origin, y_dir_rotated, x_dir)
+    big_axis = AllplanGeo.AxisPlacement3D(big_origin, y_dir_rotated, x_dir_rotated)
 
     big_cylinder = AllplanGeo.BRep3D.CreateCylinder(
         big_axis, radio_semi_d + eps, (ancho_placa_d_x + eps) * 2.0
@@ -2135,9 +2149,15 @@ def create_tensor_solid(
 
     mat = AllplanGeo.Matrix3D()
     offset_vec = AllplanGeo.Vector3D(
-        x_dir.X * offset_x + y_dir_rotated.X * offset_y + z_dir_rotated.X * offset_z,
-        x_dir.Y * offset_x + y_dir_rotated.Y * offset_y + z_dir_rotated.Y * offset_z,
-        x_dir.Z * offset_x + y_dir_rotated.Z * offset_y + z_dir_rotated.Z * offset_z,
+        x_dir_rotated.X * offset_x
+        + y_dir_rotated.X * offset_y
+        + z_dir_rotated.X * offset_z,
+        x_dir_rotated.Y * offset_x
+        + y_dir_rotated.Y * offset_y
+        + z_dir_rotated.Y * offset_z,
+        x_dir_rotated.Z * offset_x
+        + y_dir_rotated.Z * offset_y
+        + z_dir_rotated.Z * offset_z,
     )
     mat.SetTranslation(offset_vec)
 
@@ -2157,6 +2177,51 @@ def create_tensor_solid(
     geometry = AllplanGeo.Transform(geometry, mat_origin)
 
     return geometry
+
+
+def get_tensor_x_rotation_deg(rotation_deg: float) -> float:
+    """Rotacion propia del tensor alrededor de su eje local X."""
+    return rotation_deg + 90
+
+
+def get_tensor_y_rotation_deg() -> float:
+    """Rotacion propia del tensor alrededor de su eje local Y."""
+    return 180.0
+
+
+def get_tensor_origin_for_rotated_x(
+    origin: AllplanGeo.Point3D,
+    x_dir: AllplanGeo.Vector3D,
+    y_dir: AllplanGeo.Vector3D,
+    z_dir: AllplanGeo.Vector3D,
+    piece_length: float,
+    rotation_deg: float,
+    rotation_y_deg: float,
+) -> AllplanGeo.Point3D:
+    """Compensa el origen si la rotacion propia invierte el eje local X."""
+    x_dir_rotated = x_dir
+    y_dir_rotated = y_dir
+    z_dir_rotated = z_dir
+    if abs(rotation_deg) > 1e-6:
+        rotation_rad = math.radians(rotation_deg)
+        y_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(y_dir, x_dir, rotation_rad)
+        )
+        z_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(z_dir, x_dir, rotation_rad)
+        )
+    if abs(rotation_y_deg) > 1e-6:
+        rotation_y_rad = math.radians(rotation_y_deg)
+        x_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(x_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
+        z_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(z_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
+
+    if vector_dot(x_dir_rotated, x_dir) < -0.5:
+        return move_point(origin, x_dir, piece_length)
+    return origin
 
 
 def get_bounding_box_from_geometry(geometry: AllplanGeo.BRep3D) -> dict:
@@ -2333,8 +2398,6 @@ def create_single_angular_on_line(
     is_tensor = bool(definition.get("is_tensor", False))
     if not is_tensor:
         rotation_deg = rotation_deg + 90.0
-    if is_tensor and not is_free_mode:
-        return [], []
 
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     if base_vector.GetLength() < 1e-6:
@@ -2355,13 +2418,25 @@ def create_single_angular_on_line(
         origin = start_point
 
     if is_tensor:
+        tensor_rotation_deg = get_tensor_x_rotation_deg(rotation_deg)
+        tensor_rotation_y_deg = get_tensor_y_rotation_deg()
+        tensor_origin = get_tensor_origin_for_rotated_x(
+            origin,
+            x_dir,
+            y_dir,
+            z_dir,
+            piece_length,
+            tensor_rotation_deg,
+            tensor_rotation_y_deg,
+        )
         geometry = create_tensor_solid(
-            origin=origin,
+            origin=tensor_origin,
             x_dir=x_dir,
             y_dir=y_dir,
             z_dir=z_dir,
             invert_profile=False,
-            rotation_deg=rotation_deg,
+            rotation_deg=tensor_rotation_deg,
+            rotation_y_deg=tensor_rotation_y_deg,
         )
         edge = create_edge_angulars_group(
             definition=definition,
@@ -2371,6 +2446,8 @@ def create_single_angular_on_line(
             z_dir=z_dir,
             piece_length=piece_length,
             is_tensor=True,
+            rotation_deg=tensor_rotation_deg,
+            rotation_y_deg=tensor_rotation_y_deg,
         )
 
         if invert_side:
@@ -2432,8 +2509,6 @@ def create_angulars_on_line(
     is_tensor = bool(definition.get("is_tensor", False))
     if not is_tensor:
         rotation_deg = rotation_deg + 90.0
-    if is_tensor and not is_free_mode:
-        return [], []
 
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = decompose_vector(
@@ -2482,13 +2557,25 @@ def create_angulars_on_line(
             origin = line_origin
 
         if is_tensor:
+            tensor_rotation_deg = get_tensor_x_rotation_deg(rotation_deg)
+            tensor_rotation_y_deg = get_tensor_y_rotation_deg()
+            tensor_origin = get_tensor_origin_for_rotated_x(
+                origin,
+                x_dir,
+                y_dir,
+                z_dir,
+                piece_length,
+                tensor_rotation_deg,
+                tensor_rotation_y_deg,
+            )
             tensor = create_tensor_solid(
-                origin=origin,
+                origin=tensor_origin,
                 x_dir=x_dir,
                 y_dir=y_dir,
                 z_dir=z_dir,
                 invert_profile=False,
-                rotation_deg=rotation_deg,
+                rotation_deg=tensor_rotation_deg,
+                rotation_y_deg=tensor_rotation_y_deg,
             )
             edge = create_edge_angulars_group(
                 definition=definition,
@@ -2498,6 +2585,8 @@ def create_angulars_on_line(
                 z_dir=z_dir,
                 piece_length=piece_length,
                 is_tensor=True,
+                rotation_deg=tensor_rotation_deg,
+                rotation_y_deg=tensor_rotation_y_deg,
             )
 
             if invert_side:
@@ -2543,6 +2632,8 @@ def create_edge_angulars_group(
     z_dir: AllplanGeo.Vector3D,
     piece_length: float,
     is_tensor: bool = False,
+    rotation_deg: float = 0.0,
+    rotation_y_deg: float = 0.0,
 ) -> AllplanGeo.Line3D:
 
     thickness = definition["thickness"]
@@ -2561,16 +2652,36 @@ def create_edge_angulars_group(
         final = move_point(final, z_dir, thickness)
         final = move_point(final, y_dir, 0.0)
     else:
+        x_dir_rotated = x_dir
+        y_dir_rotated = y_dir
+        z_dir_rotated = z_dir
+        if abs(rotation_deg) > 1e-6:
+            rotation_rad = math.radians(rotation_deg)
+            y_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(y_dir, x_dir, rotation_rad)
+            )
+            z_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(z_dir, x_dir, rotation_rad)
+            )
+        if abs(rotation_y_deg) > 1e-6:
+            rotation_y_rad = math.radians(rotation_y_deg)
+            x_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(x_dir_rotated, y_dir_rotated, rotation_y_rad)
+            )
+            z_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(z_dir_rotated, y_dir_rotated, rotation_y_rad)
+            )
+
         guide_start = start_point
         guide_end = move_point(start_point, x_dir, piece_length)
 
         origin = move_point(start_point, x_dir, 0.0)
-        origin = move_point(origin, z_dir, definition["vertical"])
-        origin = move_point(origin, y_dir, -thickness)
+        origin = move_point(origin, z_dir_rotated, definition["vertical"])
+        origin = move_point(origin, y_dir_rotated, -thickness)
 
         final = move_point(guide_end, x_dir, 0.0)
-        final = move_point(final, z_dir, definition["vertical"])
-        final = move_point(final, y_dir, -thickness)
+        final = move_point(final, z_dir_rotated, definition["vertical"])
+        final = move_point(final, y_dir_rotated, -thickness)
 
     axis_origin = local_to_world(origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0)
     axis_point = AllplanGeo.Axis3D(
@@ -3389,6 +3500,7 @@ class AngularLineScript(BaseScriptObject):
 
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
             rotation_axis_z_deg, rotation_y_deg = self._get_individual_axis_rotations()
+            is_tensor = bool(definition.get("is_tensor", False))
             placement_center = AllplanGeo.Point3D(
                 (start_point.X + end_point.X) / 2.0,
                 (start_point.Y + end_point.Y) / 2.0,
@@ -3396,12 +3508,13 @@ class AngularLineScript(BaseScriptObject):
             )
             placement_dir = normalize_vector(vector_from_points(start_point, end_point))
             if placement_dir and placement_dir.GetLength() > 1e-6:
-                start_point = placement_center
-                end_point = move_point(
-                    placement_center,
-                    placement_dir,
-                    definition.get("piece_length", definition.get("length", 0.0)),
-                )
+                if not is_tensor:
+                    start_point = placement_center
+                    end_point = move_point(
+                        placement_center,
+                        placement_dir,
+                        definition.get("piece_length", definition.get("length", 0.0)),
+                    )
             else:
                 piece_length = definition.get(
                     "piece_length", definition.get("length", 0.0)
