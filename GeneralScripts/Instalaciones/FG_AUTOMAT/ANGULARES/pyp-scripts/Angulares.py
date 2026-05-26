@@ -49,12 +49,13 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.2-seleccionar-restaurado-sin-native-sync"
+ANGULARES_SCRIPT_VERSION = "2.3.3-cambiar-muro-activo"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
 ANGULAR_EVENT_SELECT_EXISTING = 1048
 ANGULAR_EVENT_DESELECT_EXISTING = 1049
+ANGULAR_EVENT_CHANGE_ACTIVE_WALL = 1050
 ANGULAR_OTHER_EXECUTION_MSG = (
     "No se puede seleccionar un angular colocado en otra ejecución.\n\n"
     "Solo puede editar angulares colocados en la ejecución actual.\n\n"
@@ -2891,6 +2892,7 @@ CANCEL = 3
 SELECTING_FACE = 4
 SELECTING_POSITION = 5
 SELECTING_EXISTING_ANGULAR = 6
+SELECTING_ACTIVE_WALL = 7
 
 
 def check_allplan_version(_build_ele: BuildingElement, _version: float) -> bool:
@@ -3218,6 +3220,11 @@ class AngularLineScript(BaseScriptObject):
         self._inline_last_execute_result = None
         self._pending_resume_position_after_deselect = False
         self._resume_after_deselect_inline = False
+
+        if hasattr(self.build_ele, "PermitirCambiarMuro"):
+            self.build_ele.PermitirCambiarMuro.value = not getattr(
+                self, "is_modification_mode", False
+            )
 
         if self.is_modification_mode:
             self._load_existing_points()
@@ -5534,6 +5541,20 @@ class AngularLineScript(BaseScriptObject):
             else:
                 self.state = SELECTING_POSITION
                 self._resume_individual_position_input(coord_input)
+
+        elif self.state == SELECTING_ACTIVE_WALL:
+            coord_input = getattr(self.script_object_interactor, "coord_input", None)
+            self.script_object_interactor = None
+            if self.wall_select_result.is_selected:
+                self._process_wall_selection_free()
+                print(
+                    "[INPUT][INDIVIDUAL] Muro activo cambiado; "
+                    "los siguientes angulares usaran este muro"
+                )
+            else:
+                print("[INPUT][INDIVIDUAL] Cambio de muro cancelado")
+            self.state = SELECTING_POSITION
+            self._resume_individual_position_input(coord_input)
 
     def _process_wall_selection_free(self):
         """Procesa la selección del muro en modo libre (solo referencia)"""
@@ -8073,6 +8094,34 @@ class AngularLineScript(BaseScriptObject):
         print("[SELECT][ANGULAR] Continua colocacion individual")
         return True
 
+    def _start_active_wall_selection(self) -> bool:
+        """Boton Cambiar muro: selecciona el muro para los proximos angulares."""
+        if getattr(self, "is_modification_mode", False):
+            print("[INPUT][INDIVIDUAL] Cambio de muro no disponible en EDIT")
+            return False
+        if not self._is_individual_distribution():
+            print("[INPUT][INDIVIDUAL] Cambio de muro solo disponible en Individual")
+            return False
+
+        if getattr(self, "_inline_selected_angular_active", False):
+            self._clear_inline_selection_visual()
+            self._leave_individual_angular_edit_mode()
+
+        self.wall_select_result = WallSelectResult()
+        self.position_result = PointInteractorResult()
+        self.line_result = LineInteractorResult()
+        self.state = SELECTING_ACTIVE_WALL
+        self.preview_active = False
+        self.script_object_interactor = WallSelectInteractor(
+            self.wall_select_result,
+            "Seleccione el nuevo muro para los siguientes angulares",
+        )
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+        print("[INPUT][INDIVIDUAL] Modo cambio de muro activo")
+        return True
+
     def _enter_individual_angular_edit_mode(self, result: AngularSelectResult) -> bool:
         """
         Tras Seleccionar: carga el PPG en la paleta y prepara edicion
@@ -9172,6 +9221,8 @@ class AngularLineScript(BaseScriptObject):
             return self._start_inline_angular_selection()
         if event_id == ANGULAR_EVENT_DESELECT_EXISTING:
             return self._deselect_inline_angular()
+        if event_id == ANGULAR_EVENT_CHANGE_ACTIVE_WALL:
+            return self._start_active_wall_selection()
         return True
 
     def set_active_palette_page_index(self, page_index: int) -> None:

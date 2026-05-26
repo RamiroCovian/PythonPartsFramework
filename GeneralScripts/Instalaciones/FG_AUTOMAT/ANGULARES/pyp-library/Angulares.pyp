@@ -176,6 +176,17 @@
         <TextId>1049</TextId>
         <Persistent>No</Persistent>
       </Parameter>
+      <Parameter>
+        <Name>CambiarMuroIndividual</Name>
+        <Text>Cambiar muro</Text>
+        <EventId>1050</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <Visible>PermitirCambiarMuro == True</Visible>
+        <TextId>1050</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
     </Parameter>
 
     <Parameter>
@@ -799,6 +810,15 @@
       <Text>z_unique</Text>
       <Value>0</Value>
       <ValueType>Double</ValueType>
+      <Visible>False</Visible>
+      <Persistent>No</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>PermitirCambiarMuro</Name>
+      <Text>Permitir cambiar muro</Text>
+      <Value>True</Value>
+      <ValueType>CheckBox</ValueType>
       <Visible>False</Visible>
       <Persistent>No</Persistent>
     </Parameter>
