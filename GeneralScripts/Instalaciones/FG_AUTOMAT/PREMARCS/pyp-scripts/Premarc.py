@@ -713,6 +713,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.detected_wall_thickness = 0
         self._opening_baseline_width = None
         self._opening_baseline_height = None
+        self._opening_recreated_during_cancel = False
+        self._opening_sync_requires_direct_update = False
 
         self.val_pmp_wall_id = self.build_ele.wall_id.value
 
@@ -2375,6 +2377,100 @@ class PremarcScriptObject(BaseScriptObject):
             None,
         )
 
+    def _get_modification_root_adapter(self):
+        """Devuelve el adaptador raiz del PythonPart que se esta modificando."""
+        modification_list = getattr(self, "modification_ele_list", None)
+        if not modification_list:
+            return None
+
+        try:
+            if not modification_list.is_modification_element():
+                return None
+        except Exception:
+            pass
+
+        try:
+            first = modification_list[0]
+            if isinstance(first, AllplanEleAdapter.BaseElementAdapter):
+                return first
+        except Exception:
+            pass
+
+        try:
+            return modification_list.get_base_element_adapter(self.document)
+        except Exception as exc:
+            print(f"[Premarc] No se pudo obtener el PythonPart original: {exc}")
+            return None
+
+    def _replace_modified_premarc_direct(self) -> bool:
+        """Reemplaza el PythonPart editado sin usar modification_ele_list.
+
+        Workaround acotado: despues de borrar/recrear un opening reducido,
+        Allplan lanza una excepcion C++ al confirmar con la lista de
+        modificacion. Borramos el PPG anterior y creamos el nuevo PPG como
+        insercion limpia para cerrar la operacion sin reentrar al framework.
+        """
+        if self.placement_pnt == AllplanGeo.Point3D():
+            return False
+        if not self.selected_wall:
+            return False
+
+        old_adapter = self._get_modification_root_adapter()
+
+        z_unique = z_unique_as_int(self.build_ele.z_unique.value)
+        if z_unique <= 0:
+            z_unique = int(random.random() * 3600)
+        self.build_ele.z_unique.value = z_unique
+        self.thickness_premarc = (
+            self.build_ele.manual_thickness.value
+            if self.build_ele.enable_manual_thickness.value
+            else self.build_ele.thickness.value
+        )
+
+        self._rebuild_placement_mat()
+
+        original_modification_mode = self.is_modification_mode
+        try:
+            self.is_modification_mode = False
+            premarc_elements = self.create_premarcs_group()
+        finally:
+            self.is_modification_mode = original_modification_mode
+
+        if not premarc_elements:
+            print("[Premarc] Reemplazo directo cancelado: sin geometria")
+            return False
+
+        trans_mat = AllplanGeo.Matrix3D()
+        trans_mat.SetTranslation(AllplanGeo.Vector3D(self.placement_pnt))
+
+        if old_adapter is not None and not old_adapter.IsNull():
+            try:
+                old_list = AllplanEleAdapter.BaseElementAdapterList()
+                old_list.append(old_adapter)
+                AllplanBaseElements.DeleteElements(self.document, old_list)
+                print("[Premarc] PythonPart anterior borrado antes del reemplazo directo")
+            except Exception as exc:
+                print(f"[Premarc] No se pudo borrar el PythonPart anterior: {exc}")
+                return False
+
+        try:
+            created_elements = AllplanBaseElements.CreateElements(
+                self.document,
+                trans_mat,
+                premarc_elements,
+                [],
+                None,
+            )
+        except Exception as exc:
+            print(f"[Premarc] Reemplazo directo fallo al crear PPG: {exc}")
+            return False
+
+        print(
+            "[Premarc] Reemplazo directo OK "
+            f"({len(created_elements) if created_elements else 0} elementos)"
+        )
+        return bool(created_elements)
+
     def is_cuboid_inside_wall(
         self,
         cuboid: AllplanGeo.Polyhedron3D,
@@ -2423,9 +2519,9 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _create_wall_opening(self, modify_existing: bool = False):
         if not self.selected_wall or self.selected_wall.IsNull():
-            return
+            return False
         if self.placement_pnt == AllplanGeo.Point3D():
-            return
+            return False
 
         import math
         from DocumentManager import DocumentManager
@@ -2444,7 +2540,7 @@ class PremarcScriptObject(BaseScriptObject):
         axis_ele = AllplanEleAdapter.AxisElementAdapter(self.selected_wall)
         if axis_ele.IsNull():
             print("[Premarc] Sin eje, skip opening")
-            return
+            return False
         gruix = axis_ele.GetThickness()
         wall_axis = axis_ele.GetAxis()  # Line2D: eje central del muro
 
@@ -2456,7 +2552,7 @@ class PremarcScriptObject(BaseScriptObject):
         length = math.sqrt(dx * dx + dy * dy)
         if length < 1e-10:
             print("[Premarc] Muro sin longitud, skip opening")
-            return
+            return False
 
         ux, uy = dx / length, dy / length  # dirección unitaria a lo largo del muro
         nx, ny = -uy, ux  # perpendicular (normal izquierda)
@@ -2510,7 +2606,7 @@ class PremarcScriptObject(BaseScriptObject):
         # ── 3. Validar intersección con la geometría del muro ────────────────
         if not self.is_cuboid_inside_wall(cuboid, self.selected_wall):
             print("[Premarc] Cuboide fuera del muro, skip opening")
-            return
+            return False
 
         # ── 4. Crear el opening con placement_line alineada al eje del muro ─
         wall_geo = self.selected_wall.GetGroundViewArchitectureElementGeometry()
@@ -2576,17 +2672,25 @@ class PremarcScriptObject(BaseScriptObject):
         # El opening creado es el primer elemento de la lista
 
         if created_opening:
-            opening_adapter = [
+            opening_adapters = [
                 x
                 for x in created_opening
                 if x.GetElementAdapterType() == AllplanEleAdapter.WindowTier_TypeUUID
-            ][0]
+            ]
+            if not opening_adapters:
+                print("[Premarc] Opening creado sin WindowTier reconocible")
+                return False
+
+            opening_adapter = opening_adapters[0]
             opening_guid = opening_adapter.GetModelElementUUID()  # objeto GUID
             opening_guid_str = str(opening_guid)  # string persistible
             print(f"[Premarc] Opening GUID: {opening_guid_str}")
             self.build_ele.opening_guid.value = opening_guid_str
             self._opening_created_width = llarg
             self._opening_created_heigh = alt
+            return True
+
+        return False
 
     def _recreate_wall_opening(self):
         if not self.selected_wall:
@@ -2604,6 +2708,9 @@ class PremarcScriptObject(BaseScriptObject):
         Allplan modifica bien cuando el opening crece, pero puede no reducirlo
         al achicar el ancho/alto. En ese caso se recrea el opening.
         """
+        self._opening_recreated_during_cancel = False
+        self._opening_sync_requires_direct_update = False
+
         if not self.selected_wall:
             print("[Premarc] Sin muro seleccionado; no se actualiza opening")
             return
@@ -2627,8 +2734,12 @@ class PremarcScriptObject(BaseScriptObject):
                 f"{baseline_w}x{baseline_h} -> {current_w}x{current_h}. "
                 "Recreando hueco."
             )
+            self._opening_sync_requires_direct_update = True
             self._delete_wall_opening()
-            self._create_wall_opening()
+            if self._create_wall_opening():
+                self._opening_recreated_during_cancel = True
+            self._opening_baseline_width = current_w
+            self._opening_baseline_height = current_h
             return
 
         if opening_guid:
@@ -2645,48 +2756,34 @@ class PremarcScriptObject(BaseScriptObject):
     def _delete_wall_opening(self):
         opening_guid_str = self.build_ele.opening_guid.value
         if not opening_guid_str:
-            return
+            return False
 
         from DocumentManager import DocumentManager
-        from PythonPartTransaction import PythonPartTransaction
 
-        DocumentManager.get_instance().document = (
-            self.coord_input.GetInputViewDocument()
-        )
+        doc = self.coord_input.GetInputViewDocument()
+        DocumentManager.get_instance().document = doc
 
         # guid = AllplanEleAdapter.GUID()
         # guid.FromString(opening_guid_str)
         guid = AllplanEleAdapter.GUID.FromString(opening_guid_str)
-        docDrawingFile = AllplanBaseElements.DrawingFileService()
-        docAdapter = AllplanEleAdapter.DocumentAdapter()
-        listDocumnets = (
-            AllplanEleAdapter.DocumentNameService.GetLoadedDocumentsNameData()
-        )
 
-        for docValue in range(0, len(listDocumnets)):
-            docDrawingFile.LoadFile(
-                docAdapter,
-                listDocumnets[docValue][1],
-                AllplanBaseElements.DrawingFileLoadState.ActiveForeground,
-            )
-            doc = DocumentManager.get_instance().document  # doc consistente
-            opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(guid, doc)
+        opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(guid, doc)
 
-            if opening_adapter.IsNull():
-                # Ya no existe (undo externo, borrado manual, etc.)
-                print("[Premarc] Opening ya no existe, limpiando GUID")
-                self.build_ele.opening_guid.value = ""
-                continue
-
-            ele_list = AllplanEleAdapter.BaseElementAdapterList()
-            ele_list.append(opening_adapter)
-
-            AllplanBaseElements.DeleteElements(doc, ele_list)
-
+        if opening_adapter.IsNull():
+            print("[Premarc] Opening ya no existe en el documento actual, limpiando GUID")
             self.build_ele.opening_guid.value = ""
-            self._opening_created_width = 0
-            self._opening_created_heigh = 0
-            print("[delete_wall_opening] Opening borrado OK")
+            return False
+
+        ele_list = AllplanEleAdapter.BaseElementAdapterList()
+        ele_list.append(opening_adapter)
+
+        AllplanBaseElements.DeleteElements(doc, ele_list)
+
+        self.build_ele.opening_guid.value = ""
+        self._opening_created_width = 0
+        self._opening_created_heigh = 0
+        print("[delete_wall_opening] Opening borrado OK")
+        return True
 
     def _get_wall_thickness(self, wall_adapter) -> float:
         """Lee el grosor del muro desde su geometria 2D en planta.
@@ -3102,6 +3199,22 @@ class PremarcScriptObject(BaseScriptObject):
 
             if self.selected_wall:
                 self._sync_wall_opening_for_modification()
+
+            if self._opening_sync_requires_direct_update:
+                print(
+                    "[Premarc] Opening reducido; reemplazando PythonPart "
+                    "sin modification_ele_list"
+                )
+                self._create_union_frames = True
+                replaced = self._replace_modified_premarc_direct()
+                if not replaced:
+                    print(
+                        "[Premarc] Reemplazo directo no confirmado; se evita "
+                        "CREATE_ELEMENTS para no reentrar en excepcion C++"
+                    )
+                self._opening_sync_requires_direct_update = False
+                self._opening_recreated_during_cancel = False
+                return OnCancelFunctionResult.CANCEL_INPUT
 
             print("[Premarc] Modificación confirmada -> CREATE_ELEMENTS")
             return OnCancelFunctionResult.CREATE_ELEMENTS
