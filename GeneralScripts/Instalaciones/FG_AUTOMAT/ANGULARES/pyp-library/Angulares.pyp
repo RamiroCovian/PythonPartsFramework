@@ -155,7 +155,7 @@
       <Name>RowSeleccionAngularIndividual</Name>
       <Text>Edición</Text>
       <ValueType>Row</ValueType>
-      <Visible>True</Visible>
+      <Visible>PermitirCambiarMuro == True</Visible>
       <Parameter>
         <Name>SeleccionarAngularIndividual</Name>
         <Text>Seleccionar</Text>
@@ -194,6 +194,7 @@
       <Text>Separación entre angulares</Text>
       <Value>10</Value>
       <ValueType>Length</ValueType>
+      <Visible>False</Visible>
       <TextId>1005</TextId>
     </Parameter>
 
@@ -204,6 +205,7 @@
       <ValueType>Length</ValueType>
       <TextId>1007</TextId>
       <Enable>False</Enable>
+      <Visible>False</Visible>
       <ReadOnly>True</ReadOnly>
       <Persistent>Model</Persistent>
     </Parameter>
@@ -214,6 +216,7 @@
       <Value>0</Value>
       <ValueType>Length</ValueType>
       <Enable>False</Enable>
+      <Visible>False</Visible>
       <TextId>1004</TextId>
       <Persistent>Model</Persistent>
     </Parameter>
@@ -305,7 +308,7 @@
     <Parameter>
       <Name>SiLlevaNeopreno</Name>
       <Text>Si lleva Neopreno</Text>
-      <Value>false</Value>
+      <Value>true</Value>
       <ValueType>CheckBox</ValueType>
       <Visible>True</Visible>
       <TextId>1008</TextId>

@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.3-cambiar-muro-activo"
+ANGULARES_SCRIPT_VERSION = "2.3.5-neopreno-longitud-metros"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -272,6 +272,16 @@ def normalize_distribution_type(value: Any) -> str:
     if normalized == DISTRIBUTION_INDIVIDUAL:
         return DISTRIBUTION_INDIVIDUAL
     return DISTRIBUTION_GROUP
+
+
+def get_neoprene_length_meters(definition: dict | None) -> float:
+    """Devuelve la longitud del angular en metros para atributos PMP."""
+    if not definition:
+        return 0.0
+    try:
+        return float(definition.get("length", 0.0) or 0.0) / 1000.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def create_element_hash(element_type: str, stable: bool = False, **params) -> str:
@@ -3200,6 +3210,8 @@ class AngularLineScript(BaseScriptObject):
                         self._z_unique_from_group = 0
         else:
             self._z_unique_from_group = 0
+            if hasattr(self.build_ele, "SiLlevaNeopreno"):
+                self.build_ele.SiLlevaNeopreno.value = True
             # self._reset_build_ele_for_create()
 
         self.is_editing_existing = self._check_if_editing_existing()
@@ -3625,7 +3637,7 @@ class AngularLineScript(BaseScriptObject):
             be.ValorZIndividual.value = 0.0
 
         if hasattr(be, "SiLlevaNeopreno"):
-            be.SiLlevaNeopreno.value = False
+            be.SiLlevaNeopreno.value = True
 
         if hasattr(be, "angular_libre"):
             be.angular_libre.value = True
@@ -3856,7 +3868,7 @@ class AngularLineScript(BaseScriptObject):
                 lleva_val = (
                     state.get("lleva_neopreno")
                     if "lleva_neopreno" in state
-                    else state.get("SiLlevaNeopreno", False)
+                    else state.get("SiLlevaNeopreno", True)
                 )
                 self.build_ele.SiLlevaNeopreno.value = bool(lleva_val)
 
@@ -4084,8 +4096,7 @@ class AngularLineScript(BaseScriptObject):
         neopre = "Si" if lleva_neopreno else "No"
         rot_x_deg, rot_y_deg = self._get_individual_axis_rotations()
 
-        # grosor_float = self._grosor_neopreno_to_float(grosor_neopre_value)
-        length_mm_str = f"{float(def_angular['length']):.2f}mm"
+        neoprene_length_m = get_neoprene_length_meters(def_angular)
         result = {
             "z_unique": z_unique,
             "TotalElements": total_elements,
@@ -4122,7 +4133,7 @@ class AngularLineScript(BaseScriptObject):
             "PMP_FG_ANG_FORATS": num_forats,
             "PMP_FG_ANG_NOM": nom,
             "PMP_FG_ANGULAR_NEOPRE": neopre,
-            "PMP_FG_ANG_NEOPRE": length_mm_str,
+            "PMP_FG_ANG_NEOPRE": neoprene_length_m,
         }
         for k, v in self._wall_face_params_from_build_ele().items():
             if k not in result:
@@ -9513,7 +9524,7 @@ class AngularLineScript(BaseScriptObject):
 
         grosor_length_value = ""
         if lleva_neopreno:
-            grosor_length_value = float(definition["length"])
+            grosor_length_value = get_neoprene_length_meters(definition)
 
         for line in geometries:
             elem = AllplanBasisElements.ModelElement3D(props, line)
@@ -9708,7 +9719,7 @@ class AngularLineScript(BaseScriptObject):
                     if lleva_neopreno_local and angular_key:
                         definition = ANGULAR_CATALOG.get(angular_key)
                         if definition:
-                            largo_neopre_value = float(definition["length"])
+                            largo_neopre_value = get_neoprene_length_meters(definition)
                             attr_list.add_attribute(
                                 attr_largo_neopre_id, largo_neopre_value
                             )
@@ -10250,7 +10261,7 @@ class AngularLineScript(BaseScriptObject):
         rot = 0.0
         invertido = False
         lleva_neopreno = False
-        largo_neopre_value = 240
+        largo_neopre_value = 0.0
         wall_pare = ""
 
         start_point = (
@@ -10410,7 +10421,7 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "SiLlevaNeopreno")
             else False
         )
-        largo_neopre_value = float(definition["length"])
+        largo_neopre_value = get_neoprene_length_meters(definition)
         wall_pare = (
             str(getattr(self.build_ele.pmp_pare, "value", "") or "")
             .strip()
