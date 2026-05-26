@@ -70,7 +70,7 @@ ANGULAR_SELECTION_AUX_PEN = 15
 ANGULAR_SELECTION_AUX_OUTWARD_MM = 0.0
 ANGULAR_SELECTION_AUX_CROSS_HALF_MM = 120.0
 ANGULAR_SELECTION_AUX_PARALLEL_MM = 0.0
-ANGULAR_POSITION_REFERENCE_Y_MM = -20.0
+ANGULAR_POSITION_REFERENCE_Y_FALLBACK_MM = -20.0
 
 
 def _find_nearest_angular_record_index(
@@ -755,12 +755,32 @@ def axis_with_offset(
     return AllplanGeo.AxisPlacement3D(axis_origin, x_dir, z_dir)
 
 
+def get_angular_position_reference_y(definition: dict) -> float:
+    """Referencia local Y de posicionamiento respecto al origen fisico del perfil."""
+    try:
+        return float(
+            definition.get(
+                "position_reference_y",
+                -float(
+                    definition.get(
+                        "thickness", -ANGULAR_POSITION_REFERENCE_Y_FALLBACK_MM
+                    )
+                ),
+            )
+        )
+    except (TypeError, ValueError):
+        return ANGULAR_POSITION_REFERENCE_Y_FALLBACK_MM
+
+
 def angular_profile_origin_from_reference(
+    definition: dict,
     reference_origin: AllplanGeo.Point3D,
     y_dir: AllplanGeo.Vector3D,
 ) -> AllplanGeo.Point3D:
     """Convierte la referencia de posicionamiento al origen físico del perfil."""
-    return move_point(reference_origin, y_dir, ANGULAR_POSITION_REFERENCE_Y_MM)
+    return move_point(
+        reference_origin, y_dir, get_angular_position_reference_y(definition)
+    )
 
 
 class SolidFaceSelectResult:
@@ -1632,7 +1652,7 @@ def create_single_angular(
     horizontal = definition["horizontal"]
     thickness = definition["thickness"]
 
-    profile_origin = angular_profile_origin_from_reference(origin, y_dir)
+    profile_origin = angular_profile_origin_from_reference(definition, origin, y_dir)
     angular_origin = move_point(profile_origin, x_dir, -length / 2.0)
 
     horizontal_axis = axis_with_offset(
@@ -2527,7 +2547,9 @@ def create_edge_angulars_group(
 
     thickness = definition["thickness"]
     if not is_tensor:
-        profile_start = angular_profile_origin_from_reference(start_point, y_dir)
+        profile_start = angular_profile_origin_from_reference(
+            definition, start_point, y_dir
+        )
         guide_start = move_point(profile_start, x_dir, -piece_length / 2.0)
         guide_end = move_point(profile_start, x_dir, piece_length / 2.0)
 
