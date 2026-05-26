@@ -5314,7 +5314,6 @@ class AngularLineScript(BaseScriptObject):
                         "[INPUT][INDIVIDUAL] Muro seleccionado; pasando a seleccion de posicion"
                     )
                     self._process_wall_selection_free()
-                    self._resolve_individual_face_from_wall()
                     self.state = SELECTING_POSITION
                     self._start_position_input()
                 else:
@@ -5397,6 +5396,10 @@ class AngularLineScript(BaseScriptObject):
         self.detected_wall = selected_element
         real_wall_guid = str(selected_element.GetModelElementUUID())
         self.detected_wall_guid = real_wall_guid
+        self.face_point = None
+        self.face_normal = None
+        self.face_polygon = None
+        self.face_local_system = None
 
         # self.wall_allplan_id = get_wall_ifc_id(selected_element)
 
@@ -5463,6 +5466,57 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return 0.0
 
+    def _face_normal_family_key(self, face_info: dict) -> tuple[int, int, int]:
+        """Agrupa caras por normal manteniendo el signo."""
+        normal = normalize_vector(face_info.get("normal"))
+        if not normal or normal.GetLength() < 1e-6:
+            return (0, 0, 0)
+        return (
+            int(round(normal.X * 100)),
+            int(round(normal.Y * 100)),
+            int(round(normal.Z * 100)),
+        )
+
+    def _face_plane_projection(self, face_info: dict) -> float | None:
+        """Proyeccion del plano de la cara sobre su normal."""
+        try:
+            normal = normalize_vector(face_info.get("normal"))
+            center = self._get_face_center(face_info.get("polygon"))
+            if not normal or normal.GetLength() < 1e-6 or not center:
+                return None
+            return vector_dot(AllplanGeo.Vector3D(center.X, center.Y, center.Z), normal)
+        except Exception:
+            return None
+
+    def _filter_exterior_wall_faces_by_normal(self, faces: list[dict]) -> list[dict]:
+        """Conserva solo caras en el plano exterior del muro para cada normal."""
+        groups: dict[tuple[int, int, int], list[dict]] = {}
+        for face in faces:
+            key = self._face_normal_family_key(face)
+            if key == (0, 0, 0):
+                continue
+            groups.setdefault(key, []).append(face)
+
+        filtered: list[dict] = []
+        for group_faces in groups.values():
+            projections = [
+                (face, self._face_plane_projection(face)) for face in group_faces
+            ]
+            valid = [(face, proj) for face, proj in projections if proj is not None]
+            if not valid:
+                filtered.extend(group_faces)
+                continue
+
+            exterior_projection = max(proj for _face, proj in valid)
+            tolerance = 2.0
+            filtered.extend(
+                face
+                for face, proj in valid
+                if abs(exterior_projection - proj) <= tolerance
+            )
+
+        return filtered or faces
+
     def _store_current_face_info(self, selected_element, face_index=None) -> None:
         """Persiste normal, punto de cara, GUID e indice para reconstruccion posterior."""
         if self.face_normal:
@@ -5501,6 +5555,8 @@ class AngularLineScript(BaseScriptObject):
         if not lateral_faces:
             print("[INPUT][INDIVIDUAL] No se pudieron obtener caras laterales del muro")
             return False
+
+        lateral_faces = self._filter_exterior_wall_faces_by_normal(lateral_faces)
 
         if reference_point:
             lateral_faces.sort(
