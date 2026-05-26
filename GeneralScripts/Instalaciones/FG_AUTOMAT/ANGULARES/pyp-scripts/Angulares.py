@@ -2507,12 +2507,11 @@ def create_angulars_on_line(
         wall_bbox = get_bounding_box_from_wall_element(wall_element)
 
     is_tensor = bool(definition.get("is_tensor", False))
-    if not is_tensor:
-        rotation_deg = rotation_deg + 90.0
+    line_rotation_deg = 0.0 if is_tensor else rotation_deg + 90.0
 
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = decompose_vector(
-        base_vector, rotation_deg, face_normal, is_opposite_face
+        base_vector, line_rotation_deg, face_normal, is_opposite_face
     )
     x_dir, y_dir, z_dir = apply_local_y_rotation(x_dir, y_dir, z_dir, rotation_y_deg)
     x_dir, y_dir, z_dir = apply_local_z_rotation(x_dir, y_dir, z_dir, rotation_z_deg)
@@ -2537,7 +2536,7 @@ def create_angulars_on_line(
         piece_count = 0
 
     if piece_count == 0:
-        return []
+        return [], []
 
     geometries: list[AllplanGeo.BRep3D] = []
     edges: list[AllplanGeo.Line3D] = []
@@ -2557,8 +2556,8 @@ def create_angulars_on_line(
             origin = line_origin
 
         if is_tensor:
-            tensor_rotation_deg = get_tensor_x_rotation_deg(rotation_deg)
-            tensor_rotation_y_deg = get_tensor_y_rotation_deg()
+            tensor_rotation_deg = 0.0
+            tensor_rotation_y_deg = 180.0
             tensor_origin = get_tensor_origin_for_rotated_x(
                 origin,
                 x_dir,
