@@ -61,6 +61,10 @@ ANGULAR_OTHER_EXECUTION_MSG = (
     "Para modificar uno anterior, cierre la ejecución actual y abra ese PythonPart."
 )
 
+ANGULAR_OUTSIDE_SELECTED_WALL_MSG = (
+    "No es posible el posicionamiento del Angular fuera del muro seleccionado."
+)
+
 ANGULAR_SELECTION_AUX_COLOR = 3
 ANGULAR_SELECTION_AUX_PEN = 15
 ANGULAR_SELECTION_AUX_OUTWARD_MM = 0.0
@@ -3030,6 +3034,7 @@ class AngularLineScript(BaseScriptObject):
         self.face_normal = None
         self.face_polygon = None
         self.face_local_system = None
+        self._last_individual_position_valid = True
         self._z_unique_from_group = 0  # Se rellena desde script_object_data.param_list en __init__ para usar en EDIT
         self._group_hash_from_params = ""
         self._current_group_hash = ""
@@ -5360,6 +5365,14 @@ class AngularLineScript(BaseScriptObject):
             self._process_position_input()
 
             if self._is_individual_distribution() and not self.is_modification_mode:
+                if not self.line_result.input_line:
+                    self.preview_active = False
+                    self.state = SELECTING_POSITION
+                    self._start_position_input()
+                    if coord_input:
+                        self.script_object_interactor.start_input(coord_input)
+                    return
+
                 self._finish_inline_angular_edit()
                 if self._materialize_current_individual_angular(coord_input):
                     self.line_result = LineInteractorResult()
@@ -5517,6 +5530,40 @@ class AngularLineScript(BaseScriptObject):
 
         return filtered or faces
 
+    def _projected_point_is_inside_face(
+        self,
+        face_info: dict,
+        point: AllplanGeo.Point3D,
+        tolerance_mm: float = 5.0,
+    ) -> bool:
+        """True si el punto proyectado cae dentro de los limites locales de la cara."""
+        try:
+            polygon = face_info.get("polygon")
+            normal = face_info.get("normal")
+            if not polygon or not normal:
+                return False
+
+            local_system = calculate_local_coordinate_system(polygon, normal)
+            face_center = self._get_face_center(polygon)
+            if not local_system or not face_center:
+                return False
+
+            projected = project_point_to_plane(point, face_center, normal)
+            relative = calculate_relative_position(projected, local_system)
+            if not relative:
+                return False
+
+            width = max(float(local_system.get("width", 0.0)), 1e-6)
+            height = max(float(local_system.get("height", 0.0)), 1e-6)
+            tol_u = tolerance_mm / width
+            tol_v = tolerance_mm / height
+            return (
+                -tol_u <= float(relative["u"]) <= 1.0 + tol_u
+                and -tol_v <= float(relative["v"]) <= 1.0 + tol_v
+            )
+        except Exception:
+            return False
+
     def _store_current_face_info(self, selected_element, face_index=None) -> None:
         """Persiste normal, punto de cara, GUID e indice para reconstruccion posterior."""
         if self.face_normal:
@@ -5559,6 +5606,14 @@ class AngularLineScript(BaseScriptObject):
         lateral_faces = self._filter_exterior_wall_faces_by_normal(lateral_faces)
 
         if reference_point:
+            lateral_faces = [
+                face
+                for face in lateral_faces
+                if self._projected_point_is_inside_face(face, reference_point)
+            ]
+            if not lateral_faces:
+                return False
+
             lateral_faces.sort(
                 key=lambda face: (
                     self._face_distance_to_point(face, reference_point),
@@ -5790,7 +5845,10 @@ class AngularLineScript(BaseScriptObject):
         self, position: AllplanGeo.Point3D
     ) -> AllplanGeo.Line3D:
         """Construye una línea interna de pieza desde el punto clicado."""
-        self._resolve_individual_face_from_wall(position)
+        self._last_individual_position_valid = False
+        if not self._resolve_individual_face_from_wall(position):
+            return AllplanGeo.Line3D()
+        self._last_individual_position_valid = True
 
         angular_key = (
             self.build_ele.TipoAngular.value
@@ -6106,6 +6164,9 @@ class AngularLineScript(BaseScriptObject):
 
         line = self._build_individual_line_from_position(point)
         if line == AllplanGeo.Line3D():
+            if not getattr(self, "_last_individual_position_valid", True):
+                self._warn_angular_outside_selected_wall()
+                self.line_result = LineInteractorResult()
             return
 
         self.line_result.input_line = line
@@ -6582,6 +6643,17 @@ class AngularLineScript(BaseScriptObject):
         except Exception as exc:
             print(f"[SELECT][ANGULAR] No se pudo mostrar el cuadro de aviso: {exc}")
             print(ANGULAR_OTHER_EXECUTION_MSG)
+
+    def _warn_angular_outside_selected_wall(self) -> None:
+        """Aviso al usuario: el punto elegido no pertenece al muro seleccionado."""
+        print("[INPUT][INDIVIDUAL] Rechazado: posicion fuera del muro seleccionado")
+        try:
+            AllplanUtil.ShowMessageBox(
+                ANGULAR_OUTSIDE_SELECTED_WALL_MSG, AllplanUtil.MB_OK
+            )
+        except Exception as exc:
+            print(f"[INPUT][INDIVIDUAL] No se pudo mostrar el cuadro de aviso: {exc}")
+            print(ANGULAR_OUTSIDE_SELECTED_WALL_MSG)
 
     def _remember_created_individual_angular(
         self, created_elements, model_ele_list=None
