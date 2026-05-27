@@ -80,6 +80,11 @@ NEOPRENO_SELECTION_AUX_PEN = 15
 NEOPRENO_SELECTION_AUX_OUTWARD_MM = 0.0
 NEOPRENO_SELECTION_AUX_CROSS_HALF_MM = 120.0
 NEOPRENO_SELECTION_AUX_PARALLEL_MM = 0.0
+NEOPRENO_CREATION_INDICATOR_COLOR = 6
+NEOPRENO_CREATION_INDICATOR_PEN = 4
+NEOPRENO_CREATION_INDICATOR_HALF_MM = 90.0
+NEOPRENO_CREATION_INDICATOR_TEXT_DX_MM = 120.0
+NEOPRENO_CREATION_INDICATOR_TEXT_DY_MM = 80.0
 
 
 def neo_log(message: str) -> None:
@@ -629,6 +634,64 @@ def _build_neopreno_selection_auxiliary_elements(
         _offset_point3d_selection(mid, vertical, cross_half),
     )
     return guides
+
+
+def _make_neopreno_creation_indicator_properties():
+    props = AllplanBaseElements.CommonProperties()
+    try:
+        props.GetGlobalProperties()
+    except Exception:
+        pass
+    props.Color = NEOPRENO_CREATION_INDICATOR_COLOR
+    props.Pen = NEOPRENO_CREATION_INDICATOR_PEN
+    props.ColorByLayer = False
+    props.PenByLayer = False
+    props.StrokeByLayer = False
+    props.Construction = True
+    return props
+
+
+def _build_neopreno_creation_indicator_elements(
+    anchor: AllplanGeo.Point3D | None,
+    has_previous_neoprenos: bool,
+) -> list[Any]:
+    if anchor is None:
+        return []
+
+    props = _make_neopreno_creation_indicator_properties()
+    half = float(NEOPRENO_CREATION_INDICATOR_HALF_MM)
+    elements: list[Any] = []
+
+    px = AllplanGeo.Point3D(anchor.X + half, anchor.Y, anchor.Z)
+    nx = AllplanGeo.Point3D(anchor.X - half, anchor.Y, anchor.Z)
+    py = AllplanGeo.Point3D(anchor.X, anchor.Y + half, anchor.Z)
+    ny = AllplanGeo.Point3D(anchor.X, anchor.Y - half, anchor.Z)
+    pz = AllplanGeo.Point3D(anchor.X, anchor.Y, anchor.Z + half)
+    nz = AllplanGeo.Point3D(anchor.X, anchor.Y, anchor.Z - half)
+
+    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(nx, px)))
+    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(ny, py)))
+    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(nz, pz)))
+
+    try:
+        text_props = AllplanBasisElements.TextProperties()
+        text_props.Height = 0.12
+        text_props.Width = 0.12
+        text_props.IsScaleDependent = False
+        label = (
+            "Nuevo neopreno: primer punto"
+            if has_previous_neoprenos
+            else "Neopreno: primer punto"
+        )
+        loc = AllplanGeo.Point2D(
+            anchor.X + NEOPRENO_CREATION_INDICATOR_TEXT_DX_MM,
+            anchor.Y + NEOPRENO_CREATION_INDICATOR_TEXT_DY_MM,
+        )
+        elements.append(AllplanBasisElements.TextElement(props, text_props, label, loc))
+    except Exception:
+        pass
+
+    return elements
 
 
 def rotate_vector_around_axis(
@@ -3552,6 +3615,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self.script_object_interactor.start_input(coord_input_to_use)
             except Exception:
                 pass
+        self._draw_creation_indicator_preview(clear_before=True)
 
     def _process_line_input(self):
         if not (line := self.line_result.input_line):
@@ -3772,6 +3836,57 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         return model_ele_list
 
+    def _get_creation_indicator_anchor(self) -> AllplanGeo.Point3D | None:
+        """Punto donde mostrar que la sesion sigue lista para crear otro neopreno."""
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if records:
+            last_record = records[-1]
+            pos = last_record.get("pos")
+            if pos is not None and hasattr(pos, "X"):
+                return AllplanGeo.Point3D(pos.X, pos.Y, getattr(pos, "Z", 0.0))
+
+            start = last_record.get("start")
+            end = last_record.get("end")
+            if start is not None and end is not None:
+                return AllplanGeo.Point3D(
+                    (start.X + end.X) / 2.0,
+                    (start.Y + end.Y) / 2.0,
+                    (start.Z + end.Z) / 2.0,
+                )
+
+        if self.face_point is not None and hasattr(self.face_point, "X"):
+            return AllplanGeo.Point3D(
+                self.face_point.X, self.face_point.Y, self.face_point.Z
+            )
+        return None
+
+    def _draw_creation_indicator_preview(self, clear_before: bool = True) -> bool:
+        """Preview auxiliar mientras se espera el primer punto de la siguiente linea."""
+        if self.is_editing_existing or getattr(self, "is_modification_mode", False):
+            return False
+        if self.interactor_state != SELECTING_LINE:
+            return False
+        if self.line_result and self.line_result.input_line:
+            return False
+
+        anchor = self._get_creation_indicator_anchor()
+        indicator = _build_neopreno_creation_indicator_elements(
+            anchor,
+            bool(getattr(self, "_created_neopreno_records", []) or []),
+        )
+        if not indicator:
+            return False
+
+        doc = self._get_inline_preview_document()
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                doc, AllplanGeo.Matrix3D(), indicator, clear_before, None
+            )
+            return True
+        except Exception as exc:
+            print(f"[NEOPRENO] Error dibujando indicador de creacion: {exc}")
+            return False
+
     def on_mouse_leave(self):
         if self.script_object_interactor:
             self.script_object_interactor.on_mouse_leave()
@@ -3795,6 +3910,8 @@ class NeoprenosScriptObject(BaseScriptObject):
                     True,
                     None,
                 )
+        elif self.interactor_state == SELECTING_LINE:
+            self._draw_creation_indicator_preview(clear_before=True)
 
     def modify_element_property(self, name: str, _value: Any) -> bool:
         """Maneja cambios en propiedades del elemento."""
