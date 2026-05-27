@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.7-deteccion-cara-por-clic"
+ANGULARES_SCRIPT_VERSION = "2.3.8-sin-resaltado-rojo-cara"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -851,14 +851,15 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
         if selected_element.IsNull():
             return True
 
+        is_mouse_move = self.coord_input.IsMouseMove(mouse_msg)
         is_selected, face_polygon, intersect_result = self._select_face(
-            selected_element, pnt
+            selected_element, pnt, highlight_face=False
         )
 
         if not is_selected:
             return True
 
-        if self.coord_input.IsMouseMove(mouse_msg):
+        if is_mouse_move:
             if intersect_result and hasattr(intersect_result, "IntersectionPoint"):
                 self._draw_face_normal_preview(intersect_result)
             return True
@@ -878,14 +879,14 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
 
         return False
 
-    def _select_face(self, element, pnt):
+    def _select_face(self, element, pnt, highlight_face=False):
         """Intenta seleccionar una cara del elemento"""
         try:
             is_selected, face_polygon, intersect_result = (
                 AllplanBaseElements.FaceSelectService.SelectWallFace(
                     element,
                     pnt,
-                    True,
+                    highlight_face,
                     self.coord_input.GetViewWorldProjection(),
                     self.coord_input.GetInputViewDocument(),
                     True,
@@ -901,7 +902,7 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
                 AllplanBaseElements.FaceSelectService.SelectPolyhedronFace(
                     element,
                     pnt,
-                    True,
+                    highlight_face,
                     self.coord_input.GetViewWorldProjection(),
                     self.coord_input.GetInputViewDocument(),
                     True,
@@ -5715,7 +5716,7 @@ class AngularLineScript(BaseScriptObject):
                 is_selected, face_polygon, intersect_result = select_fn(
                     wall_element,
                     mouse_2d,
-                    True,
+                    False,
                     view_projection,
                     input_document,
                     True,
