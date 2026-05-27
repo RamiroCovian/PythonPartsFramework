@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.5-neopreno-longitud-metros"
+ANGULARES_SCRIPT_VERSION = "2.3.7-deteccion-cara-por-clic"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -2932,6 +2932,8 @@ class WallSelectResult:
     def __init__(self):
         self.element = None
         self.element_guid = None
+        self.input_point = None
+        self.input_mouse_2d = None
         self.is_selected = False
 
 
@@ -2984,6 +2986,15 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
         if self.coord_input.IsMouseMove(mouse_msg):
             return True
 
+        try:
+            self.result.input_point = self.coord_input.GetInputPoint(
+                mouse_msg, pnt, msg_info
+            ).GetPoint()
+            self.result.input_mouse_2d = AllplanGeo.Point2D(pnt.X, pnt.Y)
+        except Exception:
+            self.result.input_point = None
+            self.result.input_mouse_2d = None
+
         self.result.element = selected_element
         self.result.element_guid = str(selected_element.GetModelElementUUID())
         self.result.is_selected = True
@@ -2995,6 +3006,19 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
 
     def on_mouse_leave(self):
         pass
+
+
+class IndividualPositionPointInteractor(PointInteractor):
+    """PointInteractor que conserva el clic 2D para detectar la cara lateral del muro."""
+
+    def __init__(self, owner, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.owner = owner
+
+    def process_mouse_msg(self, mouse_msg, pnt, msg_info):
+        if self.owner is not None:
+            self.owner._last_individual_mouse_2d = AllplanGeo.Point2D(pnt.X, pnt.Y)
+        return super().process_mouse_msg(mouse_msg, pnt, msg_info)
 
 
 class AngularSelectResult:
@@ -3179,6 +3203,7 @@ class AngularLineScript(BaseScriptObject):
         self.face_polygon = None
         self.face_local_system = None
         self._last_individual_position_valid = True
+        self._last_individual_mouse_2d = None
         self._z_unique_from_group = 0  # Se rellena desde script_object_data.param_list en __init__ para usar en EDIT
         self._group_hash_from_params = ""
         self._current_group_hash = ""
@@ -5588,6 +5613,17 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
 
+        selection_point = getattr(self.wall_select_result, "input_point", None)
+        selection_mouse_2d = getattr(self.wall_select_result, "input_mouse_2d", None)
+        if selection_mouse_2d is not None:
+            self._last_individual_mouse_2d = selection_mouse_2d
+        if self._is_individual_distribution() and selection_point:
+            if self._resolve_individual_face_from_wall(selection_point):
+                print(
+                    "[INPUT][INDIVIDUAL] Cara lateral fijada desde el punto "
+                    "de seleccion del muro"
+                )
+
     def _get_face_center(self, face_polygon: AllplanGeo.Polygon3D):
         """Calcula el centro del bounding box de una cara."""
         try:
@@ -5624,6 +5660,101 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return float("inf")
 
+    def _face_exterior_proximity_score(
+        self, face_info: dict, point: AllplanGeo.Point3D
+    ) -> tuple[float, float, float]:
+        """Puntuacion de proximidad; menor es mejor. Prioriza el lateral bajo el clic."""
+        try:
+            normal = normalize_vector(face_info.get("normal"))
+            center = self._get_face_center(face_info.get("polygon"))
+            if not normal or normal.GetLength() < 1e-6 or not center:
+                return (float("inf"), float("inf"), 0.0)
+
+            to_point = AllplanGeo.Vector3D(
+                point.X - center.X,
+                point.Y - center.Y,
+                point.Z - center.Z,
+            )
+            signed = vector_dot(to_point, normal)
+            abs_dist = abs(signed)
+            exterior_penalty = 0.0 if signed >= -5.0 else 1000.0 + abs_dist
+            return (exterior_penalty, abs_dist, -self._face_horizontal_span(face_info))
+        except Exception:
+            return (float("inf"), float("inf"), 0.0)
+
+    def _select_wall_lateral_face_via_service(
+        self,
+        wall_element,
+        reference_point: AllplanGeo.Point3D | None = None,
+        mouse_2d: AllplanGeo.Point2D | None = None,
+    ) -> dict | None:
+        """Detecta la cara lateral bajo el cursor usando FaceSelectService de Allplan."""
+        if not wall_element:
+            return None
+
+        coord_input = self._get_active_coord_input()
+        view_projection = None
+        input_document = self.document
+        if coord_input:
+            try:
+                view_projection = coord_input.GetViewWorldProjection()
+                input_document = coord_input.GetInputViewDocument()
+            except Exception:
+                pass
+
+        if mouse_2d is None and reference_point is not None:
+            mouse_2d = AllplanGeo.Point2D(reference_point.X, reference_point.Y)
+        if mouse_2d is None:
+            return None
+
+        for select_fn in (
+            AllplanBaseElements.FaceSelectService.SelectWallFace,
+            AllplanBaseElements.FaceSelectService.SelectPolyhedronFace,
+        ):
+            try:
+                is_selected, face_polygon, intersect_result = select_fn(
+                    wall_element,
+                    mouse_2d,
+                    True,
+                    view_projection,
+                    input_document,
+                    True,
+                )
+            except Exception:
+                continue
+
+            if not is_selected or not face_polygon or not intersect_result:
+                continue
+
+            face_normal = getattr(intersect_result, "FaceNv", None)
+            if not face_normal or not is_lateral_face(face_normal):
+                continue
+
+            face_normal = normalize_vector(face_normal)
+            if not face_normal or face_normal.GetLength() < 1e-6:
+                continue
+
+            face_point = getattr(intersect_result, "IntersectionPoint", None)
+            if face_point is None and reference_point is not None:
+                center = self._get_face_center(face_polygon)
+                if center:
+                    face_point = project_point_to_plane(
+                        reference_point, center, face_normal
+                    )
+            if face_point is None:
+                face_point = self._get_face_center(face_polygon)
+
+            face_index = self._find_face_index(wall_element, face_polygon, face_normal)
+            return {
+                "index": face_index,
+                "polygon": face_polygon,
+                "normal": face_normal,
+                "points": None,
+                "face_point": face_point,
+            }
+
+        return None
+
     def _face_horizontal_span(self, face_info: dict) -> float:
         """Longitud horizontal aproximada de una cara; prioriza caras principales."""
         try:
@@ -5646,14 +5777,23 @@ class AngularLineScript(BaseScriptObject):
             return 0.0
 
     def _face_normal_family_key(self, face_info: dict) -> tuple[int, int, int]:
-        """Agrupa caras por normal manteniendo el signo."""
+        """Agrupa caras paralelas independientemente del sentido de la normal."""
         normal = normalize_vector(face_info.get("normal"))
         if not normal or normal.GetLength() < 1e-6:
             return (0, 0, 0)
+
+        nx, ny, nz = normal.X, normal.Y, normal.Z
+        if (
+            nx < -1e-6
+            or (abs(nx) <= 1e-6 and ny < -1e-6)
+            or (abs(nx) <= 1e-6 and abs(ny) <= 1e-6 and nz < 0.0)
+        ):
+            nx, ny, nz = -nx, -ny, -nz
+
         return (
-            int(round(normal.X * 100)),
-            int(round(normal.Y * 100)),
-            int(round(normal.Z * 100)),
+            int(round(nx * 100)),
+            int(round(ny * 100)),
+            int(round(nz * 100)),
         )
 
     def _face_plane_projection(self, face_info: dict) -> float | None:
@@ -5668,7 +5808,7 @@ class AngularLineScript(BaseScriptObject):
             return None
 
     def _filter_exterior_wall_faces_by_normal(self, faces: list[dict]) -> list[dict]:
-        """Conserva solo caras en el plano exterior del muro para cada normal."""
+        """Conserva las caras exteriores del muro para cada orientacion de normal."""
         groups: dict[tuple[int, int, int], list[dict]] = {}
         for face in faces:
             key = self._face_normal_family_key(face)
@@ -5677,6 +5817,7 @@ class AngularLineScript(BaseScriptObject):
             groups.setdefault(key, []).append(face)
 
         filtered: list[dict] = []
+        tolerance = 2.0
         for group_faces in groups.values():
             projections = [
                 (face, self._face_plane_projection(face)) for face in group_faces
@@ -5686,12 +5827,13 @@ class AngularLineScript(BaseScriptObject):
                 filtered.extend(group_faces)
                 continue
 
-            exterior_projection = max(proj for _face, proj in valid)
-            tolerance = 2.0
+            min_projection = min(proj for _face, proj in valid)
+            max_projection = max(proj for _face, proj in valid)
             filtered.extend(
                 face
                 for face, proj in valid
-                if abs(exterior_projection - proj) <= tolerance
+                if abs(proj - min_projection) <= tolerance
+                or abs(proj - max_projection) <= tolerance
             )
 
         return filtered or faces
@@ -5730,6 +5872,57 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return False
 
+    def _select_best_lateral_face_for_point(
+        self, faces: list[dict], reference_point: AllplanGeo.Point3D | None
+    ) -> dict | None:
+        """Selecciona la cara lateral más probable según el punto de referencia.
+
+        Considera todas las caras laterales exteriores del muro (no solo la cara
+        usada en una colocación anterior) para permitir posicionar en cualquier
+        lateral del muro seleccionado.
+        """
+        if not faces:
+            return None
+
+        faces_with_span = [
+            (face, self._face_horizontal_span(face)) for face in faces
+        ]
+        max_span = max((span for _face, span in faces_with_span), default=0.0)
+        min_main_span = max(150.0, max_span * 0.03) if max_span > 0.0 else 0.0
+        main_faces = [
+            face for face, span in faces_with_span if span >= min_main_span
+        ] or faces
+
+        if reference_point:
+            containing_faces = [
+                face
+                for face in main_faces
+                if self._projected_point_is_inside_face(face, reference_point)
+            ]
+            if containing_faces:
+                containing_faces.sort(
+                    key=lambda face: self._face_exterior_proximity_score(
+                        face, reference_point
+                    )
+                )
+                return containing_faces[0]
+
+            main_faces.sort(
+                key=lambda face: self._face_exterior_proximity_score(
+                    face, reference_point
+                )
+            )
+            best_face = main_faces[0] if main_faces else None
+            if best_face:
+                print(
+                    "[INPUT][INDIVIDUAL] Punto fuera de fragmentos de cara; "
+                    "usando plano exterior principal mas cercano"
+                )
+            return best_face
+
+        main_faces.sort(key=lambda face: -self._face_horizontal_span(face))
+        return main_faces[0] if main_faces else None
+
     def _store_current_face_info(self, selected_element, face_index=None) -> None:
         """Persiste normal, punto de cara, GUID e indice para reconstruccion posterior."""
         if self.face_normal:
@@ -5764,36 +5957,39 @@ class AngularLineScript(BaseScriptObject):
         if not wall_element:
             return False
 
-        lateral_faces = get_wall_lateral_faces(wall_element)
-        if not lateral_faces:
-            print("[INPUT][INDIVIDUAL] No se pudieron obtener caras laterales del muro")
-            return False
+        best_face = None
+        if reference_point is not None:
+            mouse_2d = getattr(self, "_last_individual_mouse_2d", None)
+            best_face = self._select_wall_lateral_face_via_service(
+                wall_element, reference_point, mouse_2d
+            )
+            if best_face:
+                print(
+                    "[INPUT][INDIVIDUAL] Cara detectada via FaceSelectService: "
+                    f"normal=({best_face['normal'].X:.3f}, "
+                    f"{best_face['normal'].Y:.3f}, {best_face['normal'].Z:.3f})"
+                )
 
-        lateral_faces = self._filter_exterior_wall_faces_by_normal(lateral_faces)
-
-        if reference_point:
-            lateral_faces = [
-                face
-                for face in lateral_faces
-                if self._projected_point_is_inside_face(face, reference_point)
-            ]
+        if not best_face:
+            lateral_faces = get_wall_lateral_faces(wall_element)
             if not lateral_faces:
+                print("[INPUT][INDIVIDUAL] No se pudieron obtener caras laterales del muro")
                 return False
 
-            lateral_faces.sort(
-                key=lambda face: (
-                    self._face_distance_to_point(face, reference_point),
-                    -self._face_horizontal_span(face),
-                )
+            lateral_faces = self._filter_exterior_wall_faces_by_normal(lateral_faces)
+            best_face = self._select_best_lateral_face_for_point(
+                lateral_faces, reference_point
             )
-        else:
-            lateral_faces.sort(key=lambda face: -self._face_horizontal_span(face))
+            if not best_face:
+                return False
 
-        best_face = lateral_faces[0]
         face_polygon = best_face.get("polygon")
         face_normal = normalize_vector(best_face.get("normal"))
         face_center = self._get_face_center(face_polygon)
-        if (
+        service_face_point = best_face.get("face_point")
+        if service_face_point:
+            face_point = service_face_point
+        elif (
             reference_point
             and face_center
             and face_normal
@@ -6287,7 +6483,8 @@ class AngularLineScript(BaseScriptObject):
     def _start_position_input(self):
         """Inicia el tercer click: posición final del angular individual."""
         self.position_result = PointInteractorResult()
-        self.script_object_interactor = PointInteractor(
+        self.script_object_interactor = IndividualPositionPointInteractor(
+            self,
             self.position_result,
             True,
             "Indique la posición del angular individual",
