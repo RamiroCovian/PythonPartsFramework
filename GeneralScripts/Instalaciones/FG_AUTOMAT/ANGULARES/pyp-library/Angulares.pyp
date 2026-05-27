@@ -155,7 +155,7 @@
       <Name>RowSeleccionAngularIndividual</Name>
       <Text>Edición</Text>
       <ValueType>Row</ValueType>
-      <Visible>True</Visible>
+      <Visible>PermitirCambiarMuro == True</Visible>
       <Parameter>
         <Name>SeleccionarAngularIndividual</Name>
         <Text>Seleccionar</Text>
@@ -176,6 +176,17 @@
         <TextId>1049</TextId>
         <Persistent>No</Persistent>
       </Parameter>
+      <Parameter>
+        <Name>CambiarMuroIndividual</Name>
+        <Text>Cambiar muro</Text>
+        <EventId>1050</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <Visible>PermitirCambiarMuro == True</Visible>
+        <TextId>1050</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
     </Parameter>
 
     <Parameter>
@@ -183,6 +194,7 @@
       <Text>Separación entre angulares</Text>
       <Value>10</Value>
       <ValueType>Length</ValueType>
+      <Visible>False</Visible>
       <TextId>1005</TextId>
     </Parameter>
 
@@ -193,6 +205,7 @@
       <ValueType>Length</ValueType>
       <TextId>1007</TextId>
       <Enable>False</Enable>
+      <Visible>False</Visible>
       <ReadOnly>True</ReadOnly>
       <Persistent>Model</Persistent>
     </Parameter>
@@ -203,6 +216,7 @@
       <Value>0</Value>
       <ValueType>Length</ValueType>
       <Enable>False</Enable>
+      <Visible>False</Visible>
       <TextId>1004</TextId>
       <Persistent>Model</Persistent>
     </Parameter>
@@ -294,7 +308,7 @@
     <Parameter>
       <Name>SiLlevaNeopreno</Name>
       <Text>Si lleva Neopreno</Text>
-      <Value>false</Value>
+      <Value>true</Value>
       <ValueType>CheckBox</ValueType>
       <Visible>True</Visible>
       <TextId>1008</TextId>
@@ -799,6 +813,15 @@
       <Text>z_unique</Text>
       <Value>0</Value>
       <ValueType>Double</ValueType>
+      <Visible>False</Visible>
+      <Persistent>No</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>PermitirCambiarMuro</Name>
+      <Text>Permitir cambiar muro</Text>
+      <Value>True</Value>
+      <ValueType>CheckBox</ValueType>
       <Visible>False</Visible>
       <Persistent>No</Persistent>
     </Parameter>

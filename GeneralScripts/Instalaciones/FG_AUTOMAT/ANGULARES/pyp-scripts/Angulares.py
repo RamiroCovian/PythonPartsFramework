@@ -49,16 +49,21 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.2-seleccionar-restaurado-sin-native-sync"
+ANGULARES_SCRIPT_VERSION = "2.3.5-neopreno-longitud-metros"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
 ANGULAR_EVENT_SELECT_EXISTING = 1048
 ANGULAR_EVENT_DESELECT_EXISTING = 1049
+ANGULAR_EVENT_CHANGE_ACTIVE_WALL = 1050
 ANGULAR_OTHER_EXECUTION_MSG = (
     "No se puede seleccionar un angular colocado en otra ejecución.\n\n"
     "Solo puede editar angulares colocados en la ejecución actual.\n\n"
     "Para modificar uno anterior, cierre la ejecución actual y abra ese PythonPart."
+)
+
+ANGULAR_OUTSIDE_SELECTED_WALL_MSG = (
+    "No es posible el posicionamiento del Angular fuera del muro seleccionado."
 )
 
 ANGULAR_SELECTION_AUX_COLOR = 3
@@ -66,6 +71,7 @@ ANGULAR_SELECTION_AUX_PEN = 15
 ANGULAR_SELECTION_AUX_OUTWARD_MM = 0.0
 ANGULAR_SELECTION_AUX_CROSS_HALF_MM = 120.0
 ANGULAR_SELECTION_AUX_PARALLEL_MM = 0.0
+ANGULAR_POSITION_REFERENCE_Y_FALLBACK_MM = -20.0
 
 
 def _find_nearest_angular_record_index(
@@ -266,6 +272,16 @@ def normalize_distribution_type(value: Any) -> str:
     if normalized == DISTRIBUTION_INDIVIDUAL:
         return DISTRIBUTION_INDIVIDUAL
     return DISTRIBUTION_GROUP
+
+
+def get_neoprene_length_meters(definition: dict | None) -> float:
+    """Devuelve la longitud del angular en metros para atributos PMP."""
+    if not definition:
+        return 0.0
+    try:
+        return float(definition.get("length", 0.0) or 0.0) / 1000.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def create_element_hash(element_type: str, stable: bool = False, **params) -> str:
@@ -748,6 +764,34 @@ def axis_with_offset(
         origin, x_dir, y_dir, z_dir, offset_x, offset_y, offset_z
     )
     return AllplanGeo.AxisPlacement3D(axis_origin, x_dir, z_dir)
+
+
+def get_angular_position_reference_y(definition: dict) -> float:
+    """Referencia local Y de posicionamiento respecto al origen fisico del perfil."""
+    try:
+        return float(
+            definition.get(
+                "position_reference_y",
+                -float(
+                    definition.get(
+                        "thickness", -ANGULAR_POSITION_REFERENCE_Y_FALLBACK_MM
+                    )
+                ),
+            )
+        )
+    except (TypeError, ValueError):
+        return ANGULAR_POSITION_REFERENCE_Y_FALLBACK_MM
+
+
+def angular_profile_origin_from_reference(
+    definition: dict,
+    reference_origin: AllplanGeo.Point3D,
+    y_dir: AllplanGeo.Vector3D,
+) -> AllplanGeo.Point3D:
+    """Convierte la referencia de posicionamiento al origen físico del perfil."""
+    return move_point(
+        reference_origin, y_dir, get_angular_position_reference_y(definition)
+    )
 
 
 class SolidFaceSelectResult:
@@ -1619,7 +1663,8 @@ def create_single_angular(
     horizontal = definition["horizontal"]
     thickness = definition["thickness"]
 
-    angular_origin = move_point(origin, x_dir, -length / 2.0)
+    profile_origin = angular_profile_origin_from_reference(definition, origin, y_dir)
+    angular_origin = move_point(profile_origin, x_dir, -length / 2.0)
 
     horizontal_axis = axis_with_offset(
         angular_origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0
@@ -1970,6 +2015,7 @@ def create_tensor_solid(
     z_dir: AllplanGeo.Vector3D,
     invert_profile: bool = False,
     rotation_deg: float = 0.0,
+    rotation_y_deg: float = 0.0,
 ) -> AllplanGeo.BRep3D:
     """Crea un Tensor orientado según los ejes indicados.
 
@@ -1984,6 +2030,7 @@ def create_tensor_solid(
     Returns:
         BRep3D del tensor completo
     """
+    x_dir_rotated = x_dir
     y_dir_rotated = y_dir
     z_dir_rotated = z_dir
     if abs(rotation_deg) > 1e-6:
@@ -1992,6 +2039,14 @@ def create_tensor_solid(
         z_dir_rotated = rotate_vector_around_axis(z_dir, x_dir, rotation_rad)
         y_dir_rotated = normalize_vector(y_dir_rotated)
         z_dir_rotated = normalize_vector(z_dir_rotated)
+    if abs(rotation_y_deg) > 1e-6:
+        rotation_y_rad = math.radians(rotation_y_deg)
+        x_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(x_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
+        z_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(z_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
 
     largo_placa_x = 10.0
     ancho_placa_y = 200.0
@@ -2008,7 +2063,7 @@ def create_tensor_solid(
     distancia_semi_d_y = 65.0
     distancia_semi_d_z = 65.0
 
-    axis_principal = AllplanGeo.AxisPlacement3D(origin, x_dir, z_dir_rotated)
+    axis_principal = AllplanGeo.AxisPlacement3D(origin, x_dir_rotated, z_dir_rotated)
     placa_principal = AllplanGeo.BRep3D.CreateCuboid(
         axis_principal, ancho_placa_y, largo_placa_x, alto_placa_z
     )
@@ -2022,9 +2077,11 @@ def create_tensor_solid(
         hole_z = row["z"]
         for hole_x in row["x_positions"]:
             hole_origin = local_to_world(
-                origin, x_dir, y_dir_rotated, z_dir_rotated, hole_x, 0.0, hole_z
+                origin, x_dir_rotated, y_dir_rotated, z_dir_rotated, hole_x, 0.0, hole_z
             )
-            hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, y_dir_rotated)
+            hole_axis = AllplanGeo.AxisPlacement3D(
+                hole_origin, x_dir_rotated, y_dir_rotated
+            )
             altura_cilindro = ancho_placa_y * 2.0
             hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(
                 hole_axis, HOLE_RADIUS, altura_cilindro
@@ -2045,7 +2102,7 @@ def create_tensor_solid(
 
     hole_origin_d = local_to_world(
         origin,
-        x_dir,
+        x_dir_rotated,
         y_dir_rotated,
         z_dir_rotated,
         -ancho_placa_d_x,
@@ -2053,7 +2110,9 @@ def create_tensor_solid(
         center_z,
     )
 
-    hole_axis_d = AllplanGeo.AxisPlacement3D(hole_origin_d, y_dir_rotated, x_dir)
+    hole_axis_d = AllplanGeo.AxisPlacement3D(
+        hole_origin_d, y_dir_rotated, x_dir_rotated
+    )
 
     hole_cylinder_d = AllplanGeo.BRep3D.CreateCylinder(
         hole_axis_d, diametro_taladro_d / 2.0, ancho_placa_d_x * 2.0
@@ -2067,7 +2126,7 @@ def create_tensor_solid(
 
     big_origin = local_to_world(
         origin,
-        x_dir,
+        x_dir_rotated,
         y_dir_rotated,
         z_dir_rotated,
         -ancho_placa_d_x - eps,
@@ -2075,7 +2134,7 @@ def create_tensor_solid(
         center_z,
     )
 
-    big_axis = AllplanGeo.AxisPlacement3D(big_origin, y_dir_rotated, x_dir)
+    big_axis = AllplanGeo.AxisPlacement3D(big_origin, y_dir_rotated, x_dir_rotated)
 
     big_cylinder = AllplanGeo.BRep3D.CreateCylinder(
         big_axis, radio_semi_d + eps, (ancho_placa_d_x + eps) * 2.0
@@ -2101,9 +2160,15 @@ def create_tensor_solid(
 
     mat = AllplanGeo.Matrix3D()
     offset_vec = AllplanGeo.Vector3D(
-        x_dir.X * offset_x + y_dir_rotated.X * offset_y + z_dir_rotated.X * offset_z,
-        x_dir.Y * offset_x + y_dir_rotated.Y * offset_y + z_dir_rotated.Y * offset_z,
-        x_dir.Z * offset_x + y_dir_rotated.Z * offset_y + z_dir_rotated.Z * offset_z,
+        x_dir_rotated.X * offset_x
+        + y_dir_rotated.X * offset_y
+        + z_dir_rotated.X * offset_z,
+        x_dir_rotated.Y * offset_x
+        + y_dir_rotated.Y * offset_y
+        + z_dir_rotated.Y * offset_z,
+        x_dir_rotated.Z * offset_x
+        + y_dir_rotated.Z * offset_y
+        + z_dir_rotated.Z * offset_z,
     )
     mat.SetTranslation(offset_vec)
 
@@ -2123,6 +2188,51 @@ def create_tensor_solid(
     geometry = AllplanGeo.Transform(geometry, mat_origin)
 
     return geometry
+
+
+def get_tensor_x_rotation_deg(rotation_deg: float) -> float:
+    """Rotacion propia del tensor alrededor de su eje local X."""
+    return rotation_deg + 90
+
+
+def get_tensor_y_rotation_deg() -> float:
+    """Rotacion propia del tensor alrededor de su eje local Y."""
+    return 180.0
+
+
+def get_tensor_origin_for_rotated_x(
+    origin: AllplanGeo.Point3D,
+    x_dir: AllplanGeo.Vector3D,
+    y_dir: AllplanGeo.Vector3D,
+    z_dir: AllplanGeo.Vector3D,
+    piece_length: float,
+    rotation_deg: float,
+    rotation_y_deg: float,
+) -> AllplanGeo.Point3D:
+    """Compensa el origen si la rotacion propia invierte el eje local X."""
+    x_dir_rotated = x_dir
+    y_dir_rotated = y_dir
+    z_dir_rotated = z_dir
+    if abs(rotation_deg) > 1e-6:
+        rotation_rad = math.radians(rotation_deg)
+        y_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(y_dir, x_dir, rotation_rad)
+        )
+        z_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(z_dir, x_dir, rotation_rad)
+        )
+    if abs(rotation_y_deg) > 1e-6:
+        rotation_y_rad = math.radians(rotation_y_deg)
+        x_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(x_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
+        z_dir_rotated = normalize_vector(
+            rotate_vector_around_axis(z_dir_rotated, y_dir_rotated, rotation_y_rad)
+        )
+
+    if vector_dot(x_dir_rotated, x_dir) < -0.5:
+        return move_point(origin, x_dir, piece_length)
+    return origin
 
 
 def get_bounding_box_from_geometry(geometry: AllplanGeo.BRep3D) -> dict:
@@ -2299,8 +2409,6 @@ def create_single_angular_on_line(
     is_tensor = bool(definition.get("is_tensor", False))
     if not is_tensor:
         rotation_deg = rotation_deg + 90.0
-    if is_tensor and not is_free_mode:
-        return [], []
 
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     if base_vector.GetLength() < 1e-6:
@@ -2321,13 +2429,25 @@ def create_single_angular_on_line(
         origin = start_point
 
     if is_tensor:
+        tensor_rotation_deg = get_tensor_x_rotation_deg(rotation_deg)
+        tensor_rotation_y_deg = get_tensor_y_rotation_deg()
+        tensor_origin = get_tensor_origin_for_rotated_x(
+            origin,
+            x_dir,
+            y_dir,
+            z_dir,
+            piece_length,
+            tensor_rotation_deg,
+            tensor_rotation_y_deg,
+        )
         geometry = create_tensor_solid(
-            origin=origin,
+            origin=tensor_origin,
             x_dir=x_dir,
             y_dir=y_dir,
             z_dir=z_dir,
             invert_profile=False,
-            rotation_deg=rotation_deg,
+            rotation_deg=tensor_rotation_deg,
+            rotation_y_deg=tensor_rotation_y_deg,
         )
         edge = create_edge_angulars_group(
             definition=definition,
@@ -2337,6 +2457,8 @@ def create_single_angular_on_line(
             z_dir=z_dir,
             piece_length=piece_length,
             is_tensor=True,
+            rotation_deg=tensor_rotation_deg,
+            rotation_y_deg=tensor_rotation_y_deg,
         )
 
         if invert_side:
@@ -2396,14 +2518,11 @@ def create_angulars_on_line(
         wall_bbox = get_bounding_box_from_wall_element(wall_element)
 
     is_tensor = bool(definition.get("is_tensor", False))
-    if not is_tensor:
-        rotation_deg = rotation_deg + 90.0
-    if is_tensor and not is_free_mode:
-        return [], []
+    line_rotation_deg = 0.0 if is_tensor else rotation_deg + 90.0
 
     base_vector = get_base_vector(start_point, end_point, face_normal, is_opposite_face)
     x_dir, y_dir, z_dir = decompose_vector(
-        base_vector, rotation_deg, face_normal, is_opposite_face
+        base_vector, line_rotation_deg, face_normal, is_opposite_face
     )
     x_dir, y_dir, z_dir = apply_local_y_rotation(x_dir, y_dir, z_dir, rotation_y_deg)
     x_dir, y_dir, z_dir = apply_local_z_rotation(x_dir, y_dir, z_dir, rotation_z_deg)
@@ -2428,7 +2547,7 @@ def create_angulars_on_line(
         piece_count = 0
 
     if piece_count == 0:
-        return []
+        return [], []
 
     geometries: list[AllplanGeo.BRep3D] = []
     edges: list[AllplanGeo.Line3D] = []
@@ -2448,13 +2567,25 @@ def create_angulars_on_line(
             origin = line_origin
 
         if is_tensor:
+            tensor_rotation_deg = 0.0
+            tensor_rotation_y_deg = 180.0
+            tensor_origin = get_tensor_origin_for_rotated_x(
+                origin,
+                x_dir,
+                y_dir,
+                z_dir,
+                piece_length,
+                tensor_rotation_deg,
+                tensor_rotation_y_deg,
+            )
             tensor = create_tensor_solid(
-                origin=origin,
+                origin=tensor_origin,
                 x_dir=x_dir,
                 y_dir=y_dir,
                 z_dir=z_dir,
                 invert_profile=False,
-                rotation_deg=rotation_deg,
+                rotation_deg=tensor_rotation_deg,
+                rotation_y_deg=tensor_rotation_y_deg,
             )
             edge = create_edge_angulars_group(
                 definition=definition,
@@ -2464,6 +2595,8 @@ def create_angulars_on_line(
                 z_dir=z_dir,
                 piece_length=piece_length,
                 is_tensor=True,
+                rotation_deg=tensor_rotation_deg,
+                rotation_y_deg=tensor_rotation_y_deg,
             )
 
             if invert_side:
@@ -2509,12 +2642,17 @@ def create_edge_angulars_group(
     z_dir: AllplanGeo.Vector3D,
     piece_length: float,
     is_tensor: bool = False,
+    rotation_deg: float = 0.0,
+    rotation_y_deg: float = 0.0,
 ) -> AllplanGeo.Line3D:
 
     thickness = definition["thickness"]
     if not is_tensor:
-        guide_start = move_point(start_point, x_dir, -piece_length / 2.0)
-        guide_end = move_point(start_point, x_dir, piece_length / 2.0)
+        profile_start = angular_profile_origin_from_reference(
+            definition, start_point, y_dir
+        )
+        guide_start = move_point(profile_start, x_dir, -piece_length / 2.0)
+        guide_end = move_point(profile_start, x_dir, piece_length / 2.0)
 
         origin = move_point(guide_start, x_dir, 0.0)
         origin = move_point(origin, z_dir, thickness)
@@ -2524,16 +2662,36 @@ def create_edge_angulars_group(
         final = move_point(final, z_dir, thickness)
         final = move_point(final, y_dir, 0.0)
     else:
+        x_dir_rotated = x_dir
+        y_dir_rotated = y_dir
+        z_dir_rotated = z_dir
+        if abs(rotation_deg) > 1e-6:
+            rotation_rad = math.radians(rotation_deg)
+            y_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(y_dir, x_dir, rotation_rad)
+            )
+            z_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(z_dir, x_dir, rotation_rad)
+            )
+        if abs(rotation_y_deg) > 1e-6:
+            rotation_y_rad = math.radians(rotation_y_deg)
+            x_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(x_dir_rotated, y_dir_rotated, rotation_y_rad)
+            )
+            z_dir_rotated = normalize_vector(
+                rotate_vector_around_axis(z_dir_rotated, y_dir_rotated, rotation_y_rad)
+            )
+
         guide_start = start_point
         guide_end = move_point(start_point, x_dir, piece_length)
 
         origin = move_point(start_point, x_dir, 0.0)
-        origin = move_point(origin, z_dir, definition["vertical"])
-        origin = move_point(origin, y_dir, -thickness)
+        origin = move_point(origin, z_dir_rotated, definition["vertical"])
+        origin = move_point(origin, y_dir_rotated, -thickness)
 
         final = move_point(guide_end, x_dir, 0.0)
-        final = move_point(final, z_dir, definition["vertical"])
-        final = move_point(final, y_dir, -thickness)
+        final = move_point(final, z_dir_rotated, definition["vertical"])
+        final = move_point(final, y_dir_rotated, -thickness)
 
     axis_origin = local_to_world(origin, x_dir, y_dir, z_dir, 0.0, 0.0, 0.0)
     axis_point = AllplanGeo.Axis3D(
@@ -2744,6 +2902,7 @@ CANCEL = 3
 SELECTING_FACE = 4
 SELECTING_POSITION = 5
 SELECTING_EXISTING_ANGULAR = 6
+SELECTING_ACTIVE_WALL = 7
 
 
 def check_allplan_version(_build_ele: BuildingElement, _version: float) -> bool:
@@ -3019,6 +3178,7 @@ class AngularLineScript(BaseScriptObject):
         self.face_normal = None
         self.face_polygon = None
         self.face_local_system = None
+        self._last_individual_position_valid = True
         self._z_unique_from_group = 0  # Se rellena desde script_object_data.param_list en __init__ para usar en EDIT
         self._group_hash_from_params = ""
         self._current_group_hash = ""
@@ -3050,6 +3210,8 @@ class AngularLineScript(BaseScriptObject):
                         self._z_unique_from_group = 0
         else:
             self._z_unique_from_group = 0
+            if hasattr(self.build_ele, "SiLlevaNeopreno"):
+                self.build_ele.SiLlevaNeopreno.value = True
             # self._reset_build_ele_for_create()
 
         self.is_editing_existing = self._check_if_editing_existing()
@@ -3070,6 +3232,11 @@ class AngularLineScript(BaseScriptObject):
         self._inline_last_execute_result = None
         self._pending_resume_position_after_deselect = False
         self._resume_after_deselect_inline = False
+
+        if hasattr(self.build_ele, "PermitirCambiarMuro"):
+            self.build_ele.PermitirCambiarMuro.value = not getattr(
+                self, "is_modification_mode", False
+            )
 
         if self.is_modification_mode:
             self._load_existing_points()
@@ -3351,6 +3518,7 @@ class AngularLineScript(BaseScriptObject):
 
             print("[DISTRIBUTION][INDIVIDUAL] Entrando al flujo individual")
             rotation_axis_z_deg, rotation_y_deg = self._get_individual_axis_rotations()
+            is_tensor = bool(definition.get("is_tensor", False))
             placement_center = AllplanGeo.Point3D(
                 (start_point.X + end_point.X) / 2.0,
                 (start_point.Y + end_point.Y) / 2.0,
@@ -3358,12 +3526,13 @@ class AngularLineScript(BaseScriptObject):
             )
             placement_dir = normalize_vector(vector_from_points(start_point, end_point))
             if placement_dir and placement_dir.GetLength() > 1e-6:
-                start_point = placement_center
-                end_point = move_point(
-                    placement_center,
-                    placement_dir,
-                    definition.get("piece_length", definition.get("length", 0.0)),
-                )
+                if not is_tensor:
+                    start_point = placement_center
+                    end_point = move_point(
+                        placement_center,
+                        placement_dir,
+                        definition.get("piece_length", definition.get("length", 0.0)),
+                    )
             else:
                 piece_length = definition.get(
                     "piece_length", definition.get("length", 0.0)
@@ -3468,7 +3637,7 @@ class AngularLineScript(BaseScriptObject):
             be.ValorZIndividual.value = 0.0
 
         if hasattr(be, "SiLlevaNeopreno"):
-            be.SiLlevaNeopreno.value = False
+            be.SiLlevaNeopreno.value = True
 
         if hasattr(be, "angular_libre"):
             be.angular_libre.value = True
@@ -3699,7 +3868,7 @@ class AngularLineScript(BaseScriptObject):
                 lleva_val = (
                     state.get("lleva_neopreno")
                     if "lleva_neopreno" in state
-                    else state.get("SiLlevaNeopreno", False)
+                    else state.get("SiLlevaNeopreno", True)
                 )
                 self.build_ele.SiLlevaNeopreno.value = bool(lleva_val)
 
@@ -3927,8 +4096,7 @@ class AngularLineScript(BaseScriptObject):
         neopre = "Si" if lleva_neopreno else "No"
         rot_x_deg, rot_y_deg = self._get_individual_axis_rotations()
 
-        # grosor_float = self._grosor_neopreno_to_float(grosor_neopre_value)
-        length_mm_str = f"{float(def_angular['length']):.2f}mm"
+        neoprene_length_m = get_neoprene_length_meters(def_angular)
         result = {
             "z_unique": z_unique,
             "TotalElements": total_elements,
@@ -3965,7 +4133,7 @@ class AngularLineScript(BaseScriptObject):
             "PMP_FG_ANG_FORATS": num_forats,
             "PMP_FG_ANG_NOM": nom,
             "PMP_FG_ANGULAR_NEOPRE": neopre,
-            "PMP_FG_ANG_NEOPRE": length_mm_str,
+            "PMP_FG_ANG_NEOPRE": neoprene_length_m,
         }
         for k, v in self._wall_face_params_from_build_ele().items():
             if k not in result:
@@ -5303,7 +5471,6 @@ class AngularLineScript(BaseScriptObject):
                         "[INPUT][INDIVIDUAL] Muro seleccionado; pasando a seleccion de posicion"
                     )
                     self._process_wall_selection_free()
-                    self._resolve_individual_face_from_wall()
                     self.state = SELECTING_POSITION
                     self._start_position_input()
                 else:
@@ -5350,6 +5517,14 @@ class AngularLineScript(BaseScriptObject):
             self._process_position_input()
 
             if self._is_individual_distribution() and not self.is_modification_mode:
+                if not self.line_result.input_line:
+                    self.preview_active = False
+                    self.state = SELECTING_POSITION
+                    self._start_position_input()
+                    if coord_input:
+                        self.script_object_interactor.start_input(coord_input)
+                    return
+
                 self._finish_inline_angular_edit()
                 if self._materialize_current_individual_angular(coord_input):
                     self.line_result = LineInteractorResult()
@@ -5378,6 +5553,20 @@ class AngularLineScript(BaseScriptObject):
                 self.state = SELECTING_POSITION
                 self._resume_individual_position_input(coord_input)
 
+        elif self.state == SELECTING_ACTIVE_WALL:
+            coord_input = getattr(self.script_object_interactor, "coord_input", None)
+            self.script_object_interactor = None
+            if self.wall_select_result.is_selected:
+                self._process_wall_selection_free()
+                print(
+                    "[INPUT][INDIVIDUAL] Muro activo cambiado; "
+                    "los siguientes angulares usaran este muro"
+                )
+            else:
+                print("[INPUT][INDIVIDUAL] Cambio de muro cancelado")
+            self.state = SELECTING_POSITION
+            self._resume_individual_position_input(coord_input)
+
     def _process_wall_selection_free(self):
         """Procesa la selección del muro en modo libre (solo referencia)"""
         element_guid_str = self.wall_select_result.element_guid
@@ -5386,6 +5575,10 @@ class AngularLineScript(BaseScriptObject):
         self.detected_wall = selected_element
         real_wall_guid = str(selected_element.GetModelElementUUID())
         self.detected_wall_guid = real_wall_guid
+        self.face_point = None
+        self.face_normal = None
+        self.face_polygon = None
+        self.face_local_system = None
 
         # self.wall_allplan_id = get_wall_ifc_id(selected_element)
 
@@ -5452,6 +5645,91 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return 0.0
 
+    def _face_normal_family_key(self, face_info: dict) -> tuple[int, int, int]:
+        """Agrupa caras por normal manteniendo el signo."""
+        normal = normalize_vector(face_info.get("normal"))
+        if not normal or normal.GetLength() < 1e-6:
+            return (0, 0, 0)
+        return (
+            int(round(normal.X * 100)),
+            int(round(normal.Y * 100)),
+            int(round(normal.Z * 100)),
+        )
+
+    def _face_plane_projection(self, face_info: dict) -> float | None:
+        """Proyeccion del plano de la cara sobre su normal."""
+        try:
+            normal = normalize_vector(face_info.get("normal"))
+            center = self._get_face_center(face_info.get("polygon"))
+            if not normal or normal.GetLength() < 1e-6 or not center:
+                return None
+            return vector_dot(AllplanGeo.Vector3D(center.X, center.Y, center.Z), normal)
+        except Exception:
+            return None
+
+    def _filter_exterior_wall_faces_by_normal(self, faces: list[dict]) -> list[dict]:
+        """Conserva solo caras en el plano exterior del muro para cada normal."""
+        groups: dict[tuple[int, int, int], list[dict]] = {}
+        for face in faces:
+            key = self._face_normal_family_key(face)
+            if key == (0, 0, 0):
+                continue
+            groups.setdefault(key, []).append(face)
+
+        filtered: list[dict] = []
+        for group_faces in groups.values():
+            projections = [
+                (face, self._face_plane_projection(face)) for face in group_faces
+            ]
+            valid = [(face, proj) for face, proj in projections if proj is not None]
+            if not valid:
+                filtered.extend(group_faces)
+                continue
+
+            exterior_projection = max(proj for _face, proj in valid)
+            tolerance = 2.0
+            filtered.extend(
+                face
+                for face, proj in valid
+                if abs(exterior_projection - proj) <= tolerance
+            )
+
+        return filtered or faces
+
+    def _projected_point_is_inside_face(
+        self,
+        face_info: dict,
+        point: AllplanGeo.Point3D,
+        tolerance_mm: float = 5.0,
+    ) -> bool:
+        """True si el punto proyectado cae dentro de los limites locales de la cara."""
+        try:
+            polygon = face_info.get("polygon")
+            normal = face_info.get("normal")
+            if not polygon or not normal:
+                return False
+
+            local_system = calculate_local_coordinate_system(polygon, normal)
+            face_center = self._get_face_center(polygon)
+            if not local_system or not face_center:
+                return False
+
+            projected = project_point_to_plane(point, face_center, normal)
+            relative = calculate_relative_position(projected, local_system)
+            if not relative:
+                return False
+
+            width = max(float(local_system.get("width", 0.0)), 1e-6)
+            height = max(float(local_system.get("height", 0.0)), 1e-6)
+            tol_u = tolerance_mm / width
+            tol_v = tolerance_mm / height
+            return (
+                -tol_u <= float(relative["u"]) <= 1.0 + tol_u
+                and -tol_v <= float(relative["v"]) <= 1.0 + tol_v
+            )
+        except Exception:
+            return False
+
     def _store_current_face_info(self, selected_element, face_index=None) -> None:
         """Persiste normal, punto de cara, GUID e indice para reconstruccion posterior."""
         if self.face_normal:
@@ -5491,7 +5769,17 @@ class AngularLineScript(BaseScriptObject):
             print("[INPUT][INDIVIDUAL] No se pudieron obtener caras laterales del muro")
             return False
 
+        lateral_faces = self._filter_exterior_wall_faces_by_normal(lateral_faces)
+
         if reference_point:
+            lateral_faces = [
+                face
+                for face in lateral_faces
+                if self._projected_point_is_inside_face(face, reference_point)
+            ]
+            if not lateral_faces:
+                return False
+
             lateral_faces.sort(
                 key=lambda face: (
                     self._face_distance_to_point(face, reference_point),
@@ -5723,7 +6011,10 @@ class AngularLineScript(BaseScriptObject):
         self, position: AllplanGeo.Point3D
     ) -> AllplanGeo.Line3D:
         """Construye una línea interna de pieza desde el punto clicado."""
-        self._resolve_individual_face_from_wall(position)
+        self._last_individual_position_valid = False
+        if not self._resolve_individual_face_from_wall(position):
+            return AllplanGeo.Line3D()
+        self._last_individual_position_valid = True
 
         angular_key = (
             self.build_ele.TipoAngular.value
@@ -6039,6 +6330,9 @@ class AngularLineScript(BaseScriptObject):
 
         line = self._build_individual_line_from_position(point)
         if line == AllplanGeo.Line3D():
+            if not getattr(self, "_last_individual_position_valid", True):
+                self._warn_angular_outside_selected_wall()
+                self.line_result = LineInteractorResult()
             return
 
         self.line_result.input_line = line
@@ -6515,6 +6809,17 @@ class AngularLineScript(BaseScriptObject):
         except Exception as exc:
             print(f"[SELECT][ANGULAR] No se pudo mostrar el cuadro de aviso: {exc}")
             print(ANGULAR_OTHER_EXECUTION_MSG)
+
+    def _warn_angular_outside_selected_wall(self) -> None:
+        """Aviso al usuario: el punto elegido no pertenece al muro seleccionado."""
+        print("[INPUT][INDIVIDUAL] Rechazado: posicion fuera del muro seleccionado")
+        try:
+            AllplanUtil.ShowMessageBox(
+                ANGULAR_OUTSIDE_SELECTED_WALL_MSG, AllplanUtil.MB_OK
+            )
+        except Exception as exc:
+            print(f"[INPUT][INDIVIDUAL] No se pudo mostrar el cuadro de aviso: {exc}")
+            print(ANGULAR_OUTSIDE_SELECTED_WALL_MSG)
 
     def _remember_created_individual_angular(
         self, created_elements, model_ele_list=None
@@ -7800,6 +8105,34 @@ class AngularLineScript(BaseScriptObject):
         print("[SELECT][ANGULAR] Continua colocacion individual")
         return True
 
+    def _start_active_wall_selection(self) -> bool:
+        """Boton Cambiar muro: selecciona el muro para los proximos angulares."""
+        if getattr(self, "is_modification_mode", False):
+            print("[INPUT][INDIVIDUAL] Cambio de muro no disponible en EDIT")
+            return False
+        if not self._is_individual_distribution():
+            print("[INPUT][INDIVIDUAL] Cambio de muro solo disponible en Individual")
+            return False
+
+        if getattr(self, "_inline_selected_angular_active", False):
+            self._clear_inline_selection_visual()
+            self._leave_individual_angular_edit_mode()
+
+        self.wall_select_result = WallSelectResult()
+        self.position_result = PointInteractorResult()
+        self.line_result = LineInteractorResult()
+        self.state = SELECTING_ACTIVE_WALL
+        self.preview_active = False
+        self.script_object_interactor = WallSelectInteractor(
+            self.wall_select_result,
+            "Seleccione el nuevo muro para los siguientes angulares",
+        )
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+        print("[INPUT][INDIVIDUAL] Modo cambio de muro activo")
+        return True
+
     def _enter_individual_angular_edit_mode(self, result: AngularSelectResult) -> bool:
         """
         Tras Seleccionar: carga el PPG en la paleta y prepara edicion
@@ -8899,6 +9232,8 @@ class AngularLineScript(BaseScriptObject):
             return self._start_inline_angular_selection()
         if event_id == ANGULAR_EVENT_DESELECT_EXISTING:
             return self._deselect_inline_angular()
+        if event_id == ANGULAR_EVENT_CHANGE_ACTIVE_WALL:
+            return self._start_active_wall_selection()
         return True
 
     def set_active_palette_page_index(self, page_index: int) -> None:
@@ -9189,7 +9524,7 @@ class AngularLineScript(BaseScriptObject):
 
         grosor_length_value = ""
         if lleva_neopreno:
-            grosor_length_value = float(definition["length"])
+            grosor_length_value = get_neoprene_length_meters(definition)
 
         for line in geometries:
             elem = AllplanBasisElements.ModelElement3D(props, line)
@@ -9384,7 +9719,7 @@ class AngularLineScript(BaseScriptObject):
                     if lleva_neopreno_local and angular_key:
                         definition = ANGULAR_CATALOG.get(angular_key)
                         if definition:
-                            largo_neopre_value = float(definition["length"])
+                            largo_neopre_value = get_neoprene_length_meters(definition)
                             attr_list.add_attribute(
                                 attr_largo_neopre_id, largo_neopre_value
                             )
@@ -9926,7 +10261,7 @@ class AngularLineScript(BaseScriptObject):
         rot = 0.0
         invertido = False
         lleva_neopreno = False
-        largo_neopre_value = 240
+        largo_neopre_value = 0.0
         wall_pare = ""
 
         start_point = (
@@ -10086,7 +10421,7 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "SiLlevaNeopreno")
             else False
         )
-        largo_neopre_value = float(definition["length"])
+        largo_neopre_value = get_neoprene_length_meters(definition)
         wall_pare = (
             str(getattr(self.build_ele.pmp_pare, "value", "") or "")
             .strip()
