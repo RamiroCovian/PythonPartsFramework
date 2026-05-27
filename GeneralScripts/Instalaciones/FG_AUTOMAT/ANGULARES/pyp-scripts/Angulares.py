@@ -274,6 +274,24 @@ def normalize_distribution_type(value: Any) -> str:
     return DISTRIBUTION_GROUP
 
 
+def normalize_pmp_pare_value(value: Any) -> str:
+    """Valor limpio para PMP_PARE/PMP_WALL_ID: sin comillas de serializacion."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return ""
+        try:
+            parsed = ast.literal_eval(text)
+            if isinstance(parsed, str):
+                text = parsed.strip()
+        except (ValueError, SyntaxError):
+            pass
+        return text.strip().strip("'").strip('"')
+    return str(value).strip().strip("'").strip('"')
+
+
 def get_neoprene_length_meters(definition: dict | None) -> float:
     """Devuelve la longitud del angular en metros para atributos PMP."""
     if not definition:
@@ -3720,11 +3738,8 @@ class AngularLineScript(BaseScriptObject):
                     if hasattr(self.build_ele, "SiLlevaNeopreno")
                     else False
                 ),
-                "pmp_pare": (
-                    str(getattr(self.build_ele.pmp_pare, "value", "") or "")
-                    .strip()
-                    .strip("'")
-                    .strip('"')
+                "pmp_pare": normalize_pmp_pare_value(
+                    getattr(self.build_ele.pmp_pare, "value", "")
                     if hasattr(self.build_ele, "pmp_pare")
                     else ""
                 ),
@@ -3873,8 +3888,9 @@ class AngularLineScript(BaseScriptObject):
                 self.build_ele.SiLlevaNeopreno.value = bool(lleva_val)
 
             if hasattr(self.build_ele, "pmp_pare"):
-                raw_pp = str(state.get("pmp_pare", "") or "").strip()
-                self.build_ele.pmp_pare.value = raw_pp.strip("'").strip('"')
+                self.build_ele.pmp_pare.value = normalize_pmp_pare_value(
+                    state.get("pmp_pare", "")
+                )
 
             state_group_hash = (
                 str(state.get("GroupHash", state.get("group_hash", "")) or "")
@@ -3919,6 +3935,8 @@ class AngularLineScript(BaseScriptObject):
                         value, AllplanGeo.Point3D
                     ):
                         attr.value = value
+                    elif key == "pmp_pare":
+                        attr.value = normalize_pmp_pare_value(value)
                     else:
                         attr.value = value
                 except Exception as e:
@@ -4123,7 +4141,7 @@ class AngularLineScript(BaseScriptObject):
             "InvertirAngular": invertido,
             "SiLlevaNeopreno": lleva_neopreno,
             "SavedState": saved_state_str if saved_state_str else "",
-            "pmp_pare": pmp_pare_value if pmp_pare_value else "",
+            "pmp_pare": normalize_pmp_pare_value(pmp_pare_value),
             "GroupHash": str(
                 getattr(self, "_current_group_hash", "")
                 or getattr(self, "_group_hash_from_params", "")
@@ -6269,7 +6287,7 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(self.build_ele, "pmp_pare") and hasattr(
             self.build_ele.pmp_pare, "value"
         ):
-            wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
+            wall_pare = normalize_pmp_pare_value(self.build_ele.pmp_pare.value)
 
         model_elements = self.create_angulars(
             geometries, edges, definition, pmp_pare=wall_pare or None
@@ -9495,8 +9513,7 @@ class AngularLineScript(BaseScriptObject):
         props.Layer = layer_id
 
         # Si es None, usar string vacío
-        if pmp_pare is None:
-            pmp_pare = ""
+        pmp_pare = normalize_pmp_pare_value(pmp_pare)
 
         attr_id = getattr(self, "attr_pmp_pare_id", 0)
         attr_wall_id = getattr(self, "attr_pmp_wall_id", 0)
@@ -9532,10 +9549,10 @@ class AngularLineScript(BaseScriptObject):
             attr_list = BuildingElementAttributeList()
 
             if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+                attr_list.add_attribute(attr_id, pmp_pare)
 
             if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
+                attr_list.add_attribute(attr_wall_id, pmp_pare)
 
             if attr_detall_id > 0:
                 attr_list.add_attribute(attr_detall_id, "")
@@ -9563,10 +9580,10 @@ class AngularLineScript(BaseScriptObject):
             attr_list = BuildingElementAttributeList()
 
             if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+                attr_list.add_attribute(attr_id, pmp_pare)
 
             if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
+                attr_list.add_attribute(attr_wall_id, pmp_pare)
 
             if attr_detall_id > 0:
                 attr_list.add_attribute(attr_detall_id, "")
@@ -9594,10 +9611,10 @@ class AngularLineScript(BaseScriptObject):
             attr_list = BuildingElementAttributeList()
 
             if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+                attr_list.add_attribute(attr_id, pmp_pare)
 
             if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
+                attr_list.add_attribute(attr_wall_id, pmp_pare)
 
             if attr_detall_id > 0:
                 attr_list.add_attribute(attr_detall_id, "")
@@ -9680,7 +9697,7 @@ class AngularLineScript(BaseScriptObject):
                 attr_largo_neopre_id = getattr(self, "attr_pmp_fg_ang_neopre_id", 0)
 
                 #  Usar pmp_pare pasado como parámetro (NO leer desde build_ele)
-                wall_pare = pmp_pare.replace("'", "") if pmp_pare else ""
+                wall_pare = normalize_pmp_pare_value(pmp_pare)
                 if wall_pare and attr_pmp_id > 0:
                     attr_list.add_attribute(attr_pmp_id, wall_pare)
 
@@ -9929,7 +9946,7 @@ class AngularLineScript(BaseScriptObject):
             try:
                 wall_id = get_wall_ifc_id(wall)
                 if wall_id:
-                    wall_pare = wall_id
+                    wall_pare = normalize_pmp_pare_value(wall_id)
                     print(f"[CREATE] PMP_PARE calculado desde muro: {wall_pare}")
             except Exception as e:
                 print(f"[CREATE]  Error obteniendo material del muro: {e}")
@@ -9942,7 +9959,7 @@ class AngularLineScript(BaseScriptObject):
             self.build_ele.pmp_pare, "value"
         ):
             try:
-                self.build_ele.pmp_pare.value = wall_pare.replace("'", "")
+                self.build_ele.pmp_pare.value = normalize_pmp_pare_value(wall_pare)
                 print(f"[CREATE]  pmp_pare guardado en build_ele: '{wall_pare}'")
             except Exception as e:
                 print(f"[CREATE]  ERROR al guardar pmp_pare en build_ele: {e}")
@@ -10423,9 +10440,7 @@ class AngularLineScript(BaseScriptObject):
         )
         largo_neopre_value = get_neoprene_length_meters(definition)
         wall_pare = (
-            str(getattr(self.build_ele.pmp_pare, "value", "") or "")
-            .strip()
-            .replace("'", "")
+            normalize_pmp_pare_value(getattr(self.build_ele.pmp_pare, "value", ""))
             if hasattr(self.build_ele, "pmp_pare")
             else ""
         )
@@ -10496,8 +10511,8 @@ class AngularLineScript(BaseScriptObject):
                 self.build_ele.pmp_pare, "value"
             ):
                 try:
-                    wall_pare = (
-                        str(self.build_ele.pmp_pare.value).strip().replace("'", "")
+                    wall_pare = normalize_pmp_pare_value(
+                        self.build_ele.pmp_pare.value
                     )
                 except Exception:
                     pass
@@ -10749,9 +10764,7 @@ class AngularLineScript(BaseScriptObject):
         # Justo antes de armar global_params: serializar SavedState desde build_ele
         saved_state_edit = self._serialize_state_to_json()
         wall_pare_edit = (
-            str(getattr(self.build_ele.pmp_pare, "value", "") or "")
-            .strip()
-            .replace("'", "")
+            normalize_pmp_pare_value(getattr(self.build_ele.pmp_pare, "value", ""))
             if hasattr(self.build_ele, "pmp_pare")
             else wall_pare
         )
