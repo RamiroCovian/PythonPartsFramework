@@ -56,8 +56,9 @@
         <Parameter>
             <Name>RowSeleccionNeopreno</Name>
             <Text>Edición</Text>
+            <TextId>e_NEO_PP_1054</TextId>
             <ValueType>Row</ValueType>
-            <Visible>True</Visible>
+            <Visible>PermitirCambiarMuro == True</Visible>
             <Parameter>
                 <Name>SeleccionarNeopreno</Name>
                 <Text>Seleccionar</Text>
@@ -76,6 +77,17 @@
                 <ValueType>Button</ValueType>
                 <Enable>True</Enable>
                 <TextId>e_NEO_PP_1051</TextId>
+                <Persistent>No</Persistent>
+            </Parameter>
+            <Parameter>
+                <Name>CambiarMuroNeopreno</Name>
+                <Text>Cambiar muro</Text>
+                <EventId>1052</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Visible>PermitirCambiarMuro == True</Visible>
+                <TextId>e_NEO_PP_1052</TextId>
                 <Persistent>No</Persistent>
             </Parameter>
         </Parameter>
@@ -498,6 +510,16 @@
             <ValueType>String</ValueType>
             <Visible>False</Visible>
             <Persistent>MODEL_AND_FAVORITE</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>PermitirCambiarMuro</Name>
+            <Text>Permitir cambiar muro</Text>
+            <TextId>e_NEO_PP_1053</TextId>
+            <Value>True</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+            <Persistent>No</Persistent>
         </Parameter>
 
         <Parameter>

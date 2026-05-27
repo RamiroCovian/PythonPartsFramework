@@ -53,5 +53,10 @@
     <Item><TextId>e_NEO_PP_350</TextId><Text>Tipo de línea</Text></Item>
     <Item><TextId>e_NEO_PP_351</TextId><Text>Capa</Text></Item>
     <Item><TextId>e_NEO_PP_352</TextId><Text>pmp_pare</Text></Item>
+    <Item><TextId>e_NEO_PP_1050</TextId><Text>Seleccionar</Text></Item>
+    <Item><TextId>e_NEO_PP_1051</TextId><Text>Deseleccionar</Text></Item>
+    <Item><TextId>e_NEO_PP_1052</TextId><Text>Cambiar muro</Text></Item>
+    <Item><TextId>e_NEO_PP_1053</TextId><Text>Permitir cambiar muro</Text></Item>
+    <Item><TextId>e_NEO_PP_1054</TextId><Text>Edición</Text></Item>
     <Item><TextId>e_NEO_SS_001</TextId><Text>SavedState</Text></Item>
 </Element>
