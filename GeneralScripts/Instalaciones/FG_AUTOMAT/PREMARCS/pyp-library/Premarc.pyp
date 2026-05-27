@@ -5,7 +5,7 @@
         <!-- <Name>PP\PREMARCS_improve\pyp-scripts\Premarc.py</Name> -->
         <Title>Superficie Zona XPS</Title>
         <Version>1.0</Version>
-        <ReadLastInput>True</ReadLastInput>
+        <!-- <ReadLastInput>True</ReadLastInput> -->
         <Interactor>False</Interactor>
     </Script>
 
@@ -66,6 +66,32 @@
                 <Text>Posicionar otro premarco</Text>
                 <EventId>1001</EventId>
                 <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>RowSeleccionPremarc</Name>
+            <Text>EdiciÃ³n</Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>SeleccionarPremarc</Name>
+                <Text>Seleccionar</Text>
+                <EventId>1055</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Persistent>No</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>DeseleccionarPremarc</Name>
+                <Text>Deseleccionar</Text>
+                <EventId>1056</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Persistent>No</Persistent>
             </Parameter>
         </Parameter>
 
