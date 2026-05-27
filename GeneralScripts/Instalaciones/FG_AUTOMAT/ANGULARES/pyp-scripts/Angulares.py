@@ -3226,6 +3226,7 @@ class AngularLineScript(BaseScriptObject):
                         )
                     except (TypeError, ValueError):
                         self._z_unique_from_group = 0
+            self._restored_from_saved_state = self._restore_saved_state()
         else:
             self._z_unique_from_group = 0
             if hasattr(self.build_ele, "SiLlevaNeopreno"):
@@ -4014,6 +4015,17 @@ class AngularLineScript(BaseScriptObject):
                                 param_lines = parameter
                             else:
                                 param_lines = []
+                            params = parse_params_list_to_dict(param_lines)
+                            state_json = str(params.get("SavedState", "") or "")
+                            if state_json:
+                                print(
+                                    f"[SO] Encontrado SavedState en PythonPartGroup: {len(state_json)} caracteres"
+                                )
+                                if self._deserialize_state_from_json(state_json):
+                                    print(
+                                        "[SO] Estado previo restaurado desde PythonPartGroup.SavedState"
+                                    )
+                                    return True
                             for line in param_lines:
                                 if isinstance(line, str):
                                     line = line.strip()
@@ -4188,6 +4200,54 @@ class AngularLineScript(BaseScriptObject):
         if q0 is not None and q1 is not None:
             self.line_result.input_line = AllplanGeo.Line3D(q0, q1)
             print("[EDIT] line_result reconstruida desde SavedState (p0/p1)")
+
+    def _is_default_pyp_line(
+        self, start_point: AllplanGeo.Point3D | None, end_point: AllplanGeo.Point3D | None
+    ) -> bool:
+        """Detecta la linea placeholder del .pyp, no una linea real del angular."""
+        if start_point is None or end_point is None:
+            return False
+        return (
+            abs(float(start_point.X)) < 1e-6
+            and abs(float(start_point.Y)) < 1e-6
+            and abs(float(start_point.Z)) < 1e-6
+            and abs(float(end_point.X) - 1000.0) < 1e-6
+            and abs(float(end_point.Y)) < 1e-6
+            and abs(float(end_point.Z)) < 1e-6
+        )
+
+    def _is_unsafe_default_modify_state(
+        self,
+        start_point: AllplanGeo.Point3D | None,
+        end_point: AllplanGeo.Point3D | None,
+        parsed_saved_state: Dict[str, Any] | None,
+    ) -> bool:
+        """Evita regenerar desde defaults del .pyp durante updates asociativos del muro."""
+        if not self._is_default_pyp_line(start_point, end_point):
+            return False
+        if parsed_saved_state:
+            return False
+        try:
+            z_value = float(getattr(self.build_ele.z_unique, "value", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            z_value = 0.0
+        try:
+            z_group = float(getattr(self, "_z_unique_from_group", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            z_group = 0.0
+        if abs(z_value) > 1e-9 or abs(z_group) > 1e-9:
+            return False
+        wall_pare = normalize_pmp_pare_value(
+            getattr(self.build_ele.pmp_pare, "value", "")
+            if hasattr(self.build_ele, "pmp_pare")
+            else ""
+        )
+        muro_guid = (
+            str(getattr(self.build_ele.MuroGUID, "value", "") or "").strip()
+            if hasattr(self.build_ele, "MuroGUID")
+            else ""
+        )
+        return not wall_pare and not muro_guid
 
     def _check_if_editing_existing(self) -> bool:
         """Verifica si se está editando un angular existente"""
@@ -10316,6 +10376,44 @@ class AngularLineScript(BaseScriptObject):
             )
 
         # Alinear distribución con el JSON persistido si la paleta quedó incoherente (no pisa cambio explícito de usuario).
+        if self._is_unsafe_default_modify_state(
+            start_point, end_point, parsed_saved_state_edit
+        ):
+            print(
+                "[EDIT] Estado default del .pyp detectado en MODIFY; se intenta restaurar desde el PPG"
+            )
+            if self._restore_saved_state():
+                saved_state_str_edit = (
+                    (self.build_ele.SavedState.value or "").strip()
+                    if hasattr(self.build_ele, "SavedState")
+                    and hasattr(self.build_ele.SavedState, "value")
+                    else ""
+                )
+                parsed_saved_state_edit = (
+                    parse_saved_state(saved_state_str_edit)
+                    if saved_state_str_edit
+                    else {}
+                )
+                start_point = (
+                    getattr(self.build_ele.PuntoInicial, "value", start_point)
+                    if hasattr(self.build_ele, "PuntoInicial")
+                    else start_point
+                )
+                end_point = (
+                    getattr(self.build_ele.PuntoFinal, "value", end_point)
+                    if hasattr(self.build_ele, "PuntoFinal")
+                    else end_point
+                )
+            if self._is_unsafe_default_modify_state(
+                start_point, end_point, parsed_saved_state_edit
+            ):
+                print(
+                    "[EDIT] MODIFY abortado: solo hay defaults del .pyp; no se reemplaza el angular"
+                )
+                return CreateElementResult(
+                    elements=[], handles=[], elements_to_delete=None
+                )
+
         self._apply_saved_distribution_to_build_ele_in_modify(parsed_saved_state_edit)
 
         # Persistencia EDIT: muro, cara, ejes y Z de la línea (param_list/SavedState antes minimal → build_ele incompleto).
