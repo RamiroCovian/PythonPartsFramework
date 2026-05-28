@@ -2425,7 +2425,8 @@ def create_single_angular_on_line(
         return [], []
 
     if face_normal and face_point:
-        origin = project_point_to_plane(start_point, face_point, face_normal)
+        # origin = project_point_to_plane(start_point, face_point, face_normal)
+        origin =  start_point
     else:
         origin = start_point
 
@@ -6229,14 +6230,15 @@ class AngularLineScript(BaseScriptObject):
         z_value = self._resolve_individual_z_from_point(
             position, update_from_point=True
         )
-        position = self._project_point_to_individual_vertical_face(position, z_value)
+        # position = self._project_point_to_individual_vertical_face(position, z_value)
 
         x_dir = self._get_individual_horizontal_axis_on_face()
         start = move_point(position, x_dir, -piece_length / 2.0)
         end = move_point(position, x_dir, piece_length / 2.0)
-        return self._project_line_to_individual_vertical_face(
-            AllplanGeo.Line3D(start, end), z_value
-        )
+        # return self._project_line_to_individual_vertical_face(
+        #     AllplanGeo.Line3D(start, end), z_value
+        # )
+        return AllplanGeo.Line3D(start, end)
 
     def _build_individual_centered_preview_line(
         self, line: AllplanGeo.Line3D
@@ -6271,8 +6273,8 @@ class AngularLineScript(BaseScriptObject):
         end = move_point(center, x_dir, piece_length / 2.0)
         preview_line = AllplanGeo.Line3D(start, end)
 
-        if self.face_normal and self.face_point:
-            preview_line = self._project_line_to_individual_vertical_face(preview_line)
+        # if self.face_normal and self.face_point:
+        #     preview_line = self._project_line_to_individual_vertical_face(preview_line)
 
         return preview_line
 
@@ -9007,7 +9009,7 @@ class AngularLineScript(BaseScriptObject):
 
         if not self.is_free_mode:
             if is_individual_distribution and self.face_normal and self.face_point:
-                line = self._project_line_to_individual_vertical_face(line)
+                # line = self._project_line_to_individual_vertical_face(line)
                 local_system = self.face_local_system
                 if not local_system and self.face_polygon and self.face_normal:
                     local_system = calculate_local_coordinate_system(
@@ -9082,7 +9084,8 @@ class AngularLineScript(BaseScriptObject):
                 )
 
             if is_individual_distribution:
-                line = self._project_line_to_individual_vertical_face(line)
+                # line = self._project_line_to_individual_vertical_face(line)
+                line = line
             else:
                 line, local_system = self._clamp_line_to_face(line)
                 if local_system:
