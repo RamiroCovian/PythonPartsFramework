@@ -1282,10 +1282,12 @@ def create_neopreno_solid_on_face(
         raw_end = line.EndPoint
 
         if not is_free_mode and face_normal and face_point:
-            punto_inicial = project_point_to_face_plane(
-                raw_start, face_point, face_normal
-            )
-            punto_final = project_point_to_face_plane(raw_end, face_point, face_normal)
+            # punto_inicial = project_point_to_face_plane(
+            #     raw_start, face_point, face_normal
+            # )
+            # punto_final = project_point_to_face_plane(raw_end, face_point, face_normal)
+            punto_inicial = raw_start
+            punto_final = raw_end
         else:
             punto_inicial = raw_start
             punto_final = raw_end
@@ -2869,10 +2871,11 @@ class NeoprenosScriptObject(BaseScriptObject):
             return line, local_system
 
         if self.face_normal and self.face_point:
-            line = apply_line_projection_or_translation(
-                line, self.face_point, self.face_normal
-            )
-            line, local_system = self._clamp_line_to_face(line)
+            # line = apply_line_projection_or_translation(
+            #     line, self.face_point, self.face_normal
+            # )
+            # line, local_system = self._clamp_line_to_face(line)
+            line = line
 
         if not local_system and self.face_polygon and self.face_normal:
             local_system = self._get_face_local_system()

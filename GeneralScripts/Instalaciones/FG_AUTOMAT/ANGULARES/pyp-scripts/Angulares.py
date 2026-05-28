@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.5-neopreno-longitud-metros"
+ANGULARES_SCRIPT_VERSION = "2.3.8-sin-resaltado-rojo-cara"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -272,24 +272,6 @@ def normalize_distribution_type(value: Any) -> str:
     if normalized == DISTRIBUTION_INDIVIDUAL:
         return DISTRIBUTION_INDIVIDUAL
     return DISTRIBUTION_GROUP
-
-
-def normalize_pmp_pare_value(value: Any) -> str:
-    """Valor limpio para PMP_PARE/PMP_WALL_ID: sin comillas de serializacion."""
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return ""
-        try:
-            parsed = ast.literal_eval(text)
-            if isinstance(parsed, str):
-                text = parsed.strip()
-        except (ValueError, SyntaxError):
-            pass
-        return text.strip().strip("'").strip('"')
-    return str(value).strip().strip("'").strip('"')
 
 
 def get_neoprene_length_meters(definition: dict | None) -> float:
@@ -869,14 +851,15 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
         if selected_element.IsNull():
             return True
 
+        is_mouse_move = self.coord_input.IsMouseMove(mouse_msg)
         is_selected, face_polygon, intersect_result = self._select_face(
-            selected_element, pnt
+            selected_element, pnt, highlight_face=False
         )
 
         if not is_selected:
             return True
 
-        if self.coord_input.IsMouseMove(mouse_msg):
+        if is_mouse_move:
             if intersect_result and hasattr(intersect_result, "IntersectionPoint"):
                 self._draw_face_normal_preview(intersect_result)
             return True
@@ -896,14 +879,14 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
 
         return False
 
-    def _select_face(self, element, pnt):
+    def _select_face(self, element, pnt, highlight_face=False):
         """Intenta seleccionar una cara del elemento"""
         try:
             is_selected, face_polygon, intersect_result = (
                 AllplanBaseElements.FaceSelectService.SelectWallFace(
                     element,
                     pnt,
-                    True,
+                    highlight_face,
                     self.coord_input.GetViewWorldProjection(),
                     self.coord_input.GetInputViewDocument(),
                     True,
@@ -919,7 +902,7 @@ class SolidFaceSelectInteractor(BaseScriptObjectInteractor):
                 AllplanBaseElements.FaceSelectService.SelectPolyhedronFace(
                     element,
                     pnt,
-                    True,
+                    highlight_face,
                     self.coord_input.GetViewWorldProjection(),
                     self.coord_input.GetInputViewDocument(),
                     True,
@@ -2442,7 +2425,8 @@ def create_single_angular_on_line(
         return [], []
 
     if face_normal and face_point:
-        origin = project_point_to_plane(start_point, face_point, face_normal)
+        # origin = project_point_to_plane(start_point, face_point, face_normal)
+        origin =  start_point
     else:
         origin = start_point
 
@@ -2950,6 +2934,8 @@ class WallSelectResult:
     def __init__(self):
         self.element = None
         self.element_guid = None
+        self.input_point = None
+        self.input_mouse_2d = None
         self.is_selected = False
 
 
@@ -3002,6 +2988,15 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
         if self.coord_input.IsMouseMove(mouse_msg):
             return True
 
+        try:
+            self.result.input_point = self.coord_input.GetInputPoint(
+                mouse_msg, pnt, msg_info
+            ).GetPoint()
+            self.result.input_mouse_2d = AllplanGeo.Point2D(pnt.X, pnt.Y)
+        except Exception:
+            self.result.input_point = None
+            self.result.input_mouse_2d = None
+
         self.result.element = selected_element
         self.result.element_guid = str(selected_element.GetModelElementUUID())
         self.result.is_selected = True
@@ -3013,6 +3008,19 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
 
     def on_mouse_leave(self):
         pass
+
+
+class IndividualPositionPointInteractor(PointInteractor):
+    """PointInteractor que conserva el clic 2D para detectar la cara lateral del muro."""
+
+    def __init__(self, owner, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.owner = owner
+
+    def process_mouse_msg(self, mouse_msg, pnt, msg_info):
+        if self.owner is not None:
+            self.owner._last_individual_mouse_2d = AllplanGeo.Point2D(pnt.X, pnt.Y)
+        return super().process_mouse_msg(mouse_msg, pnt, msg_info)
 
 
 class AngularSelectResult:
@@ -3197,6 +3205,7 @@ class AngularLineScript(BaseScriptObject):
         self.face_polygon = None
         self.face_local_system = None
         self._last_individual_position_valid = True
+        self._last_individual_mouse_2d = None
         self._z_unique_from_group = 0  # Se rellena desde script_object_data.param_list en __init__ para usar en EDIT
         self._group_hash_from_params = ""
         self._current_group_hash = ""
@@ -3226,7 +3235,6 @@ class AngularLineScript(BaseScriptObject):
                         )
                     except (TypeError, ValueError):
                         self._z_unique_from_group = 0
-            self._restored_from_saved_state = self._restore_saved_state()
         else:
             self._z_unique_from_group = 0
             if hasattr(self.build_ele, "SiLlevaNeopreno"):
@@ -3739,8 +3747,11 @@ class AngularLineScript(BaseScriptObject):
                     if hasattr(self.build_ele, "SiLlevaNeopreno")
                     else False
                 ),
-                "pmp_pare": normalize_pmp_pare_value(
-                    getattr(self.build_ele.pmp_pare, "value", "")
+                "pmp_pare": (
+                    str(getattr(self.build_ele.pmp_pare, "value", "") or "")
+                    .strip()
+                    .strip("'")
+                    .strip('"')
                     if hasattr(self.build_ele, "pmp_pare")
                     else ""
                 ),
@@ -3889,9 +3900,8 @@ class AngularLineScript(BaseScriptObject):
                 self.build_ele.SiLlevaNeopreno.value = bool(lleva_val)
 
             if hasattr(self.build_ele, "pmp_pare"):
-                self.build_ele.pmp_pare.value = normalize_pmp_pare_value(
-                    state.get("pmp_pare", "")
-                )
+                raw_pp = str(state.get("pmp_pare", "") or "").strip()
+                self.build_ele.pmp_pare.value = raw_pp.strip("'").strip('"')
 
             state_group_hash = (
                 str(state.get("GroupHash", state.get("group_hash", "")) or "")
@@ -3936,8 +3946,6 @@ class AngularLineScript(BaseScriptObject):
                         value, AllplanGeo.Point3D
                     ):
                         attr.value = value
-                    elif key == "pmp_pare":
-                        attr.value = normalize_pmp_pare_value(value)
                     else:
                         attr.value = value
                 except Exception as e:
@@ -4015,17 +4023,6 @@ class AngularLineScript(BaseScriptObject):
                                 param_lines = parameter
                             else:
                                 param_lines = []
-                            params = parse_params_list_to_dict(param_lines)
-                            state_json = str(params.get("SavedState", "") or "")
-                            if state_json:
-                                print(
-                                    f"[SO] Encontrado SavedState en PythonPartGroup: {len(state_json)} caracteres"
-                                )
-                                if self._deserialize_state_from_json(state_json):
-                                    print(
-                                        "[SO] Estado previo restaurado desde PythonPartGroup.SavedState"
-                                    )
-                                    return True
                             for line in param_lines:
                                 if isinstance(line, str):
                                     line = line.strip()
@@ -4153,7 +4150,7 @@ class AngularLineScript(BaseScriptObject):
             "InvertirAngular": invertido,
             "SiLlevaNeopreno": lleva_neopreno,
             "SavedState": saved_state_str if saved_state_str else "",
-            "pmp_pare": normalize_pmp_pare_value(pmp_pare_value),
+            "pmp_pare": pmp_pare_value if pmp_pare_value else "",
             "GroupHash": str(
                 getattr(self, "_current_group_hash", "")
                 or getattr(self, "_group_hash_from_params", "")
@@ -4200,54 +4197,6 @@ class AngularLineScript(BaseScriptObject):
         if q0 is not None and q1 is not None:
             self.line_result.input_line = AllplanGeo.Line3D(q0, q1)
             print("[EDIT] line_result reconstruida desde SavedState (p0/p1)")
-
-    def _is_default_pyp_line(
-        self, start_point: AllplanGeo.Point3D | None, end_point: AllplanGeo.Point3D | None
-    ) -> bool:
-        """Detecta la linea placeholder del .pyp, no una linea real del angular."""
-        if start_point is None or end_point is None:
-            return False
-        return (
-            abs(float(start_point.X)) < 1e-6
-            and abs(float(start_point.Y)) < 1e-6
-            and abs(float(start_point.Z)) < 1e-6
-            and abs(float(end_point.X) - 1000.0) < 1e-6
-            and abs(float(end_point.Y)) < 1e-6
-            and abs(float(end_point.Z)) < 1e-6
-        )
-
-    def _is_unsafe_default_modify_state(
-        self,
-        start_point: AllplanGeo.Point3D | None,
-        end_point: AllplanGeo.Point3D | None,
-        parsed_saved_state: Dict[str, Any] | None,
-    ) -> bool:
-        """Evita regenerar desde defaults del .pyp durante updates asociativos del muro."""
-        if not self._is_default_pyp_line(start_point, end_point):
-            return False
-        if parsed_saved_state:
-            return False
-        try:
-            z_value = float(getattr(self.build_ele.z_unique, "value", 0.0) or 0.0)
-        except (TypeError, ValueError):
-            z_value = 0.0
-        try:
-            z_group = float(getattr(self, "_z_unique_from_group", 0.0) or 0.0)
-        except (TypeError, ValueError):
-            z_group = 0.0
-        if abs(z_value) > 1e-9 or abs(z_group) > 1e-9:
-            return False
-        wall_pare = normalize_pmp_pare_value(
-            getattr(self.build_ele.pmp_pare, "value", "")
-            if hasattr(self.build_ele, "pmp_pare")
-            else ""
-        )
-        muro_guid = (
-            str(getattr(self.build_ele.MuroGUID, "value", "") or "").strip()
-            if hasattr(self.build_ele, "MuroGUID")
-            else ""
-        )
-        return not wall_pare and not muro_guid
 
     def _check_if_editing_existing(self) -> bool:
         """Verifica si se está editando un angular existente"""
@@ -5666,6 +5615,17 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
 
+        selection_point = getattr(self.wall_select_result, "input_point", None)
+        selection_mouse_2d = getattr(self.wall_select_result, "input_mouse_2d", None)
+        if selection_mouse_2d is not None:
+            self._last_individual_mouse_2d = selection_mouse_2d
+        if self._is_individual_distribution() and selection_point:
+            if self._resolve_individual_face_from_wall(selection_point):
+                print(
+                    "[INPUT][INDIVIDUAL] Cara lateral fijada desde el punto "
+                    "de seleccion del muro"
+                )
+
     def _get_face_center(self, face_polygon: AllplanGeo.Polygon3D):
         """Calcula el centro del bounding box de una cara."""
         try:
@@ -5702,6 +5662,101 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return float("inf")
 
+    def _face_exterior_proximity_score(
+        self, face_info: dict, point: AllplanGeo.Point3D
+    ) -> tuple[float, float, float]:
+        """Puntuacion de proximidad; menor es mejor. Prioriza el lateral bajo el clic."""
+        try:
+            normal = normalize_vector(face_info.get("normal"))
+            center = self._get_face_center(face_info.get("polygon"))
+            if not normal or normal.GetLength() < 1e-6 or not center:
+                return (float("inf"), float("inf"), 0.0)
+
+            to_point = AllplanGeo.Vector3D(
+                point.X - center.X,
+                point.Y - center.Y,
+                point.Z - center.Z,
+            )
+            signed = vector_dot(to_point, normal)
+            abs_dist = abs(signed)
+            exterior_penalty = 0.0 if signed >= -5.0 else 1000.0 + abs_dist
+            return (exterior_penalty, abs_dist, -self._face_horizontal_span(face_info))
+        except Exception:
+            return (float("inf"), float("inf"), 0.0)
+
+    def _select_wall_lateral_face_via_service(
+        self,
+        wall_element,
+        reference_point: AllplanGeo.Point3D | None = None,
+        mouse_2d: AllplanGeo.Point2D | None = None,
+    ) -> dict | None:
+        """Detecta la cara lateral bajo el cursor usando FaceSelectService de Allplan."""
+        if not wall_element:
+            return None
+
+        coord_input = self._get_active_coord_input()
+        view_projection = None
+        input_document = self.document
+        if coord_input:
+            try:
+                view_projection = coord_input.GetViewWorldProjection()
+                input_document = coord_input.GetInputViewDocument()
+            except Exception:
+                pass
+
+        if mouse_2d is None and reference_point is not None:
+            mouse_2d = AllplanGeo.Point2D(reference_point.X, reference_point.Y)
+        if mouse_2d is None:
+            return None
+
+        for select_fn in (
+            AllplanBaseElements.FaceSelectService.SelectWallFace,
+            AllplanBaseElements.FaceSelectService.SelectPolyhedronFace,
+        ):
+            try:
+                is_selected, face_polygon, intersect_result = select_fn(
+                    wall_element,
+                    mouse_2d,
+                    False,
+                    view_projection,
+                    input_document,
+                    True,
+                )
+            except Exception:
+                continue
+
+            if not is_selected or not face_polygon or not intersect_result:
+                continue
+
+            face_normal = getattr(intersect_result, "FaceNv", None)
+            if not face_normal or not is_lateral_face(face_normal):
+                continue
+
+            face_normal = normalize_vector(face_normal)
+            if not face_normal or face_normal.GetLength() < 1e-6:
+                continue
+
+            face_point = getattr(intersect_result, "IntersectionPoint", None)
+            if face_point is None and reference_point is not None:
+                center = self._get_face_center(face_polygon)
+                if center:
+                    face_point = project_point_to_plane(
+                        reference_point, center, face_normal
+                    )
+            if face_point is None:
+                face_point = self._get_face_center(face_polygon)
+
+            face_index = self._find_face_index(wall_element, face_polygon, face_normal)
+            return {
+                "index": face_index,
+                "polygon": face_polygon,
+                "normal": face_normal,
+                "points": None,
+                "face_point": face_point,
+            }
+
+        return None
+
     def _face_horizontal_span(self, face_info: dict) -> float:
         """Longitud horizontal aproximada de una cara; prioriza caras principales."""
         try:
@@ -5724,14 +5779,23 @@ class AngularLineScript(BaseScriptObject):
             return 0.0
 
     def _face_normal_family_key(self, face_info: dict) -> tuple[int, int, int]:
-        """Agrupa caras por normal manteniendo el signo."""
+        """Agrupa caras paralelas independientemente del sentido de la normal."""
         normal = normalize_vector(face_info.get("normal"))
         if not normal or normal.GetLength() < 1e-6:
             return (0, 0, 0)
+
+        nx, ny, nz = normal.X, normal.Y, normal.Z
+        if (
+            nx < -1e-6
+            or (abs(nx) <= 1e-6 and ny < -1e-6)
+            or (abs(nx) <= 1e-6 and abs(ny) <= 1e-6 and nz < 0.0)
+        ):
+            nx, ny, nz = -nx, -ny, -nz
+
         return (
-            int(round(normal.X * 100)),
-            int(round(normal.Y * 100)),
-            int(round(normal.Z * 100)),
+            int(round(nx * 100)),
+            int(round(ny * 100)),
+            int(round(nz * 100)),
         )
 
     def _face_plane_projection(self, face_info: dict) -> float | None:
@@ -5746,7 +5810,7 @@ class AngularLineScript(BaseScriptObject):
             return None
 
     def _filter_exterior_wall_faces_by_normal(self, faces: list[dict]) -> list[dict]:
-        """Conserva solo caras en el plano exterior del muro para cada normal."""
+        """Conserva las caras exteriores del muro para cada orientacion de normal."""
         groups: dict[tuple[int, int, int], list[dict]] = {}
         for face in faces:
             key = self._face_normal_family_key(face)
@@ -5755,6 +5819,7 @@ class AngularLineScript(BaseScriptObject):
             groups.setdefault(key, []).append(face)
 
         filtered: list[dict] = []
+        tolerance = 2.0
         for group_faces in groups.values():
             projections = [
                 (face, self._face_plane_projection(face)) for face in group_faces
@@ -5764,12 +5829,13 @@ class AngularLineScript(BaseScriptObject):
                 filtered.extend(group_faces)
                 continue
 
-            exterior_projection = max(proj for _face, proj in valid)
-            tolerance = 2.0
+            min_projection = min(proj for _face, proj in valid)
+            max_projection = max(proj for _face, proj in valid)
             filtered.extend(
                 face
                 for face, proj in valid
-                if abs(exterior_projection - proj) <= tolerance
+                if abs(proj - min_projection) <= tolerance
+                or abs(proj - max_projection) <= tolerance
             )
 
         return filtered or faces
@@ -5808,6 +5874,57 @@ class AngularLineScript(BaseScriptObject):
         except Exception:
             return False
 
+    def _select_best_lateral_face_for_point(
+        self, faces: list[dict], reference_point: AllplanGeo.Point3D | None
+    ) -> dict | None:
+        """Selecciona la cara lateral más probable según el punto de referencia.
+
+        Considera todas las caras laterales exteriores del muro (no solo la cara
+        usada en una colocación anterior) para permitir posicionar en cualquier
+        lateral del muro seleccionado.
+        """
+        if not faces:
+            return None
+
+        faces_with_span = [
+            (face, self._face_horizontal_span(face)) for face in faces
+        ]
+        max_span = max((span for _face, span in faces_with_span), default=0.0)
+        min_main_span = max(150.0, max_span * 0.03) if max_span > 0.0 else 0.0
+        main_faces = [
+            face for face, span in faces_with_span if span >= min_main_span
+        ] or faces
+
+        if reference_point:
+            containing_faces = [
+                face
+                for face in main_faces
+                if self._projected_point_is_inside_face(face, reference_point)
+            ]
+            if containing_faces:
+                containing_faces.sort(
+                    key=lambda face: self._face_exterior_proximity_score(
+                        face, reference_point
+                    )
+                )
+                return containing_faces[0]
+
+            main_faces.sort(
+                key=lambda face: self._face_exterior_proximity_score(
+                    face, reference_point
+                )
+            )
+            best_face = main_faces[0] if main_faces else None
+            if best_face:
+                print(
+                    "[INPUT][INDIVIDUAL] Punto fuera de fragmentos de cara; "
+                    "usando plano exterior principal mas cercano"
+                )
+            return best_face
+
+        main_faces.sort(key=lambda face: -self._face_horizontal_span(face))
+        return main_faces[0] if main_faces else None
+
     def _store_current_face_info(self, selected_element, face_index=None) -> None:
         """Persiste normal, punto de cara, GUID e indice para reconstruccion posterior."""
         if self.face_normal:
@@ -5842,36 +5959,39 @@ class AngularLineScript(BaseScriptObject):
         if not wall_element:
             return False
 
-        lateral_faces = get_wall_lateral_faces(wall_element)
-        if not lateral_faces:
-            print("[INPUT][INDIVIDUAL] No se pudieron obtener caras laterales del muro")
-            return False
+        best_face = None
+        if reference_point is not None:
+            mouse_2d = getattr(self, "_last_individual_mouse_2d", None)
+            best_face = self._select_wall_lateral_face_via_service(
+                wall_element, reference_point, mouse_2d
+            )
+            if best_face:
+                print(
+                    "[INPUT][INDIVIDUAL] Cara detectada via FaceSelectService: "
+                    f"normal=({best_face['normal'].X:.3f}, "
+                    f"{best_face['normal'].Y:.3f}, {best_face['normal'].Z:.3f})"
+                )
 
-        lateral_faces = self._filter_exterior_wall_faces_by_normal(lateral_faces)
-
-        if reference_point:
-            lateral_faces = [
-                face
-                for face in lateral_faces
-                if self._projected_point_is_inside_face(face, reference_point)
-            ]
+        if not best_face:
+            lateral_faces = get_wall_lateral_faces(wall_element)
             if not lateral_faces:
+                print("[INPUT][INDIVIDUAL] No se pudieron obtener caras laterales del muro")
                 return False
 
-            lateral_faces.sort(
-                key=lambda face: (
-                    self._face_distance_to_point(face, reference_point),
-                    -self._face_horizontal_span(face),
-                )
+            lateral_faces = self._filter_exterior_wall_faces_by_normal(lateral_faces)
+            best_face = self._select_best_lateral_face_for_point(
+                lateral_faces, reference_point
             )
-        else:
-            lateral_faces.sort(key=lambda face: -self._face_horizontal_span(face))
+            if not best_face:
+                return False
 
-        best_face = lateral_faces[0]
         face_polygon = best_face.get("polygon")
         face_normal = normalize_vector(best_face.get("normal"))
         face_center = self._get_face_center(face_polygon)
-        if (
+        service_face_point = best_face.get("face_point")
+        if service_face_point:
+            face_point = service_face_point
+        elif (
             reference_point
             and face_center
             and face_normal
@@ -6110,14 +6230,15 @@ class AngularLineScript(BaseScriptObject):
         z_value = self._resolve_individual_z_from_point(
             position, update_from_point=True
         )
-        position = self._project_point_to_individual_vertical_face(position, z_value)
+        # position = self._project_point_to_individual_vertical_face(position, z_value)
 
         x_dir = self._get_individual_horizontal_axis_on_face()
         start = move_point(position, x_dir, -piece_length / 2.0)
         end = move_point(position, x_dir, piece_length / 2.0)
-        return self._project_line_to_individual_vertical_face(
-            AllplanGeo.Line3D(start, end), z_value
-        )
+        # return self._project_line_to_individual_vertical_face(
+        #     AllplanGeo.Line3D(start, end), z_value
+        # )
+        return AllplanGeo.Line3D(start, end)
 
     def _build_individual_centered_preview_line(
         self, line: AllplanGeo.Line3D
@@ -6152,8 +6273,8 @@ class AngularLineScript(BaseScriptObject):
         end = move_point(center, x_dir, piece_length / 2.0)
         preview_line = AllplanGeo.Line3D(start, end)
 
-        if self.face_normal and self.face_point:
-            preview_line = self._project_line_to_individual_vertical_face(preview_line)
+        # if self.face_normal and self.face_point:
+        #     preview_line = self._project_line_to_individual_vertical_face(preview_line)
 
         return preview_line
 
@@ -6347,7 +6468,7 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(self.build_ele, "pmp_pare") and hasattr(
             self.build_ele.pmp_pare, "value"
         ):
-            wall_pare = normalize_pmp_pare_value(self.build_ele.pmp_pare.value)
+            wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
 
         model_elements = self.create_angulars(
             geometries, edges, definition, pmp_pare=wall_pare or None
@@ -6365,7 +6486,8 @@ class AngularLineScript(BaseScriptObject):
     def _start_position_input(self):
         """Inicia el tercer click: posición final del angular individual."""
         self.position_result = PointInteractorResult()
-        self.script_object_interactor = PointInteractor(
+        self.script_object_interactor = IndividualPositionPointInteractor(
+            self,
             self.position_result,
             True,
             "Indique la posición del angular individual",
@@ -8887,7 +9009,7 @@ class AngularLineScript(BaseScriptObject):
 
         if not self.is_free_mode:
             if is_individual_distribution and self.face_normal and self.face_point:
-                line = self._project_line_to_individual_vertical_face(line)
+                # line = self._project_line_to_individual_vertical_face(line)
                 local_system = self.face_local_system
                 if not local_system and self.face_polygon and self.face_normal:
                     local_system = calculate_local_coordinate_system(
@@ -8962,7 +9084,8 @@ class AngularLineScript(BaseScriptObject):
                 )
 
             if is_individual_distribution:
-                line = self._project_line_to_individual_vertical_face(line)
+                # line = self._project_line_to_individual_vertical_face(line)
+                line = line
             else:
                 line, local_system = self._clamp_line_to_face(line)
                 if local_system:
@@ -9573,7 +9696,8 @@ class AngularLineScript(BaseScriptObject):
         props.Layer = layer_id
 
         # Si es None, usar string vacío
-        pmp_pare = normalize_pmp_pare_value(pmp_pare)
+        if pmp_pare is None:
+            pmp_pare = ""
 
         attr_id = getattr(self, "attr_pmp_pare_id", 0)
         attr_wall_id = getattr(self, "attr_pmp_wall_id", 0)
@@ -9609,10 +9733,10 @@ class AngularLineScript(BaseScriptObject):
             attr_list = BuildingElementAttributeList()
 
             if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare)
+                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare)
+                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
 
             if attr_detall_id > 0:
                 attr_list.add_attribute(attr_detall_id, "")
@@ -9640,10 +9764,10 @@ class AngularLineScript(BaseScriptObject):
             attr_list = BuildingElementAttributeList()
 
             if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare)
+                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare)
+                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
 
             if attr_detall_id > 0:
                 attr_list.add_attribute(attr_detall_id, "")
@@ -9671,10 +9795,10 @@ class AngularLineScript(BaseScriptObject):
             attr_list = BuildingElementAttributeList()
 
             if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare)
+                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare)
+                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
 
             if attr_detall_id > 0:
                 attr_list.add_attribute(attr_detall_id, "")
@@ -9757,7 +9881,7 @@ class AngularLineScript(BaseScriptObject):
                 attr_largo_neopre_id = getattr(self, "attr_pmp_fg_ang_neopre_id", 0)
 
                 #  Usar pmp_pare pasado como parámetro (NO leer desde build_ele)
-                wall_pare = normalize_pmp_pare_value(pmp_pare)
+                wall_pare = pmp_pare.replace("'", "") if pmp_pare else ""
                 if wall_pare and attr_pmp_id > 0:
                     attr_list.add_attribute(attr_pmp_id, wall_pare)
 
@@ -10006,7 +10130,7 @@ class AngularLineScript(BaseScriptObject):
             try:
                 wall_id = get_wall_ifc_id(wall)
                 if wall_id:
-                    wall_pare = normalize_pmp_pare_value(wall_id)
+                    wall_pare = wall_id
                     print(f"[CREATE] PMP_PARE calculado desde muro: {wall_pare}")
             except Exception as e:
                 print(f"[CREATE]  Error obteniendo material del muro: {e}")
@@ -10019,7 +10143,7 @@ class AngularLineScript(BaseScriptObject):
             self.build_ele.pmp_pare, "value"
         ):
             try:
-                self.build_ele.pmp_pare.value = normalize_pmp_pare_value(wall_pare)
+                self.build_ele.pmp_pare.value = wall_pare.replace("'", "")
                 print(f"[CREATE]  pmp_pare guardado en build_ele: '{wall_pare}'")
             except Exception as e:
                 print(f"[CREATE]  ERROR al guardar pmp_pare en build_ele: {e}")
@@ -10376,44 +10500,6 @@ class AngularLineScript(BaseScriptObject):
             )
 
         # Alinear distribución con el JSON persistido si la paleta quedó incoherente (no pisa cambio explícito de usuario).
-        if self._is_unsafe_default_modify_state(
-            start_point, end_point, parsed_saved_state_edit
-        ):
-            print(
-                "[EDIT] Estado default del .pyp detectado en MODIFY; se intenta restaurar desde el PPG"
-            )
-            if self._restore_saved_state():
-                saved_state_str_edit = (
-                    (self.build_ele.SavedState.value or "").strip()
-                    if hasattr(self.build_ele, "SavedState")
-                    and hasattr(self.build_ele.SavedState, "value")
-                    else ""
-                )
-                parsed_saved_state_edit = (
-                    parse_saved_state(saved_state_str_edit)
-                    if saved_state_str_edit
-                    else {}
-                )
-                start_point = (
-                    getattr(self.build_ele.PuntoInicial, "value", start_point)
-                    if hasattr(self.build_ele, "PuntoInicial")
-                    else start_point
-                )
-                end_point = (
-                    getattr(self.build_ele.PuntoFinal, "value", end_point)
-                    if hasattr(self.build_ele, "PuntoFinal")
-                    else end_point
-                )
-            if self._is_unsafe_default_modify_state(
-                start_point, end_point, parsed_saved_state_edit
-            ):
-                print(
-                    "[EDIT] MODIFY abortado: solo hay defaults del .pyp; no se reemplaza el angular"
-                )
-                return CreateElementResult(
-                    elements=[], handles=[], elements_to_delete=None
-                )
-
         self._apply_saved_distribution_to_build_ele_in_modify(parsed_saved_state_edit)
 
         # Persistencia EDIT: muro, cara, ejes y Z de la línea (param_list/SavedState antes minimal → build_ele incompleto).
@@ -10538,7 +10624,9 @@ class AngularLineScript(BaseScriptObject):
         )
         largo_neopre_value = get_neoprene_length_meters(definition)
         wall_pare = (
-            normalize_pmp_pare_value(getattr(self.build_ele.pmp_pare, "value", ""))
+            str(getattr(self.build_ele.pmp_pare, "value", "") or "")
+            .strip()
+            .replace("'", "")
             if hasattr(self.build_ele, "pmp_pare")
             else ""
         )
@@ -10609,8 +10697,8 @@ class AngularLineScript(BaseScriptObject):
                 self.build_ele.pmp_pare, "value"
             ):
                 try:
-                    wall_pare = normalize_pmp_pare_value(
-                        self.build_ele.pmp_pare.value
+                    wall_pare = (
+                        str(self.build_ele.pmp_pare.value).strip().replace("'", "")
                     )
                 except Exception:
                     pass
@@ -10862,7 +10950,9 @@ class AngularLineScript(BaseScriptObject):
         # Justo antes de armar global_params: serializar SavedState desde build_ele
         saved_state_edit = self._serialize_state_to_json()
         wall_pare_edit = (
-            normalize_pmp_pare_value(getattr(self.build_ele.pmp_pare, "value", ""))
+            str(getattr(self.build_ele.pmp_pare, "value", "") or "")
+            .strip()
+            .replace("'", "")
             if hasattr(self.build_ele, "pmp_pare")
             else wall_pare
         )
