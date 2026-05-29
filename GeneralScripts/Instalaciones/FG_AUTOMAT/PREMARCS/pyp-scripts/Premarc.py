@@ -613,6 +613,34 @@ def parse_params_list_to_dict(param_list: List[str]) -> dict:
     return params
 
 
+def parse_saved_state_value(raw_value: Any) -> dict:
+    if isinstance(raw_value, dict):
+        return dict(raw_value)
+
+    if raw_value in (None, "", b""):
+        return {}
+
+    raw_text = str(raw_value).strip()
+    if not raw_text:
+        return {}
+
+    try:
+        parsed = json.loads(raw_text)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+
+    try:
+        parsed = ast.literal_eval(raw_text)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception as exc:
+        print(f"[SELECT][PREMARC] No se pudo parsear SavedState del PPG: {exc}")
+
+    return {}
+
+
 def _make_premarc_selection_aux_properties(
     color: int = PREMARC_SELECTION_AUX_COLOR,
     pen: int = PREMARC_SELECTION_AUX_PEN,
@@ -752,6 +780,7 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
 class PremarcSelectResult:
     def __init__(self):
         self.element = None
+        self.element_guid = ""
         self.param_list: list = []
         self.saved_state: dict = {}
         self.is_selected = False
@@ -762,6 +791,10 @@ class PendingPremarcSelectResult:
         self.selected_index = None
         self.selected_item = None
         self.input_point = None
+        self.selection_source = ""
+        self.element = None
+        self.param_list: list = []
+        self.saved_state: dict = {}
         self.is_selected = False
 
 
@@ -813,15 +846,13 @@ class ExistingPremarcSelectInteractor(BaseScriptObjectInteractor):
             self.owner._warn_premarc_from_other_execution()
             return True
 
-        saved_state = {}
-        raw_saved_state = str(params.get("SavedState", "") or "").strip()
-        if raw_saved_state:
-            try:
-                saved_state = json.loads(raw_saved_state)
-            except Exception as exc:
-                print(f"[SELECT][PREMARC] No se pudo parsear SavedState del PPG: {exc}")
+        saved_state = parse_saved_state_value(params.get("SavedState", {}))
 
         self.result.element = pyp_element
+        try:
+            self.result.element_guid = str(pyp_element.GetModelElementUUID())
+        except Exception:
+            self.result.element_guid = ""
         self.result.param_list = list(param_list) if param_list else []
         self.result.saved_state = saved_state
         self.result.is_selected = True
@@ -876,18 +907,51 @@ class PendingPremarcSelectInteractor(BaseScriptObjectInteractor):
             return True
 
         idx, item = self.owner._find_pending_premarc_candidate_near_point(input_point)
-        if item is None:
+        if item is not None:
+            self.result.selected_index = idx
+            self.result.selected_item = item
+            self.result.input_point = input_point
+            self.result.selection_source = "preview"
+            self.result.is_selected = True
+            print(f"[SELECT][PREMARC] Preview seleccionado indice={idx}")
+            return False
+
+        self.coord_input.SelectElement(mouse_msg, pnt, msg_info, True, False, False)
+        selected_element = self.coord_input.GetSelectedElement()
+        if selected_element is None or selected_element.IsNull():
             print(
-                "[SELECT][PREMARC] Clic fuera de los premarcos preview; "
-                "seleccione un premarco colocado en esta sesion"
+                "[SELECT][PREMARC] Clic fuera del premarco activo; "
+                "seleccione un preview o un PPG ya creado"
             )
             return True
 
-        self.result.selected_index = idx
-        self.result.selected_item = item
+        pyp_element, param_list = self.owner._resolve_premarc_ppg_from_adapter(
+            selected_element
+        )
+        if pyp_element is None:
+            print("[SELECT][PREMARC] No se identifico el PPG Premarcs en el dibujo")
+            return True
+
+        params = parse_params_list_to_dict(param_list)
+        selected_z = z_unique_as_int(params.get("z_unique", 0))
+        current_z = z_unique_as_int(getattr(self.owner.build_ele.z_unique, "value", 0))
+        if selected_z <= 0 or current_z <= 0 or selected_z != current_z:
+            self.owner._warn_premarc_from_other_execution()
+            return True
+
+        saved_state = parse_saved_state_value(params.get("SavedState", {}))
+
+        self.result.element = pyp_element
+        try:
+            self.result.element_guid = str(pyp_element.GetModelElementUUID())
+        except Exception:
+            self.result.element_guid = ""
+        self.result.param_list = list(param_list) if param_list else []
+        self.result.saved_state = saved_state
         self.result.input_point = input_point
+        self.result.selection_source = "existing"
         self.result.is_selected = True
-        print(f"[SELECT][PREMARC] Preview seleccionado indice={idx}")
+        print("[SELECT][PREMARC] PPG seleccionado desde selector combinado")
         return False
 
     def on_cancel_function(self):
@@ -1083,6 +1147,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.interactor_state = STOPPED
         self.handle_list = []
         self._pending_premarcs = []
+        self._session_created_premarcs = []
+        self._active_session_source_guid = ""
         self._has_confirmed_placement = False
         self._final_creation_cancelled_by_user = False
         self._create_union_frames = False  # Flag para controlar el comportamiento
@@ -1799,16 +1865,31 @@ class PremarcScriptObject(BaseScriptObject):
             self.script_object_interactor = None
             self.interactor_state = STOPPED
             if self.premarc_select_result.is_selected:
-                self._activate_selected_premarc_overlay(
-                    self.premarc_select_result.saved_state
-                )
+                if not self._select_session_created_premarc_for_edit(
+                    self.premarc_select_result.saved_state,
+                    self.premarc_select_result.element_guid,
+                ):
+                    self._activate_selected_premarc_overlay(
+                        self.premarc_select_result.saved_state
+                    )
         elif self.interactor_state == SELECTING_PENDING_PREMARC:
             self.script_object_interactor = None
             self.interactor_state = STOPPED
             if self.pending_premarc_select_result.is_selected:
-                self._select_pending_premarc_for_edit(
-                    self.pending_premarc_select_result.selected_item
-                )
+                if self.pending_premarc_select_result.selection_source == "preview":
+                    self._select_pending_premarc_for_edit(
+                        self.pending_premarc_select_result.selected_item
+                    )
+                elif (
+                    self.pending_premarc_select_result.selection_source == "existing"
+                ):
+                    if not self._select_session_created_premarc_for_edit(
+                        self.pending_premarc_select_result.saved_state,
+                        self.pending_premarc_select_result.element_guid,
+                    ):
+                        self._activate_selected_premarc_overlay(
+                            self.pending_premarc_select_result.saved_state
+                        )
 
     def _start_placement_point_input(self):
         """Inicia el input de punto conservando el muro seleccionado."""
@@ -1887,6 +1968,212 @@ class PremarcScriptObject(BaseScriptObject):
         self._loaded_saved_state = {}
 
         print("[Premarc] Premarco confirmado; habilitando nueva posicion")
+        return True
+
+    def _extract_created_premarc_ppg_guid(self, created_elements) -> str:
+        for element in created_elements or []:
+            ppg_element, _ = self._resolve_premarc_ppg_from_adapter(element)
+            if ppg_element is None:
+                continue
+            try:
+                if ppg_element.IsNull():
+                    continue
+            except Exception:
+                pass
+            try:
+                return str(ppg_element.GetModelElementUUID())
+            except Exception:
+                continue
+        return ""
+
+    def _create_current_premarc_ppg_without_opening(
+        self, *, register_session_item: bool, reset_active_after_create: bool
+    ) -> bool:
+        if self.placement_pnt == AllplanGeo.Point3D():
+            print("[Premarc] No hay premarco posicionado para crear PPG sin opening")
+            return True
+
+        if not self.selected_wall:
+            PythonUtility.ShowMessageBox(
+                "Seleccione un muro antes de crear el premarco.",
+                PythonUtility.MB_OK,
+            )
+            return False
+
+        self.update_params()
+        if self.build_ele.enable_manual_thickness.value:
+            self.save_color_manual_thickness()
+        if self.build_ele.EnableManualEncaje.value and not self.disable_save_encaje:
+            self.save_manual_encaje()
+
+        if self.check_falcas_and_persianas():
+            resp = PythonUtility.ShowMessageBox(
+                f"Selecciono Falcas, pero no hay persianas.\n" "Â¿Desea continuar?",
+                PythonUtility.MB_OKCANCEL,
+            )
+            if resp == PythonUtility.IDCANCEL:
+                return False
+
+        if hasattr(self.build_ele, "opening_guid"):
+            self.build_ele.opening_guid.value = ""
+
+        session_state = self._build_premarc_saved_state_dict(self.placement_pnt)
+        session_wall_guid = str(
+            session_state.get("wall_guid", "")
+            or self.wall_select_result.element_guid
+            or getattr(self, "wall_guid_str", "")
+            or ""
+        )
+
+        self._create_union_frames = True
+        created_elements = self._execute() or []
+        created_ppg_guid = self._extract_created_premarc_ppg_guid(created_elements)
+
+        if register_session_item:
+            session_item = {
+                "point": self._copy_point3d(self.placement_pnt),
+                "state": dict(session_state),
+                "ppg_guid": created_ppg_guid,
+                "wall_guid": session_wall_guid,
+            }
+            replaced_existing = False
+            if self._active_session_source_guid:
+                for idx, item in enumerate(self._session_created_premarcs):
+                    if str(item.get("ppg_guid", "") or "") == str(
+                        self._active_session_source_guid
+                    ):
+                        self._session_created_premarcs[idx] = session_item
+                        replaced_existing = True
+                        break
+            if not replaced_existing:
+                self._session_created_premarcs.append(session_item)
+            print(
+                "[Premarc] PPG de sesion creado sin opening: "
+                f"{len(self._session_created_premarcs)} pendiente(s) de opening"
+            )
+
+        if reset_active_after_create:
+            self.placement_pnt = AllplanGeo.Point3D()
+            self._has_confirmed_placement = False
+            self._loaded_saved_state = {}
+            self._active_session_source_guid = ""
+            if hasattr(self.build_ele, "opening_guid"):
+                self.build_ele.opening_guid.value = ""
+
+        return True
+
+    def _replace_session_premarc_ppg(self, ppg_guid_str: str) -> bool:
+        if not ppg_guid_str:
+            self._create_union_frames = True
+            created = self._execute()
+            return bool(created)
+
+        try:
+            old_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                AllplanEleAdapter.GUID.FromString(ppg_guid_str),
+                self.coord_input.GetInputViewDocument(),
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo recuperar PPG de sesion: {exc}")
+            self._create_union_frames = True
+            created = self._execute()
+            return bool(created)
+
+        if old_adapter is None or old_adapter.IsNull():
+            print(
+                "[Premarc] PPG de sesion no encontrado; "
+                "recreando premarco final desde el estado de sesion"
+            )
+            self._create_union_frames = True
+            created = self._execute()
+            return bool(created)
+
+        self._rebuild_placement_mat()
+        premarc_elements = self.create_premarcs_group()
+        if not premarc_elements:
+            print("[Premarc] Actualizacion de PPG cancelada: sin geometria")
+            return False
+
+        trans_mat = AllplanGeo.Matrix3D()
+        trans_mat.SetTranslation(AllplanGeo.Vector3D(self.placement_pnt))
+
+        try:
+            old_list = AllplanEleAdapter.BaseElementAdapterList()
+            old_list.append(old_adapter)
+            AllplanBaseElements.DeleteElements(self.document, old_list)
+        except Exception as exc:
+            print(f"[Premarc] No se pudo borrar PPG previo antes de actualizar: {exc}")
+            return False
+
+        try:
+            created_elements = AllplanBaseElements.CreateElements(
+                self.document,
+                trans_mat,
+                premarc_elements,
+                [],
+                None,
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo recrear PPG con opening: {exc}")
+            return False
+
+        print(
+            "[Premarc] PPG de sesion actualizado con opening "
+            f"({len(created_elements) if created_elements else 0} elementos)"
+        )
+        return bool(created_elements)
+
+    def _finalize_session_created_premarcs(self) -> bool:
+        if not self._validate_before_final_creation():
+            return False
+
+        if self._has_confirmed_placement:
+            if not self._create_current_premarc_ppg_without_opening(
+                register_session_item=True,
+                reset_active_after_create=True,
+            ):
+                return False
+
+        if not self._session_created_premarcs:
+            print("[Premarc] No hay PPGs de premarco pendientes de opening")
+            return False
+
+        session_items = list(self._session_created_premarcs)
+        self._session_created_premarcs = []
+
+        for index, item in enumerate(session_items, start=1):
+            point = item["point"]
+            state = dict(item["state"])
+            wall_guid = str(item.get("wall_guid", "") or state.get("wall_guid", "") or "")
+
+            self._apply_premarc_saved_state(state)
+            self.placement_pnt = self._copy_point3d(point)
+            self._sync_placement_point_parameter()
+            self._rebuild_placement_mat()
+            self._has_confirmed_placement = True
+
+            if wall_guid:
+                self._try_restore_wall_from_guid(wall_guid)
+
+            if hasattr(self.build_ele, "opening_guid"):
+                self.build_ele.opening_guid.value = ""
+
+            print(
+                f"[Premarc] Generando opening final {index}/{len(session_items)} en "
+                f"({point.X:.1f}, {point.Y:.1f}, {point.Z:.1f})"
+            )
+            if self.selected_wall:
+                self._create_wall_opening()
+
+            self._replace_session_premarc_ppg(str(item.get("ppg_guid", "") or ""))
+
+        self.placement_pnt = AllplanGeo.Point3D()
+        self._has_confirmed_placement = False
+        self._loaded_saved_state = {}
+        self._active_session_source_guid = ""
+        if hasattr(self.build_ele, "opening_guid"):
+            self.build_ele.opening_guid.value = ""
+
         return True
 
     def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
@@ -2182,6 +2469,94 @@ class PremarcScriptObject(BaseScriptObject):
         self._rebuild_placement_mat()
         self._has_confirmed_placement = True
         return self._activate_selected_premarc_overlay(selected_pending["state"])
+
+    def _delete_session_premarc_ppg(self, ppg_guid_str: str) -> bool:
+        if not ppg_guid_str:
+            return False
+        try:
+            ppg_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                AllplanEleAdapter.GUID.FromString(ppg_guid_str),
+                self.coord_input.GetInputViewDocument(),
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo recuperar PPG de sesion para editar: {exc}")
+            return False
+
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            print("[Premarc] PPG de sesion ya no existe al intentar editarlo")
+            return False
+
+        try:
+            ele_list = AllplanEleAdapter.BaseElementAdapterList()
+            ele_list.append(ppg_adapter)
+            AllplanBaseElements.DeleteElements(self.document, ele_list)
+            return True
+        except Exception as exc:
+            print(f"[Premarc] No se pudo borrar PPG de sesion seleccionado: {exc}")
+            return False
+
+    def _select_session_created_premarc_for_edit(
+        self, saved_state: dict, ppg_guid_str: str
+    ) -> bool:
+        if not saved_state or not ppg_guid_str:
+            return False
+
+        selected_index = None
+        selected_item = None
+        for idx, item in enumerate(self._session_created_premarcs):
+            if str(item.get("ppg_guid", "") or "") == str(ppg_guid_str):
+                selected_index = idx
+                selected_item = item
+                break
+
+        if selected_item is None:
+            return False
+
+        selected_point = self._copy_point3d(selected_item["point"])
+        current_is_same = (
+            self._has_confirmed_placement
+            and abs(self.placement_pnt.X - selected_point.X) <= 0.01
+            and abs(self.placement_pnt.Y - selected_point.Y) <= 0.01
+            and abs(self.placement_pnt.Z - selected_point.Z) <= 0.01
+        )
+
+        if self._has_confirmed_placement and not current_is_same:
+            if not self._create_current_premarc_ppg_without_opening(
+                register_session_item=True,
+                reset_active_after_create=True,
+            ):
+                return False
+
+            selected_index = None
+            selected_item = None
+            for idx, item in enumerate(self._session_created_premarcs):
+                if str(item.get("ppg_guid", "") or "") == str(ppg_guid_str):
+                    selected_index = idx
+                    selected_item = item
+                    break
+            if selected_item is None:
+                return False
+
+        self._delete_session_premarc_ppg(ppg_guid_str)
+        self._active_session_source_guid = str(ppg_guid_str)
+
+        self._apply_premarc_saved_state(dict(selected_item["state"]))
+        self.placement_pnt = self._copy_point3d(selected_item["point"])
+        self._sync_placement_point_parameter()
+        self._rebuild_placement_mat()
+        self._has_confirmed_placement = True
+        self._loaded_saved_state = dict(selected_item["state"])
+
+        wall_guid = str(
+            selected_item.get("wall_guid", "")
+            or selected_item["state"].get("wall_guid", "")
+            or ""
+        )
+        if wall_guid:
+            self._try_restore_wall_from_guid(wall_guid)
+
+        print("[Premarc] PPG de sesion cargado como premarco activo editable")
+        return self._activate_selected_premarc_overlay(selected_item["state"])
 
     def _transform_model_element_list(
         self, elements_list: list, matrix: AllplanGeo.Matrix3D
@@ -2632,6 +3007,27 @@ class PremarcScriptObject(BaseScriptObject):
                 )
             )
 
+    def _append_session_created_premarcs_preview(
+        self, preview_elements, exclude_point: AllplanGeo.Point3D | None = None
+    ):
+        for item in self._session_created_premarcs:
+            point = item.get("point")
+            state = item.get("state", {})
+            if point is None or not state:
+                continue
+            if (
+                exclude_point is not None
+                and abs(point.X - exclude_point.X) <= 0.01
+                and abs(point.Y - exclude_point.Y) <= 0.01
+                and abs(point.Z - exclude_point.Z) <= 0.01
+            ):
+                continue
+            self._apply_premarc_saved_state(state)
+            self.placement_pnt = self._copy_point3d(point)
+            self._rebuild_placement_mat()
+            local_model = self._create_premarc_placement_preview_only()
+            self._append_preview_model_at_current_matrix(preview_elements, local_model)
+
     def _create_accumulated_placement_preview(self, active_point):
         """Preview de premarcos en cola + el activo (confirmado o bajo el cursor)."""
         saved_pnt = self.placement_pnt
@@ -2644,6 +3040,11 @@ class PremarcScriptObject(BaseScriptObject):
 
         try:
             self._in_placement_preview = True
+
+            self._append_session_created_premarcs_preview(
+                preview_elements,
+                exclude_point=saved_pnt if saved_pnt != AllplanGeo.Point3D() else None,
+            )
 
             for item in self._pending_premarcs:
                 self._apply_premarc_saved_state(item["state"])
@@ -2683,6 +3084,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.wall_select_result = WallSelectResult()
             self.selected_wall = None
             self._pending_premarcs = []
+            self._active_session_source_guid = ""
             self._has_confirmed_placement = False
             self.interactor_state = SELECTING_WALL
             self.script_object_interactor = WallSelectInteractor(
@@ -2694,7 +3096,10 @@ class PremarcScriptObject(BaseScriptObject):
             if self.is_modification_mode:
                 return False
 
-            if not self._commit_current_premarc_before_next_placement():
+            if not self._create_current_premarc_ppg_without_opening(
+                register_session_item=True,
+                reset_active_after_create=True,
+            ):
                 return True
 
             if not self.selected_wall:
@@ -2714,18 +3119,17 @@ class PremarcScriptObject(BaseScriptObject):
                 self.script_object_interactor.start_input(self.coord_input)
             return True
         elif event_id == 1055:
-            if self._pending_premarcs or self._has_confirmed_placement:
-                self._clear_selected_premarc_overlay()
-                self.pending_premarc_select_result = PendingPremarcSelectResult()
-                self.interactor_state = SELECTING_PENDING_PREMARC
-                self.script_object_interactor = PendingPremarcSelectInteractor(
-                    self.pending_premarc_select_result,
-                    "Seleccione el premarco preview a editar",
-                    owner=self,
-                )
-                if self.script_object_interactor:
-                    self.script_object_interactor.start_input(self.coord_input)
-                return True
+            if (
+                not self.is_modification_mode
+                and self._has_confirmed_placement
+                and self.placement_pnt != AllplanGeo.Point3D()
+            ):
+                if not self._create_current_premarc_ppg_without_opening(
+                    register_session_item=True,
+                    reset_active_after_create=True,
+                ):
+                    return True
+
             self._clear_selected_premarc_overlay()
             self.premarc_select_result = PremarcSelectResult()
             self.interactor_state = SELECTING_EXISTING_PREMARC
@@ -2741,6 +3145,7 @@ class PremarcScriptObject(BaseScriptObject):
             self._clear_selected_premarc_overlay()
             self.premarc_select_result = PremarcSelectResult()
             self.pending_premarc_select_result = PendingPremarcSelectResult()
+            self._active_session_source_guid = ""
             self.script_object_interactor = None
             if self.interactor_state in (
                 SELECTING_EXISTING_PREMARC,
@@ -2968,9 +3373,9 @@ class PremarcScriptObject(BaseScriptObject):
         # self.crearListaAbiertoCerrado()
         # self.load_radio_buttons_pendent()
         z_unique = z_unique_as_int(self.build_ele.z_unique.value)
-        if z_unique <= 0 or not self.is_modification_mode:
+        if z_unique <= 0:
             z_unique = int(random.random() * 3600)
-        self.build_ele.z_unique.value = z_unique
+            self.build_ele.z_unique.value = z_unique
         self.thickness_premarc = (
             self.build_ele.manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
@@ -2996,12 +3401,35 @@ class PremarcScriptObject(BaseScriptObject):
         if self.placement_pnt == AllplanGeo.Point3D():
             return CreateElementResult([])
 
+        preview_elements = []
+        if not self.is_modification_mode and self._session_created_premarcs:
+            saved_pnt = self._copy_point3d(self.placement_pnt)
+            saved_mat = self.placement_mat
+            saved_state = (
+                self._build_premarc_saved_state_dict(saved_pnt)
+                if saved_pnt != AllplanGeo.Point3D()
+                else None
+            )
+            saved_preview_flag = self._in_placement_preview
+            try:
+                self._in_placement_preview = True
+                self._append_session_created_premarcs_preview(
+                    preview_elements, exclude_point=saved_pnt
+                )
+            finally:
+                self._in_placement_preview = saved_preview_flag
+                if saved_state:
+                    self._apply_premarc_saved_state(saved_state)
+                else:
+                    self.placement_pnt = saved_pnt
+                    self.placement_mat = saved_mat
+
         self._rebuild_placement_mat()
 
         premarc_elements = self.create_premarcs_group()
 
         return CreateElementResult(
-            elements=premarc_elements,
+            elements=preview_elements + premarc_elements,
             handles=self.handle_list,
             placement_point=self.placement_pnt,
         )
@@ -3017,9 +3445,9 @@ class PremarcScriptObject(BaseScriptObject):
         hace el framework en execute() vía insert_matrix + placement_matrix).
         Usar placement_mat aquí causaría doble rotación."""
         z_unique = z_unique_as_int(self.build_ele.z_unique.value)
-        if z_unique <= 0 or not self.is_modification_mode:
+        if z_unique <= 0:
             z_unique = int(random.random() * 3600)
-        self.build_ele.z_unique.value = z_unique
+            self.build_ele.z_unique.value = z_unique
         self.thickness_premarc = (
             self.build_ele.manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
@@ -3038,7 +3466,7 @@ class PremarcScriptObject(BaseScriptObject):
         trans_mat = AllplanGeo.Matrix3D()
         trans_mat.SetTranslation(AllplanGeo.Vector3D(self.placement_pnt))
 
-        AllplanBaseElements.CreateElements(
+        return AllplanBaseElements.CreateElements(
             self.document,
             trans_mat,
             premarc_elements,
@@ -3931,7 +4359,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.interactor_state = STOPPED
 
         if self.script_object_interactor is None:
-            self._create_pending_premarcs()
+            self._finalize_session_created_premarcs()
             if self._final_creation_cancelled_by_user:
                 return OnCancelFunctionResult.CONTINUE_INPUT
             return OnCancelFunctionResult.CANCEL_INPUT
