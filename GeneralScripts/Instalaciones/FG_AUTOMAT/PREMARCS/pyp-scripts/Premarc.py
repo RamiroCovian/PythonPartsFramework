@@ -2380,6 +2380,23 @@ class PremarcScriptObject(BaseScriptObject):
         self._selected_premarc_overlay_active = True
         return self._draw_selected_premarc_overlay(clear_before=False)
 
+    def _get_active_selected_premarc_overlay(self) -> list[Any]:
+        """Marco auxiliar del premarco seleccionado, actualizado con el estado activo."""
+        if (
+            not self._selected_premarc_overlay_active
+            or self.placement_pnt == AllplanGeo.Point3D()
+        ):
+            return []
+
+        state = self._build_premarc_saved_state_dict(self.placement_pnt)
+        if not state:
+            state = dict(self._selected_premarc_overlay_state or {})
+        if not state:
+            return []
+
+        self._selected_premarc_overlay_state = dict(state)
+        return self._build_premarc_selection_overlay(state)
+
     def _build_current_active_premarc_item(self) -> dict | None:
         if not self._has_confirmed_placement or self.placement_pnt == AllplanGeo.Point3D():
             return None
@@ -3461,10 +3478,14 @@ class PremarcScriptObject(BaseScriptObject):
         preview_elements = self._make_preview_relative_to_point(
             preview_elements, self.placement_pnt
         )
+        selection_overlay = self._make_preview_relative_to_point(
+            self._get_active_selected_premarc_overlay(), self.placement_pnt
+        )
 
         return CreateElementResult(
             elements=preview_elements + premarc_elements,
             handles=self.handle_list,
+            preview_elements=selection_overlay,
             placement_point=self.placement_pnt,
         )
 
