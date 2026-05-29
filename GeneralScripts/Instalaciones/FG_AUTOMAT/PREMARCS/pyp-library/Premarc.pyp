@@ -96,6 +96,22 @@
         </Parameter>
 
         <Parameter>
+            <Name>RowReubicarPremarc</Name>
+            <Text>Reubicar premarco</Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>ReubicarPremarc</Name>
+                <Text>Mover posición</Text>
+                <EventId>1002</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Persistent>No</Persistent>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
             <Name>medidas</Name>
             <Text>Medidas (mm)</Text>
             <Value>False</Value>

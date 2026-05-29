@@ -542,9 +542,7 @@ def create_element_hash(element_type: str, stable: bool = False, **params) -> st
     # En modificacion debe ser estable para no perder relaciones del PPG.
     param_items = sorted(params.items())
     if stable:
-        param_string = element_type + "_" + "_".join(
-            f"{k}={v}" for k, v in param_items
-        )
+        param_string = element_type + "_" + "_".join(f"{k}={v}" for k, v in param_items)
     else:
         random_number = random.randint(10**15, 10**16 - 1)
         param_string = f"{element_type}_random{random_number}_" + "_".join(
@@ -713,6 +711,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.detected_wall_thickness = 0
         self._opening_baseline_width = None
         self._opening_baseline_height = None
+        self._opening_baseline_point = None
+        self._loaded_saved_state = {}
         self._opening_recreated_during_cancel = False
         self._opening_sync_requires_direct_update = False
 
@@ -739,22 +739,26 @@ class PremarcScriptObject(BaseScriptObject):
             "encaje_premacs.txt",
         )
 
-        if self.is_modification_mode:
-            self.wall_guid_str = ""
-            raw_state = self.build_ele.SavedState.value
-            if raw_state:
-                # SavedState puede venir como JSON string o ya como dict
-                if isinstance(raw_state, str):
-                    state = json.loads(raw_state)
-                elif isinstance(raw_state, dict):
-                    state = raw_state
-                else:
-                    state = {}
+        self.wall_guid_str = ""
+        raw_state = self.build_ele.SavedState.value
+        if raw_state:
+            # SavedState puede venir como JSON string o ya como dict
+            if isinstance(raw_state, str):
+                self._loaded_saved_state = json.loads(raw_state)
+            elif isinstance(raw_state, dict):
+                self._loaded_saved_state = raw_state
 
-                self.wall_guid_str = state.get("wall_guid", "")
-                self._apply_premarc_saved_state(state)
-                self._opening_baseline_width = float(state.get("width", self.width))
-                self._opening_baseline_height = float(state.get("height", self.heigh))
+        if self.is_modification_mode:
+            if self._loaded_saved_state:
+                self.wall_guid_str = self._loaded_saved_state.get("wall_guid", "")
+                self._apply_premarc_saved_state(self._loaded_saved_state)
+                self._opening_baseline_width = float(
+                    self._loaded_saved_state.get("width", self.width)
+                )
+                self._opening_baseline_height = float(
+                    self._loaded_saved_state.get("height", self.heigh)
+                )
+                self._opening_baseline_point = self._copy_point3d(self.placement_pnt)
 
             self._reset_wall_selection_for_modification(self.wall_guid_str)
 
@@ -874,6 +878,9 @@ class PremarcScriptObject(BaseScriptObject):
         self._create_union_frames = False  # Flag para controlar el comportamiento
         self._should_recreate_opening_after_handle = False
         self._placement_handle_start_pnt = None
+        self._palette_reposition_active = False
+        self._palette_reposition_has_new_point = False
+        self._palette_reposition_original_point = None
         self._in_placement_preview = (
             False  # True solo durante preview del punto (sin XPS/accesorios/ampits)
         )
@@ -1556,6 +1563,8 @@ class PremarcScriptObject(BaseScriptObject):
                 self._sync_placement_point_parameter()
                 self._rebuild_placement_mat()
                 self._has_confirmed_placement = True
+                if self._palette_reposition_active:
+                    self._palette_reposition_has_new_point = True
 
                 # self.build_ele.PlacementPntX.value = self.placement_pnt.X
                 # self.build_ele.PlacementPntY.value = self.placement_pnt.Y
@@ -1585,6 +1594,27 @@ class PremarcScriptObject(BaseScriptObject):
             request_text="Posicionar Premarco",
             preview_function=self.draw_placement_preview,
         )
+
+    def _start_palette_reposition_input(self) -> bool:
+        """Start explicit point-pick to relocate an existing premarc from the PPG."""
+        if not self.is_modification_mode:
+            return False
+
+        if not self.selected_wall:
+            self._reset_wall_selection_for_modification(self.wall_guid_str)
+
+        if not self.selected_wall:
+            PythonUtility.ShowMessageBox(
+                "No se pudo restaurar el muro del premarco para reubicarlo.",
+                PythonUtility.MB_OK,
+            )
+            return False
+
+        self._palette_reposition_original_point = self._copy_point3d(self.placement_pnt)
+        self._palette_reposition_active = True
+        self._palette_reposition_has_new_point = False
+        self._start_placement_point_input()
+        return True
 
     def _commit_current_premarc_before_next_placement(self) -> bool:
         """Materializa el premarco configurado antes de pedir una nueva posicion."""
@@ -1693,10 +1723,8 @@ class PremarcScriptObject(BaseScriptObject):
             )
             if opening_adapter.IsNull():
                 return False
-            wall_adapter = (
-                AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
-                    opening_adapter
-                )
+            wall_adapter = AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                opening_adapter
             )
         except Exception as exc:
             print(f"[Premarc] No se pudo restaurar muro desde opening: {exc}")
@@ -1732,6 +1760,71 @@ class PremarcScriptObject(BaseScriptObject):
         """Keep the hidden handle parameter aligned with the active insertion point."""
         if hasattr(self.build_ele, "PlacementPnt"):
             self.build_ele.PlacementPnt.value = self._copy_point3d(self.placement_pnt)
+
+    def _did_opening_placement_change(self, tolerance: float = 0.01) -> bool:
+        """Compare current placement against the persisted opening baseline."""
+        if self._opening_baseline_point is None:
+            return False
+
+        current = self.placement_pnt
+        baseline = self._opening_baseline_point
+
+        return (
+            abs(current.X - baseline.X) > tolerance
+            or abs(current.Y - baseline.Y) > tolerance
+            or abs(current.Z - baseline.Z) > tolerance
+        )
+
+    def _did_point_change_from_state(
+        self,
+        state: dict,
+        point: AllplanGeo.Point3D,
+        tolerance: float = 0.01,
+    ) -> bool:
+        """Compare a point against the XYZ stored in a SavedState-like dict."""
+        if not state:
+            return False
+
+        try:
+            old_x = float(state.get("X", point.X))
+            old_y = float(state.get("Y", point.Y))
+            old_z = float(state.get("Z", point.Z))
+        except (TypeError, ValueError):
+            return False
+
+        return (
+            abs(point.X - old_x) > tolerance
+            or abs(point.Y - old_y) > tolerance
+            or abs(point.Z - old_z) > tolerance
+        )
+
+    def _delete_previous_opening_for_reinserted_premarc(
+        self, source_state: dict, new_point: AllplanGeo.Point3D
+    ) -> bool:
+        """When Allplan reinserts an existing premarc after drag, remove the old opening."""
+        if not source_state:
+            return False
+
+        source_opening_guid = str(source_state.get("opening_guid", "") or "")
+        if not source_opening_guid:
+            return False
+
+        if not self._did_point_change_from_state(source_state, new_point):
+            return False
+
+        previous_guid = str(getattr(self.build_ele.opening_guid, "value", "") or "")
+        self.build_ele.opening_guid.value = source_opening_guid
+
+        try:
+            deleted = self._delete_wall_opening()
+            if deleted:
+                print(
+                    "[Premarc] Opening anterior eliminado antes de recrear "
+                    "premarco reinsertado"
+                )
+            return deleted
+        finally:
+            self.build_ele.opening_guid.value = previous_guid
 
     def _build_premarc_saved_state_dict(
         self, placement_pnt: AllplanGeo.Point3D | None = None
@@ -1829,7 +1922,9 @@ class PremarcScriptObject(BaseScriptObject):
         self.thickness_premarc = state["depth"]
         self.thickness_wall = state["thickness_wall"]
         self.build_ele.thickness_wall.value = state["thickness_wall"]
-        self.detected_wall_thickness = state.get("thickness", self.detected_wall_thickness)
+        self.detected_wall_thickness = state.get(
+            "thickness", self.detected_wall_thickness
+        )
 
         encaje = state.get("ComboBoxEncajes", state.get("encaje", ""))
         self.build_ele.ComboBoxEncajes.value = encaje
@@ -1915,6 +2010,9 @@ class PremarcScriptObject(BaseScriptObject):
             {
                 "point": self._copy_point3d(self.placement_pnt),
                 "state": self._build_premarc_saved_state_dict(self.placement_pnt),
+                "source_state": (
+                    dict(self._loaded_saved_state) if self._loaded_saved_state else {}
+                ),
             }
         )
         self.placement_pnt = AllplanGeo.Point3D()
@@ -1973,6 +2071,9 @@ class PremarcScriptObject(BaseScriptObject):
             point = item["point"]
             self._apply_premarc_saved_state(item["state"])
             self.placement_pnt = self._copy_point3d(point)
+            self._delete_previous_opening_for_reinserted_premarc(
+                item.get("source_state", {}), point
+            )
             if hasattr(self.build_ele, "opening_guid"):
                 self.build_ele.opening_guid.value = ""
 
@@ -1989,6 +2090,7 @@ class PremarcScriptObject(BaseScriptObject):
         self._has_confirmed_placement = False
         if hasattr(self.build_ele, "opening_guid"):
             self.build_ele.opening_guid.value = ""
+        self._loaded_saved_state = {}
 
         return True
 
@@ -2036,7 +2138,7 @@ class PremarcScriptObject(BaseScriptObject):
                     preview_elements, local_model
                 )
             elif active_point and active_point != PointInteractorResult():
-                self.placement_pnt = active_point
+                self.placement_pnt = self._copy_point3d(active_point)
                 self._rebuild_placement_mat()
                 local_model = self._create_premarc_placement_preview_only()
                 self._append_preview_model_at_current_matrix(
@@ -2077,6 +2179,13 @@ class PremarcScriptObject(BaseScriptObject):
                 self.start_input()
             else:
                 self._start_placement_point_input()
+
+            if self.script_object_interactor:
+                self.script_object_interactor.start_input(self.coord_input)
+            return True
+        elif event_id == 1002:
+            if not self._start_palette_reposition_input():
+                return True
 
             if self.script_object_interactor:
                 self.script_object_interactor.start_input(self.coord_input)
@@ -2194,7 +2303,9 @@ class PremarcScriptObject(BaseScriptObject):
 
         if handle_prop.handle_id == "PlacementHandle":
             if self._placement_handle_start_pnt is None:
-                self._placement_handle_start_pnt = self._copy_point3d(self.placement_pnt)
+                self._placement_handle_start_pnt = self._copy_point3d(
+                    self.placement_pnt
+                )
 
             self.placement_pnt = self._placement_handle_start_pnt + AllplanGeo.Vector3D(
                 input_pnt
@@ -2448,7 +2559,9 @@ class PremarcScriptObject(BaseScriptObject):
                 old_list = AllplanEleAdapter.BaseElementAdapterList()
                 old_list.append(old_adapter)
                 AllplanBaseElements.DeleteElements(self.document, old_list)
-                print("[Premarc] PythonPart anterior borrado antes del reemplazo directo")
+                print(
+                    "[Premarc] PythonPart anterior borrado antes del reemplazo directo"
+                )
             except Exception as exc:
                 print(f"[Premarc] No se pudo borrar el PythonPart anterior: {exc}")
                 return False
@@ -2688,6 +2801,9 @@ class PremarcScriptObject(BaseScriptObject):
             self.build_ele.opening_guid.value = opening_guid_str
             self._opening_created_width = llarg
             self._opening_created_heigh = alt
+            self._opening_baseline_width = float(llarg)
+            self._opening_baseline_height = float(alt)
+            self._opening_baseline_point = self._copy_point3d(self.placement_pnt)
             return True
 
         return False
@@ -2706,7 +2822,8 @@ class PremarcScriptObject(BaseScriptObject):
         """Sincroniza el hueco con el premarco editado.
 
         Allplan modifica bien cuando el opening crece, pero puede no reducirlo
-        al achicar el ancho/alto. En ese caso se recrea el opening.
+        al achicar el ancho/alto. Al mover el premarco tampoco siempre desplaza
+        el hueco existente. En ambos casos se recrea el opening.
         """
         self._opening_recreated_during_cancel = False
         self._opening_sync_requires_direct_update = False
@@ -2719,6 +2836,7 @@ class PremarcScriptObject(BaseScriptObject):
         current_h = float(self.build_ele.heigh.value)
         baseline_w = self._opening_baseline_width
         baseline_h = self._opening_baseline_height
+        has_moved = self._did_opening_placement_change()
         opening_guid = self.build_ele.opening_guid.value
 
         has_shrunk = (
@@ -2728,10 +2846,12 @@ class PremarcScriptObject(BaseScriptObject):
             and (current_w < baseline_w - 0.01 or current_h < baseline_h - 0.01)
         )
 
-        if has_shrunk:
+        if has_shrunk or (opening_guid and has_moved):
+            reason = "Opening disminuye" if has_shrunk else "Opening cambia de posicion"
             print(
-                "[Premarc] Opening disminuye: "
-                f"{baseline_w}x{baseline_h} -> {current_w}x{current_h}. "
+                f"[Premarc] {reason}: "
+                f"{baseline_w}x{baseline_h} -> {current_w}x{current_h}, "
+                f"pnt={self.placement_pnt}. "
                 "Recreando hueco."
             )
             self._opening_sync_requires_direct_update = True
@@ -2740,6 +2860,7 @@ class PremarcScriptObject(BaseScriptObject):
                 self._opening_recreated_during_cancel = True
             self._opening_baseline_width = current_w
             self._opening_baseline_height = current_h
+            self._opening_baseline_point = self._copy_point3d(self.placement_pnt)
             return
 
         if opening_guid:
@@ -2770,7 +2891,9 @@ class PremarcScriptObject(BaseScriptObject):
         opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(guid, doc)
 
         if opening_adapter.IsNull():
-            print("[Premarc] Opening ya no existe en el documento actual, limpiando GUID")
+            print(
+                "[Premarc] Opening ya no existe en el documento actual, limpiando GUID"
+            )
             self.build_ele.opening_guid.value = ""
             return False
 
@@ -3178,6 +3301,26 @@ class PremarcScriptObject(BaseScriptObject):
         print("ON_CANCEL_FUNCTION\n\n\n")
 
         if self.is_modification_mode:
+            if (
+                self._palette_reposition_active
+                and not self._palette_reposition_has_new_point
+            ):
+                self.script_object_interactor = None
+                self.interactor_state = STOPPED
+                if self._palette_reposition_original_point is not None:
+                    self.placement_pnt = self._copy_point3d(
+                        self._palette_reposition_original_point
+                    )
+                    self._sync_placement_point_parameter()
+                    self._rebuild_placement_mat()
+                self._palette_reposition_active = False
+                self._palette_reposition_has_new_point = False
+                self._palette_reposition_original_point = None
+                print(
+                    "[Premarc] Reubicacion cancelada desde PPG; se conserva la posicion"
+                )
+                return OnCancelFunctionResult.CANCEL_INPUT
+
             self.script_object_interactor = None
             self.interactor_state = STOPPED
 
@@ -3191,10 +3334,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.update_params()
             if self.build_ele.enable_manual_thickness.value:
                 self.save_color_manual_thickness()
-            if (
-                self.build_ele.EnableManualEncaje.value
-                and not self.disable_save_encaje
-            ):
+            if self.build_ele.EnableManualEncaje.value and not self.disable_save_encaje:
                 self.save_manual_encaje()
 
             if self.selected_wall:
@@ -3214,9 +3354,15 @@ class PremarcScriptObject(BaseScriptObject):
                     )
                 self._opening_sync_requires_direct_update = False
                 self._opening_recreated_during_cancel = False
+                self._palette_reposition_active = False
+                self._palette_reposition_has_new_point = False
+                self._palette_reposition_original_point = None
                 return OnCancelFunctionResult.CANCEL_INPUT
 
             print("[Premarc] Modificación confirmada -> CREATE_ELEMENTS")
+            self._palette_reposition_active = False
+            self._palette_reposition_has_new_point = False
+            self._palette_reposition_original_point = None
             return OnCancelFunctionResult.CREATE_ELEMENTS
 
         if self.interactor_state == SELECTING_WALL:
@@ -3295,7 +3441,10 @@ class PremarcScriptObject(BaseScriptObject):
                 # opening_guid ya está en build_ele → execute() ya lo incluyó en el cache
                 if self.is_modification_mode and self.build_ele.opening_guid.value:
                     self._create_wall_opening(modify_existing=True)
-                elif not self.is_modification_mode or not self.build_ele.opening_guid.value:
+                elif (
+                    not self.is_modification_mode
+                    or not self.build_ele.opening_guid.value
+                ):
                     self._create_wall_opening()
                 self._create_union_frames = True
                 self._execute()
