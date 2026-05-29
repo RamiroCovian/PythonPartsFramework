@@ -970,6 +970,8 @@ class PremarcScriptObject(BaseScriptObject):
         super().__init__(script_object_data)
 
         self.build_ele = build_ele
+        if hasattr(self.build_ele, "ShowSessionControls"):
+            self.build_ele.ShowSessionControls.value = not self.is_modification_mode
 
         z_unique = z_unique_as_int(getattr(self.build_ele.z_unique, "value", 0))
         if z_unique <= 0 or not self.is_modification_mode:

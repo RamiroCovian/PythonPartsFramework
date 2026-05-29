@@ -22,6 +22,14 @@
         </Parameter>
 
         <Parameter>
+            <Name>ShowSessionControls</Name>
+            <Text>ShowSessionControls</Text>
+            <Value>True</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+
+        <Parameter>
             <Name>ShowXPS</Name>
             <Text>Mostrar XPS completa</Text>
             <Value>False</Value>
@@ -60,6 +68,7 @@
             <Name>NextPremarcPlacementRow</Name>
             <Text>Colocación</Text>
             <ValueType>Row</ValueType>
+            <Visible>ShowSessionControls</Visible>
 
             <Parameter>
                 <Name>NextPremarcPlacement</Name>
@@ -71,8 +80,9 @@
 
         <Parameter>
             <Name>RowSeleccionPremarc</Name>
-            <Text>EdiciÃ³n</Text>
+            <Text>Edición</Text>
             <ValueType>Row</ValueType>
+            <Visible>ShowSessionControls</Visible>
 
             <Parameter>
                 <Name>SeleccionarPremarc</Name>
