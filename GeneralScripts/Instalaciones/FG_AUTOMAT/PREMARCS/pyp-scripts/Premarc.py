@@ -3007,9 +3007,37 @@ class PremarcScriptObject(BaseScriptObject):
                 )
             )
 
+    def _make_preview_relative_to_point(self, preview_elements, point):
+        """Convert global preview geometry to the local space used by placement_point."""
+        if not preview_elements or point is None or point == AllplanGeo.Point3D():
+            return preview_elements
+
+        offset_mat = AllplanGeo.Matrix3D()
+        offset_mat.SetTranslation(
+            AllplanGeo.Vector3D(-point.X, -point.Y, -point.Z)
+        )
+
+        relative_elements = []
+        for element in preview_elements:
+            geo = _geometry_from_model_element(element)
+            if geo is None:
+                continue
+            try:
+                geo = AllplanGeo.Transform(geo, offset_mat)
+            except Exception as e:
+                print(f"[Premarc] No se pudo relativizar preview de contexto: {e}")
+                continue
+            relative_elements.append(
+                AllplanBasisElements.ModelElement3D(
+                    _common_props_from_model_element(element), geo
+                )
+            )
+        return relative_elements
+
     def _append_session_created_premarcs_preview(
         self, preview_elements, exclude_point: AllplanGeo.Point3D | None = None
     ):
+        rendered = 0
         for item in self._session_created_premarcs:
             point = item.get("point")
             state = item.get("state", {})
@@ -3027,6 +3055,9 @@ class PremarcScriptObject(BaseScriptObject):
             self._rebuild_placement_mat()
             local_model = self._create_premarc_placement_preview_only()
             self._append_preview_model_at_current_matrix(preview_elements, local_model)
+            rendered += 1
+        if rendered:
+            print(f"[Premarc] Contexto visual de sesion dibujado: {rendered} premarco(s)")
 
     def _create_accumulated_placement_preview(self, active_point):
         """Preview de premarcos en cola + el activo (confirmado o bajo el cursor)."""
@@ -3402,7 +3433,7 @@ class PremarcScriptObject(BaseScriptObject):
             return CreateElementResult([])
 
         preview_elements = []
-        if not self.is_modification_mode and self._session_created_premarcs:
+        if self._session_created_premarcs:
             saved_pnt = self._copy_point3d(self.placement_pnt)
             saved_mat = self.placement_mat
             saved_state = (
@@ -3427,6 +3458,9 @@ class PremarcScriptObject(BaseScriptObject):
         self._rebuild_placement_mat()
 
         premarc_elements = self.create_premarcs_group()
+        preview_elements = self._make_preview_relative_to_point(
+            preview_elements, self.placement_pnt
+        )
 
         return CreateElementResult(
             elements=preview_elements + premarc_elements,
