@@ -835,6 +835,15 @@
       <Persistent>Model</Persistent>
       <Persistent>Model</Persistent>
     </Parameter>
+    <Parameter>
+      <Name>pmp_pare_name</Name>
+      <Text>pmp_pare_name</Text>
+      <Value></Value>
+      <ValueType>String</ValueType>
+      <Visible>False</Visible>
+      <Persistent>Model</Persistent>
+      <Persistent>Model</Persistent>
+    </Parameter>
 
     <Parameter>
       <Name>SeparatorPosicionRelativa</Name>

@@ -513,6 +513,15 @@
         </Parameter>
 
         <Parameter>
+            <Name>pmp_pare_name</Name>
+            <Text>pmp_pare_name</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <Visible>False</Visible>
+            <Persistent>MODEL_AND_FAVORITE</Persistent>
+        </Parameter>
+
+        <Parameter>
             <Name>PermitirCambiarMuro</Name>
             <Text>Permitir cambiar muro</Text>
             <TextId>e_NEO_PP_1053</TextId>

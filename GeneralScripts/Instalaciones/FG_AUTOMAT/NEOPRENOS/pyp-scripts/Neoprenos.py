@@ -214,6 +214,82 @@ def get_wall_ifc_id(wall_element) -> str | None:
     return get_element_ifc_id(wall_element, try_parent=True)
 
 
+def get_wall_material_name(wall_element) -> str | None:
+    """Obtiene el nombre del muro desde el atributo Material (id 508) o buscando en todos los atributos."""
+
+    if not wall_element:
+        return ""
+
+    try:
+        from DocumentManager import DocumentManager
+
+        doc = DocumentManager.get_instance().document
+
+        attrs = wall_element.GetAttributes(
+            AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
+        )
+        material_value_from_508 = None
+        for attr in attrs:
+            try:
+                attr_id = getattr(attr, "Id", None)
+                if (
+                    attr_id is None
+                    and isinstance(attr, (tuple, list))
+                    and len(attr) >= 2
+                ):
+                    attr_id = attr[0]
+                    attr_value = attr[1]
+                else:
+                    attr_value = getattr(attr, "Value", None)
+
+                if attr_id == 508:
+                    material_value_from_508 = (
+                        str(attr_value).strip() if attr_value else ""
+                    )
+
+                    if (
+                        material_value_from_508
+                        and material_value_from_508 != "<undefiniert>"
+                    ):
+                        if "$" in material_value_from_508:
+                            wall_name = material_value_from_508.split("$")[0].strip()
+                            return wall_name if wall_name else None
+                        else:
+                            return material_value_from_508
+            except Exception:
+                continue
+
+        for attr in attrs:
+            try:
+                attr_id = getattr(attr, "Id", None)
+                if (
+                    attr_id is None
+                    and isinstance(attr, (tuple, list))
+                    and len(attr) >= 2
+                ):
+                    attr_id = attr[0]
+                    attr_value = attr[1]
+                else:
+                    attr_value = getattr(attr, "Value", None)
+
+                if attr_value:
+                    attr_value_str = str(attr_value).strip()
+                    if "$" in attr_value_str and attr_value_str != "<undefiniert>":
+                        try:
+                            wall_name = attr_value_str.split("$")[0].strip()
+                            if wall_name:
+                                return wall_name
+                        except Exception:
+                            pass
+            except Exception:
+                continue
+
+    except Exception:
+        pass
+
+    return None
+
+
 neo_log(f"module loaded: {__file__}")
 
 
@@ -224,6 +300,7 @@ def build_saved_state_dict(
     grosor: float,
     libre: bool,
     pmp_pare: str,
+    pmp_pare_name: str = "",
     rot: float = 0.0,
     invertido: bool = False,
     layer: int = -1,
@@ -237,7 +314,8 @@ def build_saved_state_dict(
         ancho: ancho del neopreno
         grosor: grosor seleccionado
         libre: modo libre (neopreno_libre)
-        pmp_pare: metadata del muro
+        pmp_pare: identificador tecnico del muro/host
+        pmp_pare_name: nombre/material legible del muro/host
         rot: rotación en grados (si libre)
         invertido: InvertirGrosor (si aplica)
         layer: layer ID
@@ -254,6 +332,7 @@ def build_saved_state_dict(
         "rot": float(rot),
         "invertido": bool(invertido),
         "pmp_pare": normalize_pmp_pare_value(pmp_pare),
+        "pmp_pare_name": normalize_pmp_pare_value(pmp_pare_name),
         "layer": int(layer),
     }
 
@@ -380,7 +459,7 @@ def normalize_pmp_pare_value(value: Any) -> str:
 
 def coerce_build_ele_param_value(key: str, value: Any) -> Any:
     """Tipo correcto al cargar param_list del PPG en build_ele (evita CheckBox con str)."""
-    if key == "pmp_pare":
+    if key in ("pmp_pare", "pmp_pare_name"):
         return normalize_pmp_pare_value(value)
     if key in NEOPRENO_CHECKBOX_PARAM_KEYS:
         parsed = parse_bool_param_value(value)
@@ -569,7 +648,6 @@ def _build_neopreno_selection_auxiliary_elements(
 ) -> list[Any]:
     """
     Marco auxiliar de seleccion: eje, paralelas y cruz central (sin escuadras).
-    Copia de Angulares._build_angular_selection_auxiliary_elements.
     """
     if line is None:
         return []
@@ -578,9 +656,7 @@ def _build_neopreno_selection_auxiliary_elements(
     start = AllplanGeo.Point3D(line.StartPoint.X, line.StartPoint.Y, line.StartPoint.Z)
     end = AllplanGeo.Point3D(line.EndPoint.X, line.EndPoint.Y, line.EndPoint.Z)
 
-    outward_norm = (
-        _normalize_vector_selection(outward) if outward is not None else None
-    )
+    outward_norm = _normalize_vector_selection(outward) if outward is not None else None
     if outward_norm is not None and outward_norm.GetLength() > 1e-6:
         outward_mm = float(NEOPRENO_SELECTION_AUX_OUTWARD_MM)
         if abs(outward_mm) > 0.01:
@@ -669,9 +745,15 @@ def _build_neopreno_creation_indicator_elements(
     pz = AllplanGeo.Point3D(anchor.X, anchor.Y, anchor.Z + half)
     nz = AllplanGeo.Point3D(anchor.X, anchor.Y, anchor.Z - half)
 
-    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(nx, px)))
-    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(ny, py)))
-    elements.append(AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(nz, pz)))
+    elements.append(
+        AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(nx, px))
+    )
+    elements.append(
+        AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(ny, py))
+    )
+    elements.append(
+        AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(nz, pz))
+    )
 
     try:
         text_props = AllplanBasisElements.TextProperties()
@@ -2330,6 +2412,51 @@ class NeoprenosScriptObject(BaseScriptObject):
             self._warn_unidentifiable_parent_element()
         return ""
 
+    def _resolve_host_pmp_pare_name(self) -> str:
+        """Obtiene un nombre/material legible del elemento host seleccionado."""
+        if getattr(self, "wall_material_name", None):
+            cached = normalize_pmp_pare_value(self.wall_material_name)
+            if cached:
+                return cached
+
+        host_candidates: list = []
+        if getattr(self, "ref_face_element", None):
+            host_candidates.append(self.ref_face_element)
+        if getattr(self, "detected_wall", None):
+            host_candidates.append(self.detected_wall)
+        solid_info = getattr(self, "solid_info", None)
+        if isinstance(solid_info, dict) and solid_info.get("element"):
+            host_candidates.append(solid_info["element"])
+        if (
+            getattr(self, "wall_select_result", None)
+            and self.wall_select_result.element
+        ):
+            host_candidates.append(self.wall_select_result.element)
+        if (
+            getattr(self, "face_select_result", None)
+            and self.face_select_result.element
+        ):
+            host_candidates.append(self.face_select_result.element)
+
+        seen_guids: set[str] = set()
+        for element in host_candidates:
+            if not element or (hasattr(element, "IsNull") and element.IsNull()):
+                continue
+            try:
+                element_guid = str(element.GetModelElementUUID())
+                if element_guid in seen_guids:
+                    continue
+                seen_guids.add(element_guid)
+            except Exception:
+                pass
+
+            wall_name = get_wall_material_name(element)
+            if wall_name:
+                self.wall_material_name = normalize_pmp_pare_value(wall_name)
+                return self.wall_material_name
+
+        return ""
+
     def _warn_unidentifiable_parent_element(self) -> None:
         """Aviso al usuario: el elemento padre no tiene IFC ID identificable."""
         if getattr(self, "_unidentifiable_parent_warned", False):
@@ -2347,15 +2474,23 @@ class NeoprenosScriptObject(BaseScriptObject):
             print(NEOPRENO_PARENT_NOT_IDENTIFIABLE_MSG)
 
     def _init_pmp_attribute_ids(self) -> None:
-        """Resuelve IDs de PMP_PARE y PMP_WALL_ID (mismo criterio que Angulares / Neoprenos1)."""
+        """Resuelve IDs de PMP_PARE y PMP_WALL_ID."""
         doc = getattr(self, "document", None)
         if not doc:
             self.attr_pmp_pare_id = 0
             self.attr_pmp_wall_id = 0
             return
         self.attr_pmp_pare_id = resolve_attribute_id(doc, "pmp_pare", "PMP_PARE")
-        self.attr_pmp_wall_id = resolve_attribute_id(doc, "PMP_WALL_ID")
+        self.attr_pmp_wall_id = resolve_attribute_id(
+            doc,
+            "PMP_WALL_ID",
+        )
         if self.attr_pmp_pare_id <= 0 or self.attr_pmp_wall_id <= 0:
+            neo_log(
+                "_init_pmp_attribute_ids: "
+                f"PMP_PARE={self.attr_pmp_pare_id} PMP_WALL_ID={self.attr_pmp_wall_id}"
+            )
+        else:
             neo_log(
                 "_init_pmp_attribute_ids: "
                 f"PMP_PARE={self.attr_pmp_pare_id} PMP_WALL_ID={self.attr_pmp_wall_id}"
@@ -2439,6 +2574,15 @@ class NeoprenosScriptObject(BaseScriptObject):
             ):
                 pmp_pare = normalize_pmp_pare_value(self.build_ele.pmp_pare.value)
 
+            pmp_pare_name = ""
+            if (
+                hasattr(self.build_ele, "pmp_pare_name")
+                and self.build_ele.pmp_pare_name.value is not None
+            ):
+                pmp_pare_name = normalize_pmp_pare_value(
+                    self.build_ele.pmp_pare_name.value
+                )
+
             layer = -1
             if (
                 hasattr(self.build_ele, "Layer")
@@ -2460,6 +2604,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 "rot": rot,
                 "invertido": invertido,
                 "pmp_pare": normalize_pmp_pare_value(pmp_pare),
+                "pmp_pare_name": normalize_pmp_pare_value(pmp_pare_name),
                 "layer": layer,
             }
             return json.dumps(state, separators=(",", ":"))
@@ -2533,6 +2678,10 @@ class NeoprenosScriptObject(BaseScriptObject):
             if "pmp_pare" in state and hasattr(self.build_ele, "pmp_pare"):
                 self.build_ele.pmp_pare.value = normalize_pmp_pare_value(
                     state["pmp_pare"]
+                )
+            if "pmp_pare_name" in state and hasattr(self.build_ele, "pmp_pare_name"):
+                self.build_ele.pmp_pare_name.value = normalize_pmp_pare_value(
+                    state["pmp_pare_name"]
                 )
 
             if (
@@ -4131,6 +4280,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             z_unique = random.random() * 3600
 
         wall_pare = normalize_pmp_pare_value(self._resolve_host_pmp_pare())
+        wall_name = normalize_pmp_pare_value(self._resolve_host_pmp_pare_name())
 
         if not self.is_editing_existing:
             if hasattr(self.build_ele, "pmp_pare") and hasattr(
@@ -4138,7 +4288,18 @@ class NeoprenosScriptObject(BaseScriptObject):
             ):
                 try:
                     self.build_ele.pmp_pare.value = wall_pare
+                    neo_log(f"_execute_create: build_ele.pmp_pare(IFC)='{wall_pare}'")
                 except Exception as e:
+                    pass
+            if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+                self.build_ele.pmp_pare_name, "value"
+            ):
+                try:
+                    self.build_ele.pmp_pare_name.value = wall_name
+                    neo_log(
+                        f"_execute_create: build_ele.pmp_pare_name(material)='{wall_name}'"
+                    )
+                except Exception:
                     pass
         else:
             if hasattr(self.build_ele, "pmp_pare") and hasattr(
@@ -4149,12 +4310,34 @@ class NeoprenosScriptObject(BaseScriptObject):
                     if self.build_ele.pmp_pare.value
                     else ""
                 )
+            if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+                self.build_ele.pmp_pare_name, "value"
+            ):
+                wall_name = (
+                    normalize_pmp_pare_value(self.build_ele.pmp_pare_name.value)
+                    if self.build_ele.pmp_pare_name.value
+                    else ""
+                )
+
+        if not wall_pare:
+            wall_pare = "SIN_IFC"
+        if not wall_name:
+            wall_name = "SIN_PARE"
 
         self.line_result.input_line = line_to_use
 
         self._init_pmp_attribute_ids()
+        neo_log(
+            "_execute_create: atributos destino "
+            f"PMP_PARE={getattr(self, 'attr_pmp_pare_id', 0)} "
+            f"PMP_WALL_ID={getattr(self, 'attr_pmp_wall_id', 0)} "
+            f"valor_ifc='{wall_pare}' valor_material='{wall_name}'"
+        )
 
-        self.elements = self._create_neopreno_elements(pmp_pare=wall_pare)
+        self.elements = self._create_neopreno_elements(
+            pmp_pare=wall_pare,
+            pmp_pare_name=wall_name,
+        )
         neo_log(
             f"_execute_create: elementos geometria={len(self.elements) if self.elements else 0} wall_pare={wall_pare}"
         )
@@ -4168,6 +4351,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         individual_pythonparts = self.create_individual_pythonparts_from_elements(
             self.elements,
             pmp_pare=wall_pare,
+            pmp_pare_name=wall_name,
             is_modify=False,  # Hash random en creación
         )
 
@@ -4215,6 +4399,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         global_params = {
             "z_unique": z_unique,
             "pmp_pare": wall_pare,
+            "pmp_pare_name": wall_name,
             "TotalElements": len(individual_pythonparts),
             "PuntoInicial": punto_inicial,
             "PuntoFinal": punto_final,
@@ -4899,6 +5084,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             "RotacionManual",
             "InvertirGrosor",
             "pmp_pare",
+            "pmp_pare_name",
             "z_unique",
             "MuroGUID",
             "SolidoGUID",
@@ -5412,7 +5598,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._inline_last_execute_result = result
         return result
 
-    def _draw_inline_selected_neopreno_preview(self, clear_before: bool = False) -> bool:
+    def _draw_inline_selected_neopreno_preview(
+        self, clear_before: bool = False
+    ) -> bool:
         """Refuerzo visual del marco auxiliar (encima del preview del framework)."""
         if not getattr(self, "_inline_selected_neopreno_active", False):
             return False
@@ -5594,6 +5782,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         start_point = None
         end_point = None
         wall_pare = ""
+        wall_name = ""
         ancho = 50.0
         grosor = 5.0
         libre = True
@@ -5626,10 +5815,14 @@ class NeoprenosScriptObject(BaseScriptObject):
             else:
                 start_point = p0_restored
                 end_point = p1_restored
-            wall_pare = (state.get("pmp_pare") or "").strip()
-            wall_pare = normalize_pmp_pare_value(wall_pare)
+            wall_pare = normalize_pmp_pare_value((state.get("pmp_pare") or "").strip())
+            wall_name = normalize_pmp_pare_value(
+                (state.get("pmp_pare_name") or "").strip()
+            )
             if wall_pare == "SIN_IFC":
                 wall_pare = ""
+            if wall_name == "SIN_PARE":
+                wall_name = ""
             ancho = (
                 get_neopreno_width(self.build_ele)
                 if hasattr(self.build_ele, "Ancho")
@@ -5672,11 +5865,28 @@ class NeoprenosScriptObject(BaseScriptObject):
                 wall_pare = ""
             if not wall_pare:
                 wall_pare = normalize_pmp_pare_value(self._resolve_host_pmp_pare())
+            if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+                self.build_ele.pmp_pare_name, "value"
+            ):
+                wall_name = (
+                    normalize_pmp_pare_value(self.build_ele.pmp_pare_name.value)
+                    if self.build_ele.pmp_pare_name.value
+                    else ""
+                )
+            if wall_name == "SIN_PARE":
+                wall_name = ""
+            if not wall_name:
+                wall_name = normalize_pmp_pare_value(self._resolve_host_pmp_pare_name())
             if hasattr(self.build_ele, "Ancho"):
                 ancho = get_neopreno_width(self.build_ele)
             if hasattr(self.build_ele, "GrosorSeleccionado"):
                 grosor = get_selected_thickness(self.build_ele)
             libre = self._get_free_mode()
+
+        if not wall_pare:
+            wall_pare = "SIN_IFC"
+        if not wall_name:
+            wall_name = "SIN_PARE"
 
         existing_group_hash = None
         if hasattr(self.build_ele, "get_hash"):
@@ -5728,8 +5938,17 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.line_result.input_line = line_to_use
 
         self._init_pmp_attribute_ids()
+        neo_log(
+            "_execute_modify: atributos destino "
+            f"PMP_PARE={getattr(self, 'attr_pmp_pare_id', 0)} "
+            f"PMP_WALL_ID={getattr(self, 'attr_pmp_wall_id', 0)} "
+            f"valor_ifc='{wall_pare}' valor_material='{wall_name}'"
+        )
 
-        self.elements = self._create_neopreno_elements(pmp_pare=wall_pare)
+        self.elements = self._create_neopreno_elements(
+            pmp_pare=wall_pare,
+            pmp_pare_name=wall_name,
+        )
 
         if not self.elements:
             return CreateElementResult(
@@ -5738,7 +5957,10 @@ class NeoprenosScriptObject(BaseScriptObject):
             )
 
         individual_pp = self.create_individual_pythonparts_from_elements(
-            self.elements, pmp_pare=wall_pare, is_modify=True  # Hash estable en edición
+            self.elements,
+            pmp_pare=wall_pare,
+            pmp_pare_name=wall_name,
+            is_modify=True,  # Hash estable en edición
         )
 
         if not individual_pp:
@@ -5787,6 +6009,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         global_params = {
             "z_unique": z_unique,
             "pmp_pare": wall_pare,
+            "pmp_pare_name": wall_name,
             "TotalElements": len(individual_pp),
             "PuntoInicial": start_point,
             "PuntoFinal": end_point,
@@ -6083,7 +6306,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         )
 
     def _create_neopreno_elements(
-        self, pmp_pare: str = None
+        self, pmp_pare: str = None, pmp_pare_name: str = None
     ) -> List[AllplanBasisElements.ModelElement3D]:
         """Crea los elementos del neopreno como ModelElement3D individuales.
 
@@ -6171,6 +6394,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         attr_list = BuildingElementAttributeList()
         pmp_pare = normalize_pmp_pare_value(pmp_pare)
+        pmp_pare_name = normalize_pmp_pare_value(pmp_pare_name)
 
         if (
             getattr(self, "attr_pmp_pare_id", 0) <= 0
@@ -6180,8 +6404,13 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         attr_id = getattr(self, "attr_pmp_pare_id", 0)
         attr_wall_id = getattr(self, "attr_pmp_wall_id", 0)
-        if attr_id > 0 and pmp_pare:
-            attr_list.add_attribute(attr_id, pmp_pare)
+        neo_log(
+            "_create_neopreno_elements: "
+            f"attr_pmp_pare_id={attr_id} value='{pmp_pare_name}' "
+            f"attr_pmp_wall_id={attr_wall_id} value='{pmp_pare}'"
+        )
+        if attr_id > 0 and pmp_pare_name:
+            attr_list.add_attribute(attr_id, pmp_pare_name)
         if attr_wall_id > 0 and pmp_pare:
             attr_list.add_attribute(attr_wall_id, pmp_pare)
 
@@ -6203,6 +6432,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self,
         elements_list: List[AllplanBasisElements.ModelElement3D],
         pmp_pare: str = None,
+        pmp_pare_name: str = None,
         is_modify: bool = False,
     ) -> List[PythonPart]:
         """
@@ -6250,8 +6480,14 @@ class NeoprenosScriptObject(BaseScriptObject):
                 attr_wall_name_id = getattr(self, "attr_pmp_wall_id", 0)
 
                 wall_pare = normalize_pmp_pare_value(pmp_pare)
-                if wall_pare and attr_pmp_id > 0:
-                    attr_list.add_attribute(attr_pmp_id, wall_pare)
+                wall_name = normalize_pmp_pare_value(pmp_pare_name)
+                neo_log(
+                    "create_individual_pythonparts_from_elements: "
+                    f"attr_pmp_pare_id={attr_pmp_id} value='{wall_name}' "
+                    f"attr_pmp_wall_id={attr_wall_name_id} value='{wall_pare}'"
+                )
+                if wall_name and attr_pmp_id > 0:
+                    attr_list.add_attribute(attr_pmp_id, wall_name)
                 if wall_pare and attr_wall_name_id > 0:
                     attr_list.add_attribute(attr_wall_name_id, wall_pare)
 

@@ -1136,6 +1136,66 @@ def get_wall_ifc_id(wall_element) -> str | None:
 
     return None
 
+def get_wall_material_name(wall_element) -> str | None:
+    """Obtiene el nombre del muro desde el atributo Material (id 508) o buscando en todos los atributos.
+    """
+
+    if not wall_element:
+        return ''
+
+    try:
+        from DocumentManager import DocumentManager
+        doc = DocumentManager.get_instance().document
+
+        attrs = wall_element.GetAttributes(AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable)
+        material_value_from_508 = None
+        for attr in attrs:
+            try:
+                attr_id = getattr(attr, "Id", None)
+                if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                    attr_id = attr[0]
+                    attr_value = attr[1]
+                else:
+                    attr_value = getattr(attr, "Value", None)
+
+                if attr_id == 508:
+                    material_value_from_508 = str(attr_value).strip() if attr_value else ""
+
+                    if material_value_from_508 and material_value_from_508 != "<undefiniert>":
+                        if "$" in material_value_from_508:
+                            wall_name = material_value_from_508.split("$")[0].strip()
+                            return wall_name if wall_name else None
+                        else:
+                            return material_value_from_508
+            except Exception:
+                continue
+
+        for attr in attrs:
+            try:
+                attr_id = getattr(attr, "Id", None)
+                if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                    attr_id = attr[0]
+                    attr_value = attr[1]
+                else:
+                    attr_value = getattr(attr, "Value", None)
+
+                if attr_value:
+                    attr_value_str = str(attr_value).strip()
+                    if "$" in attr_value_str and attr_value_str != "<undefiniert>":
+                        try:
+                            wall_name = attr_value_str.split("$")[0].strip()
+                            if wall_name:
+                                return wall_name
+                        except Exception:
+                            pass
+            except Exception:
+                continue
+
+    except Exception:
+        pass
+
+    return None
+
 
 def get_all_walls_from_document(document) -> list:
     """Obtiene todos los muros del documento.
@@ -3755,6 +3815,14 @@ class AngularLineScript(BaseScriptObject):
                     if hasattr(self.build_ele, "pmp_pare")
                     else ""
                 ),
+                "pmp_pare_name": (
+                    str(getattr(self.build_ele.pmp_pare_name, "value", "") or "")
+                    .strip()
+                    .strip("'")
+                    .strip('"')
+                    if hasattr(self.build_ele, "pmp_pare_name")
+                    else ""
+                ),
                 "z_unique": (
                     float(getattr(self.build_ele.z_unique, "value", 0.0) or 0.0)
                     if hasattr(self.build_ele, "z_unique")
@@ -3902,6 +3970,10 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "pmp_pare"):
                 raw_pp = str(state.get("pmp_pare", "") or "").strip()
                 self.build_ele.pmp_pare.value = raw_pp.strip("'").strip('"')
+
+            if hasattr(self.build_ele, "pmp_pare_name"):
+                raw_pp = str(state.get("pmp_pare_name", "") or "").strip()
+                self.build_ele.pmp_pare_name.value = raw_pp.strip("'").strip('"')
 
             state_group_hash = (
                 str(state.get("GroupHash", state.get("group_hash", "")) or "")
@@ -4107,6 +4179,7 @@ class AngularLineScript(BaseScriptObject):
         invertido: bool,
         lleva_neopreno: bool,
         pmp_pare_value: str,
+        pmp_pare_name: str,
         saved_state_str: str,
     ) -> dict:
         """
@@ -4151,6 +4224,7 @@ class AngularLineScript(BaseScriptObject):
             "SiLlevaNeopreno": lleva_neopreno,
             "SavedState": saved_state_str if saved_state_str else "",
             "pmp_pare": pmp_pare_value if pmp_pare_value else "",
+            "pmp_pare_name": pmp_pare_name if pmp_pare_name else "",
             "GroupHash": str(
                 getattr(self, "_current_group_hash", "")
                 or getattr(self, "_group_hash_from_params", "")
@@ -6470,8 +6544,14 @@ class AngularLineScript(BaseScriptObject):
         ):
             wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
 
+        wall_name = ""
+        if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+            self.build_ele.pmp_pare_name, "value"
+        ):
+            wall_name = str(self.build_ele.pmp_pare_name.value or "").replace("'", "")
+
         model_elements = self.create_angulars(
-            geometries, edges, definition, pmp_pare=wall_pare or None
+            geometries, edges, definition, pmp_pare=wall_pare or None, pmp_pare_name=wall_name or None
         )
         return self._apply_angular_preview_display_properties(model_elements)
 
@@ -6613,6 +6693,7 @@ class AngularLineScript(BaseScriptObject):
             "UsarValorZManual",
             "ValorZIndividual",
             "pmp_pare",
+            "pmp_pare_name",
             "z_unique",
             "GroupHash",
         ):
@@ -9671,6 +9752,7 @@ class AngularLineScript(BaseScriptObject):
         edges: list[AllplanGeo.Line3D],
         definition: dict,
         pmp_pare: str = None,
+        pmp_pare_name: str = None,
     ) -> List[AllplanBasisElements.ModelElement3D]:
         """Crea ModelElement3D individuales con los angulares aplicando layer, color y PMP_PARE.
 
@@ -9698,6 +9780,8 @@ class AngularLineScript(BaseScriptObject):
         # Si es None, usar string vacío
         if pmp_pare is None:
             pmp_pare = ""
+        if pmp_pare_name is None:
+            pmp_pare_name = ""
 
         attr_id = getattr(self, "attr_pmp_pare_id", 0)
         attr_wall_id = getattr(self, "attr_pmp_wall_id", 0)
@@ -9732,8 +9816,8 @@ class AngularLineScript(BaseScriptObject):
 
             attr_list = BuildingElementAttributeList()
 
-            if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+            if attr_id > 0 and pmp_pare_name:
+                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
                 attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
@@ -9763,8 +9847,8 @@ class AngularLineScript(BaseScriptObject):
 
             attr_list = BuildingElementAttributeList()
 
-            if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+            if attr_id > 0 and pmp_pare_name:
+                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
                 attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
@@ -9794,8 +9878,8 @@ class AngularLineScript(BaseScriptObject):
 
             attr_list = BuildingElementAttributeList()
 
-            if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+            if attr_id > 0 and pmp_pare_name:
+                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
                 attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
@@ -9833,6 +9917,7 @@ class AngularLineScript(BaseScriptObject):
         is_free_mode: bool = None,
         is_modify: bool = False,
         pmp_pare: str = None,
+        pmp_pare_name: str = None,
     ) -> List[PythonPart]:
         """
         Convierte una lista de ModelElement3D en PythonParts individuales.
@@ -9882,8 +9967,9 @@ class AngularLineScript(BaseScriptObject):
 
                 #  Usar pmp_pare pasado como parámetro (NO leer desde build_ele)
                 wall_pare = pmp_pare.replace("'", "") if pmp_pare else ""
-                if wall_pare and attr_pmp_id > 0:
-                    attr_list.add_attribute(attr_pmp_id, wall_pare)
+                wall_name = pmp_pare_name.replace("'", "") if pmp_pare_name else ""
+                if wall_name and attr_pmp_id > 0:
+                    attr_list.add_attribute(attr_pmp_id, wall_name)
 
                 if attr_wall_id and attr_wall_id > 0:
                     attr_list.add_attribute(attr_wall_id, wall_pare)
@@ -10125,18 +10211,26 @@ class AngularLineScript(BaseScriptObject):
 
         #  Detectar muro → calcular PMP_PARE → guardar en build_ele
         wall_pare = None
+        wall_name = None
         wall = self._get_wall_element() if hasattr(self, "_get_wall_element") else None
         if wall:
             try:
                 wall_id = get_wall_ifc_id(wall)
+                wall_str = get_wall_material_name(wall)
                 if wall_id:
                     wall_pare = wall_id
-                    print(f"[CREATE] PMP_PARE calculado desde muro: {wall_pare}")
+                    print(f"[CREATE] PMP_WALL_ID calculado desde muro: {wall_pare}")
+                if wall_str:
+                    wall_name = wall_str
+                    print(f"[CREATE] PMP_PARE calculado desde muro: {wall_name}")
             except Exception as e:
                 print(f"[CREATE]  Error obteniendo material del muro: {e}")
 
         if not wall_pare:
             wall_pare = "MURO_NO_DEFINIDO"
+
+        if not wall_name:
+            wall_name = "MURO_NO_DEFINIDO"
 
         #  Guardar pmp_pare en build_ele (ahora existe en .pyp con Persistent>MODEL_AND_FAVORITE)
         if hasattr(self.build_ele, "pmp_pare") and hasattr(
@@ -10144,7 +10238,20 @@ class AngularLineScript(BaseScriptObject):
         ):
             try:
                 self.build_ele.pmp_pare.value = wall_pare.replace("'", "")
-                print(f"[CREATE]  pmp_pare guardado en build_ele: '{wall_pare}'")
+                print(f"[CREATE]  PMP_WALL_ID guardado en build_ele: '{wall_pare}'")
+            except Exception as e:
+                print(f"[CREATE]  ERROR al guardar PMP_WALL_ID en build_ele: {e}")
+
+        print(
+            f"[CREATE]  PMP_WALL_ID también se guardará en build_ele y en atributos del elemento"
+        )
+
+        if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+            self.build_ele.pmp_pare_name, "value"
+        ):
+            try:
+                self.build_ele.pmp_pare_name.value = wall_name.replace("'", "")
+                print(f"[CREATE]  pmp_pare guardado en build_ele: '{wall_name}'")
             except Exception as e:
                 print(f"[CREATE]  ERROR al guardar pmp_pare en build_ele: {e}")
 
@@ -10246,7 +10353,7 @@ class AngularLineScript(BaseScriptObject):
 
         #  create_angulars() - SIEMPRE aplica PMP_PARE
         self.elements = self.create_angulars(
-            geometries, edges, definition, pmp_pare=wall_pare
+            geometries, edges, definition, pmp_pare=wall_pare, pmp_pare_name=wall_name
         )
 
         if not self.elements:
@@ -10281,6 +10388,7 @@ class AngularLineScript(BaseScriptObject):
             is_free_mode=self.is_free_mode,
             is_modify=False,
             pmp_pare=wall_pare,
+            pmp_pare_name=wall_name
         )
 
         if not individual_pythonparts:
@@ -10348,6 +10456,7 @@ class AngularLineScript(BaseScriptObject):
             invertido=invertido,
             lleva_neopreno=lleva_neopreno,
             pmp_pare_value=wall_pare or "",
+            pmp_pare_name=wall_name or "",
             saved_state_str=saved_state_str or "",
         )
         print(
@@ -10464,6 +10573,7 @@ class AngularLineScript(BaseScriptObject):
         lleva_neopreno = False
         largo_neopre_value = 0.0
         wall_pare = ""
+        wall_name = ""
 
         start_point = (
             getattr(self.build_ele.PuntoInicial, "value", None)
@@ -10630,8 +10740,19 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "pmp_pare")
             else ""
         )
+        wall_name = (
+            str(getattr(self.build_ele.pmp_pare_name, "value", "") or "")
+            .strip()
+            .replace("'", "")
+            if hasattr(self.build_ele, "pmp_pare_name")
+            else ""
+        )
         if not wall_pare:
             wall_pare = "SIN_PARE"
+
+        if not wall_name:
+            wall_name = "SIN_PARE"
+
         if hasattr(self.build_ele, "angular_libre") and hasattr(
             self.build_ele.angular_libre, "value"
         ):
@@ -10705,6 +10826,21 @@ class AngularLineScript(BaseScriptObject):
             if not wall_pare:
                 wall_pare = "SIN_PARE"
             print(f"[EDIT]  pmp_pare: '{wall_pare}'")
+
+        if not wall_name:
+            wall_name = ""
+            if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+                self.build_ele.pmp_pare_name, "value"
+            ):
+                try:
+                    wall_name = (
+                        str(self.build_ele.pmp_pare_name.value).strip().replace("'", "")
+                    )
+                except Exception:
+                    pass
+            if not wall_name:
+                wall_name = "SIN_PARE"
+            print(f"[EDIT]  pmp_pare_name: '{wall_name}'")
 
         # EDIT: conservar el hash anterior solo como diagnóstico/fallback.
         # El hash que se devuelve al grupo se recalcula con los parámetros actuales,
@@ -10844,7 +10980,7 @@ class AngularLineScript(BaseScriptObject):
 
         #  create_angulars() - Pasa is_modify=True (aunque ya no importa, se aplica PMP_PARE igual)
         self.elements = self.create_angulars(
-            geometries, edges, definition, pmp_pare=wall_pare
+            geometries, edges, definition, pmp_pare=wall_pare, pmp_pare_name=wall_name
         )
 
         if not self.elements:
@@ -10865,6 +11001,7 @@ class AngularLineScript(BaseScriptObject):
             is_free_mode=self.is_free_mode,
             is_modify=True,
             pmp_pare=wall_pare,
+            pmp_pare_name=wall_name
         )
 
         if not individual_pp:
@@ -10957,6 +11094,14 @@ class AngularLineScript(BaseScriptObject):
             else wall_pare
         )
 
+        wall_name_edit = (
+            str(getattr(self.build_ele.pmp_pare_name, "value", "") or "")
+            .strip()
+            .replace("'", "")
+            if hasattr(self.build_ele, "pmp_pare_name")
+            else wall_name
+        )
+
         print("[CHECK] z_unique antes del group:", z_unique)
         global_params = self._build_group_global_params(
             z_unique=z_unique,
@@ -10971,6 +11116,7 @@ class AngularLineScript(BaseScriptObject):
             invertido=invertido_edit,
             lleva_neopreno=lleva_neopreno_edit,
             pmp_pare_value=wall_pare_edit or "",
+            pmp_pare_name=wall_name_edit or "",
             saved_state_str=saved_state_edit or "",
         )
         print(
