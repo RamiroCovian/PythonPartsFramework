@@ -1,3 +1,4 @@
+import ast
 from PythonPartTransaction import PythonPartTransaction
 from TypeCollections.ModificationElementList import ModificationElementList
 import NemAll_Python_ArchElements as AllplanArchElements
@@ -191,6 +192,11 @@ STOPPED = 0
 # RUNNING = 1
 SELECTING_WALL = 1
 PLACING_POINT = 2
+SELECTING_EXISTING_PREMARC = 3
+SELECTING_PENDING_PREMARC = 4
+PREMARC_SELECTION_AUX_COLOR = 3
+PREMARC_SELECTION_AUX_PEN = 15
+PREMARC_SELECTION_AUX_CROSS_HALF_MM = 120.0
 THICKNESS_MM = 3
 SQUARE_THICKNESS = 60
 SQUARE_VERTEX_OFFSET = math.sqrt(
@@ -582,6 +588,60 @@ def z_unique_as_int(value) -> int:
         return 0
 
 
+def parse_params_list_to_dict(param_list: List[str]) -> dict:
+    params = {}
+    for param_str in param_list or []:
+        if "=" not in param_str:
+            continue
+        key, value = param_str.split("=", 1)
+        key = key.strip()
+        value = value.strip().rstrip("\n").strip()
+        if not key:
+            continue
+        try:
+            params[key] = ast.literal_eval(value)
+            continue
+        except (ValueError, SyntaxError):
+            pass
+        if value.lower() in ("true", "false"):
+            params[key] = value.lower() == "true"
+            continue
+        try:
+            params[key] = float(value) if "." in value else int(value)
+        except ValueError:
+            params[key] = value
+    return params
+
+
+def _make_premarc_selection_aux_properties(
+    color: int = PREMARC_SELECTION_AUX_COLOR,
+    pen: int = PREMARC_SELECTION_AUX_PEN,
+):
+    props = AllplanBaseElements.CommonProperties()
+    try:
+        props.GetGlobalProperties()
+    except Exception:
+        pass
+    props.Color = color
+    props.Pen = pen
+    props.ColorByLayer = False
+    props.PenByLayer = False
+    props.StrokeByLayer = False
+    props.Construction = True
+    return props
+
+
+def _append_premarc_aux_line(elements, props, p0, p1) -> None:
+    try:
+        if AllplanGeo.CalcLength(AllplanGeo.Line3D(p0, p1)) < 0.5:
+            return
+    except Exception:
+        return
+    elements.append(
+        AllplanBasisElements.ModelElement3D(props, AllplanGeo.Line3D(p0, p1))
+    )
+
+
 def check_allplan_version(build_ele, version):
     return True
 
@@ -689,6 +749,154 @@ class WallSelectInteractor(BaseScriptObjectInteractor):
         pass
 
 
+class PremarcSelectResult:
+    def __init__(self):
+        self.element = None
+        self.param_list: list = []
+        self.saved_state: dict = {}
+        self.is_selected = False
+
+
+class PendingPremarcSelectResult:
+    def __init__(self):
+        self.selected_index = None
+        self.selected_item = None
+        self.input_point = None
+        self.is_selected = False
+
+
+class ExistingPremarcSelectInteractor(BaseScriptObjectInteractor):
+    def __init__(
+        self,
+        result: PremarcSelectResult,
+        prompt_msg: str = "Seleccione el premarco (PPG) en el dibujo",
+        owner=None,
+    ):
+        self.result = result
+        self.coord_input = None
+        self.prompt_msg = prompt_msg
+        self.owner = owner
+
+    def start_input(self, coord_input: AllplanIFW.CoordinateInput):
+        self.coord_input = coord_input
+        coord_input.InitFirstElementInput(
+            AllplanIFW.InputStringConvert(self.prompt_msg)
+        )
+
+    def process_mouse_msg(
+        self, mouse_msg: int, pnt: AllplanGeo.Point2D, msg_info
+    ) -> bool:
+        if not self.coord_input or self.owner is None:
+            return True
+
+        self.coord_input.SelectElement(mouse_msg, pnt, msg_info, True, False, False)
+
+        if self.coord_input.IsMouseMove(mouse_msg):
+            return True
+
+        selected_element = self.coord_input.GetSelectedElement()
+        if selected_element is None or selected_element.IsNull():
+            print("[SELECT][PREMARC] Clic sin elemento: seleccione la geometria del premarco")
+            return True
+
+        pyp_element, param_list = self.owner._resolve_premarc_ppg_from_adapter(
+            selected_element
+        )
+        if pyp_element is None:
+            print("[SELECT][PREMARC] No se identifico el PPG Premarcs en el dibujo")
+            return True
+
+        params = parse_params_list_to_dict(param_list)
+        selected_z = z_unique_as_int(params.get("z_unique", 0))
+        current_z = z_unique_as_int(getattr(self.owner.build_ele.z_unique, "value", 0))
+        if selected_z <= 0 or current_z <= 0 or selected_z != current_z:
+            self.owner._warn_premarc_from_other_execution()
+            return True
+
+        saved_state = {}
+        raw_saved_state = str(params.get("SavedState", "") or "").strip()
+        if raw_saved_state:
+            try:
+                saved_state = json.loads(raw_saved_state)
+            except Exception as exc:
+                print(f"[SELECT][PREMARC] No se pudo parsear SavedState del PPG: {exc}")
+
+        self.result.element = pyp_element
+        self.result.param_list = list(param_list) if param_list else []
+        self.result.saved_state = saved_state
+        self.result.is_selected = True
+        print(
+            f"[SELECT][PREMARC] PPG seleccionado params={len(self.result.param_list)}"
+        )
+        return False
+
+    def on_cancel_function(self):
+        return OnCancelFunctionResult.CANCEL_INPUT
+
+    def on_mouse_leave(self):
+        pass
+
+
+class PendingPremarcSelectInteractor(BaseScriptObjectInteractor):
+    def __init__(
+        self,
+        result: PendingPremarcSelectResult,
+        prompt_msg: str = "Seleccione el premarco preview a editar",
+        owner=None,
+    ):
+        self.result = result
+        self.coord_input = None
+        self.prompt_msg = prompt_msg
+        self.owner = owner
+
+    def start_input(self, coord_input: AllplanIFW.CoordinateInput):
+        self.coord_input = coord_input
+        coord_input.InitFirstPointInput(
+            AllplanIFW.InputStringConvert(self.prompt_msg)
+        )
+
+    def process_mouse_msg(
+        self, mouse_msg: int, pnt: AllplanGeo.Point2D, msg_info
+    ) -> bool:
+        if not self.coord_input or self.owner is None:
+            return True
+
+        if self.coord_input.IsMouseMove(mouse_msg):
+            return True
+
+        try:
+            input_point = self.coord_input.GetInputPoint(
+                mouse_msg, pnt, msg_info
+            ).GetPoint()
+        except Exception:
+            input_point = None
+
+        if input_point is None:
+            print("[SELECT][PREMARC] No se pudo leer el punto de seleccion preview")
+            return True
+
+        idx, item = self.owner._find_pending_premarc_candidate_near_point(input_point)
+        if item is None:
+            print(
+                "[SELECT][PREMARC] Clic fuera de los premarcos preview; "
+                "seleccione un premarco colocado en esta sesion"
+            )
+            return True
+
+        self.result.selected_index = idx
+        self.result.selected_item = item
+        self.result.input_point = input_point
+        self.result.is_selected = True
+        print(f"[SELECT][PREMARC] Preview seleccionado indice={idx}")
+        return False
+
+    def on_cancel_function(self):
+        return OnCancelFunctionResult.CANCEL_INPUT
+
+    def on_mouse_leave(self):
+        pass
+
+
 class PremarcScriptObject(BaseScriptObject):
     def __init__(
         self, build_ele: BuildingElement, script_object_data: BaseScriptObjectData
@@ -707,6 +915,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.placement_pnt = AllplanGeo.Point3D()
         self.point_result = PointInteractorResult()
         self.wall_select_result = WallSelectResult()
+        self.premarc_select_result = PremarcSelectResult()
+        self.pending_premarc_select_result = PendingPremarcSelectResult()
         self.selected_wall = None  # guardará el BaseElementAdapter
         self.detected_wall_thickness = 0
         self._opening_baseline_width = None
@@ -878,6 +1088,9 @@ class PremarcScriptObject(BaseScriptObject):
         self._create_union_frames = False  # Flag para controlar el comportamiento
         self._should_recreate_opening_after_handle = False
         self._placement_handle_start_pnt = None
+        self._selected_premarc_overlay_active = False
+        self._selected_premarc_overlay_state = {}
+        self._selected_premarc_overlay_elements = []
         self._palette_reposition_active = False
         self._palette_reposition_has_new_point = False
         self._palette_reposition_original_point = None
@@ -1582,6 +1795,20 @@ class PremarcScriptObject(BaseScriptObject):
 
             self.script_object_interactor = None
             self.interactor_state = STOPPED
+        elif self.interactor_state == SELECTING_EXISTING_PREMARC:
+            self.script_object_interactor = None
+            self.interactor_state = STOPPED
+            if self.premarc_select_result.is_selected:
+                self._activate_selected_premarc_overlay(
+                    self.premarc_select_result.saved_state
+                )
+        elif self.interactor_state == SELECTING_PENDING_PREMARC:
+            self.script_object_interactor = None
+            self.interactor_state = STOPPED
+            if self.pending_premarc_select_result.is_selected:
+                self._select_pending_premarc_for_edit(
+                    self.pending_premarc_select_result.selected_item
+                )
 
     def _start_placement_point_input(self):
         """Inicia el input de punto conservando el muro seleccionado."""
@@ -1622,8 +1849,6 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _commit_current_premarc_before_next_placement(self) -> bool:
         """Materializa el premarco configurado antes de pedir una nueva posicion."""
-        return self._queue_current_premarc_for_later_creation()
-
         self.update_params()
 
         if self.placement_pnt == AllplanGeo.Point3D():
@@ -1656,14 +1881,307 @@ class PremarcScriptObject(BaseScriptObject):
 
         # El siguiente ciclo debe empezar sin punto activo ni GUID de opening heredado.
         self.placement_pnt = AllplanGeo.Point3D()
+        self._has_confirmed_placement = False
         if hasattr(self.build_ele, "opening_guid"):
             self.build_ele.opening_guid.value = ""
+        self._loaded_saved_state = {}
 
         print("[Premarc] Premarco confirmado; habilitando nueva posicion")
         return True
 
     def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
         return AllplanGeo.Point3D(point.X, point.Y, point.Z)
+
+    def _normalize_pyp_display_name(self, name: Any) -> str:
+        return str(name or "").strip().strip("'\"")
+
+    def _parameter_to_param_list(self, parameter: Any) -> list:
+        if isinstance(parameter, str):
+            return parameter.splitlines()
+        if isinstance(parameter, (list, tuple)):
+            return list(parameter)
+        return []
+
+    def _is_premarc_pyp_params(self, name: Any, parameter: Any) -> bool:
+        if self._normalize_pyp_display_name(name) == "Premarcs":
+            return True
+        param_list = self._parameter_to_param_list(parameter)
+        if not param_list:
+            return False
+        params = parse_params_list_to_dict(param_list)
+        return bool(params.get("SavedState")) and params.get("z_unique") not in (
+            None,
+            0,
+            0.0,
+        )
+
+    def _read_premarc_param_list_from_element(self, pyp_element) -> list:
+        if pyp_element is None:
+            return []
+        try:
+            if pyp_element.IsNull():
+                return []
+        except Exception:
+            pass
+        try:
+            success, name, parameter = AllplanBaseElements.PythonPartService.GetParameter(
+                pyp_element
+            )
+            if success and self._is_premarc_pyp_params(name, parameter):
+                return self._parameter_to_param_list(parameter)
+        except Exception as exc:
+            print(f"[SELECT][PREMARC] Error leyendo param_list del PPG: {exc}")
+        return []
+
+    def _get_parent_adapter(self, adapter):
+        if adapter is None:
+            return None
+        try:
+            return AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
+                adapter
+            )
+        except Exception:
+            return None
+
+    def _resolve_premarc_ppg_from_adapter(self, adapter):
+        current = adapter
+        visited = set()
+        for _ in range(16):
+            if current is None:
+                break
+            try:
+                if current.IsNull():
+                    break
+            except Exception:
+                break
+            param_list = self._read_premarc_param_list_from_element(current)
+            if param_list:
+                return current, param_list
+            try:
+                key = str(current.GetNOIGUID())
+            except Exception:
+                key = str(id(current))
+            if key in visited:
+                break
+            visited.add(key)
+            current = self._get_parent_adapter(current)
+        return None, []
+
+    def _warn_premarc_from_other_execution(self) -> None:
+        print(
+            "[SELECT][PREMARC] Rechazado: premarco de otra ejecucion "
+            "(solo premarcos colocados en esta sesion)"
+        )
+        try:
+            PythonUtility.ShowMessageBox(
+                "No se puede seleccionar un premarco colocado en otra ejecución.\n\n"
+                "Solo puede seleccionar premarcos colocados en la ejecución actual.",
+                PythonUtility.MB_OK,
+            )
+        except Exception:
+            pass
+
+    def _build_premarc_selection_overlay(self, state: dict) -> list[Any]:
+        if not state:
+            return []
+
+        try:
+            width = float(state.get("width", 0.0))
+            height = float(state.get("height", 0.0))
+            depth = float(state.get("depth", 0.0))
+            rotation = float(state.get("rotation", 0.0))
+            base_point = AllplanGeo.Point3D(
+                float(state.get("X", 0.0)),
+                float(state.get("Y", 0.0)),
+                float(state.get("Z", 0.0)),
+            )
+        except (TypeError, ValueError):
+            return []
+
+        props = _make_premarc_selection_aux_properties()
+        mat = AllplanGeo.Matrix3D()
+        mat.SetRotation(
+            AllplanGeo.Line3D(
+                base_point,
+                AllplanGeo.Point3D(base_point.X, base_point.Y, base_point.Z + 100),
+            ),
+            AllplanGeo.Angle.FromDeg(rotation),
+        )
+        mat.SetTranslation(AllplanGeo.Vector3D(base_point))
+
+        def tp(x, y, z):
+            return AllplanGeo.Transform(AllplanGeo.Point3D(x, y, z), mat)
+
+        p0 = tp(0, 0, 0)
+        p1 = tp(width, 0, 0)
+        p2 = tp(width, 0, -height)
+        p3 = tp(0, 0, -height)
+        p4 = tp(0, -depth, 0)
+        p5 = tp(width, -depth, 0)
+        p6 = tp(width, -depth, -height)
+        p7 = tp(0, -depth, -height)
+        mid = tp(width / 2.0, -depth / 2.0, -height / 2.0)
+
+        overlay = []
+        for a, b in (
+            (p0, p1),
+            (p1, p2),
+            (p2, p3),
+            (p3, p0),
+            (p4, p5),
+            (p5, p6),
+            (p6, p7),
+            (p7, p4),
+            (p0, p4),
+            (p1, p5),
+            (p2, p6),
+            (p3, p7),
+            (
+                tp(width / 2.0 - PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0, -depth / 2.0, -height / 2.0),
+                tp(width / 2.0 + PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0, -depth / 2.0, -height / 2.0),
+            ),
+            (
+                tp(width / 2.0, -depth / 2.0, -height / 2.0 - PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0),
+                tp(width / 2.0, -depth / 2.0, -height / 2.0 + PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0),
+            ),
+        ):
+            _append_premarc_aux_line(overlay, props, a, b)
+        return overlay
+
+    def _draw_selected_premarc_overlay(self, clear_before: bool = False) -> bool:
+        if not self._selected_premarc_overlay_active or not self._selected_premarc_overlay_state:
+            return False
+        overlay = self._build_premarc_selection_overlay(
+            self._selected_premarc_overlay_state
+        )
+        if not overlay:
+            return False
+        self._selected_premarc_overlay_elements = list(overlay)
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                self.document, AllplanGeo.Matrix3D(), overlay, clear_before, None
+            )
+            return True
+        except Exception as exc:
+            print(f"[SELECT][PREMARC] Error dibujando marco auxiliar: {exc}")
+            return False
+
+    def _clear_selected_premarc_overlay(self) -> None:
+        if not self._selected_premarc_overlay_elements:
+            self._selected_premarc_overlay_active = False
+            self._selected_premarc_overlay_state = {}
+            return
+        try:
+            AllplanBaseElements.DrawElementPreview(
+                self.document,
+                AllplanGeo.Matrix3D(),
+                list(self._selected_premarc_overlay_elements),
+                True,
+                None,
+            )
+        except Exception as exc:
+            print(f"[SELECT][PREMARC] Error limpiando marco auxiliar: {exc}")
+        self._selected_premarc_overlay_elements = []
+        self._selected_premarc_overlay_active = False
+        self._selected_premarc_overlay_state = {}
+
+    def _activate_selected_premarc_overlay(self, state: dict) -> bool:
+        self._clear_selected_premarc_overlay()
+        if not state:
+            return False
+        self._selected_premarc_overlay_state = dict(state)
+        self._selected_premarc_overlay_active = True
+        return self._draw_selected_premarc_overlay(clear_before=False)
+
+    def _build_current_active_premarc_item(self) -> dict | None:
+        if not self._has_confirmed_placement or self.placement_pnt == AllplanGeo.Point3D():
+            return None
+        return {
+            "point": self._copy_point3d(self.placement_pnt),
+            "state": self._build_premarc_saved_state_dict(self.placement_pnt),
+            "is_active": True,
+            "pending_index": None,
+        }
+
+    def _build_selectable_pending_premarc_items(self) -> list[dict]:
+        items = []
+        for idx, item in enumerate(self._pending_premarcs):
+            items.append(
+                {
+                    "point": self._copy_point3d(item["point"]),
+                    "state": dict(item["state"]),
+                    "is_active": False,
+                    "pending_index": idx,
+                }
+            )
+        active_item = self._build_current_active_premarc_item()
+        if active_item is not None:
+            items.append(active_item)
+        return items
+
+    def _find_pending_premarc_candidate_near_point(
+        self, input_point: AllplanGeo.Point3D, tolerance_mm: float = 600.0
+    ) -> tuple[int | None, dict | None]:
+        items = self._build_selectable_pending_premarc_items()
+        if input_point is None or not hasattr(input_point, "X"):
+            return None, None
+
+        best_idx = None
+        best_item = None
+        best_dist_sq = None
+        tol_sq = float(tolerance_mm) ** 2
+
+        for idx, item in enumerate(items):
+            point = item.get("point")
+            if point is None:
+                continue
+            dx = float(point.X) - float(input_point.X)
+            dy = float(point.Y) - float(input_point.Y)
+            dz = float(getattr(point, "Z", 0.0)) - float(getattr(input_point, "Z", 0.0))
+            dist_sq = dx * dx + dy * dy + dz * dz
+            if dist_sq <= tol_sq and (best_dist_sq is None or dist_sq < best_dist_sq):
+                best_idx = idx
+                best_item = item
+                best_dist_sq = dist_sq
+        return best_idx, best_item
+
+    def _select_pending_premarc_for_edit(self, selected_item: dict) -> bool:
+        if not selected_item:
+            return False
+
+        current_active = self._build_current_active_premarc_item()
+        selected_pending_index = selected_item.get("pending_index")
+
+        if selected_item.get("is_active"):
+            self._apply_premarc_saved_state(selected_item["state"])
+            self.placement_pnt = self._copy_point3d(selected_item["point"])
+            self._sync_placement_point_parameter()
+            self._rebuild_placement_mat()
+            self._has_confirmed_placement = True
+            return self._activate_selected_premarc_overlay(selected_item["state"])
+
+        if selected_pending_index is None:
+            return False
+
+        if selected_pending_index < 0 or selected_pending_index >= len(self._pending_premarcs):
+            return False
+
+        selected_pending = self._pending_premarcs.pop(selected_pending_index)
+
+        if current_active is not None:
+            self._pending_premarcs.append(
+                {
+                    "point": self._copy_point3d(current_active["point"]),
+                    "state": dict(current_active["state"]),
+                }
+            )
+
+        self._apply_premarc_saved_state(selected_pending["state"])
+        self.placement_pnt = self._copy_point3d(selected_pending["point"])
+        self._sync_placement_point_parameter()
+        self._rebuild_placement_mat()
+        self._has_confirmed_placement = True
+        return self._activate_selected_premarc_overlay(selected_pending["state"])
 
     def _transform_model_element_list(
         self, elements_list: list, matrix: AllplanGeo.Matrix3D
@@ -2176,12 +2694,13 @@ class PremarcScriptObject(BaseScriptObject):
             if self.is_modification_mode:
                 return False
 
-            if not self._queue_current_premarc_for_later_creation():
+            if not self._commit_current_premarc_before_next_placement():
                 return True
 
             if not self.selected_wall:
                 self.start_input()
             else:
+                self.build_ele.SelectionWall.value = "Seleccionado"
                 self._start_placement_point_input()
 
             if self.script_object_interactor:
@@ -2193,6 +2712,41 @@ class PremarcScriptObject(BaseScriptObject):
 
             if self.script_object_interactor:
                 self.script_object_interactor.start_input(self.coord_input)
+            return True
+        elif event_id == 1055:
+            if self._pending_premarcs or self._has_confirmed_placement:
+                self._clear_selected_premarc_overlay()
+                self.pending_premarc_select_result = PendingPremarcSelectResult()
+                self.interactor_state = SELECTING_PENDING_PREMARC
+                self.script_object_interactor = PendingPremarcSelectInteractor(
+                    self.pending_premarc_select_result,
+                    "Seleccione el premarco preview a editar",
+                    owner=self,
+                )
+                if self.script_object_interactor:
+                    self.script_object_interactor.start_input(self.coord_input)
+                return True
+            self._clear_selected_premarc_overlay()
+            self.premarc_select_result = PremarcSelectResult()
+            self.interactor_state = SELECTING_EXISTING_PREMARC
+            self.script_object_interactor = ExistingPremarcSelectInteractor(
+                self.premarc_select_result,
+                "Seleccione el premarco (PPG) en el dibujo",
+                owner=self,
+            )
+            if self.script_object_interactor:
+                self.script_object_interactor.start_input(self.coord_input)
+            return True
+        elif event_id == 1056:
+            self._clear_selected_premarc_overlay()
+            self.premarc_select_result = PremarcSelectResult()
+            self.pending_premarc_select_result = PendingPremarcSelectResult()
+            self.script_object_interactor = None
+            if self.interactor_state in (
+                SELECTING_EXISTING_PREMARC,
+                SELECTING_PENDING_PREMARC,
+            ):
+                self.interactor_state = STOPPED
             return True
         else:
             return False
