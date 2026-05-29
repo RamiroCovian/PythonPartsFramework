@@ -196,7 +196,8 @@ SELECTING_EXISTING_PREMARC = 3
 SELECTING_PENDING_PREMARC = 4
 PREMARC_SELECTION_AUX_COLOR = 3
 PREMARC_SELECTION_AUX_PEN = 15
-PREMARC_SELECTION_AUX_CROSS_HALF_MM = 120.0
+PREMARC_SELECTION_AUX_CROSS_HALF_MM = 300.0
+PREMARC_SELECTION_AUX_OFFSET_MM = 80.0
 THICKNESS_MM = 3
 SQUARE_THICKNESS = 60
 SQUARE_VERTEX_OFFSET = math.sqrt(
@@ -2299,15 +2300,25 @@ class PremarcScriptObject(BaseScriptObject):
         def tp(x, y, z):
             return AllplanGeo.Transform(AllplanGeo.Point3D(x, y, z), mat)
 
-        p0 = tp(0, 0, 0)
-        p1 = tp(width, 0, 0)
-        p2 = tp(width, 0, -height)
-        p3 = tp(0, 0, -height)
-        p4 = tp(0, -depth, 0)
-        p5 = tp(width, -depth, 0)
-        p6 = tp(width, -depth, -height)
-        p7 = tp(0, -depth, -height)
-        mid = tp(width / 2.0, -depth / 2.0, -height / 2.0)
+        offset = float(PREMARC_SELECTION_AUX_OFFSET_MM)
+        x_min = -offset
+        x_max = width + offset
+        y_front = offset
+        y_back = -depth - offset
+        z_top = offset
+        z_bottom = -height - offset
+        mid_x = width / 2.0
+        mid_y = -depth / 2.0
+        mid_z = -height / 2.0
+
+        p0 = tp(x_min, y_front, z_top)
+        p1 = tp(x_max, y_front, z_top)
+        p2 = tp(x_max, y_front, z_bottom)
+        p3 = tp(x_min, y_front, z_bottom)
+        p4 = tp(x_min, y_back, z_top)
+        p5 = tp(x_max, y_back, z_top)
+        p6 = tp(x_max, y_back, z_bottom)
+        p7 = tp(x_min, y_back, z_bottom)
 
         overlay = []
         for a, b in (
@@ -2324,12 +2335,12 @@ class PremarcScriptObject(BaseScriptObject):
             (p2, p6),
             (p3, p7),
             (
-                tp(width / 2.0 - PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0, -depth / 2.0, -height / 2.0),
-                tp(width / 2.0 + PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0, -depth / 2.0, -height / 2.0),
+                tp(mid_x - PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0, mid_y, mid_z),
+                tp(mid_x + PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0, mid_y, mid_z),
             ),
             (
-                tp(width / 2.0, -depth / 2.0, -height / 2.0 - PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0),
-                tp(width / 2.0, -depth / 2.0, -height / 2.0 + PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0),
+                tp(mid_x, mid_y, mid_z - PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0),
+                tp(mid_x, mid_y, mid_z + PREMARC_SELECTION_AUX_CROSS_HALF_MM / 2.0),
             ),
         ):
             _append_premarc_aux_line(overlay, props, a, b)
