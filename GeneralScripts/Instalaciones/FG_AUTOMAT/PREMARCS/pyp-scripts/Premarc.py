@@ -1597,15 +1597,19 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _start_palette_reposition_input(self) -> bool:
         """Start explicit point-pick to relocate an existing premarc from the PPG."""
-        if not self.is_modification_mode:
-            return False
-
-        if not self.selected_wall:
+        if not self.selected_wall and self.is_modification_mode:
             self._reset_wall_selection_for_modification(self.wall_guid_str)
 
         if not self.selected_wall:
             PythonUtility.ShowMessageBox(
-                "No se pudo restaurar el muro del premarco para reubicarlo.",
+                "Seleccione o restaure el muro del premarco antes de reubicarlo.",
+                PythonUtility.MB_OK,
+            )
+            return False
+
+        if self.placement_pnt == AllplanGeo.Point3D():
+            PythonUtility.ShowMessageBox(
+                "Primero debe existir un premarco posicionado para poder moverlo.",
                 PythonUtility.MB_OK,
             )
             return False
@@ -3300,27 +3304,25 @@ class PremarcScriptObject(BaseScriptObject):
         """Función de cancelación: se llama cuando el usuario cancela la operación."""
         print("ON_CANCEL_FUNCTION\n\n\n")
 
-        if self.is_modification_mode:
-            if (
-                self._palette_reposition_active
-                and not self._palette_reposition_has_new_point
-            ):
-                self.script_object_interactor = None
-                self.interactor_state = STOPPED
-                if self._palette_reposition_original_point is not None:
-                    self.placement_pnt = self._copy_point3d(
-                        self._palette_reposition_original_point
-                    )
-                    self._sync_placement_point_parameter()
-                    self._rebuild_placement_mat()
-                self._palette_reposition_active = False
-                self._palette_reposition_has_new_point = False
-                self._palette_reposition_original_point = None
-                print(
-                    "[Premarc] Reubicacion cancelada desde PPG; se conserva la posicion"
+        if self._palette_reposition_active and not self._palette_reposition_has_new_point:
+            self.script_object_interactor = None
+            self.interactor_state = STOPPED
+            if self._palette_reposition_original_point is not None:
+                self.placement_pnt = self._copy_point3d(
+                    self._palette_reposition_original_point
                 )
+                self._sync_placement_point_parameter()
+                self._rebuild_placement_mat()
+                self._has_confirmed_placement = True
+            self._palette_reposition_active = False
+            self._palette_reposition_has_new_point = False
+            self._palette_reposition_original_point = None
+            print("[Premarc] Reubicacion cancelada; se conserva la posicion previa")
+            if self.is_modification_mode:
                 return OnCancelFunctionResult.CANCEL_INPUT
+            return OnCancelFunctionResult.CONTINUE_INPUT
 
+        if self.is_modification_mode:
             self.script_object_interactor = None
             self.interactor_state = STOPPED
 
