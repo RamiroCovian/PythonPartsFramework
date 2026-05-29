@@ -578,7 +578,6 @@ def vector_dot(v1: AllplanGeo.Vector3D, v2: AllplanGeo.Vector3D) -> float:
 
 
 def _normalize_vector_selection(vector: AllplanGeo.Vector3D) -> AllplanGeo.Vector3D:
-    """Normaliza como Angulares.normalize_vector (marco auxiliar de seleccion)."""
     length = vector.GetLength()
     if length < 1e-6:
         return AllplanGeo.Vector3D(0.0, 0.0, 0.0)
