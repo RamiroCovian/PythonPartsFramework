@@ -30,6 +30,14 @@
         </Parameter>
 
         <Parameter>
+            <Name>ShowModificationControls</Name>
+            <Text>ShowModificationControls</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+        </Parameter>
+
+        <Parameter>
             <Name>ShowXPS</Name>
             <Text>Mostrar XPS completa</Text>
             <Value>False</Value>
@@ -114,6 +122,23 @@
                 <Name>ReubicarPremarc</Name>
                 <Text>Mover posición</Text>
                 <EventId>1002</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Persistent>No</Persistent>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>RowEliminarPremarc</Name>
+            <Text>Eliminar premarco</Text>
+            <ValueType>Row</ValueType>
+            <Visible>ShowModificationControls</Visible>
+
+            <Parameter>
+                <Name>EliminarPremarc</Name>
+                <Text>Eliminar</Text>
+                <EventId>1003</EventId>
                 <Value>0</Value>
                 <ValueType>Button</ValueType>
                 <Enable>True</Enable>

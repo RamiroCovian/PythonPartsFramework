@@ -975,6 +975,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele = build_ele
         if hasattr(self.build_ele, "ShowSessionControls"):
             self.build_ele.ShowSessionControls.value = not self.is_modification_mode
+        if hasattr(self.build_ele, "ShowModificationControls"):
+            self.build_ele.ShowModificationControls.value = self.is_modification_mode
 
         z_unique = z_unique_as_int(getattr(self.build_ele.z_unique, "value", 0))
         if z_unique <= 0 or not self.is_modification_mode:
@@ -997,6 +999,7 @@ class PremarcScriptObject(BaseScriptObject):
         self._opening_sync_requires_direct_update = False
         self._opening_deleted_on_modification_entry = False
         self._modification_ppg_guid_str = ""
+        self._delete_current_premarc_requested = False
 
         self.val_pmp_wall_id = self.build_ele.wall_id.value
 
@@ -3380,6 +3383,22 @@ class PremarcScriptObject(BaseScriptObject):
             if self.script_object_interactor:
                 self.script_object_interactor.start_input(self.coord_input)
             return True
+        elif event_id == 1003:
+            if not self.is_modification_mode:
+                return False
+            previous_delete_requested = self._delete_current_premarc_requested
+            self._delete_current_premarc_requested = True
+            self._clear_selected_premarc_overlay()
+            print(
+                "[Premarc] Click boton Eliminar -> "
+                f"delete_requested={self._delete_current_premarc_requested}, "
+                f"previous_delete_requested={previous_delete_requested}, "
+                f"placement=({self.placement_pnt.X:.1f}, {self.placement_pnt.Y:.1f}, {self.placement_pnt.Z:.1f}), "
+                f"opening_guid={str(getattr(getattr(self.build_ele, 'opening_guid', None), 'value', '') or '<sin-opening>')}, "
+                f"cached_ppg_guid={self._modification_ppg_guid_str or '<sin-guid>'}"
+            )
+            print("[Premarc] Premarco actual marcado para eliminar al cerrar la PPG")
+            return True
         elif event_id == 1055:
             if (
                 not self.is_modification_mode
@@ -3961,6 +3980,72 @@ class PremarcScriptObject(BaseScriptObject):
             "se intentara fallback geometrico"
         )
         self._try_restore_wall_from_geometry()
+
+    def _clear_runtime_state_after_direct_delete(self) -> None:
+        print(
+            "[Premarc] Limpiando estado runtime tras borrado directo -> "
+            f"active_guid={self._active_session_source_guid or '<sin-guid>'}, "
+            f"cached_ppg_guid={self._modification_ppg_guid_str or '<sin-guid>'}"
+        )
+        self._clear_selected_premarc_overlay()
+        self._loaded_saved_state = {}
+        self._active_session_source_guid = ""
+        self._modification_ppg_guid_str = ""
+        self._has_confirmed_placement = False
+        self.placement_pnt = AllplanGeo.Point3D()
+        self._sync_placement_point_parameter()
+        if hasattr(self.build_ele, "opening_guid"):
+            self.build_ele.opening_guid.value = ""
+        if hasattr(self.build_ele, "SavedState"):
+            self.build_ele.SavedState.value = ""
+
+    def _delete_modified_premarc_direct(self) -> bool:
+        """Borra el PPG en modificacion sin pasar por CREATE_ELEMENTS."""
+        print(
+            "[Premarc] Inicio borrado directo -> "
+            f"placement=({self.placement_pnt.X:.1f}, {self.placement_pnt.Y:.1f}, {self.placement_pnt.Z:.1f}), "
+            f"opening_guid={str(getattr(getattr(self.build_ele, 'opening_guid', None), 'value', '') or '<sin-opening>')}, "
+            f"wall_guid={self.wall_guid_str or '<sin-wall-guid>'}, "
+            f"cached_ppg_guid={self._modification_ppg_guid_str or '<sin-guid>'}"
+        )
+        opening_deleted = False
+        opening_prop = getattr(self.build_ele, "opening_guid", None)
+        if opening_prop and str(getattr(opening_prop, "value", "") or ""):
+            opening_deleted = self._delete_wall_opening()
+            print(f"[Premarc] Resultado borrado opening previo: {opening_deleted}")
+        else:
+            print("[Premarc] Eliminar premarco -> sin opening persistido para borrar")
+
+        old_adapter = self._get_modification_root_adapter()
+        if old_adapter is None or old_adapter.IsNull():
+            print(
+                "[Premarc] Eliminar premarco -> adapter actual no validado; "
+                "probando GUID cacheado del PPG original"
+            )
+            old_adapter = self._get_cached_modification_root_adapter()
+        else:
+            name, type_guid, model_guid = self._get_adapter_debug_values(old_adapter)
+            print(
+                "[Premarc] Eliminar premarco -> adapter actual valido: "
+                f"name={name}, type={type_guid}, model_guid={model_guid or '<sin-guid>'}"
+            )
+
+        if old_adapter is None or old_adapter.IsNull():
+            print("[Premarc] Eliminacion cancelada: PPG original no validado")
+            return opening_deleted
+
+        try:
+            old_list = AllplanEleAdapter.BaseElementAdapterList()
+            old_list.append(old_adapter)
+            AllplanBaseElements.DeleteElements(self.document, old_list)
+            print("[Premarc] PPG original borrado OK")
+        except Exception as exc:
+            print(f"[Premarc] No se pudo borrar el PPG original: {exc}")
+            return opening_deleted
+
+        self._clear_runtime_state_after_direct_delete()
+        print("[Premarc] Borrado directo finalizado OK")
+        return True
 
     def _replace_modified_premarc_direct(self) -> bool:
         """Reemplaza el PythonPart editado sin usar modification_ele_list.
@@ -4801,6 +4886,26 @@ class PremarcScriptObject(BaseScriptObject):
         if self.is_modification_mode:
             self.script_object_interactor = None
             self.interactor_state = STOPPED
+            print(
+                "[Premarc] Cierre en modificacion -> "
+                f"delete_requested={self._delete_current_premarc_requested}, "
+                f"placement_is_zero={self.placement_pnt == AllplanGeo.Point3D()}, "
+                f"selected_wall={'si' if bool(self.selected_wall) else 'no'}, "
+                f"opening_guid={str(getattr(getattr(self.build_ele, 'opening_guid', None), 'value', '') or '<sin-opening>')}, "
+                f"cached_ppg_guid={self._modification_ppg_guid_str or '<sin-guid>'}"
+            )
+
+            if self._delete_current_premarc_requested:
+                print("[Premarc] Eliminacion solicitada -> borrando PPG en cierre")
+                deleted = self._delete_modified_premarc_direct()
+                self._delete_current_premarc_requested = False
+                self._opening_deleted_on_modification_entry = False
+                self._opening_sync_requires_direct_update = False
+                self._opening_recreated_during_cancel = False
+                self._reset_reposition_state()
+                if not deleted:
+                    print("[Premarc] Eliminacion del premarco no confirmada")
+                return OnCancelFunctionResult.CANCEL_INPUT
 
             if self.placement_pnt == AllplanGeo.Point3D():
                 print(
