@@ -114,6 +114,23 @@
         </Parameter>
 
         <Parameter>
+            <Name>RowEliminarPremarcSesion</Name>
+            <Text>Eliminar premarco</Text>
+            <ValueType>Row</ValueType>
+            <Visible>ShowSessionControls</Visible>
+
+            <Parameter>
+                <Name>EliminarPremarcSesion</Name>
+                <Text>Eliminar</Text>
+                <EventId>1003</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Persistent>No</Persistent>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
             <Name>RowReubicarPremarc</Name>
             <Text>Reubicar premarco</Text>
             <ValueType>Row</ValueType>

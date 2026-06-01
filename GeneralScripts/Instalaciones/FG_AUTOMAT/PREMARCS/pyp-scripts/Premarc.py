@@ -2595,6 +2595,74 @@ class PremarcScriptObject(BaseScriptObject):
             print(f"[Premarc] No se pudo borrar PPG de sesion seleccionado: {exc}")
             return False
 
+    def _remove_session_created_premarc_item(self, ppg_guid_str: str) -> dict | None:
+        if not ppg_guid_str:
+            return None
+
+        for idx, item in enumerate(self._session_created_premarcs):
+            if str(item.get("ppg_guid", "") or "") == str(ppg_guid_str):
+                removed_item = self._session_created_premarcs.pop(idx)
+                print(
+                    "[Premarc] Premarco de sesion retirado de la cola -> "
+                    f"ppg_guid={ppg_guid_str}, pendientes={len(self._session_created_premarcs)}"
+                )
+                return removed_item
+
+        print(
+            "[Premarc] Premarco de sesion no encontrado en la cola para borrar -> "
+            f"ppg_guid={ppg_guid_str}"
+        )
+        return None
+
+    def _discard_active_session_premarc_from_creation(self) -> bool:
+        """Delete the selected premarc during the same creation session."""
+        active_guid = str(self._active_session_source_guid or "")
+        print(
+            "[Premarc] Eliminar en sesion -> "
+            f"active_guid={active_guid or '<sin-guid>'}, "
+            f"placement_is_zero={self.placement_pnt == AllplanGeo.Point3D()}, "
+            f"pending_queue={len(self._pending_premarcs)}, "
+            f"session_queue={len(self._session_created_premarcs)}"
+        )
+
+        if active_guid:
+            removed_item = self._remove_session_created_premarc_item(active_guid)
+            self._clear_selected_premarc_overlay()
+            self._loaded_saved_state = {}
+            self._active_session_source_guid = ""
+            self._has_confirmed_placement = False
+            self.placement_pnt = AllplanGeo.Point3D()
+            self._sync_placement_point_parameter()
+            if hasattr(self.build_ele, "opening_guid"):
+                self.build_ele.opening_guid.value = ""
+            if hasattr(self.build_ele, "SavedState"):
+                self.build_ele.SavedState.value = ""
+            print(
+                "[Premarc] Premarco seleccionado de la sesion eliminado desde UI -> "
+                f"found_in_queue={'si' if removed_item else 'no'}"
+            )
+            return True
+
+        if self._has_confirmed_placement and self.placement_pnt != AllplanGeo.Point3D():
+            self._clear_selected_premarc_overlay()
+            self._loaded_saved_state = {}
+            self._has_confirmed_placement = False
+            self.placement_pnt = AllplanGeo.Point3D()
+            self._sync_placement_point_parameter()
+            if hasattr(self.build_ele, "opening_guid"):
+                self.build_ele.opening_guid.value = ""
+            if hasattr(self.build_ele, "SavedState"):
+                self.build_ele.SavedState.value = ""
+            print("[Premarc] Premarco activo no materializado descartado desde UI")
+            return True
+
+        print("[Premarc] Eliminacion en sesion cancelada: no hay premarco activo seleccionado")
+        PythonUtility.ShowMessageBox(
+            "Seleccione un premarco de esta misma ejecucion antes de eliminarlo.",
+            PythonUtility.MB_OK,
+        )
+        return False
+
     def _select_session_created_premarc_for_edit(
         self, saved_state: dict, ppg_guid_str: str
     ) -> bool:
@@ -3386,7 +3454,14 @@ class PremarcScriptObject(BaseScriptObject):
             return True
         elif event_id == 1003:
             if not self.is_modification_mode:
-                return False
+                print(
+                    "[Premarc] Click boton Eliminar (sesion) -> "
+                    f"active_guid={self._active_session_source_guid or '<sin-guid>'}, "
+                    f"placement=({self.placement_pnt.X:.1f}, {self.placement_pnt.Y:.1f}, {self.placement_pnt.Z:.1f}), "
+                    f"session_queue={len(self._session_created_premarcs)}"
+                )
+                self._discard_active_session_premarc_from_creation()
+                return True
             previous_delete_requested = self._delete_current_premarc_requested
             self._delete_current_premarc_requested = True
             self._clear_selected_premarc_overlay()
