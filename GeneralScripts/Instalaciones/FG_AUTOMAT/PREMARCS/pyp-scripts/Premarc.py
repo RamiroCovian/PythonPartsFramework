@@ -999,6 +999,7 @@ class PremarcScriptObject(BaseScriptObject):
         self._opening_sync_requires_direct_update = False
         self._opening_deleted_on_modification_entry = False
         self._modification_ppg_guid_str = ""
+        self._modification_ppg_adapter = None
         self._delete_current_premarc_requested = False
 
         self.val_pmp_wall_id = self.build_ele.wall_id.value
@@ -3397,7 +3398,18 @@ class PremarcScriptObject(BaseScriptObject):
                 f"opening_guid={str(getattr(getattr(self.build_ele, 'opening_guid', None), 'value', '') or '<sin-opening>')}, "
                 f"cached_ppg_guid={self._modification_ppg_guid_str or '<sin-guid>'}"
             )
-            print("[Premarc] Premarco actual marcado para eliminar al cerrar la PPG")
+            print("[Premarc] Intentando eliminar premarco inmediatamente desde el boton")
+            deleted_now = self._delete_modified_premarc_direct()
+            if deleted_now:
+                self._delete_current_premarc_requested = False
+                self.script_object_interactor = None
+                self.interactor_state = STOPPED
+                print("[Premarc] Premarco eliminado inmediatamente desde el boton")
+            else:
+                print(
+                    "[Premarc] Eliminacion inmediata no confirmada; "
+                    "se reintentara al cerrar la PPG"
+                )
             return True
         elif event_id == 1055:
             if (
@@ -3808,6 +3820,8 @@ class PremarcScriptObject(BaseScriptObject):
 
         ppg_adapter = self._get_modification_root_adapter()
         if ppg_adapter is None or ppg_adapter.IsNull():
+            ppg_adapter = self._get_document_manager_modification_root_adapter()
+        if ppg_adapter is None or ppg_adapter.IsNull():
             print("[Premarc] No se pudo cachear GUID del PPG en modificacion")
             return
 
@@ -3819,8 +3833,86 @@ class PremarcScriptObject(BaseScriptObject):
             )
             return
 
+        self._modification_ppg_adapter = ppg_adapter
         self._modification_ppg_guid_str = model_guid
         print(f"[Premarc] PPG original cacheado: {self._modification_ppg_guid_str}")
+
+    def _get_cached_modification_adapter_object(self):
+        adapter = getattr(self, "_modification_ppg_adapter", None)
+        if adapter is None:
+            print("[Premarc] Sin adapter PPG cacheado en memoria")
+            return None
+
+        try:
+            if adapter.IsNull():
+                print("[Premarc] Adapter PPG cacheado en memoria es nulo")
+                return None
+        except Exception as exc:
+            print(f"[Premarc] Adapter PPG cacheado en memoria invalido: {exc}")
+            return None
+
+        try:
+            model_guid = str(adapter.GetModelElementUUID())
+        except Exception:
+            model_guid = ""
+
+        print(
+            "[Premarc] Adapter PPG cacheado en memoria reutilizado -> "
+            f"model_guid={model_guid or '<sin-guid>'}"
+        )
+        return adapter
+
+    def _get_document_manager_pythonpart_adapter(self):
+        try:
+            from DocumentManager import DocumentManager
+
+            adapter = DocumentManager.get_instance().pythonpart_element
+        except Exception as exc:
+            print(f"[Premarc] No se pudo leer pythonpart_element del DocumentManager: {exc}")
+            return None
+
+        if adapter is None:
+            print("[Premarc] DocumentManager.pythonpart_element = None")
+            return None
+        try:
+            if adapter.IsNull():
+                print("[Premarc] DocumentManager.pythonpart_element es nulo")
+                return None
+        except Exception:
+            return None
+
+        name, type_guid, model_guid = self._get_adapter_debug_values(adapter)
+        print(
+            "[Premarc] DocumentManager pythonpart_element -> "
+            f"name={name}, type={type_guid}, model_guid={model_guid or '<sin-guid>'}"
+        )
+        if self._is_invalid_modification_adapter(name, model_guid):
+            print("[Premarc] DocumentManager pythonpart_element invalido")
+            return None
+        return adapter
+
+    def _get_document_manager_modification_root_adapter(self):
+        base_adapter = self._get_document_manager_pythonpart_adapter()
+        if base_adapter is None:
+            return None
+
+        ppg_adapter, param_list = self._resolve_premarc_ppg_from_adapter(base_adapter)
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            print("[Premarc] DocumentManager pythonpart_element no resolvio PPG Premarcs")
+            return None
+
+        params = parse_params_list_to_dict(param_list)
+        selected_z = z_unique_as_int(params.get("z_unique", 0))
+        current_z = z_unique_as_int(getattr(self.build_ele.z_unique, "value", 0))
+        if selected_z > 0 and current_z > 0 and selected_z != current_z:
+            print(
+                "[Premarc] PPG desde DocumentManager rechazado por z_unique: "
+                f"{selected_z} != {current_z}"
+            )
+            return None
+
+        print("[Premarc] PPG original recuperado desde DocumentManager")
+        return ppg_adapter
 
     def _get_cached_modification_root_adapter(self):
         guid_str = str(self._modification_ppg_guid_str or "")
@@ -3981,6 +4073,89 @@ class PremarcScriptObject(BaseScriptObject):
         )
         self._try_restore_wall_from_geometry()
 
+    def _build_safe_premarc_delete_list(self, ppg_adapter):
+        """Build a delete list from the PPG child tree, skipping the host wall."""
+        empty_list = AllplanEleAdapter.BaseElementAdapterList()
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            print("[Premarc] Delete list segura cancelada: adapter PPG nulo")
+            return empty_list, 0
+
+        child_list = None
+        try:
+            child_list = (
+                AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElementsFromTree(
+                    ppg_adapter
+                )
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo leer arbol hijo del PPG: {exc}")
+
+        if child_list is None:
+            try:
+                child_list = (
+                    AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
+                        ppg_adapter, True
+                    )
+                )
+            except Exception as exc:
+                print(f"[Premarc] No se pudo leer hijos directos del PPG: {exc}")
+                child_list = None
+
+        if child_list is None:
+            print("[Premarc] Delete list segura vacia: no hay hijos recuperables del PPG")
+            return empty_list, 0
+
+        delete_list = AllplanEleAdapter.BaseElementAdapterList()
+        seen_guids = set()
+        wall_guid = str(self.wall_guid_str or "")
+        opening_guid = str(
+            getattr(getattr(self.build_ele, "opening_guid", None), "value", "") or ""
+        )
+        kept_wall = False
+        included_opening = False
+        candidate_count = 0
+
+        for child_adapter in child_list:
+            if child_adapter is None or child_adapter.IsNull():
+                continue
+
+            name, type_guid, model_guid = self._get_adapter_debug_values(child_adapter)
+            guid_str = str(model_guid or "")
+            candidate_count += 1
+
+            if self._is_invalid_modification_adapter(name, guid_str):
+                print(
+                    "[Premarc] Delete list segura ignora child invalido -> "
+                    f"name={name}, type={type_guid}, model_guid={guid_str or '<sin-guid>'}"
+                )
+                continue
+
+            if wall_guid and guid_str == wall_guid:
+                kept_wall = True
+                print(
+                    "[Premarc] Delete list segura conserva muro host -> "
+                    f"model_guid={guid_str}"
+                )
+                continue
+
+            dedupe_key = guid_str or f"{name}|{type_guid}|{candidate_count}"
+            if dedupe_key in seen_guids:
+                continue
+
+            if opening_guid and guid_str == opening_guid:
+                included_opening = True
+
+            seen_guids.add(dedupe_key)
+            delete_list.append(child_adapter)
+
+        delete_count = len(seen_guids)
+        print(
+            "[Premarc] Delete list segura construida -> "
+            f"candidates={candidate_count}, delete_count={delete_count}, "
+            f"wall_preserved={kept_wall}, opening_included={included_opening}"
+        )
+        return delete_list, delete_count
+
     def _clear_runtime_state_after_direct_delete(self) -> None:
         print(
             "[Premarc] Limpiando estado runtime tras borrado directo -> "
@@ -3991,6 +4166,7 @@ class PremarcScriptObject(BaseScriptObject):
         self._loaded_saved_state = {}
         self._active_session_source_guid = ""
         self._modification_ppg_guid_str = ""
+        self._modification_ppg_adapter = None
         self._has_confirmed_placement = False
         self.placement_pnt = AllplanGeo.Point3D()
         self._sync_placement_point_parameter()
@@ -4020,9 +4196,13 @@ class PremarcScriptObject(BaseScriptObject):
         if old_adapter is None or old_adapter.IsNull():
             print(
                 "[Premarc] Eliminar premarco -> adapter actual no validado; "
-                "probando GUID cacheado del PPG original"
+                "probando adapter cacheado, DocumentManager y GUID cacheado del PPG original"
             )
-            old_adapter = self._get_cached_modification_root_adapter()
+            old_adapter = self._get_cached_modification_adapter_object()
+            if old_adapter is None or old_adapter.IsNull():
+                old_adapter = self._get_document_manager_modification_root_adapter()
+            if old_adapter is None or old_adapter.IsNull():
+                old_adapter = self._get_cached_modification_root_adapter()
         else:
             name, type_guid, model_guid = self._get_adapter_debug_values(old_adapter)
             print(
@@ -4032,16 +4212,25 @@ class PremarcScriptObject(BaseScriptObject):
 
         if old_adapter is None or old_adapter.IsNull():
             print("[Premarc] Eliminacion cancelada: PPG original no validado")
-            return opening_deleted
+            return False
+
+        delete_list, delete_count = self._build_safe_premarc_delete_list(old_adapter)
+        if delete_count <= 0:
+            print(
+                "[Premarc] Eliminacion cancelada: no se pudo construir "
+                "una lista segura de subelementos del PPG"
+            )
+            return False
 
         try:
-            old_list = AllplanEleAdapter.BaseElementAdapterList()
-            old_list.append(old_adapter)
-            AllplanBaseElements.DeleteElements(self.document, old_list)
-            print("[Premarc] PPG original borrado OK")
+            AllplanBaseElements.DeleteElements(self.document, delete_list)
+            print(
+                "[Premarc] Subelementos del PPG borrados OK -> "
+                f"delete_count={delete_count}"
+            )
         except Exception as exc:
-            print(f"[Premarc] No se pudo borrar el PPG original: {exc}")
-            return opening_deleted
+            print(f"[Premarc] No se pudo borrar la lista segura del PPG: {exc}")
+            return False
 
         self._clear_runtime_state_after_direct_delete()
         print("[Premarc] Borrado directo finalizado OK")
@@ -4066,7 +4255,9 @@ class PremarcScriptObject(BaseScriptObject):
                 "[Premarc] Adapter actual no validado; probando GUID cacheado "
                 "del PPG original"
             )
-            old_adapter = self._get_cached_modification_root_adapter()
+            old_adapter = self._get_cached_modification_adapter_object()
+            if old_adapter is None or old_adapter.IsNull():
+                old_adapter = self._get_cached_modification_root_adapter()
             if old_adapter is None or old_adapter.IsNull():
                 print(
                     "[Premarc] PPG original no validado; creando PPG nuevo "
