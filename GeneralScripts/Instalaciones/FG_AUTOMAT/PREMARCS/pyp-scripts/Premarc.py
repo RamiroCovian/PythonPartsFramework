@@ -49,9 +49,12 @@ from HandleProperties import HandleProperties
 from HandlePropertiesService import HandlePropertiesService
 import NemAll_Python_Utility as AllplanUtil
 from PythonPart import View2D3D, View2D, View3D, PythonPart, PythonPartGroup
+from Utils.BaseElementAdapterFilter import BaseElementAdapterFilter
 from .opening_creation_util import OpeningCreationUtil, WindowOpeningCreationUtil
 
 import requests
+
+ZERO_MODEL_GUID = "00000000-0000-0000-0000-000000000000"
 
 
 def _site_packages_path(
@@ -992,6 +995,8 @@ class PremarcScriptObject(BaseScriptObject):
         self._loaded_saved_state = {}
         self._opening_recreated_during_cancel = False
         self._opening_sync_requires_direct_update = False
+        self._opening_deleted_on_modification_entry = False
+        self._modification_ppg_guid_str = ""
 
         self.val_pmp_wall_id = self.build_ele.wall_id.value
 
@@ -1026,8 +1031,17 @@ class PremarcScriptObject(BaseScriptObject):
                 self._loaded_saved_state = raw_state
 
         if self.is_modification_mode:
+            print(
+                "[Premarc] Reingreso modificacion -> "
+                f"saved_state={'si' if bool(self._loaded_saved_state) else 'no'}, "
+                f"opening_guid={str(getattr(self.build_ele.opening_guid, 'value', '') or '<sin-opening>')}"
+            )
             if self._loaded_saved_state:
                 self.wall_guid_str = self._loaded_saved_state.get("wall_guid", "")
+                print(
+                    "[Premarc] Reingreso modificacion -> "
+                    f"wall_guid_saved={self.wall_guid_str or '<sin-wall-guid>'}"
+                )
                 self._apply_premarc_saved_state(self._loaded_saved_state)
                 self._opening_baseline_width = float(
                     self._loaded_saved_state.get("width", self.width)
@@ -1038,24 +1052,15 @@ class PremarcScriptObject(BaseScriptObject):
                 self._opening_baseline_point = self._copy_point3d(self.placement_pnt)
 
             self._reset_wall_selection_for_modification(self.wall_guid_str)
-
-            # If opening exists, delete it
-            # guid_exists = bool(self.build_ele.opening_guid.value)
-
-            # if guid_exists:
-            #     self._delete_wall_opening()
-
-            # opening_guid_str = self.build_ele.opening_guid.value
-
-            # if opening_guid_str:
-            #     # Reconstruir el GUID object desde string
-            #     guid = AllplanEleAdapter.GUID()
-            #     guid.FromString(opening_guid_str)   # o según la API: GUID(opening_guid_str)
-            #     # Obtener el BaseElementAdapter desde el GUID
-            #     opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(guid, self.document)
-            #     if not opening_adapter.IsNull():
-            #         print("[Premarc] Opening recuperado OK")
-            #         # Aquí puedes borrarlo o modificarlo
+            self._cache_modification_ppg_guid()
+            if self.build_ele.opening_guid.value:
+                deleted = self._delete_wall_opening()
+                if deleted:
+                    self._opening_deleted_on_modification_entry = True
+                    print(
+                        "[Premarc] Opening eliminado al reingresar a la PPG "
+                        "de modificacion"
+                    )
 
             # self.detected_wall_thickness = self.build_ele.SavedWallThickness.value
 
@@ -1946,26 +1951,40 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _prepare_modification_reposition_preview(self) -> bool:
         """Hide the edited PPG while dragging so only the live preview remains."""
-        old_adapter = self._get_modification_root_adapter()
-        if old_adapter is None or old_adapter.IsNull():
-            print("[Premarc] No se pudo recuperar el PPG original para ocultarlo")
-            return False
-
+        wall_guid = ""
         try:
-            old_list = AllplanEleAdapter.BaseElementAdapterList()
-            old_list.append(old_adapter)
-            AllplanBaseElements.DeleteElements(self.document, old_list)
-            self._palette_reposition_deleted_root = True
-            print("[Premarc] PPG original ocultado temporalmente para reubicar")
-        except Exception as exc:
-            print(f"[Premarc] No se pudo ocultar el PPG original al reubicar: {exc}")
-            return False
+            if self.selected_wall and not self.selected_wall.IsNull():
+                wall_guid = str(self.selected_wall.GetModelElementUUID())
+        except Exception:
+            wall_guid = str(self.wall_guid_str or "")
 
+        print(
+            "[Premarc] Reubicar -> estado previo: "
+            f"wall_guid={wall_guid or '<sin-guid>'}, "
+            f"opening_guid={str(getattr(self.build_ele.opening_guid, 'value', '') or '<sin-opening>')}, "
+            f"placement=({self.placement_pnt.X:.1f}, {self.placement_pnt.Y:.1f}, {self.placement_pnt.Z:.1f})"
+        )
+
+        # No borrar el PPG aqui. Allplan puede cerrar la sesion si se llama
+        # DeleteElements() sobre el elemento activo mientras la PPG esta en modo
+        # modificacion. La actualizacion real se hace al confirmar/cerrar.
+        self._palette_reposition_deleted_root = False
+        self._palette_reposition_deleted_opening = False
+        print("[Premarc] Reubicar -> modo seguro: no se borra PPG durante el drag")
+
+        wall_guid_after = ""
         try:
-            self._palette_reposition_deleted_opening = self._delete_wall_opening()
-        except Exception as exc:
-            print(f"[Premarc] No se pudo borrar temporalmente el opening: {exc}")
-            self._palette_reposition_deleted_opening = False
+            if self.selected_wall and not self.selected_wall.IsNull():
+                wall_guid_after = str(self.selected_wall.GetModelElementUUID())
+        except Exception:
+            wall_guid_after = str(self.wall_guid_str or "")
+
+        print(
+            "[Premarc] Reubicar -> estado posterior: "
+            f"wall_guid={wall_guid_after or '<sin-guid>'}, "
+            f"opening_deleted={self._palette_reposition_deleted_opening}, "
+            f"ppg_deleted={self._palette_reposition_deleted_root}"
+        )
 
         return True
 
@@ -2282,6 +2301,15 @@ class PremarcScriptObject(BaseScriptObject):
                     break
             except Exception:
                 break
+
+            name, _type_guid, model_guid = self._get_adapter_debug_values(current)
+            if self._is_invalid_modification_adapter(name, model_guid):
+                print(
+                    "[Premarc] Resolucion PPG detenida: adapter invalido "
+                    f"name={name}, model_guid={model_guid or '<sin-guid>'}"
+                )
+                break
+
             param_list = self._read_premarc_param_list_from_element(current)
             if param_list:
                 return current, param_list
@@ -2666,6 +2694,7 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _try_restore_wall_from_guid(self, wall_guid_str: str) -> bool:
         if not wall_guid_str:
+            print("[Premarc] Restore muro -> wall_guid vacio")
             return False
         try:
             wall_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
@@ -2675,11 +2704,18 @@ class PremarcScriptObject(BaseScriptObject):
         except Exception as exc:
             print(f"[Premarc] No se pudo leer wall_guid guardado: {exc}")
             return False
+        if wall_adapter is None or wall_adapter.IsNull():
+            print(
+                "[Premarc] Restore muro -> wall_guid no resolvio un adaptador valido: "
+                f"{wall_guid_str}"
+            )
+            return False
         return self._set_selected_wall_adapter(wall_adapter, wall_guid_str)
 
     def _try_restore_wall_from_opening(self) -> bool:
         opening_guid_str = str(getattr(self.build_ele.opening_guid, "value", "") or "")
         if not opening_guid_str:
+            print("[Premarc] Restore muro -> opening_guid vacio")
             return False
         try:
             opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
@@ -2687,6 +2723,10 @@ class PremarcScriptObject(BaseScriptObject):
                 self.coord_input.GetInputViewDocument(),
             )
             if opening_adapter.IsNull():
+                print(
+                    "[Premarc] Restore muro -> opening_guid sin adaptador valido: "
+                    f"{opening_guid_str}"
+                )
                 return False
             wall_adapter = AllplanEleAdapter.BaseElementAdapterParentElementService.GetParentElement(
                 opening_adapter
@@ -2696,14 +2736,129 @@ class PremarcScriptObject(BaseScriptObject):
             return False
         return self._set_selected_wall_adapter(wall_adapter)
 
+    def _get_saved_placement_reference_point(self):
+        point = getattr(self, "placement_pnt", None)
+        if isinstance(point, AllplanGeo.Point3D):
+            return self._copy_point3d(point)
+
+        if hasattr(self.build_ele, "PlacementPnt"):
+            raw_point = getattr(self.build_ele.PlacementPnt, "value", None)
+            if isinstance(raw_point, AllplanGeo.Point3D):
+                return self._copy_point3d(raw_point)
+
+        return None
+
+    def _get_axis_projection_metrics(self, point: AllplanGeo.Point3D, wall_adapter):
+        try:
+            axis_ele = AllplanEleAdapter.AxisElementAdapter(wall_adapter)
+            if axis_ele.IsNull():
+                return None
+
+            wall_axis = axis_ele.GetAxis()
+            p0 = wall_axis.StartPoint
+            p1 = wall_axis.EndPoint
+            dx = p1.X - p0.X
+            dy = p1.Y - p0.Y
+            axis_length = math.sqrt(dx * dx + dy * dy)
+            if axis_length < 1e-9:
+                return None
+
+            ux = dx / axis_length
+            uy = dy / axis_length
+            rel_x = point.X - p0.X
+            rel_y = point.Y - p0.Y
+            axis_pos = rel_x * ux + rel_y * uy
+            normal_dist = abs((-uy * rel_x) + (ux * rel_y))
+
+            if axis_pos < 0.0:
+                outside_axis = -axis_pos
+            elif axis_pos > axis_length:
+                outside_axis = axis_pos - axis_length
+            else:
+                outside_axis = 0.0
+
+            return {
+                "normal_dist": normal_dist,
+                "outside_axis": outside_axis,
+                "axis_length": axis_length,
+                "thickness": float(axis_ele.GetThickness()),
+            }
+        except Exception:
+            return None
+
+    def _try_restore_wall_from_geometry(self) -> bool:
+        ref_point = self._get_saved_placement_reference_point()
+        if ref_point is None:
+            print("[Premarc] Restore muro geometria -> sin punto de referencia")
+            return False
+
+        try:
+            active_doc = self.coord_input.GetInputViewDocument()
+            all_elements = AllplanBaseElements.ElementsSelectService.SelectAllElements(active_doc)
+            wall_candidates = BaseElementAdapterFilter.get_wall_tiers(all_elements)
+        except Exception as exc:
+            print(f"[Premarc] Restore muro geometria -> no se pudieron leer muros: {exc}")
+            return False
+
+        if not wall_candidates:
+            print("[Premarc] Restore muro geometria -> sin muros candidatos")
+            return False
+
+        best_wall = None
+        best_guid = ""
+        best_score = None
+        best_metrics = None
+
+        for wall_adapter in wall_candidates:
+            metrics = self._get_axis_projection_metrics(ref_point, wall_adapter)
+            if metrics is None:
+                continue
+
+            axis_tolerance = max(float(self.width) * 0.5, 500.0)
+            normal_tolerance = max(metrics["thickness"] * 1.5, 500.0)
+            if metrics["outside_axis"] > axis_tolerance:
+                continue
+            if metrics["normal_dist"] > normal_tolerance:
+                continue
+
+            score = (metrics["outside_axis"] * 10000.0) + metrics["normal_dist"]
+            if best_score is None or score < best_score:
+                best_score = score
+                best_wall = wall_adapter
+                best_guid = str(wall_adapter.GetModelElementUUID())
+                best_metrics = metrics
+
+        if best_wall is None:
+            print(
+                "[Premarc] Restore muro geometria -> sin candidato valido "
+                f"para point=({ref_point.X:.1f}, {ref_point.Y:.1f}, {ref_point.Z:.1f})"
+            )
+            return False
+
+        print(
+            "[Premarc] Restore muro geometria -> candidato "
+            f"{best_guid} con dist_normal={best_metrics['normal_dist']:.1f} mm, "
+            f"fuera_eje={best_metrics['outside_axis']:.1f} mm"
+        )
+        return self._set_selected_wall_adapter(best_wall, best_guid)
+
     def _reset_wall_selection_for_modification(self, wall_guid_str: str) -> None:
         self.wall_select_result = WallSelectResult()
         self.selected_wall = None
+
+        print(
+            "[Premarc] Restore muro modificacion -> "
+            f"wall_guid_input={wall_guid_str or '<sin-wall-guid>'}, "
+            f"opening_guid_input={str(getattr(self.build_ele.opening_guid, 'value', '') or '<sin-opening>')}"
+        )
 
         if self._try_restore_wall_from_guid(wall_guid_str):
             return
 
         if self._try_restore_wall_from_opening():
+            return
+
+        if self._try_restore_wall_from_geometry():
             return
 
         self.build_ele.SelectionWall.value = "No seleccionado"
@@ -3595,8 +3750,115 @@ class PremarcScriptObject(BaseScriptObject):
             None,
         )
 
+    def _get_adapter_debug_values(self, adapter):
+        name = "<sin-name>"
+        type_guid = "<sin-type>"
+        model_guid = ""
+
+        try:
+            name = str(adapter.GetDisplayName())
+        except Exception:
+            pass
+
+        try:
+            type_guid = str(adapter.GetElementAdapterType().GetGuid())
+        except Exception:
+            pass
+
+        try:
+            model_guid = str(adapter.GetModelElementUUID())
+        except Exception:
+            pass
+
+        return name, type_guid, model_guid
+
+    def _is_invalid_modification_adapter(self, name: str, model_guid: str) -> bool:
+        normalized_name = str(name or "").strip().lower()
+        normalized_guid = str(model_guid or "").strip().lower().strip("{}")
+
+        return (
+            not normalized_guid
+            or normalized_guid.startswith(ZERO_MODEL_GUID)
+            or normalized_name == "undefined element"
+        )
+
+    def _cache_modification_ppg_guid(self) -> None:
+        """Guarda el GUID del PPG activo antes de tocar openings/muro."""
+        if self._modification_ppg_guid_str:
+            return
+
+        ppg_adapter = self._get_modification_root_adapter()
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            print("[Premarc] No se pudo cachear GUID del PPG en modificacion")
+            return
+
+        name, _type_guid, model_guid = self._get_adapter_debug_values(ppg_adapter)
+        if self._is_invalid_modification_adapter(name, model_guid):
+            print(
+                "[Premarc] GUID del PPG no cacheado: adapter invalido "
+                f"name={name}, model_guid={model_guid or '<sin-guid>'}"
+            )
+            return
+
+        self._modification_ppg_guid_str = model_guid
+        print(f"[Premarc] PPG original cacheado: {self._modification_ppg_guid_str}")
+
+    def _get_cached_modification_root_adapter(self):
+        guid_str = str(self._modification_ppg_guid_str or "")
+        if not guid_str:
+            print("[Premarc] Sin GUID cacheado del PPG original")
+            return None
+
+        try:
+            doc = self.coord_input.GetInputViewDocument()
+        except Exception:
+            doc = self.document
+
+        try:
+            adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                AllplanEleAdapter.GUID.FromString(guid_str),
+                doc,
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo recuperar PPG por GUID cacheado: {exc}")
+            return None
+
+        if adapter is None or adapter.IsNull():
+            print(
+                "[Premarc] GUID cacheado del PPG original no resolvio adapter: "
+                f"{guid_str}"
+            )
+            return None
+
+        name, type_guid, model_guid = self._get_adapter_debug_values(adapter)
+        print(
+            "[Premarc] Adapter PPG cacheado -> "
+            f"name={name}, type={type_guid}, model_guid={model_guid or '<sin-guid>'}"
+        )
+        if self._is_invalid_modification_adapter(name, model_guid):
+            print("[Premarc] Adapter PPG cacheado invalido; no se usa")
+            return None
+
+        ppg_adapter, param_list = self._resolve_premarc_ppg_from_adapter(adapter)
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            print("[Premarc] GUID cacheado no corresponde a un PPG Premarcs")
+            return None
+
+        params = parse_params_list_to_dict(param_list)
+        selected_z = z_unique_as_int(params.get("z_unique", 0))
+        current_z = z_unique_as_int(getattr(self.build_ele.z_unique, "value", 0))
+        if selected_z > 0 and current_z > 0 and selected_z != current_z:
+            print(
+                "[Premarc] PPG cacheado rechazado por z_unique: "
+                f"{selected_z} != {current_z}"
+            )
+            return None
+
+        print("[Premarc] PPG original recuperado por GUID cacheado")
+        return ppg_adapter
+
     def _get_modification_root_adapter(self):
-        """Devuelve el adaptador raiz del PythonPart que se esta modificando."""
+        """Devuelve el adaptador raiz del PythonPartGroup Premarcs en edicion."""
         modification_list = getattr(self, "modification_ele_list", None)
         if not modification_list:
             return None
@@ -3607,18 +3869,98 @@ class PremarcScriptObject(BaseScriptObject):
         except Exception:
             pass
 
+        base_adapter = None
         try:
             first = modification_list[0]
             if isinstance(first, AllplanEleAdapter.BaseElementAdapter):
-                return first
+                base_adapter = first
         except Exception:
             pass
 
-        try:
-            return modification_list.get_base_element_adapter(self.document)
-        except Exception as exc:
-            print(f"[Premarc] No se pudo obtener el PythonPart original: {exc}")
+        if base_adapter is None:
+            try:
+                base_adapter = modification_list.get_base_element_adapter(self.document)
+            except Exception as exc:
+                print(f"[Premarc] No se pudo obtener el PythonPart original: {exc}")
+                return None
+
+        if base_adapter is None or base_adapter.IsNull():
+            print("[Premarc] Adapter base de modificacion nulo")
             return None
+
+        name, type_guid, model_guid = self._get_adapter_debug_values(base_adapter)
+        print(
+            "[Premarc] Adapter base modificacion -> "
+            f"name={name}, type={type_guid}, model_guid={model_guid or '<sin-guid>'}"
+        )
+
+        if self._is_invalid_modification_adapter(name, model_guid):
+            print(
+                "[Premarc] Adapter base modificacion invalido; "
+                "se evita resolver PPG para no llamar servicios C++ "
+                "sobre undefined element"
+            )
+            return None
+
+        ppg_adapter, param_list = self._resolve_premarc_ppg_from_adapter(base_adapter)
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            print("[Premarc] Adapter base no pertenece a un PythonPartGroup Premarcs")
+            return None
+
+        try:
+            is_pyp = AllplanBaseElements.PythonPartService.IsPythonPartElement(ppg_adapter)
+            is_ppg = AllplanBaseElements.PythonPartService.IsPythonPartGroupElement(
+                ppg_adapter
+            )
+        except Exception as exc:
+            print(f"[Premarc] No se pudo validar tipo PythonPart: {exc}")
+            return None
+
+        if not (is_pyp or is_ppg):
+            print("[Premarc] Adapter resuelto no es PythonPart/PythonPartGroup")
+            return None
+
+        params = parse_params_list_to_dict(param_list)
+        selected_z = z_unique_as_int(params.get("z_unique", 0))
+        current_z = z_unique_as_int(getattr(self.build_ele.z_unique, "value", 0))
+        if selected_z > 0 and current_z > 0 and selected_z != current_z:
+            print(
+                "[Premarc] Adapter resuelto rechazado por z_unique: "
+                f"{selected_z} != {current_z}"
+            )
+            return None
+
+        try:
+            print(
+                "[Premarc] PythonPartGroup Premarcs resuelto para borrado -> "
+                f"name={ppg_adapter.GetDisplayName()}, "
+                f"model_guid={ppg_adapter.GetModelElementUUID()}, "
+                f"is_group={is_ppg}"
+            )
+        except Exception:
+            pass
+
+        return ppg_adapter
+
+    def _reset_reposition_state(self) -> None:
+        self._palette_reposition_active = False
+        self._palette_reposition_has_new_point = False
+        self._palette_reposition_original_point = None
+        self._palette_reposition_original_state = {}
+        self._palette_reposition_deleted_root = False
+        self._palette_reposition_deleted_opening = False
+
+    def _refresh_selected_wall_after_delete(self, wall_guid_str: str) -> None:
+        if not wall_guid_str:
+            return
+        if self._try_restore_wall_from_guid(wall_guid_str):
+            print("[Premarc] Muro revalidado tras borrar PPG temporal")
+            return
+        print(
+            "[Premarc] Muro no revalidado por GUID tras borrar PPG; "
+            "se intentara fallback geometrico"
+        )
+        self._try_restore_wall_from_geometry()
 
     def _replace_modified_premarc_direct(self) -> bool:
         """Reemplaza el PythonPart editado sin usar modification_ele_list.
@@ -3634,6 +3976,19 @@ class PremarcScriptObject(BaseScriptObject):
             return False
 
         old_adapter = self._get_modification_root_adapter()
+        if old_adapter is None or old_adapter.IsNull():
+            print(
+                "[Premarc] Adapter actual no validado; probando GUID cacheado "
+                "del PPG original"
+            )
+            old_adapter = self._get_cached_modification_root_adapter()
+            if old_adapter is None or old_adapter.IsNull():
+                print(
+                    "[Premarc] PPG original no validado; creando PPG nuevo "
+                    "sin borrar adapter anterior"
+                )
+                return self._create_current_premarc_direct(delete_existing_adapter=None)
+
         return self._create_current_premarc_direct(delete_existing_adapter=old_adapter)
 
     def _create_current_premarc_direct(self, delete_existing_adapter=None) -> bool:
@@ -4466,15 +4821,45 @@ class PremarcScriptObject(BaseScriptObject):
             if self._palette_reposition_deleted_root:
                 print("[Premarc] Reubicacion confirmada con insercion directa")
                 created = self._create_current_premarc_direct()
-                self._palette_reposition_active = False
-                self._palette_reposition_has_new_point = False
-                self._palette_reposition_original_point = None
-                self._palette_reposition_original_state = {}
-                self._palette_reposition_deleted_root = False
-                self._palette_reposition_deleted_opening = False
+                self._opening_deleted_on_modification_entry = False
+                self._reset_reposition_state()
                 if not created:
                     print(
                         "[Premarc] No se pudo recrear el premarco tras la reubicacion"
+                    )
+                return OnCancelFunctionResult.CANCEL_INPUT
+
+            if (
+                self._opening_deleted_on_modification_entry
+                and self._palette_reposition_active
+                and self._palette_reposition_has_new_point
+            ):
+                print(
+                    "[Premarc] Reubicacion con opening recreado -> "
+                    "reemplazo directo del PythonPart"
+                )
+                self._create_union_frames = True
+                replaced = self._replace_modified_premarc_direct()
+                self._opening_deleted_on_modification_entry = False
+                self._reset_reposition_state()
+                if not replaced:
+                    print(
+                        "[Premarc] Reemplazo directo no confirmado tras "
+                        "reubicar y recrear opening"
+                    )
+                return OnCancelFunctionResult.CANCEL_INPUT
+
+            if self._opening_deleted_on_modification_entry:
+                print(
+                    "[Premarc] Opening eliminado al entrar en modificacion; "
+                    "cerrando con reemplazo directo del PythonPart"
+                )
+                replaced = self._replace_modified_premarc_direct()
+                self._opening_deleted_on_modification_entry = False
+                self._reset_reposition_state()
+                if not replaced:
+                    print(
+                        "[Premarc] Reemplazo directo no confirmado tras recrear opening"
                     )
                 return OnCancelFunctionResult.CANCEL_INPUT
 
@@ -4492,21 +4877,13 @@ class PremarcScriptObject(BaseScriptObject):
                     )
                 self._opening_sync_requires_direct_update = False
                 self._opening_recreated_during_cancel = False
-                self._palette_reposition_active = False
-                self._palette_reposition_has_new_point = False
-                self._palette_reposition_original_point = None
-                self._palette_reposition_original_state = {}
-                self._palette_reposition_deleted_root = False
-                self._palette_reposition_deleted_opening = False
+                self._opening_deleted_on_modification_entry = False
+                self._reset_reposition_state()
                 return OnCancelFunctionResult.CANCEL_INPUT
 
             print("[Premarc] Modificación confirmada -> CREATE_ELEMENTS")
-            self._palette_reposition_active = False
-            self._palette_reposition_has_new_point = False
-            self._palette_reposition_original_point = None
-            self._palette_reposition_original_state = {}
-            self._palette_reposition_deleted_root = False
-            self._palette_reposition_deleted_opening = False
+            self._reset_reposition_state()
+            self._opening_deleted_on_modification_entry = False
             return OnCancelFunctionResult.CREATE_ELEMENTS
 
         if self.interactor_state == SELECTING_WALL:
