@@ -1163,6 +1163,9 @@ class PremarcScriptObject(BaseScriptObject):
         self._palette_reposition_active = False
         self._palette_reposition_has_new_point = False
         self._palette_reposition_original_point = None
+        self._palette_reposition_original_state = {}
+        self._palette_reposition_deleted_root = False
+        self._palette_reposition_deleted_opening = False
         self._in_placement_preview = (
             False  # True solo durante preview del punto (sin XPS/accesorios/ampits)
         )
@@ -1925,10 +1928,45 @@ class PremarcScriptObject(BaseScriptObject):
             )
             return False
 
+        self._clear_selected_premarc_overlay()
         self._palette_reposition_original_point = self._copy_point3d(self.placement_pnt)
+        self._palette_reposition_original_state = self._build_premarc_saved_state_dict(
+            self.placement_pnt
+        )
+        self._palette_reposition_deleted_root = False
+        self._palette_reposition_deleted_opening = False
+
+        if self.is_modification_mode:
+            self._prepare_modification_reposition_preview()
+
         self._palette_reposition_active = True
         self._palette_reposition_has_new_point = False
         self._start_placement_point_input()
+        return True
+
+    def _prepare_modification_reposition_preview(self) -> bool:
+        """Hide the edited PPG while dragging so only the live preview remains."""
+        old_adapter = self._get_modification_root_adapter()
+        if old_adapter is None or old_adapter.IsNull():
+            print("[Premarc] No se pudo recuperar el PPG original para ocultarlo")
+            return False
+
+        try:
+            old_list = AllplanEleAdapter.BaseElementAdapterList()
+            old_list.append(old_adapter)
+            AllplanBaseElements.DeleteElements(self.document, old_list)
+            self._palette_reposition_deleted_root = True
+            print("[Premarc] PPG original ocultado temporalmente para reubicar")
+        except Exception as exc:
+            print(f"[Premarc] No se pudo ocultar el PPG original al reubicar: {exc}")
+            return False
+
+        try:
+            self._palette_reposition_deleted_opening = self._delete_wall_opening()
+        except Exception as exc:
+            print(f"[Premarc] No se pudo borrar temporalmente el opening: {exc}")
+            self._palette_reposition_deleted_opening = False
+
         return True
 
     def _commit_current_premarc_before_next_placement(self) -> bool:
@@ -3098,6 +3136,11 @@ class PremarcScriptObject(BaseScriptObject):
         if saved_pnt != AllplanGeo.Point3D():
             working_state = self._build_premarc_saved_state_dict(saved_pnt)
         preview_elements = []
+        active_preview_point = None
+        if active_point is not None and hasattr(active_point, "X"):
+            active_preview_point = self._copy_point3d(active_point)
+        elif saved_pnt != AllplanGeo.Point3D():
+            active_preview_point = self._copy_point3d(saved_pnt)
 
         try:
             self._in_placement_preview = True
@@ -3117,12 +3160,15 @@ class PremarcScriptObject(BaseScriptObject):
 
             if working_state:
                 self._apply_premarc_saved_state(working_state)
+                if active_preview_point is not None:
+                    self.placement_pnt = self._copy_point3d(active_preview_point)
+                    self._rebuild_placement_mat()
                 local_model = self._create_premarc_placement_preview_only()
                 self._append_preview_model_at_current_matrix(
                     preview_elements, local_model
                 )
-            elif active_point and active_point != PointInteractorResult():
-                self.placement_pnt = self._copy_point3d(active_point)
+            elif active_preview_point is not None:
+                self.placement_pnt = self._copy_point3d(active_preview_point)
                 self._rebuild_placement_mat()
                 local_model = self._create_premarc_placement_preview_only()
                 self._append_preview_model_at_current_matrix(
@@ -3446,6 +3492,13 @@ class PremarcScriptObject(BaseScriptObject):
         if not self.selected_wall and not self.is_modification_mode:
             return CreateElementResult([])
 
+        if self._palette_reposition_active and not self._palette_reposition_has_new_point:
+            return CreateElementResult(
+                elements=[],
+                handles=[],
+                placement_point=AllplanGeo.Point3D(),
+            )
+
         if not self.is_modification_mode and self._pending_premarcs:
             active_point = (
                 self.placement_pnt
@@ -3581,6 +3634,10 @@ class PremarcScriptObject(BaseScriptObject):
             return False
 
         old_adapter = self._get_modification_root_adapter()
+        return self._create_current_premarc_direct(delete_existing_adapter=old_adapter)
+
+    def _create_current_premarc_direct(self, delete_existing_adapter=None) -> bool:
+        """Create the current PPG as a clean insertion, optionally deleting an old root."""
 
         z_unique = z_unique_as_int(self.build_ele.z_unique.value)
         if z_unique <= 0:
@@ -3608,10 +3665,10 @@ class PremarcScriptObject(BaseScriptObject):
         trans_mat = AllplanGeo.Matrix3D()
         trans_mat.SetTranslation(AllplanGeo.Vector3D(self.placement_pnt))
 
-        if old_adapter is not None and not old_adapter.IsNull():
+        if delete_existing_adapter is not None and not delete_existing_adapter.IsNull():
             try:
                 old_list = AllplanEleAdapter.BaseElementAdapterList()
-                old_list.append(old_adapter)
+                old_list.append(delete_existing_adapter)
                 AllplanBaseElements.DeleteElements(self.document, old_list)
                 print(
                     "[Premarc] PythonPart anterior borrado antes del reemplazo directo"
@@ -4357,6 +4414,7 @@ class PremarcScriptObject(BaseScriptObject):
         if self._palette_reposition_active and not self._palette_reposition_has_new_point:
             self.script_object_interactor = None
             self.interactor_state = STOPPED
+            original_state = dict(self._palette_reposition_original_state or {})
             if self._palette_reposition_original_point is not None:
                 self.placement_pnt = self._copy_point3d(
                     self._palette_reposition_original_point
@@ -4364,9 +4422,22 @@ class PremarcScriptObject(BaseScriptObject):
                 self._sync_placement_point_parameter()
                 self._rebuild_placement_mat()
                 self._has_confirmed_placement = True
+            if self.is_modification_mode and original_state:
+                self._apply_premarc_saved_state(original_state)
+                if (
+                    self._palette_reposition_deleted_opening
+                    and self.selected_wall
+                    and self.placement_pnt != AllplanGeo.Point3D()
+                ):
+                    self._create_wall_opening()
+                if self._palette_reposition_deleted_root:
+                    self._create_current_premarc_direct()
             self._palette_reposition_active = False
             self._palette_reposition_has_new_point = False
             self._palette_reposition_original_point = None
+            self._palette_reposition_original_state = {}
+            self._palette_reposition_deleted_root = False
+            self._palette_reposition_deleted_opening = False
             print("[Premarc] Reubicacion cancelada; se conserva la posicion previa")
             if self.is_modification_mode:
                 return OnCancelFunctionResult.CANCEL_INPUT
@@ -4392,6 +4463,21 @@ class PremarcScriptObject(BaseScriptObject):
             if self.selected_wall:
                 self._sync_wall_opening_for_modification()
 
+            if self._palette_reposition_deleted_root:
+                print("[Premarc] Reubicacion confirmada con insercion directa")
+                created = self._create_current_premarc_direct()
+                self._palette_reposition_active = False
+                self._palette_reposition_has_new_point = False
+                self._palette_reposition_original_point = None
+                self._palette_reposition_original_state = {}
+                self._palette_reposition_deleted_root = False
+                self._palette_reposition_deleted_opening = False
+                if not created:
+                    print(
+                        "[Premarc] No se pudo recrear el premarco tras la reubicacion"
+                    )
+                return OnCancelFunctionResult.CANCEL_INPUT
+
             if self._opening_sync_requires_direct_update:
                 print(
                     "[Premarc] Opening reducido; reemplazando PythonPart "
@@ -4409,12 +4495,18 @@ class PremarcScriptObject(BaseScriptObject):
                 self._palette_reposition_active = False
                 self._palette_reposition_has_new_point = False
                 self._palette_reposition_original_point = None
+                self._palette_reposition_original_state = {}
+                self._palette_reposition_deleted_root = False
+                self._palette_reposition_deleted_opening = False
                 return OnCancelFunctionResult.CANCEL_INPUT
 
             print("[Premarc] Modificación confirmada -> CREATE_ELEMENTS")
             self._palette_reposition_active = False
             self._palette_reposition_has_new_point = False
             self._palette_reposition_original_point = None
+            self._palette_reposition_original_state = {}
+            self._palette_reposition_deleted_root = False
+            self._palette_reposition_deleted_opening = False
             return OnCancelFunctionResult.CREATE_ELEMENTS
 
         if self.interactor_state == SELECTING_WALL:
