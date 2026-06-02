@@ -2802,7 +2802,9 @@ class PremarcScriptObject(BaseScriptObject):
 
         if active_guid:
             removed_item = self._remove_session_created_premarc_item(active_guid)
+            deleted_ppg = self._delete_session_premarc_ppg(active_guid)
             self._clear_selected_premarc_overlay()
+            self._clear_session_selection_preview_context()
             self._loaded_saved_state = {}
             self._active_session_source_guid = ""
             self._has_confirmed_placement = False
@@ -2814,13 +2816,15 @@ class PremarcScriptObject(BaseScriptObject):
                 self.build_ele.SavedState.value = ""
             print(
                 "[Premarc] Premarco seleccionado de la sesion eliminado desde UI -> "
-                f"found_in_queue={'si' if removed_item else 'no'}"
+                f"found_in_queue={'si' if removed_item else 'no'}, "
+                f"deleted_ppg_now={'si' if deleted_ppg else 'no'}"
             )
             self._redraw_session_created_premarcs_context()
             return True
 
         if self._has_confirmed_placement and self.placement_pnt != AllplanGeo.Point3D():
             self._clear_selected_premarc_overlay()
+            self._clear_session_selection_preview_context()
             self._loaded_saved_state = {}
             self._has_confirmed_placement = False
             self.placement_pnt = AllplanGeo.Point3D()
