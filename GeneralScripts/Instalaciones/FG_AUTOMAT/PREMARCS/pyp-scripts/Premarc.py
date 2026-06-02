@@ -836,6 +836,14 @@ class ExistingPremarcSelectInteractor(BaseScriptObjectInteractor):
             print("[SELECT][PREMARC] Clic sin elemento: seleccione la geometria del premarco")
             return True
 
+        clicked_name, clicked_type, clicked_guid = self.owner._get_adapter_debug_values(
+            selected_element
+        )
+        print(
+            "[SELECT][PREMARC] Click elemento -> "
+            f"name={clicked_name}, type={clicked_type}, model_guid={clicked_guid or '<sin-guid>'}"
+        )
+
         pyp_element, param_list = self.owner._resolve_premarc_ppg_from_adapter(
             selected_element
         )
@@ -844,13 +852,20 @@ class ExistingPremarcSelectInteractor(BaseScriptObjectInteractor):
             return True
 
         params = parse_params_list_to_dict(param_list)
-        selected_z = z_unique_as_int(params.get("z_unique", 0))
-        current_z = z_unique_as_int(getattr(self.owner.build_ele.z_unique, "value", 0))
-        if selected_z <= 0 or current_z <= 0 or selected_z != current_z:
-            self.owner._warn_premarc_from_other_execution()
-            return True
-
         saved_state = parse_saved_state_value(params.get("SavedState", {}))
+        ppg_name, ppg_type, ppg_guid = self.owner._get_adapter_debug_values(pyp_element)
+        print(
+            "[SELECT][PREMARC] PPG resuelto -> "
+            f"clicked_guid={clicked_guid or '<sin-guid>'}, "
+            f"ppg_name={ppg_name}, ppg_type={ppg_type}, ppg_guid={ppg_guid or '<sin-guid>'}, "
+            f"params={len(param_list) if param_list else 0}, "
+            f"saved_state_keys={sorted(saved_state.keys()) if saved_state else []}"
+        )
+        if not saved_state:
+            print(
+                "[SELECT][PREMARC] PPG sin SavedState utilizable: no se puede dibujar el marco de seleccion"
+            )
+            return True
 
         self.result.element = pyp_element
         try:
@@ -1894,6 +1909,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.script_object_interactor = None
             self.interactor_state = STOPPED
         elif self.interactor_state == SELECTING_EXISTING_PREMARC:
+            self._clear_session_selection_preview_context()
             self.script_object_interactor = None
             self.interactor_state = STOPPED
             if self.premarc_select_result.is_selected:
@@ -1904,6 +1920,8 @@ class PremarcScriptObject(BaseScriptObject):
                     self._activate_selected_premarc_overlay(
                         self.premarc_select_result.saved_state
                     )
+                if self._session_created_premarcs:
+                    self._redraw_session_created_premarcs_context()
         elif self.interactor_state == SELECTING_PENDING_PREMARC:
             self._clear_session_selection_preview_context()
             self.script_object_interactor = None
@@ -1965,6 +1983,16 @@ class PremarcScriptObject(BaseScriptObject):
 
         if self.is_modification_mode:
             self._prepare_modification_reposition_preview()
+        else:
+            source_guid = str(self._active_session_source_guid or "")
+            if source_guid:
+                deleted_now = self._delete_session_premarc_ppg(source_guid)
+                self._palette_reposition_deleted_root = deleted_now
+                print(
+                    "[Premarc][SESSION] Reubicar desde sesion -> "
+                    f"source_guid={source_guid}, "
+                    f"deleted_now={'si' if deleted_now else 'no'}"
+                )
 
         self._palette_reposition_active = True
         self._palette_reposition_has_new_point = False
@@ -2068,6 +2096,72 @@ class PremarcScriptObject(BaseScriptObject):
                 continue
         return ""
 
+    def _format_point3d_for_log(self, point: Any) -> str:
+        if point is None or not hasattr(point, "X"):
+            return "<sin-point>"
+        try:
+            return f"({float(point.X):.1f}, {float(point.Y):.1f}, {float(point.Z):.1f})"
+        except Exception:
+            return "<sin-point>"
+
+    def _log_session_created_premarcs(
+        self, reason: str, selected_guid: str = ""
+    ) -> None:
+        selected_guid_str = str(selected_guid or "")
+        active_guid_str = str(self._active_session_source_guid or "")
+        active_point_str = (
+            self._format_point3d_for_log(self.placement_pnt)
+            if self.placement_pnt != AllplanGeo.Point3D()
+            else "<sin-point>"
+        )
+        print(
+            "[Premarc][SESSION] "
+            f"{reason} -> count={len(self._session_created_premarcs)}, "
+            f"selected_guid={selected_guid_str or '<sin-guid>'}, "
+            f"active_guid={active_guid_str or '<sin-guid>'}, "
+            f"active_point={active_point_str}, "
+            f"has_confirmed={'si' if self._has_confirmed_placement else 'no'}"
+        )
+
+        if not self._session_created_premarcs:
+            print("[Premarc][SESSION]   <vacio>")
+            return
+
+        selected_found = False
+        non_selected_guids = []
+
+        for idx, item in enumerate(self._session_created_premarcs):
+            guid_str = str(item.get("ppg_guid", "") or "")
+            wall_guid_str = str(
+                item.get("wall_guid", "") or item.get("state", {}).get("wall_guid", "") or ""
+            )
+            role = (
+                "SELECTED"
+                if selected_guid_str and guid_str == selected_guid_str
+                else "OTHER"
+            )
+            if role == "SELECTED":
+                selected_found = True
+            else:
+                non_selected_guids.append(guid_str or f"idx={idx}")
+
+            print(
+                "[Premarc][SESSION]   "
+                f"idx={idx}, role={role}, guid={guid_str or '<sin-guid>'}, "
+                f"point={self._format_point3d_for_log(item.get('point'))}, "
+                f"wall_guid={wall_guid_str or '<sin-guid>'}"
+            )
+
+        if selected_guid_str and not selected_found:
+            print(
+                "[Premarc][SESSION]   "
+                f"selected_guid_not_in_queue={selected_guid_str}"
+            )
+        print(
+            "[Premarc][SESSION]   "
+            f"non_selected_guids={non_selected_guids if non_selected_guids else []}"
+        )
+
     def _create_current_premarc_ppg_without_opening(
         self, *, register_session_item: bool, reset_active_after_create: bool
     ) -> bool:
@@ -2110,6 +2204,12 @@ class PremarcScriptObject(BaseScriptObject):
         self._create_union_frames = True
         created_elements = self._execute() or []
         created_ppg_guid = self._extract_created_premarc_ppg_guid(created_elements)
+        print(
+            "[Premarc][SESSION] Materializacion sin opening -> "
+            f"created_ppg_guid={created_ppg_guid or '<sin-guid>'}, "
+            f"point={self._format_point3d_for_log(self.placement_pnt)}, "
+            f"created_elements={len(created_elements) if created_elements else 0}"
+        )
 
         if register_session_item:
             session_item = {
@@ -2132,6 +2232,10 @@ class PremarcScriptObject(BaseScriptObject):
             print(
                 "[Premarc] PPG de sesion creado sin opening: "
                 f"{len(self._session_created_premarcs)} pendiente(s) de opening"
+            )
+            self._log_session_created_premarcs(
+                "Despues de materializar PPG sin opening",
+                selected_guid=self._active_session_source_guid,
             )
 
         if reset_active_after_create:
@@ -2209,19 +2313,47 @@ class PremarcScriptObject(BaseScriptObject):
         if not self._validate_before_final_creation():
             return False
 
+        active_session_item_to_replace = None
         if self._has_confirmed_placement:
-            if not self._create_current_premarc_ppg_without_opening(
-                register_session_item=True,
-                reset_active_after_create=True,
-            ):
-                return False
+            active_session_item = self._build_current_active_session_final_item()
+            if active_session_item is not None:
+                active_guid = str(active_session_item.get("ppg_guid", "") or "")
+                if active_guid:
+                    active_session_item_to_replace = active_session_item
+                    print(
+                        "[Premarc][SESSION] Premarco activo finalizado como reemplazo -> "
+                        f"source_guid={active_guid}, "
+                        f"target_point={self._format_point3d_for_log(active_session_item.get('point'))}"
+                    )
+                else:
+                    self._session_created_premarcs.append(active_session_item)
+                self._log_session_created_premarcs(
+                    "Premarco activo preparado para finalizacion",
+                    selected_guid=active_guid,
+                )
+                self.placement_pnt = AllplanGeo.Point3D()
+                self._has_confirmed_placement = False
+                self._loaded_saved_state = {}
+                self._active_session_source_guid = ""
+                if hasattr(self.build_ele, "opening_guid"):
+                    self.build_ele.opening_guid.value = ""
+            else:
+                if not self._create_current_premarc_ppg_without_opening(
+                    register_session_item=True,
+                    reset_active_after_create=True,
+                ):
+                    return False
 
         if not self._session_created_premarcs:
-            print("[Premarc] No hay PPGs de premarco pendientes de opening")
-            return False
+            if active_session_item_to_replace is None:
+                print("[Premarc] No hay PPGs de premarco pendientes de opening")
+                return False
 
         session_items = list(self._session_created_premarcs)
         self._session_created_premarcs = []
+
+        if active_session_item_to_replace is not None:
+            session_items.insert(0, active_session_item_to_replace)
 
         for index, item in enumerate(session_items, start=1):
             point = item["point"]
@@ -2508,6 +2640,27 @@ class PremarcScriptObject(BaseScriptObject):
             "pending_index": None,
         }
 
+    def _build_current_active_session_final_item(self) -> dict | None:
+        if not self._has_confirmed_placement or self.placement_pnt == AllplanGeo.Point3D():
+            return None
+
+        session_state = self._build_premarc_saved_state_dict(self.placement_pnt)
+        if not session_state:
+            return None
+
+        session_wall_guid = str(
+            session_state.get("wall_guid", "")
+            or self.wall_select_result.element_guid
+            or getattr(self, "wall_guid_str", "")
+            or ""
+        )
+        return {
+            "point": self._copy_point3d(self.placement_pnt),
+            "state": dict(session_state),
+            "ppg_guid": str(self._active_session_source_guid or ""),
+            "wall_guid": session_wall_guid,
+        }
+
     def _build_selectable_pending_premarc_items(self) -> list[dict]:
         items = []
         for idx, item in enumerate(self._pending_premarcs):
@@ -2591,6 +2744,10 @@ class PremarcScriptObject(BaseScriptObject):
     def _delete_session_premarc_ppg(self, ppg_guid_str: str) -> bool:
         if not ppg_guid_str:
             return False
+        print(
+            "[Premarc][SELECT] Borrado temporal de PPG de sesion para editar -> "
+            f"ppg_guid={ppg_guid_str}"
+        )
         try:
             ppg_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
                 AllplanEleAdapter.GUID.FromString(ppg_guid_str),
@@ -2689,6 +2846,15 @@ class PremarcScriptObject(BaseScriptObject):
         if not saved_state or not ppg_guid_str:
             return False
 
+        print(
+            "[Premarc][SELECT] Solicitud seleccionar PPG de sesion -> "
+            f"requested_guid={ppg_guid_str}, "
+            f"saved_state_keys={sorted(saved_state.keys()) if saved_state else []}"
+        )
+        self._log_session_created_premarcs(
+            "Antes de seleccionar PPG de sesion", selected_guid=ppg_guid_str
+        )
+
         selected_index = None
         selected_item = None
         for idx, item in enumerate(self._session_created_premarcs):
@@ -2706,6 +2872,13 @@ class PremarcScriptObject(BaseScriptObject):
             and abs(self.placement_pnt.X - selected_point.X) <= 0.01
             and abs(self.placement_pnt.Y - selected_point.Y) <= 0.01
             and abs(self.placement_pnt.Z - selected_point.Z) <= 0.01
+        )
+        print(
+            "[Premarc][SELECT] Match en cola -> "
+            f"selected_index={selected_index}, "
+            f"selected_point={self._format_point3d_for_log(selected_point)}, "
+            f"current_point={self._format_point3d_for_log(self.placement_pnt)}, "
+            f"current_is_same={'si' if current_is_same else 'no'}"
         )
 
         if self._has_confirmed_placement and not current_is_same:
@@ -2726,6 +2899,12 @@ class PremarcScriptObject(BaseScriptObject):
                 return False
 
         self._delete_session_premarc_ppg(ppg_guid_str)
+        if selected_index is not None:
+            self._session_created_premarcs.pop(selected_index)
+        self._log_session_created_premarcs(
+            "Despues de sacar PPG seleccionado de la cola",
+            selected_guid=ppg_guid_str,
+        )
         self._active_session_source_guid = str(ppg_guid_str)
 
         self._apply_premarc_saved_state(dict(selected_item["state"]))
@@ -2743,7 +2922,10 @@ class PremarcScriptObject(BaseScriptObject):
         if wall_guid:
             self._try_restore_wall_from_guid(wall_guid)
 
-        print("[Premarc] PPG de sesion cargado como premarco activo editable")
+        print(
+            "[Premarc] PPG de sesion cargado como premarco activo editable -> "
+            f"restantes_en_contexto={len(self._session_created_premarcs)}"
+        )
         return self._activate_selected_premarc_overlay(selected_item["state"])
 
     def _transform_model_element_list(
@@ -3424,6 +3606,10 @@ class PremarcScriptObject(BaseScriptObject):
         self._session_selection_preview_elements = []
 
     def _draw_session_selection_preview_context(self, clear_before: bool = False) -> bool:
+        self._log_session_created_premarcs(
+            "Antes de dibujar preview de seleccion",
+            selected_guid=self._active_session_source_guid,
+        )
         preview_elements = self._build_session_selection_preview_elements()
         if not preview_elements:
             print("[Premarc] Preview de seleccion de sesion vacio")
@@ -3434,6 +3620,10 @@ class PremarcScriptObject(BaseScriptObject):
 
         self._session_selection_preview_elements = list(preview_elements)
         try:
+            print(
+                "[Premarc][SESSION] Preview seleccion construido -> "
+                f"preview_elements={len(preview_elements)}"
+            )
             AllplanBaseElements.DrawElementPreview(
                 self.document,
                 AllplanGeo.Matrix3D(),
@@ -3454,9 +3644,48 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _redraw_session_created_premarcs_context(self) -> bool:
         """Redraw the remaining premarcs of the current creation session."""
+        self._log_session_created_premarcs(
+            "Antes de refrescar contexto de sesion",
+            selected_guid=self._active_session_source_guid,
+        )
         if not self._session_created_premarcs:
+            self._clear_session_selection_preview_context()
             print("[Premarc] Contexto visual de sesion vacio tras eliminar")
             return False
+
+        preview_elements = self._build_session_created_premarcs_context_preview()
+        if not preview_elements:
+            self._clear_session_selection_preview_context()
+            print("[Premarc] Contexto visual de sesion sin geometria para refrescar")
+            return False
+
+        try:
+            self._clear_session_selection_preview_context()
+            self._session_selection_preview_elements = list(preview_elements)
+            print(
+                "[Premarc][SESSION] Redraw contexto construido -> "
+                f"preview_elements={len(preview_elements)}"
+            )
+            AllplanBaseElements.DrawElementPreview(
+                self.document,
+                AllplanGeo.Matrix3D(),
+                preview_elements,
+                False,
+                None,
+            )
+            print(
+                "[Premarc] Contexto visual de sesion refrescado tras eliminar -> "
+                f"{len(self._session_created_premarcs)} premarco(s)"
+            )
+            return True
+        except Exception as exc:
+            print(f"[Premarc] No se pudo refrescar el contexto visual de sesion: {exc}")
+            return False
+
+    def _build_session_created_premarcs_context_preview(self) -> list[Any]:
+        """Construye el contexto visual de los premarcos de sesion restantes en coordenadas globales."""
+        if not self._session_created_premarcs:
+            return []
 
         saved_pnt = self.placement_pnt
         saved_mat = self.placement_mat
@@ -3477,26 +3706,7 @@ class PremarcScriptObject(BaseScriptObject):
                 self.placement_pnt = saved_pnt
                 self.placement_mat = saved_mat
 
-        if not preview_elements:
-            print("[Premarc] Contexto visual de sesion sin geometria para refrescar")
-            return False
-
-        try:
-            AllplanBaseElements.DrawElementPreview(
-                self.document,
-                AllplanGeo.Matrix3D(),
-                preview_elements,
-                False,
-                None,
-            )
-            print(
-                "[Premarc] Contexto visual de sesion refrescado tras eliminar -> "
-                f"{len(self._session_created_premarcs)} premarco(s)"
-            )
-            return True
-        except Exception as exc:
-            print(f"[Premarc] No se pudo refrescar el contexto visual de sesion: {exc}")
-            return False
+        return preview_elements
 
     def _create_accumulated_placement_preview(self, active_point):
         """Preview de premarcos en cola + el activo (confirmado o bajo el cursor)."""
@@ -3631,52 +3841,61 @@ class PremarcScriptObject(BaseScriptObject):
                 )
             return True
         elif event_id == 1055:
-            self._clear_selected_premarc_overlay()
-            self.premarc_select_result = PremarcSelectResult()
-            self.pending_premarc_select_result = PendingPremarcSelectResult()
-
-            if not self.is_modification_mode and (
-                self._session_created_premarcs
-                or self._pending_premarcs
-                or (
-                    self._has_confirmed_placement
-                    and self.placement_pnt != AllplanGeo.Point3D()
-                )
-            ):
-                print(
-                    "[Premarc] Selector combinado de sesion -> "
-                    f"session_queue={len(self._session_created_premarcs)}, "
-                    f"pending_queue={len(self._pending_premarcs)}, "
-                    f"has_active={'si' if self._has_confirmed_placement and self.placement_pnt != AllplanGeo.Point3D() else 'no'}"
-                )
-                self.interactor_state = SELECTING_PENDING_PREMARC
-                self.script_object_interactor = PendingPremarcSelectInteractor(
-                    self.pending_premarc_select_result,
-                    "Seleccione el premarco preview o un PPG ya creado",
-                    owner=self,
-                )
-            else:
-                self.interactor_state = SELECTING_EXISTING_PREMARC
-                self.script_object_interactor = ExistingPremarcSelectInteractor(
-                    self.premarc_select_result,
-                    "Seleccione el premarco (PPG) en el dibujo",
-                    owner=self,
-                )
-            if self.script_object_interactor:
-                self.script_object_interactor.start_input(self.coord_input)
-            return True
-        elif event_id == 1056:
+            print(
+                "[Premarc][SELECT] Click boton seleccionar -> "
+                f"session_queue={len(self._session_created_premarcs)}, "
+                f"active_guid={self._active_session_source_guid or '<sin-guid>'}, "
+                f"placement={self._format_point3d_for_log(self.placement_pnt)}"
+            )
+            self._log_session_created_premarcs(
+                "Click boton seleccionar",
+                selected_guid=self._active_session_source_guid,
+            )
             self._clear_selected_premarc_overlay()
             self._clear_session_selection_preview_context()
             self.premarc_select_result = PremarcSelectResult()
             self.pending_premarc_select_result = PendingPremarcSelectResult()
-            self._active_session_source_guid = ""
-            self.script_object_interactor = None
-            if self.interactor_state in (
-                SELECTING_EXISTING_PREMARC,
-                SELECTING_PENDING_PREMARC,
-            ):
-                self.interactor_state = STOPPED
+
+            has_active_preview = (
+                self._has_confirmed_placement
+                and self.placement_pnt != AllplanGeo.Point3D()
+            )
+            has_only_active_preview = (
+                has_active_preview and not self._session_created_premarcs
+            )
+
+            if has_only_active_preview:
+                print(
+                    "[Premarc][SELECT] Seleccion directa del activo preview -> "
+                    f"active_guid={self._active_session_source_guid or '<sin-guid>'}, "
+                    f"point={self._format_point3d_for_log(self.placement_pnt)}"
+                )
+                active_state = self._build_premarc_saved_state_dict(self.placement_pnt)
+                self._activate_selected_premarc_overlay(active_state)
+                return True
+
+            if self._session_created_premarcs or has_active_preview:
+                self._draw_session_selection_preview_context(clear_before=False)
+
+            if self._session_created_premarcs or has_active_preview:
+                self.interactor_state = SELECTING_PENDING_PREMARC
+                self.script_object_interactor = PendingPremarcSelectInteractor(
+                    self.pending_premarc_select_result,
+                    "Seleccione el premarco preview o materializado a editar",
+                    owner=self,
+                )
+            else:
+                self._active_session_source_guid = ""
+                self.interactor_state = SELECTING_EXISTING_PREMARC
+                self.script_object_interactor = ExistingPremarcSelectInteractor(
+                    self.premarc_select_result,
+                    "Seleccione el premarco (PPG) materializado en el dibujo",
+                    owner=self,
+                )
+            self.script_object_interactor.start_input(self.coord_input)
+            return True
+        elif event_id == 1056:
+            print("[Premarc] Evento 1056 ignorado: selector de premarco deshabilitado temporalmente")
             return True
         else:
             return False
@@ -3876,7 +4095,14 @@ class PremarcScriptObject(BaseScriptObject):
         self.placement_mat.SetTranslation(AllplanGeo.Vector3D(self.placement_pnt))
 
     def execute(self) -> CreateElementResult:
-        print("execute")
+        print(
+            "[Premarc][EXECUTE] execute -> "
+            f"session_queue={len(self._session_created_premarcs)}, "
+            f"active_guid={self._active_session_source_guid or '<sin-guid>'}, "
+            f"placement={self._format_point3d_for_log(self.placement_pnt)}, "
+            f"has_confirmed={'si' if self._has_confirmed_placement else 'no'}, "
+            f"overlay_active={'si' if self._selected_premarc_overlay_active else 'no'}"
+        )
         # if self._should_create_opening:
         #     PythonUtility.ShowMessageBox(
         #         f"Creando opening en muro: {self.selected_wall}?",
@@ -3934,6 +4160,7 @@ class PremarcScriptObject(BaseScriptObject):
             return CreateElementResult([])
 
         preview_elements = []
+        session_context_preview = []
 
         self._rebuild_placement_mat()
 
@@ -3941,14 +4168,28 @@ class PremarcScriptObject(BaseScriptObject):
         preview_elements = self._make_preview_relative_to_point(
             preview_elements, self.placement_pnt
         )
+        if not self.is_modification_mode and self._session_created_premarcs:
+            session_context_global = self._build_session_created_premarcs_context_preview()
+            session_context_preview = self._make_preview_relative_to_point(
+                session_context_global, self.placement_pnt
+            )
+            print(
+                "[Premarc][EXECUTE] Contexto de sesion adjuntado al execute -> "
+                f"session_context_preview={len(session_context_preview)}"
+            )
         selection_overlay = self._make_preview_relative_to_point(
             self._get_active_selected_premarc_overlay(), self.placement_pnt
         )
+        if selection_overlay:
+            print(
+                "[Premarc][EXECUTE] Overlay de seleccion adjuntado al execute -> "
+                f"selection_overlay={len(selection_overlay)}"
+            )
 
         return CreateElementResult(
             elements=preview_elements + premarc_elements,
             handles=self.handle_list,
-            preview_elements=selection_overlay,
+            preview_elements=session_context_preview + selection_overlay,
             placement_point=self.placement_pnt,
         )
 
