@@ -3420,7 +3420,9 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
-        self.build_ele.wall_id.value = state["wall_id"]
+        self.build_ele.wall_id.value = state.get(
+            "pmp_pare", state.get("wall_id", "")
+        )
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
 
         if self.build_ele.enable_manual_thickness.value:
