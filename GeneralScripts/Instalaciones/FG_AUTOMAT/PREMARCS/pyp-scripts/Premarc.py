@@ -1749,15 +1749,31 @@ class PremarcScriptObject(BaseScriptObject):
                 "PASSAMÀ FALCA SUP./INF. (+ de 6m)",
             ]
 
-        # Actualizar la lista de valores
-        self.build_ele.valueListaPassama.value = lista_passama
+        # Regla de negocio: para fondo 310 no existen opciones de falca.
+        # Se filtra en UI para no depender de que la API o el mock estén
+        # perfectamente alineados con ese catálogo.
+        if self.get_thickness_for_api() == 310:
+            lista_passama = [
+                option_name
+                for option_name in lista_passama
+                if "FALCA" not in str(option_name).upper()
+            ]
 
-        # Inicializar los CheckBox si no están inicializados
-        if (
-            len(self.build_ele.PassamaOptions.value) != len(lista_passama)
-            and not self.is_modification_mode
-        ):
-            self.build_ele.PassamaOptions.value = [False] * len(lista_passama)
+        previous_names = list(self.build_ele.valueListaPassama.value or [])
+        previous_values = list(self.build_ele.PassamaOptions.value or [])
+        previous_state_by_name = {
+            str(name): bool(value)
+            for name, value in zip(previous_names, previous_values)
+        }
+
+        # Allplan no siempre recompone bien una lista dinámica si solo cambia
+        # el texto de las filas. Forzamos sincronización completa de nombres y
+        # estados, preservando únicamente las opciones que siguen existiendo.
+        self.build_ele.valueListaPassama.value = lista_passama
+        self.build_ele.PassamaOptions.value = [
+            previous_state_by_name.get(option_name, False)
+            for option_name in lista_passama
+        ]
 
     def load_rebajes_checkboxes(self):
         """Carga los valores dinámicos para los CheckBox"""
