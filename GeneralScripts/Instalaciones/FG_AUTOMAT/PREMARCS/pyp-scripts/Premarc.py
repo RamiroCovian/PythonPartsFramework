@@ -57,6 +57,24 @@ import requests
 ZERO_MODEL_GUID = "00000000-0000-0000-0000-000000000000"
 
 
+def resolve_attribute_id(document, *candidate_names: str) -> int:
+    """Devuelve el primer ID de atributo válido probando varios nombres."""
+    if not document:
+        return 0
+
+    for attr_name in candidate_names:
+        try:
+            attr_id = AllplanBaseElements.AttributeService.GetAttributeID(
+                document, attr_name
+            )
+            if attr_id and attr_id > 0:
+                return attr_id
+        except Exception:
+            continue
+
+    return 0
+
+
 def _site_packages_path(
     base_path,
 ):  # TODO: Eliminar este metodo antes de entregar a Arnau
@@ -545,7 +563,7 @@ VAL_PMP_FG_AMPIT_RETALL = 0.0
 VAL_PMP_FG_AMPIT_DETAIL_GENERAL = "TIPUS_AMPIT_1"
 VAL_PMP_FG_AMPIT_DETAIL_MATERIAL = "MATERIAL_1"
 
-ID_PMP_WALL_ID = 683
+IFC_ID_ATTRIBUTE_ID = 683
 
 
 def create_element_hash(element_type: str, stable: bool = False, **params) -> str:
@@ -1243,8 +1261,11 @@ class PremarcScriptObject(BaseScriptObject):
         self.pmp_id_premarc_id = AllplanBaseElements.AttributeService.GetAttributeID(
             self.document, PMP_ID_PREMARC
         )
-        self.pmp_pare_id = AllplanBaseElements.AttributeService.GetAttributeID(
-            self.document, PMP_PARE
+        self.pmp_pare_id = resolve_attribute_id(
+            self.document, "pmp_pare", "PMP_PARE"
+        )
+        self.pmp_wall_id_attr_id = resolve_attribute_id(
+            self.document, "PMP_WALL_ID"
         )
         self.pmp_tipus_premarc_id = AllplanBaseElements.AttributeService.GetAttributeID(
             self.document, PMP_TIPUS_PREMARC
@@ -1590,6 +1611,84 @@ class PremarcScriptObject(BaseScriptObject):
 
         return None
 
+    def get_wall_ifc_id(self, wall_element) -> str:
+        """Obtiene el IFC ID del muro host desde el atributo 683."""
+        if not wall_element:
+            return ""
+
+        try:
+            attrs = wall_element.GetAttributes(
+                AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
+            )
+            for attr in attrs:
+                try:
+                    attr_id = getattr(attr, "Id", None)
+                    if (
+                        attr_id is None
+                        and isinstance(attr, (tuple, list))
+                        and len(attr) >= 2
+                    ):
+                        attr_id = attr[0]
+                        attr_value = attr[1]
+                    else:
+                        attr_value = getattr(attr, "Value", None)
+
+                    if attr_id == IFC_ID_ATTRIBUTE_ID:
+                        return str(attr_value).strip() if attr_value else ""
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        return ""
+
+    def _get_current_pmp_pare_value(self) -> str:
+        """Valor legible de pmp_pare: nombre/material del muro host."""
+        if self.selected_wall:
+            wall_name = self.get_wall_material_name(self.selected_wall) or ""
+            if wall_name:
+                return str(wall_name).strip()
+        return str(getattr(self.build_ele.wall_id, "value", "") or "").strip()
+
+    def _get_current_wall_ifc_id_value(self) -> str:
+        """Valor técnico de PMP_WALL_ID: IFC ID del muro host."""
+        if self.selected_wall:
+            return self.get_wall_ifc_id(self.selected_wall)
+        return ""
+
+    def _get_current_premarc_id_value(self) -> str:
+        """PMP_ID_PREMARC debe salir del input de paleta del premarco."""
+        input_value = str(
+            getattr(self.build_ele.INPUT_PMP_ID_PREMARC, "value", "") or ""
+        ).strip()
+        if input_value:
+            return input_value
+        return str(getattr(self.build_ele.id_premarc, "value", "") or "").strip()
+
+    def _add_shared_generated_element_attributes(
+        self, attribute_list: BuildingElementAttributeList
+    ) -> None:
+        """Aplica atributos comunes a todos los subelementos del premarco."""
+        premarc_id = self._get_current_premarc_id_value()
+        if premarc_id:
+            attribute_list.add_attribute(self.pmp_id_premarc_id, premarc_id)
+
+        wall_name = self._get_current_pmp_pare_value()
+        if self.pmp_pare_id <= 0:
+            print("[Premarc] PMP_PARE no resuelto: attr_id<=0")
+        elif wall_name:
+            attribute_list.add_attribute(self.pmp_pare_id, wall_name)
+        else:
+            print("[Premarc] PMP_PARE vacío: no se añade atributo")
+
+        wall_ifc_id = self._get_current_wall_ifc_id_value()
+        if getattr(self, "pmp_wall_id_attr_id", 0) <= 0:
+            print("[Premarc] PMP_WALL_ID no resuelto: attr_id<=0")
+        elif wall_ifc_id:
+            attribute_list.add_attribute(self.pmp_wall_id_attr_id, wall_ifc_id)
+        else:
+            print("[Premarc] PMP_WALL_ID vacío: no se añade atributo")
+
     def get_thickness_for_api(self):
         if self.build_ele.enable_manual_thickness.value:
             return None
@@ -1878,6 +1977,7 @@ class PremarcScriptObject(BaseScriptObject):
                     try:
                         mat_raw = self.get_wall_material_name(self.selected_wall)
                         self.wall_name = mat_raw
+                        self.build_ele.wall_id.value = mat_raw or ""
 
                     except Exception as e:
                         pass
@@ -3966,6 +4066,14 @@ class PremarcScriptObject(BaseScriptObject):
                 self._user_label_override = value
             else:
                 self._user_label_override = None
+            return False
+
+        if name == "id_premarc":
+            self.build_ele.INPUT_PMP_ID_PREMARC.value = str(_value).strip()
+            return False
+
+        if name == "INPUT_PMP_ID_PREMARC":
+            self.build_ele.id_premarc.value = str(_value).strip()
             return False
 
         if name == "afegit_ampits":
@@ -6452,14 +6560,7 @@ class PremarcScriptObject(BaseScriptObject):
         xps_attribute_list.add_attribute(
             self.pmp_xps_premarc_detail_text_id, VAL_PMP_XPS_PREMARC_DETAIL_TEXT
         )
-        xps_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            xps_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        xps_attribute_list.add_attribute(ID_PMP_WALL_ID, self.build_ele.wall_id.value)
+        self._add_shared_generated_element_attributes(xps_attribute_list)
 
         init_i = len(model_ele_list) - len(xps)
         for i in range(init_i, len(model_ele_list)):
@@ -6488,19 +6589,12 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_prem_encaje_base_id, self.prem_encaje_base
         )
         frame_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        frame_attribute_list.add_attribute(
             self.pmp_prem_muro_id, self.build_ele.thickness_wall.value
         )
         frame_attribute_list.add_attribute(
             self.pmp_prem_color_id, self.color_id_to_rgb_or_hex()[0]
         )
-        if self.selected_wall:
-            frame_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        frame_attribute_list.add_attribute(ID_PMP_WALL_ID, self.build_ele.wall_id.value)
+        self._add_shared_generated_element_attributes(frame_attribute_list)
         frame_attribute_list.add_attribute(
             self.pmp_premarc_type_id, self._premarc_labels_without_extras()
         )
@@ -6571,16 +6665,7 @@ class PremarcScriptObject(BaseScriptObject):
         squares_attribute_list.add_attribute(
             self.pmp_premarc_element_labels_id, VAL_PMP_PREMARC_ELEMENT_LABELS_ESCAIRE
         )
-        squares_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            squares_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        squares_attribute_list.add_attribute(
-            ID_PMP_WALL_ID, self.build_ele.wall_id.value
-        )
+        self._add_shared_generated_element_attributes(squares_attribute_list)
 
         init_i = len(model_ele_list) - len(squares)
         for i in range(init_i, len(model_ele_list)):
@@ -6596,16 +6681,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_premarc_element_labels_id,
             VAL_PMP_PREMARC_ELEMENT_LABELS_TUB_VERTICAL,
         )
-        vertical_tubes_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            vertical_tubes_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        vertical_tubes_attribute_list.add_attribute(
-            ID_PMP_WALL_ID, self.build_ele.wall_id.value
-        )
+        self._add_shared_generated_element_attributes(vertical_tubes_attribute_list)
 
         init_i = len(model_ele_list) - len(vertical_tubs)
         for i in range(init_i, len(model_ele_list)):
@@ -6621,15 +6697,8 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_premarc_element_labels_id,
             VAL_PMP_PREMARC_ELEMENT_LABELS_TUB_HORITZONTAL,
         )
-        horitzontal_tubes_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            horitzontal_tubes_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        horitzontal_tubes_attribute_list.add_attribute(
-            ID_PMP_WALL_ID, self.build_ele.wall_id.value
+        self._add_shared_generated_element_attributes(
+            horitzontal_tubes_attribute_list
         )
 
         init_i = len(model_ele_list) - len(horizontal_tubs)
@@ -6648,14 +6717,7 @@ class PremarcScriptObject(BaseScriptObject):
         rea_attribute_list.add_attribute(
             self.pmp_premarc_element_labels_id, VAL_PMP_PREMARC_ELEMENT_LABELS_REA
         )
-        rea_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            rea_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        rea_attribute_list.add_attribute(ID_PMP_WALL_ID, self.build_ele.wall_id.value)
+        self._add_shared_generated_element_attributes(rea_attribute_list)
 
         init_i = len(model_ele_list) - len(cuboids_rea) - len(cylinders_rea)
         for i in range(init_i, len(model_ele_list)):
@@ -6670,14 +6732,7 @@ class PremarcScriptObject(BaseScriptObject):
         falca_attribute_list.add_attribute(
             self.pmp_premarc_element_labels_id, VAL_PMP_PREMARC_ELEMENT_LABELS_FALCA
         )
-        falca_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            falca_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        falca_attribute_list.add_attribute(ID_PMP_WALL_ID, self.build_ele.wall_id.value)
+        self._add_shared_generated_element_attributes(falca_attribute_list)
 
         init_i = len(model_ele_list) - len(falcas)
         for i in range(init_i, len(model_ele_list)):
@@ -6690,12 +6745,26 @@ class PremarcScriptObject(BaseScriptObject):
 
         if polyhedron_socket:
             model_ele_list.append_geometry_3d(polyhedron_socket, props_encaix)
+            socket_attribute_list = BuildingElementAttributeList()
+            self._add_shared_generated_element_attributes(socket_attribute_list)
+            model_ele_list.set_element_attributes(
+                len(model_ele_list) - 1, socket_attribute_list.get_attribute_list()
+            )
 
         box_shutter = self.create_box_shutter()
         for elem in box_shutter:
             model_ele_list.append_geometry_3d(
                 elem, props_box_shutter
             )  # use same color from premarc
+
+        if box_shutter:
+            shutter_attribute_list = BuildingElementAttributeList()
+            self._add_shared_generated_element_attributes(shutter_attribute_list)
+            init_i = len(model_ele_list) - len(box_shutter)
+            for i in range(init_i, len(model_ele_list)):
+                model_ele_list.set_element_attributes(
+                    i, shutter_attribute_list.get_attribute_list()
+                )
 
         window_3d, window_2d = self.create_premarc_window()
         for elem in window_3d:
@@ -6777,16 +6846,7 @@ class PremarcScriptObject(BaseScriptObject):
         window_attribute_list.add_attribute(
             self.pmp_fg_muntatge_id, VAL_PMP_FG_MUNTATGE
         )
-        window_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            window_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        window_attribute_list.add_attribute(
-            ID_PMP_WALL_ID, self.build_ele.wall_id.value
-        )
+        self._add_shared_generated_element_attributes(window_attribute_list)
 
         init_i = len(model_ele_list) - len(window_3d)
         for i in range(init_i, len(model_ele_list)):
@@ -6839,14 +6899,7 @@ class PremarcScriptObject(BaseScriptObject):
         ampit_attribute_list.add_attribute(
             self.pmp_fg_ampit_retall_id, VAL_PMP_FG_AMPIT_RETALL
         )
-        ampit_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            ampit_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        ampit_attribute_list.add_attribute(ID_PMP_WALL_ID, self.build_ele.wall_id.value)
+        self._add_shared_generated_element_attributes(ampit_attribute_list)
 
         init_i = len(model_ele_list) - len(ampit)
         for i in range(init_i, len(model_ele_list)):
@@ -6864,16 +6917,7 @@ class PremarcScriptObject(BaseScriptObject):
         ampit_edge_attribute_list.add_attribute(
             self.pmp_fg_ampit_parts_id, VAL_PMP_FG_AMPIT_PARTS
         )
-        ampit_edge_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            ampit_edge_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        ampit_edge_attribute_list.add_attribute(
-            ID_PMP_WALL_ID, self.build_ele.wall_id.value
-        )
+        self._add_shared_generated_element_attributes(ampit_edge_attribute_list)
 
         model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
         model_ele_list.set_element_attributes(
@@ -6912,16 +6956,7 @@ class PremarcScriptObject(BaseScriptObject):
         imperm_attribute_list.add_attribute(
             self.pmp_tipus_impermeabilitzacio_id, imperm_type
         )
-        imperm_attribute_list.add_attribute(
-            self.pmp_id_premarc_id, self.val_pmp_id_premarc
-        )
-        if self.selected_wall:
-            imperm_attribute_list.add_attribute(
-                self.pmp_pare_id, self.get_wall_material_name(self.selected_wall)
-            )
-        imperm_attribute_list.add_attribute(
-            ID_PMP_WALL_ID, self.build_ele.wall_id.value
-        )
+        self._add_shared_generated_element_attributes(imperm_attribute_list)
         init_i = len(model_ele_list) - len(imperm)
         for i in range(init_i, len(model_ele_list)):
             model_ele_list.set_element_attributes(
@@ -11049,8 +11084,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.afegit_ampits = self.build_ele.afegit_ampits.value
         self.retall_ampits = self.build_ele.retall_ampits.value
 
-        self.val_pmp_fg_wall_name = self.build_ele.wall_id.value
-        self.val_pmp_id_premarc = self.build_ele.id_premarc.value
+        self.val_pmp_fg_wall_name = self._get_current_pmp_pare_value()
+        self.val_pmp_id_premarc = self._get_current_premarc_id_value()
         # self.val_pmp_xps_premarc_detail = self.build_ele.INPUT_PMP_XPS_PREMARC_DETAIL.value
         # self.val_pmp_fg_fus_codi_panell = self.build_ele.INPUT_PMP_FG_FUS_CODI_PANELL.value
         # self.val_pmp_fg_fus_codi = self.build_ele.INPUT_PMP_FG_FUS_CODI.value
