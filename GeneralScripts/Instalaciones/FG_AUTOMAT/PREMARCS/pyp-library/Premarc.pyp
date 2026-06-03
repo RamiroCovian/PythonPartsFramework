@@ -38,13 +38,6 @@
         </Parameter>
 
         <Parameter>
-            <Name>ShowXPS</Name>
-            <Text>Mostrar XPS completa</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
             <Name>DisableTopXPS</Name>
             <Text>Deshabilitar XPS superior</Text>
             <Value>False</Value>
