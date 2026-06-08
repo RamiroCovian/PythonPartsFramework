@@ -1849,6 +1849,44 @@ class PremarcScriptObject(BaseScriptObject):
             return material_value
         return ""
 
+    def _get_effective_premarc_thickness(self) -> float:
+        """Fondo efectivo del premarco: manual si esta activo, si no valor de catalogo."""
+        return float(
+            self.build_ele.manual_thickness.value
+            if self.build_ele.enable_manual_thickness.value
+            else self.build_ele.thickness.value
+        )
+
+    def _get_ampit_detail_general_value(self) -> str:
+        """Resuelve PMP_FG_AMPIT_DETAIL_GENERAL segun material, PE y grosores."""
+        material = self._get_ampit_material_value().strip().upper()
+        is_premarc_pe = bool(getattr(self.build_ele.premarc_PE, "value", False))
+
+        if material == "CERAMICA_MAYOR" and is_premarc_pe:
+            return "DG_A_PE_CM_1"
+        if material == "CERAMIC" and is_premarc_pe:
+            return "DG_A_PE_C_2"
+
+        try:
+            premarc_thickness = self._get_effective_premarc_thickness()
+            wall_thickness = float(self.build_ele.thickness_wall.value)
+        except (TypeError, ValueError):
+            return VAL_PMP_FG_AMPIT_DETAIL_GENERAL
+
+        thickness_delta = premarc_thickness - wall_thickness
+        if material == "CERAMIC":
+            if thickness_delta > 1e-6:
+                return "DG_A_C_1"
+            if abs(thickness_delta) <= 1e-6:
+                return "DG_A_C_2"
+        elif material == "CERAMICA_MAYOR":
+            if thickness_delta > 1e-6:
+                return "DG_A_CM_1"
+            if abs(thickness_delta) <= 1e-6:
+                return "DG_A_CM_2"
+
+        return VAL_PMP_FG_AMPIT_DETAIL_GENERAL
+
     def _build_ampit_attribute_list(
         self, include_geometry_specific_fields: bool = True
     ) -> BuildingElementAttributeList:
@@ -1881,7 +1919,7 @@ class PremarcScriptObject(BaseScriptObject):
             )
 
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_detail_general_id, VAL_PMP_FG_AMPIT_DETAIL_GENERAL
+            self.pmp_fg_ampit_detail_general_id, self._get_ampit_detail_general_value()
         )
         attribute_list.add_attribute(
             self.pmp_fg_ampit_material_id, self._get_ampit_material_value()
@@ -3631,6 +3669,8 @@ class PremarcScriptObject(BaseScriptObject):
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
             "retall_ampits": self.build_ele.retall_ampits.value,
+            "ampit_material": self._get_ampit_material_value(),
+            "premarc_PE": self.build_ele.premarc_PE.value,
             "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
             "EnableRetallGanxo": self.build_ele.EnableRetallGanxo.value,
             "Z_RetallGanxo": self.build_ele.Z_RetallGanxo.value,
@@ -3729,6 +3769,14 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
+        if hasattr(self.build_ele, "INPUT_PMP_FG_AMPIT_MATERIAL"):
+            self.build_ele.INPUT_PMP_FG_AMPIT_MATERIAL.value = state.get(
+                "ampit_material",
+                getattr(self.build_ele.INPUT_PMP_FG_AMPIT_MATERIAL, "value", ""),
+            )
+        self.build_ele.premarc_PE.value = state.get(
+            "premarc_PE", getattr(self.build_ele.premarc_PE, "value", False)
+        )
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
