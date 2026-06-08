@@ -1690,6 +1690,22 @@ class PremarcScriptObject(BaseScriptObject):
         else:
             print("[Premarc] PMP_WALL_ID vacío: no se añade atributo")
 
+    def _add_ampit_identity_attributes(
+        self, attribute_list: BuildingElementAttributeList
+    ) -> None:
+        """Identidad tecnica minima para ampits y sus ejes."""
+        premarc_id = self._get_current_premarc_id_value()
+        if premarc_id:
+            attribute_list.add_attribute(self.pmp_id_premarc_id, premarc_id)
+
+        wall_ifc_id = self._get_current_wall_ifc_id_value()
+        if getattr(self, "pmp_wall_id_attr_id", 0) <= 0:
+            print("[Premarc] PMP_WALL_ID no resuelto: attr_id<=0")
+        elif wall_ifc_id:
+            attribute_list.add_attribute(self.pmp_wall_id_attr_id, wall_ifc_id)
+        else:
+            print("[Premarc] PMP_WALL_ID vacío: no se añade atributo")
+
     def _debug_log_attribute_resolution(self) -> None:
         """
         Traza acotada de los atributos clave para diagnosticar IDs no definidos
@@ -1816,13 +1832,29 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _get_ampit_afegit_value(self) -> float:
         """
-        Valor final de afegit del ampit.
-        Debe reflejar el calculo real generado en create_premarc_ampit.
+        Longitud añadida si el ampit es mas estrecho que el ancho a cubrir.
+        La fuente persistida es build_ele.afegit_ampits.
         """
-        build_ele_value = float(getattr(self.build_ele.afegit_ampits, "value", 0.0) or 0.0)
+        build_ele_value = float(
+            getattr(self.build_ele.afegit_ampits, "value", 0.0) or 0.0
+        )
         computed_value = float(getattr(self, "afegit_ampits", 0.0) or 0.0)
         if computed_value > 0 and abs(build_ele_value - computed_value) > 1e-9:
             self.build_ele.afegit_ampits.value = computed_value
+            return computed_value
+        return build_ele_value
+
+    def _get_ampit_retall_value(self) -> float:
+        """
+        Longitud a recortar si el ampit es mas ancho que el ancho a cubrir.
+        La fuente persistida es build_ele.retall_ampits.
+        """
+        build_ele_value = float(
+            getattr(self.build_ele.retall_ampits, "value", 0.0) or 0.0
+        )
+        computed_value = float(getattr(self, "retall_ampits", 0.0) or 0.0)
+        if computed_value > 0 and abs(build_ele_value - computed_value) > 1e-9:
+            self.build_ele.retall_ampits.value = computed_value
             return computed_value
         return build_ele_value
 
@@ -1887,37 +1919,16 @@ class PremarcScriptObject(BaseScriptObject):
 
         return VAL_PMP_FG_AMPIT_DETAIL_GENERAL
 
-    def _build_ampit_attribute_list(
-        self, include_geometry_specific_fields: bool = True
-    ) -> BuildingElementAttributeList:
-        """Atributos propios del ampit y sus ejes."""
+    def _build_ampit_attribute_list(self) -> BuildingElementAttributeList:
+        """Atributos visibles para los elementos 3D de ampit."""
         attribute_list = BuildingElementAttributeList()
-        if include_geometry_specific_fields:
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_detail_id, VAL_PMP_FG_AMPIT_DETAIL
-            )
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_esq_id, VAL_PMP_FG_AMPIT_ESQ
-            )
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_dre_id, VAL_PMP_FG_AMPIT_DRE
-            )
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_sup_id, VAL_PMP_FG_AMPIT_SUP
-            )
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_inf_id, VAL_PMP_FG_AMPIT_INF
-            )
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_muntatge_id, self._get_ampit_muntatge_value()
-            )
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_afegit_id, self._get_ampit_afegit_value()
-            )
-            attribute_list.add_attribute(
-                self.pmp_fg_ampit_retall_id, self.build_ele.retall_ampits.value
-            )
-
+        self._add_ampit_identity_attributes(attribute_list)
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_afegit_id, self._get_ampit_afegit_value()
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_retall_id, self._get_ampit_retall_value()
+        )
         attribute_list.add_attribute(
             self.pmp_fg_ampit_detail_general_id, self._get_ampit_detail_general_value()
         )
@@ -1925,15 +1936,38 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_material_id, self._get_ampit_material_value()
         )
         attribute_list.add_attribute(
+            self.pmp_fg_ampit_muntatge_id, self._get_ampit_muntatge_value()
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
+        )
+        attribute_list.add_attribute(
             self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
         )
         attribute_list.add_attribute(
             self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
         )
+        return attribute_list
+
+    def _build_ampit_edge_fg_attribute_list(self) -> BuildingElementAttributeList:
+        """Atributos visibles para PMP_AMPITS_EIX_FG."""
+        attribute_list = BuildingElementAttributeList()
+        self._add_ampit_identity_attributes(attribute_list)
+        return attribute_list
+
+    def _build_ampit_edge_add_attribute_list(self) -> BuildingElementAttributeList:
+        """Atributos visibles para PMP_AMPITS_EIX_ADD."""
+        attribute_list = BuildingElementAttributeList()
+        self._add_ampit_identity_attributes(attribute_list)
         attribute_list.add_attribute(
             self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
         )
-        self._add_shared_generated_element_attributes(attribute_list)
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
+        )
         return attribute_list
 
     def get_thickness_for_api(self):
@@ -7054,19 +7088,19 @@ class PremarcScriptObject(BaseScriptObject):
                 i, ampit_attribute_list.get_attribute_list()
             )
 
-        ampit_edge_attribute_list = self._build_ampit_attribute_list(
-            include_geometry_specific_fields=False
-        )
+        ampit_edge_fg_attribute_list = self._build_ampit_edge_fg_attribute_list()
+        ampit_edge_add_attribute_list = self._build_ampit_edge_add_attribute_list()
 
         model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
         model_ele_list.set_element_attributes(
-            len(model_ele_list) - 1, ampit_edge_attribute_list.get_attribute_list()
+            len(model_ele_list) - 1, ampit_edge_fg_attribute_list.get_attribute_list()
         )
 
         if len(ampit_edge_add) > 0:
             model_ele_list.append_geometry_3d(ampit_edge_add, props_ampit_eix_add)
             model_ele_list.set_element_attributes(
-                len(model_ele_list) - 1, ampit_edge_attribute_list.get_attribute_list()
+                len(model_ele_list) - 1,
+                ampit_edge_add_attribute_list.get_attribute_list(),
             )
 
         model_ele_list.append_geometry_2d(ampit_2d, props_ampit)
