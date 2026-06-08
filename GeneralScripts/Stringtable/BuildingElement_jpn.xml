@@ -54,7 +54,7 @@
     </Item>
     <Item>
         <TextId>e_DRAW_ORDER</TextId>
-        <Text>順序</Text>
+        <Text>Sequence</Text>
     </Item>
     <Item>
         <TextId>e_HELPCONSTRUCTION</TextId>
@@ -521,7 +521,7 @@
         <TextId>e_RIGHT</TextId>
     </Item>
     <Item>
-        <Text>空</Text>
+        <Text>Empty</Text>
         <TextId>e_EMPTY</TextId>
     </Item>
     <Item>
@@ -666,134 +666,134 @@
     </Item>
     <Item>
         <TextId>e_OFFICE</TextId>
-        <Text>オフィス</Text>
+        <Text>Office</Text>
     </Item>
     <Item>
         <TextId>e_PRIVAT</TextId>
-        <Text>プライベート</Text>
+        <Text>Private</Text>
     </Item>
     <Item>
         <TextId>e_PROJECT</TextId>
-        <Text>プロジェクト</Text>
+        <Text>Project</Text>
     </Item>
     <Item>
         <TextId>e_STANDARD</TextId>
-        <Text>デフォルト</Text>
+        <Text>Default</Text>
     </Item>
     <Item>
         <TextId>e_ADD_NEW_ATTRIBUTE</TextId>
-        <Text>新しい属性を割り当て</Text>
+        <Text>Assign new attribute</Text>
     </Item>
     <Item>
         <TextId>e_DELETE_ATTRIBUTE</TextId>
-        <Text>入力リストから属性を削除</Text>
+        <Text>Remove attribute from entry list</Text>
     </Item>
     <Item>
         <TextId>e_UNDEFINED</TextId>
-        <Text>未定義</Text>
+        <Text>Undefined</Text>
     </Item>
     <Item>
         <TextId>e_LICENSE_UNAVAILABLE</TextId>
-        <Text>ライセンスは利用できません</Text>
+        <Text>License not available</Text>
     </Item>
     <Item>
         <TextId>e_TEXT_FRAME</TextId>
-        <Text>テキスト境界</Text>
+        <Text>Text border</Text>
     </Item>
     <Item>
         <TextId>e_HAS_TEXT_FRAME</TextId>
-        <Text>段落テキストを囲む境界</Text>
+        <Text>Border around paragraph text</Text>
     </Item>
     <Item>
         <TextId>e_FRAME_COLOR</TextId>
-        <Text>境界の色</Text>
+        <Text>Color for border</Text>
     </Item>
     <Item>
         <TextId>e_FRAME_PEN</TextId>
-        <Text>境界のペンの太さ</Text>
+        <Text>Pen thickness for border</Text>
     </Item>
     <Item>
         <TextId>e_FRAME_STROKE</TextId>
-        <Text>境界の線の種類</Text>
+        <Text>Line type for border</Text>
     </Item>
     <Item>
         <TextId>e_TEXT_PROP</TextId>
-        <Text>テキストプロパティ</Text>
+        <Text>Text properties</Text>
         </Item>
     <Item>
         <TextId>e_FONT</TextId>
-        <Text>フォント</Text>
+        <Text>Font</Text>
     </Item>
     <Item>
         <TextId>e_FONT_STYLES</TextId>
-        <Text>強調</Text>
+        <Text>Emphasis</Text>
     </Item>
     <Item>
         <TextId>e_FONT_ANGLE</TextId>
-        <Text>斜体テキストの角度</Text>
+        <Text>Angle for italic text</Text>
     </Item>
     <Item>
         <TextId>e_COLUMN_SLOPE_ANGLE</TextId>
-        <Text>柱の角度</Text>
+        <Text>Column angle</Text>
     </Item>
     <Item>
         <TextId>e_TEXT_ANGLE</TextId>
-        <Text>テキスト回転角度</Text>
+        <Text>Text rotation angle</Text>
     </Item>
     <Item>
         <TextId>e_ALIGNMENT</TextId>
-        <Text>配置</Text>
+        <Text>Alignment</Text>
     </Item>
     <Item>
         <TextId>e_BACKGROUND</TextId>
-        <Text>背景</Text>
+        <Text>Background</Text>
     </Item>
     <Item>
         <TextId>e_BACKGROUND_FILL_OF_VIEWPORT</TextId>
-        <Text>ビューポートの背景色</Text>
+        <Text>Background fill of viewport</Text>
     </Item>
     <Item>
         <TextId>e_HAS_BACKGROUND_COLOR</TextId>
-        <Text>背景色</Text>
+        <Text>Background color</Text>
     </Item>
     <Item>
         <TextId>e_BACKGROUND_COLOR</TextId>
-        <Text>色</Text>
+        <Text>Color</Text>
     </Item>
     <Item>
         <TextId>e_LAYOUT</TextId>
-        <Text>行送り</Text>
+        <Text>Line feed</Text>
     </Item>
     <Item>
         <TextId>e_LINE_FEED</TextId>
-        <Text>行送り</Text>
+        <Text>Line feed</Text>
     </Item>
     <Item>
         <TextId>e_WRAPPED_TEXT</TextId>
-        <Text>テキストラッピング</Text>
+        <Text>Text wrapping</Text>
     </Item>
     <Item>
         <TextId>e_IS_SCALE_DEPENDENT</TextId>
-        <Text>スケール依存</Text>
+        <Text>Scale dependent</Text>
     </Item>
     <Item>
         <TextId>e_DATE_DIALOG</TextId>
-        <Text>選択日付</Text>
+        <Text>Select date</Text>
     </Item>
     <Item>
         <TextId>e_FILE_DIALOG_DEFAULT</TextId>
-        <Text>検索 ...</Text>
+        <Text>Search ...</Text>
     </Item>
     <Item>
         <TextId>e_VARIED</TextId>
-        <Text>*変更*</Text>
+        <Text>*varied*</Text>
     </Item>
     <Item>
         <TextId>e_OF</TextId>
-        <Text>/</Text>
+        <Text>of</Text>
     </Item>
     <Item>
         <TextId>e_DELETE_ITEM</TextId>
-        <Text>項目を削除</Text>
+        <Text>Delete item</Text>
     </Item>
 </Element>

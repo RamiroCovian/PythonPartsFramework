@@ -666,79 +666,79 @@
     </Item>
     <Item>
         <TextId>e_OFFICE</TextId>
-        <Text>Escritório</Text>
+        <Text>Office</Text>
     </Item>
     <Item>
         <TextId>e_PRIVAT</TextId>
-        <Text>Privado</Text>
+        <Text>Private</Text>
     </Item>
     <Item>
         <TextId>e_PROJECT</TextId>
-        <Text>Projeto</Text>
+        <Text>Project</Text>
     </Item>
     <Item>
         <TextId>e_STANDARD</TextId>
-        <Text>Padrão</Text>
+        <Text>Default</Text>
     </Item>
     <Item>
         <TextId>e_ADD_NEW_ATTRIBUTE</TextId>
-        <Text>Atribuir novo atributo</Text>
+        <Text>Assign new attribute</Text>
     </Item>
     <Item>
         <TextId>e_DELETE_ATTRIBUTE</TextId>
-        <Text>Remover atributo da lista de entradas</Text>
+        <Text>Remove attribute from entry list</Text>
     </Item>
     <Item>
         <TextId>e_UNDEFINED</TextId>
-        <Text>Indefinido</Text>
+        <Text>Undefined</Text>
     </Item>
     <Item>
         <TextId>e_LICENSE_UNAVAILABLE</TextId>
-        <Text>Licença não disponível</Text>
+        <Text>License not available</Text>
     </Item>
     <Item>
         <TextId>e_TEXT_FRAME</TextId>
-        <Text>Borda do texto</Text>
+        <Text>Text border</Text>
     </Item>
     <Item>
         <TextId>e_HAS_TEXT_FRAME</TextId>
-        <Text>Borda ao redor do texto do parágrafo</Text>
+        <Text>Border around paragraph text</Text>
     </Item>
     <Item>
         <TextId>e_FRAME_COLOR</TextId>
-        <Text>Cor da borda</Text>
+        <Text>Color for border</Text>
     </Item>
     <Item>
         <TextId>e_FRAME_PEN</TextId>
-        <Text>Espessura da pena para a borda</Text>
+        <Text>Pen thickness for border</Text>
     </Item>
     <Item>
         <TextId>e_FRAME_STROKE</TextId>
-        <Text>Tipo de linha para a borda</Text>
+        <Text>Line type for border</Text>
     </Item>
     <Item>
         <TextId>e_TEXT_PROP</TextId>
-        <Text>Propriedades do texto</Text>
+        <Text>Text properties</Text>
         </Item>
     <Item>
         <TextId>e_FONT</TextId>
-        <Text>Fonte</Text>
+        <Text>Font</Text>
     </Item>
     <Item>
         <TextId>e_FONT_STYLES</TextId>
-        <Text>Ênfase</Text>
+        <Text>Emphasis</Text>
     </Item>
     <Item>
         <TextId>e_FONT_ANGLE</TextId>
-        <Text>Ângulo para texto em itálico</Text>
+        <Text>Angle for italic text</Text>
     </Item>
     <Item>
         <TextId>e_COLUMN_SLOPE_ANGLE</TextId>
-        <Text>Ângulo do pilar</Text>
+        <Text>Column angle</Text>
     </Item>
     <Item>
         <TextId>e_TEXT_ANGLE</TextId>
-        <Text>Ângulo de rotação do texto</Text>
+        <Text>Text rotation angle</Text>
     </Item>
     <Item>
         <TextId>e_ALIGNMENT</TextId>
@@ -750,15 +750,15 @@
     </Item>
     <Item>
         <TextId>e_BACKGROUND_FILL_OF_VIEWPORT</TextId>
-        <Text>Preenchimento de fundo da janela de visualização</Text>
+        <Text>Background fill of viewport</Text>
     </Item>
     <Item>
         <TextId>e_HAS_BACKGROUND_COLOR</TextId>
-        <Text>Cor de fundo</Text>
+        <Text>Background color</Text>
     </Item>
     <Item>
         <TextId>e_BACKGROUND_COLOR</TextId>
-        <Text>Cor</Text>
+        <Text>Color</Text>
     </Item>
     <Item>
         <TextId>e_LAYOUT</TextId>
@@ -770,11 +770,11 @@
     </Item>
     <Item>
         <TextId>e_WRAPPED_TEXT</TextId>
-        <Text>Envolvimento de texto</Text>
+        <Text>Text wrapping</Text>
     </Item>
     <Item>
         <TextId>e_IS_SCALE_DEPENDENT</TextId>
-        <Text>Depende da escala</Text>
+        <Text>Scale dependent</Text>
     </Item>
     <Item>
         <TextId>e_DATE_DIALOG</TextId>
@@ -782,18 +782,18 @@
     </Item>
     <Item>
         <TextId>e_FILE_DIALOG_DEFAULT</TextId>
-        <Text>Pesquisar ...</Text>
+        <Text>Search ...</Text>
     </Item>
     <Item>
         <TextId>e_VARIED</TextId>
-        <Text>*variou*</Text>
+        <Text>*varied*</Text>
     </Item>
     <Item>
         <TextId>e_OF</TextId>
-        <Text>de</Text>
+        <Text>of</Text>
     </Item>
     <Item>
         <TextId>e_DELETE_ITEM</TextId>
-        <Text>Excluir item</Text>
+        <Text>Delete item</Text>
     </Item>
 </Element>

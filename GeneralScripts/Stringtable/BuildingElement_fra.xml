@@ -26,7 +26,7 @@
     </Item>
     <Item>
         <TextId>e_LAYER</TextId>
-        <Text>Calque</Text>
+        <Text>Layer</Text>
     </Item>
     <Item>
         <TextId>e_PEN</TextId>
@@ -34,7 +34,7 @@
     </Item>
     <Item>
         <TextId>e_PEN_BY_LAYER</TextId>
-        <Text>Plume du calque</Text>
+        <Text>Plume du layer</Text>
     </Item>
     <Item>
         <TextId>e_LINETYPE</TextId>
@@ -42,7 +42,7 @@
     </Item>
     <Item>
         <TextId>e_LINETYPE_BY_LAYER</TextId>
-        <Text>Trait du calque</Text>
+        <Text>Trait du layer</Text>
     </Item>
     <Item>
         <TextId>e_COLOR</TextId>
@@ -50,7 +50,7 @@
     </Item>
     <Item>
         <TextId>e_COLOR_BY_LAYER</TextId>
-        <Text>Couleur du calque</Text>
+        <Text>Couleur du layer</Text>
     </Item>
     <Item>
         <TextId>e_DRAW_ORDER</TextId>

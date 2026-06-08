@@ -479,7 +479,7 @@ PMP_FG_AMPIT_INF = "PMP_FG_AMPIT_INF"
 PMP_FG_AMPIT_REF_1 = "PMP_FG_AMPIT_REF_1"
 PMP_FG_AMPIT_REF_2 = "PMP_FG_AMPIT_REF_2"
 PMP_FG_AMPIT_PARTS = "PMP_FG_AMPIT_PARTS"
-PMP_FG_AMPIT_MUNTANTGE = "PMP_FG_AMPIT_MUNTANTGE"
+PMP_FG_AMPIT_MUNTATGE = "PMP_FG_AMPIT_MUNTATGE"
 PMP_FG_AMPIT_AFEGIT = "PMP_FG_AMPIT_AFEGIT"
 PMP_FG_AMPIT_RETALL = "PMP_FG_AMPIT_RETALL"
 PMP_WALL_NAME = "PMP_WALL_NAME"
@@ -488,7 +488,7 @@ PMP_FG_FUS_ACCESORI = "PMP_FG_FUS_ACCESORI"
 PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO = "PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO"
 PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO_DETAIL = "PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO"
 PMP_FG_AMPIT_DETAIL_GENERAL = "PMP_FG_AMPIT_DETAIL_GENERAL"
-PMP_FG_AMPIT_DETAIL_MATERIAL = "PMP_FG_AMPIT_DETAIL_MATERIAL"
+PMP_FG_AMPIT_MATERIAL = "PMP_FG_AMPIT_MATERIAL"
 PMP_PREM_ENCAJE_ALTURA = "PMP_PREM_ENCAJE_ALTURA"
 PMP_PREM_ENCAJE_BASE = "PMP_PREM_ENCAJE_BASE"
 PMP_PREM_MURO = "PMP_PREM_MURO"
@@ -557,11 +557,11 @@ VAL_PMP_FG_AMPIT_INF = '2"JUNTA DE 2MM"(P),409.2'
 VAL_PMP_FG_AMPIT_REF_1 = "HG-1"
 VAL_PMP_FG_AMPIT_REF_2 = "HG067"
 VAL_PMP_FG_AMPIT_PARTS = "BB-1;3"
-VAL_PMP_FG_AMPIT_MUNTANTGE = "FABRICA"
+VAL_PMP_FG_AMPIT_MUNTATGE = "FABRICA"
 VAL_PMP_FG_AMPIT_AFEGIT = 0.0
 VAL_PMP_FG_AMPIT_RETALL = 0.0
 VAL_PMP_FG_AMPIT_DETAIL_GENERAL = "TIPUS_AMPIT_1"
-VAL_PMP_FG_AMPIT_DETAIL_MATERIAL = "MATERIAL_1"
+VAL_PMP_FG_AMPIT_MATERIAL = ""
 
 IFC_ID_ATTRIBUTE_ID = 683
 
@@ -1178,7 +1178,7 @@ class PremarcScriptObject(BaseScriptObject):
         # self.build_ele.INPUT_PMP_FG_AMPIT_REF_1.value               = VAL_PMP_FG_AMPIT_REF_1
         # self.build_ele.INPUT_PMP_FG_AMPIT_REF_2.value               = VAL_PMP_FG_AMPIT_REF_2
         # self.build_ele.INPUT_PMP_FG_AMPIT_PARTS.value               = VAL_PMP_FG_AMPIT_PARTS
-        # self.build_ele.INPUT_PMP_FG_AMPIT_MUNTANTGE.value           = VAL_PMP_FG_AMPIT_MUNTANTGE
+        # self.build_ele.INPUT_PMP_FG_AMPIT_MUNTATGE.value            = VAL_PMP_FG_AMPIT_MUNTATGE
         # self.build_ele.INPUT_PMP_FG_FUSTERIA_TIPUS_MUNTATGE.value   = VAL_PMP_FG_FUSTERIA_TIPUS_MUNTATGE
         # self.build_ele.INPUT_PMP_FG_MUNTATGE.value                  = VAL_PMP_FG_MUNTATGE
         # self.build_ele.INPUT_PMP_FG_AMPIT_AFEGIT.value              = VAL_PMP_FG_AMPIT_AFEGIT
@@ -1188,7 +1188,7 @@ class PremarcScriptObject(BaseScriptObject):
         # self.build_ele.INPUT_PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO.value = VAL_PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO
         # self.build_ele.INPUT_PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO_DETAIL.value = VAL_PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO_DETAIL
         # self.build_ele.INPUT_PMP_FG_AMPIT_DETAIL_GENERAL.value = VAL_PMP_FG_AMPIT_DETAIL_GENERAL
-        # self.build_ele.INPUT_PMP_FG_AMPIT_DETAIL_MATERIAL.value = VAL_PMP_FG_AMPIT_DETAIL_MATERIAL
+        # self.build_ele.INPUT_PMP_FG_AMPIT_MATERIAL.value = VAL_PMP_FG_AMPIT_MATERIAL
 
         self.update_params()
 
@@ -1438,9 +1438,9 @@ class PremarcScriptObject(BaseScriptObject):
                 self.document, PMP_FG_AMPIT_PARTS
             )
         )
-        self.pmp_fg_ampit_muntantge_id = (
+        self.pmp_fg_ampit_muntatge_id = (
             AllplanBaseElements.AttributeService.GetAttributeID(
-                self.document, PMP_FG_AMPIT_MUNTANTGE
+                self.document, PMP_FG_AMPIT_MUNTATGE
             )
         )
         self.pmp_fg_ampit_afegit_id = (
@@ -1473,9 +1473,9 @@ class PremarcScriptObject(BaseScriptObject):
                 self.document, PMP_FG_AMPIT_DETAIL_GENERAL
             )
         )
-        self.pmp_fg_ampit_detail_material_id = (
+        self.pmp_fg_ampit_material_id = (
             AllplanBaseElements.AttributeService.GetAttributeID(
-                self.document, PMP_FG_AMPIT_DETAIL_MATERIAL
+                self.document, PMP_FG_AMPIT_MATERIAL
             )
         )
         self.pmp_prem_encaje_altura_id = (
@@ -1494,6 +1494,7 @@ class PremarcScriptObject(BaseScriptObject):
         self.pmp_prem_color_id = AllplanBaseElements.AttributeService.GetAttributeID(
             self.document, PMP_PREM_COLOR
         )
+        self._debug_log_attribute_resolution()
         # self.pmp_prem_xps_type_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, PMP_PREM_XPS_TYPE)
 
     def login_to_api(self):
@@ -1688,6 +1689,214 @@ class PremarcScriptObject(BaseScriptObject):
             attribute_list.add_attribute(self.pmp_wall_id_attr_id, wall_ifc_id)
         else:
             print("[Premarc] PMP_WALL_ID vacío: no se añade atributo")
+
+    def _debug_log_attribute_resolution(self) -> None:
+        """
+        Traza acotada de los atributos clave para diagnosticar IDs no definidos
+        en el proyecto actual.
+        """
+        debug_attrs = [
+            ("PMP_ID_PREMARC", getattr(self, "pmp_id_premarc_id", -1)),
+            ("PMP_PARE", getattr(self, "pmp_pare_id", -1)),
+            ("PMP_WALL_ID", getattr(self, "pmp_wall_id_attr_id", -1)),
+            ("PMP_FG_AMPIT_AFEGIT", getattr(self, "pmp_fg_ampit_afegit_id", -1)),
+            ("PMP_FG_AMPIT_RETALL", getattr(self, "pmp_fg_ampit_retall_id", -1)),
+            ("PMP_FG_AMPIT_MATERIAL", getattr(self, "pmp_fg_ampit_material_id", -1)),
+            ("PMP_FG_AMPIT_MUNTATGE", getattr(self, "pmp_fg_ampit_muntatge_id", -1)),
+            ("PMP_FG_AMPIT_PARTS", getattr(self, "pmp_fg_ampit_parts_id", -1)),
+            ("PMP_FG_AMPIT_REF_1", getattr(self, "pmp_fg_ampit_ref_1_id", -1)),
+            ("PMP_FG_AMPIT_REF_2", getattr(self, "pmp_fg_ampit_ref_2_id", -1)),
+        ]
+
+        print("[Premarc][ATTR] Resolucion de atributos clave:")
+        for attr_name, attr_id in debug_attrs:
+            status = "OK" if isinstance(attr_id, int) and attr_id > 0 else "MISSING"
+            print(f"[Premarc][ATTR]   {attr_name}: id={attr_id} status={status}")
+
+    def _build_window_attribute_list(self) -> BuildingElementAttributeList:
+        """Atributos propios de la fusteria, sin contaminar con los del ampit."""
+        attribute_list = BuildingElementAttributeList()
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_codipanell_id, VAL_PMP_FG_FUS_CODI_PANELL
+        )
+        attribute_list.add_attribute(self.pmp_fg_fus_codi_id, VAL_PMP_FG_FUS_CODI)
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_unitats_id, VAL_PMP_FG_FUS_UNITATS
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_material_id, VAL_PMP_FG_FUS_MATERIAL
+        )
+        attribute_list.add_attribute(self.pmp_fg_fus_color_id, VAL_PMP_FG_FUS_COLOR)
+        attribute_list.add_attribute(self.pmp_fg_fus_mides_id, VAL_PMP_FG_FUS_MIDES)
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_model_perfil_id, VAL_PMP_FG_FUS_MODEL_PERFIL
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_fulles_id, VAL_PMP_FG_FUS_FULLES
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_tipus_fulles_id, VAL_PMP_FG_FUS_TIPUS_FULLES
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_posicio_maneta_id, VAL_PMP_FG_FUS_POSICIO_MANETA
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_vidriera_id, VAL_PMP_FG_FUS_VIDRIERA
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_comp_vidriera_id, VAL_PMP_FG_FUS_COMP_VIDRIERA
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_persiana_id, VAL_PMP_FG_FUS_PERSIANA
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_aplacat_fa_id, VAL_PMP_FG_FUS_APLACAT_FA
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_comp_fust_id, VAL_PMP_FG_FUS_COMP_FUST
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_volada_fust_id, VAL_PMP_FG_FUS_VOLADA_FUST
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_pintura_obra_id, VAL_PMP_FG_FUS_PINTURA_OBRA
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_barana_id, VAL_PMP_FG_FUS_BARANA
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_mosquitera_id, VAL_PMP_FG_FUS_MOSQUITERA
+        )
+        attribute_list.add_attribute(self.pmp_fg_fus_marge_id, VAL_PMP_FG_FUS_MARGE)
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_detail_id, VAL_PMP_FG_FUS_DETAIL
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fus_tapajunts_id, VAL_PMP_FG_FUS_TAPAJUNTS
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_fusteria_tipus_muntatge_id,
+            VAL_PMP_FG_FUSTERIA_TIPUS_MUNTATGE,
+        )
+        attribute_list.add_attribute(self.pmp_fg_muntatge_id, VAL_PMP_FG_MUNTATGE)
+        self._add_shared_generated_element_attributes(attribute_list)
+        return attribute_list
+
+    def _get_build_ele_value(self, *candidate_names: str, default="") -> str:
+        """Lee el primer parametro existente en build_ele y devuelve su valor como texto."""
+        for name in candidate_names:
+            param = getattr(self.build_ele, name, None)
+            if param is None:
+                continue
+            value = getattr(param, "value", param)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return str(default).strip() if default is not None else ""
+
+    def _get_ampit_parts_value(self) -> str:
+        """ID de fusteria definido por el usuario para el ampit."""
+        return self._get_build_ele_value(
+            "INPUT_PMP_FG_AMPIT_PARTS",
+            "INPUT_PMP_FG_FUS_CODI",
+            default=VAL_PMP_FG_AMPIT_PARTS,
+        )
+
+    def _get_ampit_muntatge_value(self) -> str:
+        """
+        Tipo de montaje del ampit segun la seleccion actual de TypeTubos.
+        """
+        type_tubos = str(getattr(self.build_ele.TypeTubos, "value", "") or "").strip()
+        if type_tubos in {"OBRA", "FABRICA"}:
+            return type_tubos
+
+        return VAL_PMP_FG_AMPIT_MUNTATGE
+
+    def _get_ampit_afegit_value(self) -> float:
+        """
+        Valor final de afegit del ampit.
+        Debe reflejar el calculo real generado en create_premarc_ampit.
+        """
+        build_ele_value = float(getattr(self.build_ele.afegit_ampits, "value", 0.0) or 0.0)
+        computed_value = float(getattr(self, "afegit_ampits", 0.0) or 0.0)
+        if computed_value > 0 and abs(build_ele_value - computed_value) > 1e-9:
+            self.build_ele.afegit_ampits.value = computed_value
+            return computed_value
+        return build_ele_value
+
+    def _get_ampit_material_value(self) -> str:
+        """
+        Material del ampit seleccionado por el usuario.
+        Solo debe informarse para opciones tipo ceramic / ceramica mayor;
+        en el resto se devuelve vacio.
+        """
+        material_param = getattr(self.build_ele, "INPUT_PMP_FG_AMPIT_MATERIAL", None)
+        if material_param is not None:
+            material_value = getattr(material_param, "value", material_param)
+            material_value = str(material_value).strip() if material_value is not None else ""
+        else:
+            material_value = self._get_build_ele_value(
+                "INPUT_PMP_FG_AMPIT_DETAIL_MATERIAL",
+                "INPUT_PMP_FG_FUS_AMPIT",
+            )
+        if not material_value:
+            return ""
+
+        normalized = material_value.lower()
+        if "ceramic" in normalized or "ceramica" in normalized:
+            return material_value
+        return ""
+
+    def _build_ampit_attribute_list(
+        self, include_geometry_specific_fields: bool = True
+    ) -> BuildingElementAttributeList:
+        """Atributos propios del ampit y sus ejes."""
+        attribute_list = BuildingElementAttributeList()
+        if include_geometry_specific_fields:
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_detail_id, VAL_PMP_FG_AMPIT_DETAIL
+            )
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_esq_id, VAL_PMP_FG_AMPIT_ESQ
+            )
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_dre_id, VAL_PMP_FG_AMPIT_DRE
+            )
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_sup_id, VAL_PMP_FG_AMPIT_SUP
+            )
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_inf_id, VAL_PMP_FG_AMPIT_INF
+            )
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_muntatge_id, self._get_ampit_muntatge_value()
+            )
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_afegit_id, self._get_ampit_afegit_value()
+            )
+            attribute_list.add_attribute(
+                self.pmp_fg_ampit_retall_id, self.build_ele.retall_ampits.value
+            )
+
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_detail_general_id, VAL_PMP_FG_AMPIT_DETAIL_GENERAL
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_material_id, self._get_ampit_material_value()
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
+        )
+        attribute_list.add_attribute(
+            self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
+        )
+        self._add_shared_generated_element_attributes(attribute_list)
+        return attribute_list
 
     def get_thickness_for_api(self):
         if self.build_ele.enable_manual_thickness.value:
@@ -6770,83 +6979,7 @@ class PremarcScriptObject(BaseScriptObject):
         for elem in window_3d:
             model_ele_list.append_geometry_3d(elem, props_window)
 
-        window_attribute_list = BuildingElementAttributeList()
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_codipanell_id, VAL_PMP_FG_FUS_CODI_PANELL
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_codi_id, VAL_PMP_FG_FUS_CODI
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_unitats_id, VAL_PMP_FG_FUS_UNITATS
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_material_id, VAL_PMP_FG_FUS_MATERIAL
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_color_id, VAL_PMP_FG_FUS_COLOR
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_mides_id, VAL_PMP_FG_FUS_MIDES
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_model_perfil_id, VAL_PMP_FG_FUS_MODEL_PERFIL
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_fulles_id, VAL_PMP_FG_FUS_FULLES
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_tipus_fulles_id, VAL_PMP_FG_FUS_TIPUS_FULLES
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_posicio_maneta_id, VAL_PMP_FG_FUS_POSICIO_MANETA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_vidriera_id, VAL_PMP_FG_FUS_VIDRIERA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_comp_vidriera_id, VAL_PMP_FG_FUS_COMP_VIDRIERA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_persiana_id, VAL_PMP_FG_FUS_PERSIANA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_ampit_id, VAL_PMP_FG_FUS_AMPIT
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_aplacat_fa_id, VAL_PMP_FG_FUS_APLACAT_FA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_comp_fust_id, VAL_PMP_FG_FUS_COMP_FUST
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_volada_fust_id, VAL_PMP_FG_FUS_VOLADA_FUST
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_pintura_obra_id, VAL_PMP_FG_FUS_PINTURA_OBRA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_barana_id, VAL_PMP_FG_FUS_BARANA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_mosquitera_id, VAL_PMP_FG_FUS_MOSQUITERA
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_marge_id, VAL_PMP_FG_FUS_MARGE
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_detail_id, VAL_PMP_FG_FUS_DETAIL
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fus_tapajunts_id, VAL_PMP_FG_FUS_TAPAJUNTS
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_fusteria_tipus_muntatge_id, VAL_PMP_FG_FUSTERIA_TIPUS_MUNTATGE
-        )
-        window_attribute_list.add_attribute(
-            self.pmp_fg_muntatge_id, VAL_PMP_FG_MUNTATGE
-        )
-        self._add_shared_generated_element_attributes(window_attribute_list)
+        window_attribute_list = self._build_window_attribute_list()
 
         init_i = len(model_ele_list) - len(window_3d)
         for i in range(init_i, len(model_ele_list)):
@@ -6865,41 +6998,7 @@ class PremarcScriptObject(BaseScriptObject):
         for elem in ampit:
             model_ele_list.append_geometry_3d(elem, props_ampit)
 
-        ampit_attribute_list = BuildingElementAttributeList()
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_detail_id, VAL_PMP_FG_AMPIT_DETAIL
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_esq_id, VAL_PMP_FG_AMPIT_ESQ
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_dre_id, VAL_PMP_FG_AMPIT_DRE
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_sup_id, VAL_PMP_FG_AMPIT_SUP
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_inf_id, VAL_PMP_FG_AMPIT_INF
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, VAL_PMP_FG_AMPIT_REF_1
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, VAL_PMP_FG_AMPIT_REF_2
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_parts_id, VAL_PMP_FG_AMPIT_PARTS
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_muntantge_id, VAL_PMP_FG_AMPIT_MUNTANTGE
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_afegit_id, VAL_PMP_FG_AMPIT_AFEGIT
-        )
-        ampit_attribute_list.add_attribute(
-            self.pmp_fg_ampit_retall_id, VAL_PMP_FG_AMPIT_RETALL
-        )
-        self._add_shared_generated_element_attributes(ampit_attribute_list)
+        ampit_attribute_list = self._build_ampit_attribute_list()
 
         init_i = len(model_ele_list) - len(ampit)
         for i in range(init_i, len(model_ele_list)):
@@ -6907,17 +7006,9 @@ class PremarcScriptObject(BaseScriptObject):
                 i, ampit_attribute_list.get_attribute_list()
             )
 
-        ampit_edge_attribute_list = BuildingElementAttributeList()
-        ampit_edge_attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, VAL_PMP_FG_AMPIT_REF_1
+        ampit_edge_attribute_list = self._build_ampit_attribute_list(
+            include_geometry_specific_fields=False
         )
-        ampit_edge_attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, VAL_PMP_FG_AMPIT_REF_2
-        )
-        ampit_edge_attribute_list.add_attribute(
-            self.pmp_fg_ampit_parts_id, VAL_PMP_FG_AMPIT_PARTS
-        )
-        self._add_shared_generated_element_attributes(ampit_edge_attribute_list)
 
         model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
         model_ele_list.set_element_attributes(
@@ -11120,7 +11211,7 @@ class PremarcScriptObject(BaseScriptObject):
         # self.val_pmp_fg_ampit_ref_1	            = self.build_ele.INPUT_PMP_FG_AMPIT_REF_1.value
         # self.val_pmp_fg_ampit_ref_2 	        = self.build_ele.INPUT_PMP_FG_AMPIT_REF_2.value
         # self.val_pmp_fg_ampit_parts	            = self.build_ele.INPUT_PMP_FG_AMPIT_PARTS.value
-        # self.val_pmp_fg_ampit_muntantge         = self.build_ele.INPUT_PMP_FG_AMPIT_MUNTANTGE.value
+        # self.val_pmp_fg_ampit_muntatge          = self.build_ele.INPUT_PMP_FG_AMPIT_MUNTATGE.value
         # self.val_pmp_fg_fusteria_tipus_muntatge = self.build_ele.INPUT_PMP_FG_FUSTERIA_TIPUS_MUNTATGE.value
         # self.val_pmp_fg_muntatge                = self.build_ele.INPUT_PMP_FG_MUNTATGE.value
         # self.val_pmp_fg_ampit_afegit            = self.build_ele.INPUT_PMP_FG_AMPIT_AFEGIT.value
