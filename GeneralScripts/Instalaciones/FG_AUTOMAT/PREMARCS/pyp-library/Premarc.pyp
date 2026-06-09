@@ -388,15 +388,6 @@
             </Parameter>
 
             <Parameter>
-                <Name>INPUT_PMP_FG_AMPIT_MATERIAL</Name>
-                <Text>Material</Text>
-                <Value></Value>
-                <ValueList>|CERAMIC|CERAMICA_MAYOR</ValueList>
-                <ValueType>StringComboBox</ValueType>
-                <Visible>True</Visible>
-            </Parameter>
-
-            <Parameter>
                 <Name>imperm_type</Name>
                 <Text>Tipus Impermeabilització</Text>
                 <Value>Water-Stop</Value>
@@ -604,6 +595,15 @@
                 <Dimensions>len(valueListaRebajes) if valueListaRebajes else 0</Dimensions>
                 <ValueListStartRow>1</ValueListStartRow>
             </Parameter>
+
+            <Parameter>
+                <Name>ShowRebajesDebug</Name>
+                <Text>Mostrar solidos debug rebajes</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>False</Visible>
+            </Parameter>
+
         </Parameter>
 
         <Parameter>

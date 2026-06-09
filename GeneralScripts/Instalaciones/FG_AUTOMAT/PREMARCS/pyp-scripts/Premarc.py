@@ -220,6 +220,19 @@ PREMARC_SELECTION_AUX_PEN = 15
 PREMARC_SELECTION_AUX_CROSS_HALF_MM = 300.0
 PREMARC_SELECTION_AUX_OFFSET_MM = 80.0
 THICKNESS_MM = 3
+REBAJE_DRETA_OFFSET_X_MM = -3.0
+REBAJE_DRETA_OFFSET_Y_MM = 0.0
+REBAJE_DRETA_OFFSET_Z_MM = 0.0
+REBAJE_ESQUERRA_OFFSET_X_MM = 3.0
+REBAJE_ESQUERRA_OFFSET_Y_MM = 0.0
+REBAJE_ESQUERRA_OFFSET_Z_MM = 0.0
+REBAJE_BAIX_OFFSET_X_MM = 0.0
+REBAJE_BAIX_OFFSET_Y_MM = 0.0
+REBAJE_BAIX_OFFSET_Z_MM = 3.0
+PENDIENTE_REBAJE_BAIX_OFFSET_Z_MM = -3.69
+REBAJE_DALT_OFFSET_X_MM = 0.0
+REBAJE_DALT_OFFSET_Y_MM = 0.0
+REBAJE_DALT_OFFSET_Z_MM = -3.0
 SQUARE_THICKNESS = 60
 SQUARE_VERTEX_OFFSET = math.sqrt(
     SQUARE_THICKNESS**2 + SQUARE_THICKNESS**2
@@ -561,7 +574,7 @@ VAL_PMP_FG_AMPIT_MUNTATGE = "FABRICA"
 VAL_PMP_FG_AMPIT_AFEGIT = 0.0
 VAL_PMP_FG_AMPIT_RETALL = 0.0
 VAL_PMP_FG_AMPIT_DETAIL_GENERAL = "TIPUS_AMPIT_1"
-VAL_PMP_FG_AMPIT_MATERIAL = ""
+VAL_PMP_FG_AMPIT_MATERIAL = "MATERIAL_1"
 
 IFC_ID_ATTRIBUTE_ID = 683
 
@@ -1844,35 +1857,17 @@ class PremarcScriptObject(BaseScriptObject):
             return computed_value
         return build_ele_value
 
-    def _get_ampit_retall_value(self) -> float:
-        """
-        Longitud a recortar si el ampit es mas ancho que el ancho a cubrir.
-        La fuente persistida es build_ele.retall_ampits.
-        """
-        build_ele_value = float(
-            getattr(self.build_ele.retall_ampits, "value", 0.0) or 0.0
-        )
-        computed_value = float(getattr(self, "retall_ampits", 0.0) or 0.0)
-        if computed_value > 0 and abs(build_ele_value - computed_value) > 1e-9:
-            self.build_ele.retall_ampits.value = computed_value
-            return computed_value
-        return build_ele_value
-
     def _get_ampit_material_value(self) -> str:
         """
         Material del ampit seleccionado por el usuario.
         Solo debe informarse para opciones tipo ceramic / ceramica mayor;
         en el resto se devuelve vacio.
         """
-        material_param = getattr(self.build_ele, "INPUT_PMP_FG_AMPIT_MATERIAL", None)
-        if material_param is not None:
-            material_value = getattr(material_param, "value", material_param)
-            material_value = str(material_value).strip() if material_value is not None else ""
-        else:
-            material_value = self._get_build_ele_value(
-                "INPUT_PMP_FG_AMPIT_DETAIL_MATERIAL",
-                "INPUT_PMP_FG_FUS_AMPIT",
-            )
+        material_value = self._get_build_ele_value(
+            "INPUT_PMP_FG_AMPIT_MATERIAL",
+            "INPUT_PMP_FG_AMPIT_DETAIL_MATERIAL",
+            "INPUT_PMP_FG_FUS_AMPIT",
+        )
         if not material_value:
             return ""
 
@@ -1880,44 +1875,6 @@ class PremarcScriptObject(BaseScriptObject):
         if "ceramic" in normalized or "ceramica" in normalized:
             return material_value
         return ""
-
-    def _get_effective_premarc_thickness(self) -> float:
-        """Fondo efectivo del premarco: manual si esta activo, si no valor de catalogo."""
-        return float(
-            self.build_ele.manual_thickness.value
-            if self.build_ele.enable_manual_thickness.value
-            else self.build_ele.thickness.value
-        )
-
-    def _get_ampit_detail_general_value(self) -> str:
-        """Resuelve PMP_FG_AMPIT_DETAIL_GENERAL segun material, PE y grosores."""
-        material = self._get_ampit_material_value().strip().upper()
-        is_premarc_pe = bool(getattr(self.build_ele.premarc_PE, "value", False))
-
-        if material == "CERAMICA_MAYOR" and is_premarc_pe:
-            return "DG_A_PE_CM_1"
-        if material == "CERAMIC" and is_premarc_pe:
-            return "DG_A_PE_C_2"
-
-        try:
-            premarc_thickness = self._get_effective_premarc_thickness()
-            wall_thickness = float(self.build_ele.thickness_wall.value)
-        except (TypeError, ValueError):
-            return VAL_PMP_FG_AMPIT_DETAIL_GENERAL
-
-        thickness_delta = premarc_thickness - wall_thickness
-        if material == "CERAMIC":
-            if thickness_delta > 1e-6:
-                return "DG_A_C_1"
-            if abs(thickness_delta) <= 1e-6:
-                return "DG_A_C_2"
-        elif material == "CERAMICA_MAYOR":
-            if thickness_delta > 1e-6:
-                return "DG_A_CM_1"
-            if abs(thickness_delta) <= 1e-6:
-                return "DG_A_CM_2"
-
-        return VAL_PMP_FG_AMPIT_DETAIL_GENERAL
 
     def _build_ampit_attribute_list(self) -> BuildingElementAttributeList:
         """Atributos visibles para los elementos 3D de ampit."""
@@ -1927,10 +1884,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_afegit_id, self._get_ampit_afegit_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_retall_id, self._get_ampit_retall_value()
+            self.pmp_fg_ampit_retall_id, self.build_ele.retall_ampits.value
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_detail_general_id, self._get_ampit_detail_general_value()
+            self.pmp_fg_ampit_detail_general_id, VAL_PMP_FG_AMPIT_DETAIL_GENERAL
         )
         attribute_list.add_attribute(
             self.pmp_fg_ampit_material_id, self._get_ampit_material_value()
@@ -3703,8 +3660,6 @@ class PremarcScriptObject(BaseScriptObject):
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
             "retall_ampits": self.build_ele.retall_ampits.value,
-            "ampit_material": self._get_ampit_material_value(),
-            "premarc_PE": self.build_ele.premarc_PE.value,
             "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
             "EnableRetallGanxo": self.build_ele.EnableRetallGanxo.value,
             "Z_RetallGanxo": self.build_ele.Z_RetallGanxo.value,
@@ -3803,14 +3758,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
-        if hasattr(self.build_ele, "INPUT_PMP_FG_AMPIT_MATERIAL"):
-            self.build_ele.INPUT_PMP_FG_AMPIT_MATERIAL.value = state.get(
-                "ampit_material",
-                getattr(self.build_ele.INPUT_PMP_FG_AMPIT_MATERIAL, "value", ""),
-            )
-        self.build_ele.premarc_PE.value = state.get(
-            "premarc_PE", getattr(self.build_ele.premarc_PE, "value", False)
-        )
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
@@ -6914,8 +6861,8 @@ class PremarcScriptObject(BaseScriptObject):
                 frame_base_no_slope, props_frame_base_no_slope
             )
         self._pink_sill_poly = frame_base_no_slope
-        # for substract_rebaje in substract_rebajes: # TODO: Test rebaje
-        #     model_ele_list.append_geometry_3d(substract_rebaje, props_retall_ganxo)
+        for substract_rebaje in substract_rebajes:
+            model_ele_list.append_geometry_3d(substract_rebaje, props_retall_ganxo)
 
         u_poly = self.create_u_accessory_polyhedron()
         if u_poly is not None:
@@ -8569,6 +8516,40 @@ class PremarcScriptObject(BaseScriptObject):
             AllplanGeo.Vector3D(self.width + THICKNESS_MM, 0, 0),
         )
 
+        rebaje_dalt_offset = AllplanGeo.Vector3D(
+            REBAJE_DALT_OFFSET_X_MM,
+            REBAJE_DALT_OFFSET_Y_MM,
+            REBAJE_DALT_OFFSET_Z_MM,
+        )
+        rebaje_baix_offset = AllplanGeo.Vector3D(
+            REBAJE_BAIX_OFFSET_X_MM,
+            REBAJE_BAIX_OFFSET_Y_MM,
+            REBAJE_BAIX_OFFSET_Z_MM,
+        )
+        rebaje_esquerra_offset = AllplanGeo.Vector3D(
+            REBAJE_ESQUERRA_OFFSET_X_MM,
+            REBAJE_ESQUERRA_OFFSET_Y_MM,
+            REBAJE_ESQUERRA_OFFSET_Z_MM,
+        )
+        rebaje_dreta_offset = AllplanGeo.Vector3D(
+            REBAJE_DRETA_OFFSET_X_MM,
+            REBAJE_DRETA_OFFSET_Y_MM,
+            REBAJE_DRETA_OFFSET_Z_MM,
+        )
+
+        substract_rebajes_top = AllplanGeo.Move(
+            substract_rebajes_top, rebaje_dalt_offset
+        )
+        substract_rebajes_bottom = AllplanGeo.Move(
+            substract_rebajes_bottom, rebaje_baix_offset
+        )
+        substract_rebajes_left = AllplanGeo.Move(
+            substract_rebajes_left, rebaje_esquerra_offset
+        )
+        substract_rebajes_right = AllplanGeo.Move(
+            substract_rebajes_right, rebaje_dreta_offset
+        )
+
         # bottom grade with rebaje
         transformation_matrix = AllplanGeo.Matrix3D()
         transformation_matrix.SetScaling(1, 1, 1)
@@ -8592,6 +8573,10 @@ class PremarcScriptObject(BaseScriptObject):
 
         polyhedron_bottom_grade_with_rebaje = AllplanGeo.Rotate(
             bottom_rebaje, rotation_axis, rotation_angle
+        )
+        polyhedron_bottom_grade_with_rebaje = AllplanGeo.Move(
+            polyhedron_bottom_grade_with_rebaje,
+            AllplanGeo.Vector3D(0, 0, PENDIENTE_REBAJE_BAIX_OFFSET_Z_MM),
         )
 
         # Solids fix corners
@@ -8627,7 +8612,45 @@ class PremarcScriptObject(BaseScriptObject):
         )
         list_solid_fix_corners.append(substract_bottom_right_corner)
 
+        substract_top_left_corner = AllplanGeo.Move(
+            substract_top_left_corner,
+            AllplanGeo.Vector3D(
+                REBAJE_DALT_OFFSET_X_MM + REBAJE_ESQUERRA_OFFSET_X_MM,
+                REBAJE_DALT_OFFSET_Y_MM + REBAJE_ESQUERRA_OFFSET_Y_MM,
+                REBAJE_DALT_OFFSET_Z_MM + REBAJE_ESQUERRA_OFFSET_Z_MM,
+            ),
+        )
+        substract_top_right_corner = AllplanGeo.Move(
+            substract_top_right_corner,
+            AllplanGeo.Vector3D(
+                REBAJE_DALT_OFFSET_X_MM + REBAJE_DRETA_OFFSET_X_MM,
+                REBAJE_DALT_OFFSET_Y_MM + REBAJE_DRETA_OFFSET_Y_MM,
+                REBAJE_DALT_OFFSET_Z_MM + REBAJE_DRETA_OFFSET_Z_MM,
+            ),
+        )
+        substract_bottom_left_corner = AllplanGeo.Move(
+            substract_bottom_left_corner,
+            AllplanGeo.Vector3D(
+                REBAJE_BAIX_OFFSET_X_MM + REBAJE_ESQUERRA_OFFSET_X_MM,
+                REBAJE_BAIX_OFFSET_Y_MM + REBAJE_ESQUERRA_OFFSET_Y_MM,
+                REBAJE_BAIX_OFFSET_Z_MM + REBAJE_ESQUERRA_OFFSET_Z_MM,
+            ),
+        )
+        substract_bottom_right_corner = AllplanGeo.Move(
+            substract_bottom_right_corner,
+            AllplanGeo.Vector3D(
+                REBAJE_BAIX_OFFSET_X_MM + REBAJE_DRETA_OFFSET_X_MM,
+                REBAJE_BAIX_OFFSET_Y_MM + REBAJE_DRETA_OFFSET_Y_MM,
+                REBAJE_BAIX_OFFSET_Z_MM + REBAJE_DRETA_OFFSET_Z_MM,
+            ),
+        )
+
         ## End rebajes ##
+
+        debug_rebaje_solids = []
+        show_rebajes_debug = bool(
+            getattr(getattr(self.build_ele, "ShowRebajesDebug", None), "value", False)
+        )
 
         poly_base_no_slope = None
         # open_closed_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
@@ -9494,6 +9517,8 @@ class PremarcScriptObject(BaseScriptObject):
                         break  # discard all other rebajes
                     case "REB. DRETA":  # Rebaje derecho
                         print("Rebaje Selected REB. DRETA")
+                        if show_rebajes_debug:
+                            debug_rebaje_solids.append(substract_rebajes_right)
                         intersecting, _ = AllplanGeo.Intersect(
                             polyhedron_premarc_union, substract_rebajes_right
                         )
@@ -9508,6 +9533,8 @@ class PremarcScriptObject(BaseScriptObject):
                             pass
                     case "REB. ESQUERRA":  # Rebaje izquierdo
                         print("Rebaje Selected REB. ESQUERRA")
+                        if show_rebajes_debug:
+                            debug_rebaje_solids.append(substract_rebajes_left)
                         intersecting, _ = AllplanGeo.Intersect(
                             polyhedron_premarc_union, substract_rebajes_left
                         )
@@ -9520,8 +9547,10 @@ class PremarcScriptObject(BaseScriptObject):
                         else:
                             print("Error in intersect rebaje left")
                             pass
-                    case "REB. BAIX":  # Rebaje inferior
+                    case "REB. BAIX" | "REB. BAIXS":  # Rebaje inferior
                         print("Rebaje Selected REB. BAIX")
+                        if show_rebajes_debug:
+                            debug_rebaje_solids.append(substract_rebajes_bottom)
                         if self.build_ele.ComboBoxPendiente.value == "SI":
                             # Manage in pendent section
                             continue  # discard rebaje inferior if pendiente is selected
@@ -9540,6 +9569,8 @@ class PremarcScriptObject(BaseScriptObject):
 
                     case "REB. DALT":  # Rebaje superior
                         print("Rebaje Selected REB. DALT")
+                        if show_rebajes_debug:
+                            debug_rebaje_solids.append(substract_rebajes_top)
                         intersecting, _ = AllplanGeo.Intersect(
                             polyhedron_premarc_union, substract_rebajes_top
                         )
@@ -9560,6 +9591,8 @@ class PremarcScriptObject(BaseScriptObject):
         if self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
+            if show_rebajes_debug:
+                debug_rebaje_solids.append(substract_top_left_corner)
             intersecting, _ = AllplanGeo.Intersect(
                 polyhedron_premarc_union, substract_top_left_corner
             )
@@ -9574,6 +9607,8 @@ class PremarcScriptObject(BaseScriptObject):
         if self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
+            if show_rebajes_debug:
+                debug_rebaje_solids.append(substract_top_right_corner)
             intersecting, _ = AllplanGeo.Intersect(
                 polyhedron_premarc_union, substract_top_right_corner
             )
@@ -9588,6 +9623,8 @@ class PremarcScriptObject(BaseScriptObject):
         if self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
+            if show_rebajes_debug:
+                debug_rebaje_solids.append(substract_bottom_left_corner)
             intersecting, _ = AllplanGeo.Intersect(
                 polyhedron_premarc_union, substract_bottom_left_corner
             )
@@ -9602,6 +9639,8 @@ class PremarcScriptObject(BaseScriptObject):
         if self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
+            if show_rebajes_debug:
+                debug_rebaje_solids.append(substract_bottom_right_corner)
             intersecting, _ = AllplanGeo.Intersect(
                 polyhedron_premarc_union, substract_bottom_right_corner
             )
@@ -9707,7 +9746,7 @@ class PremarcScriptObject(BaseScriptObject):
         if polyhedron_box_shutter:
             elems.append(polyhedron_box_shutter)
 
-        substract_rebaje = []
+        substract_rebaje = debug_rebaje_solids
 
         if polyhedron_finish_bottom_fix in polyhedron_premarc_list:
             self._u_sill_finish_poly = polyhedron_finish_bottom_fix
@@ -9752,6 +9791,8 @@ class PremarcScriptObject(BaseScriptObject):
             )
         )
         d = dict(list_rebajes)
+        if option == "REB. BAIX":
+            return (d.get("REB. BAIX") == 1 or d.get("REB. BAIXS") == 1) and d.get("NO") == 0
         return d.get(option) == 1 and d.get("NO") == 0
 
     def bottom_rebaje_enabled(self):
@@ -9762,7 +9803,7 @@ class PremarcScriptObject(BaseScriptObject):
             )
         )
         d = dict(list_rebajes)
-        return d.get("REB. BAIX") == 1 and d.get("NO") == 0
+        return (d.get("REB. BAIX") == 1 or d.get("REB. BAIXS") == 1) and d.get("NO") == 0
 
     def get_direction_open_premarc(self):
         direction_open_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
