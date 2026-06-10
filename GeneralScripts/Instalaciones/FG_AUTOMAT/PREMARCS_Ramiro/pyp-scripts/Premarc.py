@@ -51,7 +51,6 @@ import NemAll_Python_Utility as AllplanUtil
 from PythonPart import View2D3D, View2D, View3D, PythonPart, PythonPartGroup
 from Utils.BaseElementAdapterFilter import BaseElementAdapterFilter
 from .opening_creation_util import OpeningCreationUtil, WindowOpeningCreationUtil
-from .solid_opening import SolidOpening
 
 import requests
 
@@ -75,14 +74,20 @@ def resolve_attribute_id(document, *candidate_names: str) -> int:
 
     return 0
 
+
 def _site_packages_path(
     base_path,
 ):  # TODO: Eliminar este metodo antes de entregar a Arnau
     return os.path.join(os.path.normpath(base_path), "PythonParts-site-packages")
 
+
 def install_packages(package):
     prg_path = AllplanSettings.AllplanPaths.GetPrgPath() + "\\"
-    target_dir = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
+
+    target_dir = _site_packages_path(
+        AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()
+    )  # TODO: Eliminar esta linea antes de entregar a Arnau y descomentar la siguiente
+    # target_dir = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
     print("target_dir ETC: ")
     print(target_dir)
     subprocess.check_call(
@@ -98,9 +103,7 @@ def install_packages(package):
         ]
     )
 
-    target_dir = (
-        f"{AllplanSettings.AllplanPaths.GetUsrPath()}Local\\PythonParts-site-packages"
-    )
+    target_dir = _site_packages_path(AllplanSettings.AllplanPaths.GetUsrPath())
     print("target_dir USR: ")
     print(target_dir)
     subprocess.check_call(
@@ -183,7 +186,16 @@ U_SILL_CONTACT_Z_EPSILON_MM = 0
 U_PROFILE_Z_INTO_AMPIT_DIP_MM = 3.0
 U_ACCESSOR_COLOR_INT = 2  # Allplan yellow (same index as COLOR_THICKNESS_MAP for 160)
 # Y placement: sill top spans y in [-self.thickness, 0]; inner opening y=0 (window side); y=-thickness = outer/back lip.
-# The U profile is hard-anchored to y0 = -thickness - overhang in _u_channel_bottom (equivalent to legacy "pit_span_from_outer_lip" mode).
+# U_PROFILE_SILL_Y_ANCHOR (full 115 mm step):
+#   "pit_span_from_outer_lip" — DEFAULT: y0 ≈ -thickness (back edge of pink sill / finestra); runs toward y=0.
+#   "pit_into_opening"        — y0 ≈ 0 (front / inner lip y=0), profile in y>0 only.
+#   "pit_inward" / "pit_outer_face" / "half_embed" — alternates (see code).
+# Prefer palette ComboBoxUChannelYAnchor when Show U is on (no code edit to flip sides).
+U_PROFILE_SILL_Y_ANCHOR = "pit_span_from_outer_lip"
+U_PROFILE_Y_ANCHOR_OFFSET_MM = 0.0
+# Fallback only if U_PROFILE_SILL_Y_ANCHOR is empty or not recognized:
+U_PROFILE_FLUSH_TO_INNER_OPENING_Y = True
+U_HALF_EMBED_AT_INNER_FACE = True
 U_Y_OFFSET_FROM_INNER_FACE_MM = 0.01
 U_PROFILE_EXTRA_Y_SHIFT_MM = 0.0
 # Fine trim (mm) added to z0 after sill top is chosen. Prefer fixing sill first.
@@ -245,7 +257,7 @@ TUB_DELTA_Y_OPEN_PREMARC = 40
 TUB_DELTA_X_OPEN_PREMARC = 80
 BOX_SHUTTER_HEIGHT = 263
 BOX_SHUTTER_WIDTH = 136
-OFFSET_FRONT_BOX_SHUTTER = 0
+OFFSET_FRONT_BOX_SHUTTER = 74
 OFFSET_FALCA = 25
 DISTANCE_BETWEEN_FALCAS = 250
 FIX_FEMELLA_Y = 40  # = 160/2- (80/2). 80 mm es el ancho de la femella.
@@ -255,58 +267,29 @@ REA_Z_ORIGIN = 50
 REA_Z_FINAL = 700
 LENGTH_REBAJES_MM = 19
 
-PREMARC_USE_COMANDES_OT = True
-
-# API_URL ="https://localhost:5050/ComandesOT/GetAllDenConfigsByAT1Value"
+API_URL = "https://localhost:5050/ComandesOT/GetAllDenConfigsByAT1Value"
 # API_URL ="http://localhost:5000/ComandesOT/GetAllDenConfigsByAT1Value"
-API_URL ="https://192.168.30.227:8301/ComandesOT/GetAllDenConfigsByAT1Value"
+# API_URL ="https://192.168.30.227:8301/ComandesOT/GetAllDenConfigsByAT1Value"
 
-# API_URL_AT1 = "https://localhost:5050/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
+API_URL_AT1 = (
+    "https://localhost:5050/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
+)
 # API_URL_AT1 ="http://localhost:5000/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
-API_URL_AT1 ="https://192.168.30.227:8301/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
+# API_URL_AT1 ="https://192.168.30.227:8301/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
 
-# API_URL_DEFAULT = "https://localhost:5050/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
+API_URL_DEFAULT = "https://localhost:5050/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
 # API_URL_DEFAULT = "http://localhost:5000/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
-API_URL_DEFAULT = "https://192.168.30.227:8301/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
+# API_URL_DEFAULT = "https://192.168.30.227:8301/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
 
-# LOGIN_URL_DEFAULT = "https://localhost:5050/Usuari/Login"
+LOGIN_URL_DEFAULT = "https://localhost:5050/Usuari/Login"
 # LOGIN_URL_DEFAULT = "http://localhost:5000/Usuari/Login"
-LOGIN_URL_DEFAULT = "https://192.168.30.227:8301/Usuari/Login"
+# LOGIN_URL_DEFAULT = "https://192.168.30.227:8301/Usuari/Login"
 
 COLOR_THICKNESS_MAP = {
     160: 2,  # amarillo
     310: 6,  # rojo
     295: 15,  # morado
 }
-
-
-def _premarc_comandes_ot_enabled() -> bool:
-    """ComandesOT (localhost) is opt-in so Allplan runs without that backend."""
-    return PREMARC_USE_COMANDES_OT
-
-
-def _premarc_empty_data_endpoint() -> dict:
-    """Shape expected by get_description_by_position when there is no API data."""
-    return {"options": []}
-
-
-def _premarc_fallback_config_values() -> dict:
-    """Thickness keys for valueListaGrosor when ComandesOT is off or unreachable."""
-    return {
-        str(i + 1): str(th)
-        for i, th in enumerate(sorted(COLOR_THICKNESS_MAP.keys()))
-    }
-
-
-_premarc_comandes_ot_warned = False
-
-
-def _warn_comandes_ot_once(message: str) -> None:
-    global _premarc_comandes_ot_warned
-    if _premarc_comandes_ot_warned:
-        return
-    _premarc_comandes_ot_warned = True
-    print(message)
 
 # TODO: Eliminar los mock antes de enviar a Arnau
 MOCK_VALUES_FOR_CONFIG = {
@@ -517,17 +500,13 @@ PMP_ID_PREMARC = "PMP_ID_PREMARC"
 PMP_FG_FUS_ACCESORI = "PMP_FG_FUS_ACCESORI"
 PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO = "PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO"
 PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO_DETAIL = "PMP_FG_FUS_TIPUS_IMPERMEABILITZACIO"
-PMP_FG_AMPIT_DETAIL_GENERAL     = "PMP_FG_AMPIT_DETAIL_GENERAL"
-PMP_FG_AMPIT_DETAIL_MATERIAL    = "PMP_FG_AMPIT_DETAIL_MATERIAL"
-PMP_FG_AMPIT_MATERIAL           = "PMP_FG_AMPIT_MATERIAL"
-PMP_FG_AMPIT_APLACAT            = "PMP_FG_AMPIT_APLACAT"
-PMP_FG_AMPIT_SOBRESALIENTE      = "PMP_FG_AMPIT_SOBRESALIENTE"
-PMP_WALL_ID                     = "PMP_WALL_ID"
-PMP_PREM_ENCAJE_ALTURA          = "PMP_PREM_ENCAJE_ALTURA"
-PMP_PREM_ENCAJE_BASE            = "PMP_PREM_ENCAJE_BASE"
-PMP_PREM_MURO                   = "PMP_PREM_MURO"
-PMP_PREM_COLOR                  = "PMP_PREM_COLOR"
-PMP_PREM_XPS_TYPE               = "PMP_PREM_XPS_TYPE"
+PMP_FG_AMPIT_DETAIL_GENERAL = "PMP_FG_AMPIT_DETAIL_GENERAL"
+PMP_FG_AMPIT_MATERIAL = "PMP_FG_AMPIT_MATERIAL"
+PMP_PREM_ENCAJE_ALTURA = "PMP_PREM_ENCAJE_ALTURA"
+PMP_PREM_ENCAJE_BASE = "PMP_PREM_ENCAJE_BASE"
+PMP_PREM_MURO = "PMP_PREM_MURO"
+PMP_PREM_COLOR = "PMP_PREM_COLOR"
+PMP_PREM_XPS_TYPE = "PMP_PREM_XPS_TYPE"
 PMP_TIPUS_PREMARC = "PMP_TIPUS_PREMARC"
 PMP_PREMARC_LABELS = "PMP_PREMARC_LABELS"
 PMP_PREMARC_TIPO = "PMP_PREMARC_TIPO"
@@ -540,7 +519,7 @@ VAL_PMP_ID_PREMARC = "HM1102 (HC-4)"
 VAL_PMP_WALL_NAME = "HM1102"
 VAL_PMP_PARE = "HM1102"
 VAL_PMP_TIPUS_PREMARC = "FONS 415 mm"
-VAL_PMP_PREMARC_LABELS = ""
+VAL_PMP_PREMARC_LABELS = "TIPUS-$<bold, height(5)>6.13$;$<bold>CALAIX OCULT$"
 VAL_PMP_PREMARC_ELEMENT_LABELS_TUB_VERTICAL = "$<bold, color(6)>TUB VERTICAL$"
 VAL_PMP_PREMARC_ELEMENT_LABELS_TUB_HORITZONTAL = "$<bold, color(6)>TUB HORITZONTAL$"
 VAL_PMP_PREMARC_ELEMENT_LABELS_ESCAIRE = "$<bold, color(6)>ESCAIRES$"
@@ -595,32 +574,7 @@ VAL_PMP_FG_AMPIT_MUNTATGE = "FABRICA"
 VAL_PMP_FG_AMPIT_AFEGIT = 0.0
 VAL_PMP_FG_AMPIT_RETALL = 0.0
 VAL_PMP_FG_AMPIT_DETAIL_GENERAL = "TIPUS_AMPIT_1"
-VAL_PMP_FG_AMPIT_DETAIL_MATERIAL = "MATERIAL_1"
-VAL_PMP_FG_AMPIT_APLACAT = "NO"
-
-# Per-type ampit geometry specs. All dimensions in mm. Color codes are this
-# codebase's verified Allplan palette indices (cross-checked against
-# NEOPRENO/Solido3DNeoprenoPP.py and PREMARCS' own usages):
-#   3 = turquesa, 4 = verde, 8 = naranja, 19 = gris negruc (see
-#   get_color_by_thickness fallback), 91 = rosa.
-# Note: color 7 in Allplan's standard palette is cyan/blue, NOT grey — use
-#       19 ("gris negruc") for PAVIMENTO to match the rest of this file.
-#   - grosor:               Z thickness of the top slab
-#   - grosor_tope:          Y depth of the front drip lip
-#   - tope:                 Z height of the front drip lip (0 = no lip)
-#   - sobresaliente:        Y projection of the lip OUTER face beyond the slab OUTER face
-#   - baseline_protrusion:  Y projection of the slab OUTER face beyond the wall interior face
-#                           (CERAMIC / CERAMICA_MAYOR / LEGACY keep the historic 14 mm "into the
-#                           room" baseline; XAPA / PAVIMENTO sit flush with the interior face)
-#   - remate:               Xapa-only horizontal return at the bottom of the lip pointing inward
-# LEGACY is kept here ONLY for state migration; it is no longer exposed in the UI.
-AMPIT_TYPE_SPECS = {
-    # "LEGACY":         {"grosor": 11, "grosor_tope": 11, "tope": 34, "sobresaliente": 0,  "baseline_protrusion": 14, "remate": 0, "color": 91, "layer": AMPIT_LAYER},
-    "CERAMIC":        {"grosor": 11, "grosor_tope": 30, "tope": 30, "sobresaliente": 5,  "baseline_protrusion": 14, "remate": 0, "color": 91, "layer": AMPIT_LAYER},
-    "CERAMICA_MAYOR": {"grosor": 11, "grosor_tope": 14, "tope": 34, "sobresaliente": 10, "baseline_protrusion": 14, "remate": 0, "color": 8,  "layer": AMPIT_LAYER},
-    "XAPA":           {"grosor": 2,  "grosor_tope": 2,  "tope": 40, "sobresaliente": 12, "baseline_protrusion": 0,  "remate": 6, "color": 3,  "layer": AMPIT_LAYER},
-    "PAVIMENTO":      {"grosor": 11, "grosor_tope": 0,  "tope": 0,  "sobresaliente": 0,  "baseline_protrusion": 0,  "remate": 0, "color": 19, "layer": AMPIT_LAYER},
-}
+VAL_PMP_FG_AMPIT_MATERIAL = "MATERIAL_1"
 
 IFC_ID_ATTRIBUTE_ID = 683
 
@@ -1306,8 +1260,6 @@ class PremarcScriptObject(BaseScriptObject):
 
         # load attributes IDs (returns -1 when attribute not defined in project)
         self._missing_attrs = set()
-
-        #each AllplanBaseElements.AttributeService.GetAttributeID + parameters need one line
         self.sizes_attribute_id = AllplanBaseElements.AttributeService.GetAttributeID(
             self.document, SIZES_ATTRIBUTE
         )
@@ -1672,54 +1624,6 @@ class PremarcScriptObject(BaseScriptObject):
             pass
 
         return None
-
-    def get_wall_internal_id(self, wall_element) -> str:
-        """Return the Allplan Wal element internal id (e.g. '7034Wal000000334').
-
-        Falls back to the typed `wall_id` field when no wall is selected or when
-        the Allplan API on the current version does not expose a UUID accessor.
-        """
-        if wall_element is None:
-            return self.build_ele.wall_id.value or ""
-        for getter_name in ("GetModelElementUUID", "GetElementUUID", "GetUUID"):
-            try:
-                getter = getattr(wall_element, getter_name, None)
-                if getter is None:
-                    continue
-                value = getter()
-                if value:
-                    return str(value)
-            except Exception:
-                continue
-        return self.build_ele.wall_id.value or ""
-
-    def compute_ampit_detail_general(self) -> str:
-        """Compute PMP_FG_AMPIT_DETAIL_GENERAL based on ampit material, premarc/wall
-        thickness comparison and the `is_puerta_entrada` flag.
-
-        Returns an empty string when no material has been chosen by the user.
-        """
-        material = (self.build_ele.ampit_material.value or "").upper()
-        is_pe = bool(self.build_ele.is_puerta_entrada.value)
-        try:
-            grosor_premarc = float(self.thickness_premarc or 0)
-        except Exception:
-            grosor_premarc = 0.0
-        try:
-            grosor_pared = float(self.detected_wall_thickness or 0)
-        except Exception:
-            grosor_pared = 0.0
-        is_thicker = grosor_premarc > grosor_pared
-
-        if material == "CERAMICA_MAYOR":
-            if is_pe:
-                return "DG_A_PE_CM_1"
-            return "DG_A_CM_1" if is_thicker else "DG_A_CM_2"
-        if material == "CERAMIC":
-            if is_pe:
-                return "DG_A_PE_C_2"
-            return "DG_A_C_1" if is_thicker else "DG_A_C_2"
-        return ""
 
     def get_wall_ifc_id(self, wall_element) -> str:
         """Obtiene el IFC ID del muro host desde el atributo 683."""
@@ -2299,19 +2203,13 @@ class PremarcScriptObject(BaseScriptObject):
                     f"[Premarc] Muro seleccionado: {self.wall_select_result.element_guid}"
                 )
 
-                try:
-                    wall_angle = self._get_wall_rotation_deg(self.selected_wall)
-                except Exception as e:
-                    print(f"[Premarc] _get_wall_rotation_deg fallo: {e}")
-                    wall_angle = 0.0
+                wall_angle = self._get_wall_rotation_deg(self.selected_wall)
                 self.rotation = wall_angle
                 self.build_ele.rotation.value = wall_angle
                 print(f"[Premarc] Rotation set to wall angle: {wall_angle} deg")
 
-                try:
-                    self._debug_wall_attrs(self.selected_wall)
-                except Exception as e:
-                    print(f"[Premarc] _debug_wall_attrs fallo: {e}")
+                # PythonUtility.ShowMessageBox(f"Grosor muro detectado: {self.detected_wall_thickness} mm", PythonUtility.MB_OK)
+                self._debug_wall_attrs(self.selected_wall)
 
                 if self.selected_wall:
                     try:
@@ -5311,13 +5209,7 @@ class PremarcScriptObject(BaseScriptObject):
             traceback.print_exc()
             return True  # en caso de error, permitir el opening para no bloquear
 
-    def _create_wall_opening(
-        self,
-        height: float | None = None,
-        width: float | None = None,
-        bottom_z: float | None = None,
-        modify_existing: bool = False,
-    ):
+    def _create_wall_opening(self, modify_existing: bool = False):
         if not self.selected_wall or self.selected_wall.IsNull():
             return False
         if self.placement_pnt == AllplanGeo.Point3D():
@@ -5334,16 +5226,14 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
         pos = self.placement_pnt
-        llarg = width if width is not None else self.build_ele.width.value
-        alt = height if height is not None else self.build_ele.heigh.value
-        bottom_z_ = bottom_z if bottom_z is not None else (pos.Z - alt)
+        llarg = self.build_ele.width.value
+        alt = self.build_ele.heigh.value
 
         axis_ele = AllplanEleAdapter.AxisElementAdapter(self.selected_wall)
         if axis_ele.IsNull():
             print("[Premarc] Sin eje, skip opening")
-        #     return
             return False
-        gruix = axis_ele.GetThickness() if width is None else float(width)
+        gruix = axis_ele.GetThickness()
         wall_axis = axis_ele.GetAxis()  # Line2D: eje central del muro
 
         # ── 1. Proyectar el click sobre el eje del muro ──────────────────────
@@ -5382,24 +5272,8 @@ class PremarcScriptObject(BaseScriptObject):
 
         # ── 2. Construir cuboid orientado con el eje del muro ────────────────
         # Esquina inicial: punto proyectado, centrado perpendicularmente en el eje
-
-        wall_thickness = axis_ele.GetThickness()  # espesor total real del muro
-        dist_n = (pos.X - proj_x) * nx + (pos.Y - proj_y) * ny  # positivo = click por el lado +n
-
-        if width is None:
-        # Comportamiento original: centrado en el eje (opening a todo el espesor)
-            start_x = proj_x - (gruix / 2.0) * nx
-            start_y = proj_y - (gruix / 2.0) * ny
-        else:
-            # Partial width: arrancar desde la cara más cercana al click (dist_n)
-            if dist_n >= 0:
-                # Cara front está en proj + (wall_thickness/2)*n
-                start_x = proj_x + (wall_thickness / 2.0 - gruix) * nx
-                start_y = proj_y + (wall_thickness / 2.0 - gruix) * ny
-            else:
-                # Cara front está en proj - (wall_thickness/2)*n
-                start_x = proj_x - (wall_thickness / 2.0) * nx
-                start_y = proj_y - (wall_thickness / 2.0) * ny
+        start_x = proj_x - (gruix / 2.0) * nx
+        start_y = proj_y - (gruix / 2.0) * ny
 
         # Matriz de rotación: alinea el eje X del cuboid (1,0,0) con la dirección del muro
         rot_mat = AllplanGeo.Matrix3D()
@@ -5410,9 +5284,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Matriz de traslación: lleva la esquina a (start_x, start_y, pos.Z)
         trans_mat = AllplanGeo.Matrix3D()
-        # trans_mat.SetTranslation(AllplanGeo.Vector3D(start_x, start_y, pos.Z - alt))
-        trans_mat.SetTranslation(AllplanGeo.Vector3D(start_x, start_y, bottom_z_))
-
+        trans_mat.SetTranslation(AllplanGeo.Vector3D(start_x, start_y, pos.Z - alt))
 
         # Combinada: primero rotar, luego trasladar → combined = rot_mat * trans_mat
         combined = AllplanGeo.Matrix3D()
@@ -5442,53 +5314,16 @@ class PremarcScriptObject(BaseScriptObject):
             start_2d, llarg, wall_axis, wall_geo, placement_line
         )
 
-        if width is None:
-            # Llamada sin argumentos → WindowOpening (premarc standard)
-            opening_prop = AllplanArchElements.WindowOpeningProperties()
-            opening_prop.Independent2DInteraction = False
+        opening_prop = AllplanArchElements.WindowOpeningProperties()
+        opening_prop.Independent2DInteraction = False
 
-            plane_ref = AllplanArchElements.PlaneReferences(
-                self.document, AllplanEleAdapter.BaseElementAdapter()
-            )
-            plane_ref.SetBottomOffset(bottom_z_)
-            plane_ref.SetHeight(alt)
-            opening_prop.PlaneReferences = plane_ref
+        plane_ref = AllplanArchElements.PlaneReferences(
+            self.document, AllplanEleAdapter.BaseElementAdapter()
+        )
+        plane_ref.SetBottomOffset(pos.Z - alt)
+        plane_ref.SetHeight(alt)
+        opening_prop.PlaneReferences = plane_ref
 
-        #     geom       = opening_prop.GetGeometryProperties()
-        #     geom.Depth = gruix
-
-        #     opening_element = AllplanArchElements.WindowOpeningElement(
-        #         opening_prop,
-        #         self.selected_wall,
-        #         start_2d,
-        #         opening_end_pnt,
-        #         drawPlacementPreview=False
-        #     )
-        # else:
-        #     # Llamada con argumentos → GeneralOpening eRecess (nicho persiana)
-        #     opening_prop = AllplanArchElements.GeneralOpeningProperties(
-        #         AllplanArchElements.OpeningType.eRecess
-        #     )
-        #     opening_prop.VisibleInViewSection3D   = True
-        #     opening_prop.Independent2DInteraction = False
-
-        #     plane_ref = AllplanArchElements.PlaneReferences(
-        #         self.document, AllplanEleAdapter.BaseElementAdapter()
-        #     )
-        #     plane_ref.SetBottomOffset(bottom_z_)
-        #     plane_ref.SetHeight(alt)
-        #     opening_prop.PlaneReferences = plane_ref
-
-        #     geom       = opening_prop.GetGeometryProperties()
-        #     geom.Depth = gruix
-
-        #     opening_element = AllplanArchElements.GeneralOpeningElement(
-        #             opening_prop,
-        #             self.selected_wall,
-        #             start_2d,
-        #             opening_end_pnt,
-        #             drawPlacementPreview=False
-        #         )
         geom = opening_prop.GetGeometryProperties()
         geom.Depth = gruix
 
@@ -5528,7 +5363,6 @@ class PremarcScriptObject(BaseScriptObject):
         # Guardar el GUID en el parámetro del PythonPart
         # El opening creado es el primer elemento de la lista
 
-
         if created_opening:
             opening_adapters = [
                 x
@@ -5543,13 +5377,7 @@ class PremarcScriptObject(BaseScriptObject):
             opening_guid = opening_adapter.GetModelElementUUID()  # objeto GUID
             opening_guid_str = str(opening_guid)  # string persistible
             print(f"[Premarc] Opening GUID: {opening_guid_str}")
-            if width is None:
-                # window opening premarc
-                self.build_ele.opening_guid.value = opening_guid_str
-            else:
-                # niche opening persiana
-                self.build_ele.niche_guid.value = opening_guid_str
-            # self.build_ele.opening_guid.value = opening_guid_str
+            self.build_ele.opening_guid.value = opening_guid_str
             self._opening_created_width = llarg
             self._opening_created_heigh = alt
             self._opening_baseline_width = float(llarg)
@@ -5625,13 +5453,8 @@ class PremarcScriptObject(BaseScriptObject):
 
         self._create_wall_opening()
 
-    def _delete_wall_opening(
-        self,
-        opening_guid_str: str | None = None,
-        is_window_opening: bool = True,
-    ):
-        if opening_guid_str is None:
-            opening_guid_str = self.build_ele.opening_guid.value
+    def _delete_wall_opening(self):
+        opening_guid_str = self.build_ele.opening_guid.value
         if not opening_guid_str:
             return False
 
@@ -5645,14 +5468,12 @@ class PremarcScriptObject(BaseScriptObject):
         guid = AllplanEleAdapter.GUID.FromString(opening_guid_str)
 
         opening_adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(guid, doc)
+
         if opening_adapter.IsNull():
             print(
                 "[Premarc] Opening ya no existe en el documento actual, limpiando GUID"
             )
-            if is_window_opening:
-                self.build_ele.opening_guid.value = ""
-            elif hasattr(self.build_ele, "niche_guid"):
-                self.build_ele.niche_guid.value = ""
+            self.build_ele.opening_guid.value = ""
             return False
 
         ele_list = AllplanEleAdapter.BaseElementAdapterList()
@@ -5660,16 +5481,12 @@ class PremarcScriptObject(BaseScriptObject):
 
         AllplanBaseElements.DeleteElements(doc, ele_list)
 
-        if is_window_opening:
-            self.build_ele.opening_guid.value = ""
-        elif hasattr(self.build_ele, "niche_guid"):
-            self.build_ele.niche_guid.value = ""
+        self.build_ele.opening_guid.value = ""
         self._opening_created_width = 0
         self._opening_created_heigh = 0
         print("[delete_wall_opening] Opening borrado OK")
         return True
 
-    # TODO detectar grosor de muro correctamente
     def _get_wall_thickness(self, wall_adapter) -> float:
         """Lee el grosor del muro desde su geometria 2D en planta.
         Funciona bien para muros rectos de un solo tier.
@@ -6274,43 +6091,6 @@ class PremarcScriptObject(BaseScriptObject):
                 #     self._elements_placed = False
                 #     return OnCancelFunctionResult.CONTINUE_INPUT
 
-            # ── SEGUNDO ESC (o modo modificación) ───────────────────────────────────
-            # opening_guid ya está en build_ele → execute() ya lo incluyó en el cache
-                # self._create_wall_opening() # opening premarc
-                # print("create wall opening")
-                # # Manage niche or windows opening from persianas (box shutter)
-                # if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT":
-                #     # Width_persiana: Premaco queda fijo en parte trasera
-                #     width_persiana = self.detected_wall_thickness - self.build_ele.thickness.value + self.build_ele.PersianaWidth.value
-                #     self._create_wall_opening(
-                #             height   = self.build_ele.PersianaHeight.value,
-                #             width    = width_persiana,
-                #             bottom_z = self.placement_pnt.Z
-                #         )
-                # elif self.build_ele.ComboBoxPersianas.value == "FALS CALAIX":
-                #     # Usar placement_pnt (cara trasera del muro) como start_pnt.
-                #     # OpeningCreationUtil usa ese punto directamente como 2D start
-                #     # del GeneralOpeningElement, lo que indica a Allplan la cara trasera.
-                #     opening_util = OpeningCreationUtil()
-                #     solid_opening = SolidOpening(
-                #         solid    = None,
-                #         placement = self.placement_pnt,
-                #         size     = [
-                #             self.build_ele.width.value,
-                #             self.build_ele.PersianaWidth.value,
-                #             self.build_ele.PersianaHeight.value,
-                #         ]
-                #     )
-                #     opening_util.create_openings(self.selected_wall, [solid_opening], [])
-                # elif self.build_ele.ComboBoxPersianas.value == "LAMISOL VIST":
-                #     # TODO: logic window opening from persianas (lamisol vist)
-                #     # height: self.build_ele.PersianaHeight.value
-                #     # width: self.detected_wall_thickness
-                #     self._create_wall_opening(
-                #         height   = self.build_ele.PersianaHeight.value,
-                #         width    = self.detected_wall_thickness,
-                #         bottom_z = self.placement_pnt.Z
-                #     )
                 # ── SEGUNDO ESC (o modo modificación) ───────────────────────────────────
                 # opening_guid ya está en build_ele → execute() ya lo incluyó en el cache
                 if self.is_modification_mode and self.build_ele.opening_guid.value:
@@ -6336,8 +6116,6 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
     def get_data_endpoint(self, at1value: str) -> dict:
-        if not _premarc_comandes_ot_enabled():
-            return _premarc_empty_data_endpoint()
         try:
             # Thickness manual → endpoint de valores por defecto (formato values)
             # Thickness de paleta → endpoint por at1value (formato options)
@@ -6357,20 +6135,13 @@ class PremarcScriptObject(BaseScriptObject):
                 return data
 
         except Exception as e:
-            _warn_comandes_ot_once(
-                f"[Premarc] ComandesOT no disponible ({e}); listas dinámicas vacías. "
-                "La API solo se usa si PREMARC_USE_COMANDES_OT=1 y el servicio responde."
-            )
+            print(f"Unexpected error: {e}")
             print(
                 "[Premarc] API no disponible. Usando datos mock para configuraciones."
             )  # TODO: Eliminar esta linea antes de entregar a Arnau
             return MOCK_DATA_ENDPOINT  # TODO: Eliminar esta linea antes de entregar a Arnau
-            # return _premarc_empty_data_endpoint()
 
     def get_values_for_config_API(self) -> dict:
-        fallback = {"values": _premarc_fallback_config_values()}
-        if not _premarc_comandes_ot_enabled():
-            return fallback
         try:
             url = f"{API_URL_AT1}"
             DEFAULT_CONFIG = MOCK_VALUES_FOR_CONFIG  # TODO: Eliminar esta linea antes de entregar a Arnau y descomentar la siguiente
@@ -6384,21 +6155,15 @@ class PremarcScriptObject(BaseScriptObject):
                 data = response.json()
                 print("Success data endpoint:")
                 # print(data)
-                vals = data.get("values") if isinstance(data, dict) else None
-                if not vals:
-                    return fallback
                 return data
-            return DEFAULT_CONFIG # TODO: eliminar para entregar a Arnau
-            # return fallback
+
+            return DEFAULT_CONFIG
         except Exception as e:
-            _warn_comandes_ot_once(
-                f"[Premarc] ComandesOT no disponible ({e}); usando grosores locales."
-            )
+            print(f"Unexpected error: {e}")
             print(
                 "[Premarc] API no disponible. Usando grosores mock."
             )  # TODO: Eliminar esta linea antes de entregar a Arnau
             return DEFAULT_CONFIG
-            # return fallback
 
     # Helper API
     # def get_description_by_position(self, data, position):
@@ -6553,12 +6318,13 @@ class PremarcScriptObject(BaseScriptObject):
 
     def crearListaConfiguraciones(self):
         """Crea una lista de configuraciones"""
-        data = self.values_for_config or {}
-        values = data.get("values") or {}
-        if not values:
-            values = _premarc_fallback_config_values()
-        lista_conf = [values[k] for k in sorted(values, key=int)]
-        self.build_ele.valueListaGrosor.value = lista_conf
+        data = self.values_for_config
+        if data["values"]:
+            lista_conf = [data["values"][k] for k in sorted(data["values"], key=int)]
+            self.build_ele.valueListaGrosor.value = lista_conf
+        else:
+            print("Error in create list of configurations")
+            self.build_ele.valueListaGrosor.value = []
 
     def update_pallete_values(self):
         """Actualiza los valores de la paleta"""
@@ -7024,9 +6790,6 @@ class PremarcScriptObject(BaseScriptObject):
         for elem in xps:
             model_ele_list.append_geometry_3d(elem, props_xps)
 
-        wall_internal_id = self.get_wall_internal_id(self.selected_wall)
-        wall_material_name = self.get_wall_material_name(self.selected_wall) or self.build_ele.wall_id.value
-
         xps_attribute_list = BuildingElementAttributeList()
         # xps_attribute_list.add_attribute(self.sizes_attribute_id, "2950x600x120mm")
         xps_attribute_list.add_attribute(
@@ -7049,7 +6812,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         frame_attribute_list = BuildingElementAttributeList()
         frame_attribute_list.add_attribute(
-            self.den_id, self.getValuesFromInputDataPallet()
+            self.den_id, self.build_ele.ComboBoxDEN.value
         )
         frame_attribute_list.add_attribute(
             self.pmp_xps_premarc_detail_text_id, self.build_ele.xps_type.value
@@ -7241,11 +7004,9 @@ class PremarcScriptObject(BaseScriptObject):
                     i, shutter_attribute_list.get_attribute_list()
                 )
 
-        # window_3d, window_2d = self.create_premarc_window()
-        # for elem in window_3d:
-        #     model_ele_list.append_geometry_3d(elem, props_window)
-        window_3d = []
-        window_2d = []
+        window_3d, window_2d = self.create_premarc_window()
+        for elem in window_3d:
+            model_ele_list.append_geometry_3d(elem, props_window)
 
         window_attribute_list = self._build_window_attribute_list()
 
@@ -7262,93 +7023,34 @@ class PremarcScriptObject(BaseScriptObject):
         for elem in mosquitera:
             model_ele_list.append_geometry_3d(elem, props_mosquitera)
 
-        if self.build_ele.EnableAmpit.value:
-            ampit, ampit_2d, ampit_edge_fg, ampit_edge_add, ampit_edge_add_cuboid, ampit_spec = self.create_premarc_ampit()
+        ampit, ampit_2d, ampit_edge_fg, ampit_edge_add = self.create_premarc_ampit()
+        for elem in ampit:
+            model_ele_list.append_geometry_3d(elem, props_ampit)
 
-            # Per-type layer + FORCED color. A FRESH CommonProperties() instance
-            # is built per material so the generic props_ampit defaults cannot
-            # leak through. ColorByLayer=False + ForceColor=True is the only
-            # combination that actually overrides the layer color in Allplan
-            # (otherwise the layer's "Pen color from layer" wins regardless of
-            # what we set on .Color). Same pattern as XPS.py preview faces.
-            # Palette indices verified against NEOPRENO + PREMARCS' own usages:
-            #   CERAMIC = 91 (rosa), CERAMICA_MAYOR = 8 (naranja),
-            #   XAPA    = 3  (turquesa), PAVIMENTO     = 19 (gris negruc).
-            # (color 7 in Allplan's standard palette is cyan/blue, NOT grey;
-            #  this file's own get_color_by_thickness fallback uses 19 for grey)
-            ampit_layer_id = AllplanBaseElements.LayerService.GetIDByShortName(ampit_spec["layer"], self.document)
-            if ampit_layer_id is None:
-                ampit_layer_id = AllplanBaseElements.LayerService.GetIDByShortName(AMPIT_LAYER, self.document)
-            props_ampit_typed = AllplanBaseElements.CommonProperties()
-            props_ampit_typed.Layer = ampit_layer_id
-            props_ampit_typed.Color = ampit_spec["color"]
-            props_ampit_typed.ColorByLayer = False
-            props_ampit_typed.ForceColor = True
+        ampit_attribute_list = self._build_ampit_attribute_list()
 
-            for elem in ampit:
-                model_ele_list.append_geometry_3d(elem, props_ampit_typed)
-
-            # Aplacat is auto-derived from REB. BAIX selection (literal-text directive,
-            # no manual checkbox, no pendiente gating). Sobresaliente saved is the
-            # EFFECTIVE value: nominal spec + LENGTH_REBAJES_MM when aplacat is on.
-            baix_selected = self.bottom_rebaje_enabled()
-            aplacat_val = "SI" if baix_selected else "NO"
-            sobresaliente_efectivo = ampit_spec["sobresaliente"] + (LENGTH_REBAJES_MM if baix_selected else 0)
-
-            ampit_attribute_list = self._build_ampit_attribute_list()
-
-            init_i = len(model_ele_list) - len(ampit)
-            for i in range(init_i, len(model_ele_list)):
-                model_ele_list.set_element_attributes(
-                    i, ampit_attribute_list.get_attribute_list()
-                )
-
-            ampit_edge_fg_attribute_list = self._build_ampit_edge_fg_attribute_list()
-            ampit_edge_add_attribute_list = self._build_ampit_edge_add_attribute_list()
-
-            model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
+        init_i = len(model_ele_list) - len(ampit)
+        for i in range(init_i, len(model_ele_list)):
             model_ele_list.set_element_attributes(
-                len(model_ele_list) - 1, ampit_edge_fg_attribute_list.get_attribute_list()
+                i, ampit_attribute_list.get_attribute_list()
             )
 
-            if len(ampit_edge_add) > 0:
-                model_ele_list.append_geometry_3d(ampit_edge_add, props_ampit_eix_add)
-                model_ele_list.set_element_attributes(
-                    len(model_ele_list) - 1,
-                    ampit_edge_add_attribute_list.get_attribute_list(),
-                )
+        ampit_edge_fg_attribute_list = self._build_ampit_edge_fg_attribute_list()
+        ampit_edge_add_attribute_list = self._build_ampit_edge_add_attribute_list()
 
-            eix_fg_attribute_list = BuildingElementAttributeList()
-            eix_fg_attribute_list.add_attribute(self.pmp_id_premarc_id, self.val_pmp_id_premarc)
-            if self.selected_wall:
-                eix_fg_attribute_list.add_attribute(self.pmp_pare_id, self.get_wall_material_name(self.selected_wall))
-            eix_fg_attribute_list.add_attribute(self.pmp_wall_id_attr_id, self.build_ele.wall_id.value)
+        model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
+        model_ele_list.set_element_attributes(
+            len(model_ele_list) - 1, ampit_edge_fg_attribute_list.get_attribute_list()
+        )
 
-            eix_add_attribute_list = BuildingElementAttributeList()
-            eix_add_attribute_list.add_attribute(self.pmp_id_premarc_id, self.val_pmp_id_premarc)
-            if self.selected_wall:
-                eix_add_attribute_list.add_attribute(self.pmp_pare_id, self.get_wall_material_name(self.selected_wall))
-            eix_add_attribute_list.add_attribute(self.pmp_wall_id_attr_id, self.build_ele.wall_id.value)
-            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_parts_id, self.build_ele.ampit_parts.value)
-            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_1_id, self.build_ele.ampit_ref_1.value)
-            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_2_id, wall_material_name)
+        if len(ampit_edge_add) > 0:
+            model_ele_list.append_geometry_3d(ampit_edge_add, props_ampit_eix_add)
+            model_ele_list.set_element_attributes(
+                len(model_ele_list) - 1,
+                ampit_edge_add_attribute_list.get_attribute_list(),
+            )
 
-            if len(ampit_edge_fg) > 0:
-                model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
-                model_ele_list.set_element_attributes(len(model_ele_list)-1, eix_fg_attribute_list.get_attribute_list())
-
-            if len(ampit_edge_add) > 0:
-                model_ele_list.append_geometry_3d(ampit_edge_add, props_ampit_eix_add)
-                model_ele_list.set_element_attributes(len(model_ele_list)-1, eix_add_attribute_list.get_attribute_list())
-
-            for cuboid in ampit_edge_add_cuboid:
-                model_ele_list.append_geometry_3d(cuboid, props_ampit_eix_add)
-                model_ele_list.set_element_attributes(
-                    len(model_ele_list) - 1, eix_add_attribute_list.get_attribute_list()
-                )
-
-            for elem in ampit_2d:
-                model_ele_list.append_geometry_2d(elem, props_ampit_typed)
+        model_ele_list.append_geometry_2d(ampit_2d, props_ampit)
 
         layer_imperm_id = AllplanBaseElements.LayerService.GetIDByShortName(
             IMPERM_LAYER, self.document
@@ -7615,8 +7317,11 @@ class PremarcScriptObject(BaseScriptObject):
     #     return polyhedron_tub
 
     def create_vertical_tub(self) -> AllplanGeo.Polyhedron3D:
-        # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self.build_ele.thickness_wall.value / 2
+        wall_center = (
+            self.build_ele.thickness_wall.value / 2
+            if self.build_ele.enable_manual_thickness.value
+            else self._get_wall_thickness(self.selected_wall) / 2
+        )
         frame_tub_bottom = AllplanGeo.Polygon3D()
         frame_tub_bottom += AllplanGeo.Point3D(
             0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
@@ -7638,8 +7343,11 @@ class PremarcScriptObject(BaseScriptObject):
 
     def create_horizontal_tub(self) -> AllplanGeo.Polyhedron3D:
 
-        # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self.build_ele.thickness_wall.value / 2
+        wall_center = (
+            self.build_ele.thickness_wall.value / 2
+            if self.build_ele.enable_manual_thickness.value
+            else self._get_wall_thickness(self.selected_wall) / 2
+        )
         frame_tub_left = AllplanGeo.Polygon3D()
         frame_tub_left += AllplanGeo.Point3D(
             0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
@@ -7773,23 +7481,15 @@ class PremarcScriptObject(BaseScriptObject):
 
         return polyhedron_sockets
 
-    def create_origin_falca_top(self)->AllplanGeo.Polygon3D:
-        height_falca = HEIGHT_FALCA
-        thickness_falca = THICKNESS_FALCA
-        if self.build_ele.ComboBoxPersianas.value == "METALUNIC VIST":
-            height_falca = self.build_ele.PersianaHeight.value
-            thickness_falca = abs(
-                self.thickness
-                - self.detected_wall_thickness
-                - self.build_ele.PersianaWidth.value
-                - THICKNESS_MM
-            )
+    def create_origin_falca_top(self) -> AllplanGeo.Polygon3D:
+
         frame_falca = AllplanGeo.Polygon3D()
+        frame_falca += AllplanGeo.Point3D(0, 0, 0)  # P1
+        frame_falca += AllplanGeo.Point3D(0, 0, HEIGHT_FALCA)  # P2
+        frame_falca += AllplanGeo.Point3D(0, -MINUS_THICKNESS_FALCA, HEIGHT_FALCA)  # P3
+        frame_falca += AllplanGeo.Point3D(0, -THICKNESS_FALCA, MINUS_HEIGHT_FALCA)  # P4
+        frame_falca += AllplanGeo.Point3D(0, -THICKNESS_FALCA, 0)  # P5
         frame_falca += AllplanGeo.Point3D(0, 0, 0)
-        frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
-        frame_falca += AllplanGeo.Point3D(0, -MINUS_THICKNESS_FALCA, height_falca)
-        frame_falca += AllplanGeo.Point3D(0, -thickness_falca, MINUS_HEIGHT_FALCA)
-        frame_falca += AllplanGeo.Point3D(0, -thickness_falca, 0)
         # error_code, polyhedron_falca = self.extrude_frame(frame_falca, "frame_falca")
         # return polyhedron_falca
         return frame_falca
@@ -8149,6 +7849,20 @@ class PremarcScriptObject(BaseScriptObject):
         dip = float(U_PROFILE_Z_INTO_AMPIT_DIP_MM)
         return z_top + eps + adj - dip
 
+    def _resolve_u_profile_y_anchor(self) -> str:
+        """Palette ComboBoxUChannelYAnchor overrides module U_PROFILE_SILL_Y_ANCHOR when set."""
+        combo = getattr(self.build_ele, "ComboBoxUChannelYAnchor", None)
+        if combo is not None:
+            v = getattr(combo, "value", None)
+            if isinstance(v, str) and v.strip():
+                return v.strip().lower().replace("-", "_")
+        return (
+            (U_PROFILE_SILL_Y_ANCHOR or "pit_span_from_outer_lip")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+
     def _u_channel_bottom(self) -> AllplanGeo.Polyhedron3D:
         """
         Sheet-metal U (115×30×3 catalog). Long axis = X. U opens toward +Z.
@@ -8284,12 +7998,6 @@ class PremarcScriptObject(BaseScriptObject):
         # scale_factor_x = (self.width + THICKNESS_MM * 2) / self.width
         # transformation_matrix.SetScaling(scale_factor_x,1,1)
 
-        # polyhedron_top_translated = AllplanGeo.Transform(polyhedron_top, transformation_matrix)
-        # translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM,0,0)
-        # polyhedron_top = AllplanGeo.Move(polyhedron_top_translated, translation_vector)
-        # transformation_matrix = AllplanGeo.Matrix3D()
-        # scale_factor_x = (self.width + THICKNESS_MM * 2) / self.width
-        # transformation_matrix.SetScaling(scale_factor_x,1,1)
         # polyhedron_top_translated = AllplanGeo.Transform(polyhedron_top, transformation_matrix)
         # translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM,0,0)
         # polyhedron_top = AllplanGeo.Move(polyhedron_top_translated, translation_vector)
@@ -10152,14 +9860,21 @@ class PremarcScriptObject(BaseScriptObject):
 
     def create_box_shutter(self):  # Cajon de persiana
         # Box shutters
-        BOX_SHUTTER_HEIGHT = self.build_ele.PersianaHeight.value
-        BOX_SHUTTER_WIDTH = self.detected_wall_thickness if self.build_ele.ComboBoxPersianas.value == "LAMISOL VIST" else self.build_ele.PersianaWidth.value
         box_shutter = AllplanGeo.Polygon3D()
         box_shutter += AllplanGeo.Point3D(0, 0, 0)
         box_shutter += AllplanGeo.Point3D(0, 0, BOX_SHUTTER_HEIGHT)
         box_shutter += AllplanGeo.Point3D(0, -BOX_SHUTTER_WIDTH, BOX_SHUTTER_HEIGHT)
         box_shutter += AllplanGeo.Point3D(0, -BOX_SHUTTER_WIDTH, 0)
         box_shutter += AllplanGeo.Point3D(0, 0, 0)
+
+        # Move box shutters to offset from front
+        translation_vector = AllplanGeo.Vector3D(
+            -THICKNESS_MM, -(OFFSET_FRONT_BOX_SHUTTER), 0
+        )
+        box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
+        error_code, polyhedron_box_shutter = self.extrude_frame(
+            box_shutter_moved, "box_shutter"
+        )
 
         # Manage config UI
         box_shutter_list = []
@@ -10169,30 +9884,15 @@ class PremarcScriptObject(BaseScriptObject):
                 box_shutter_list = []
             case "MONOBLOCK OCULT":
                 print("MONOBLOCK OCULT")
-                # Move box shutters to offset from front
-                fix_y = self.thickness - self.build_ele.PersianaWidth.value
-                translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM, -(fix_y), 0)
-                box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
-                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
-
                 box_shutter_list.append(polyhedron_box_shutter)
             case "LAMISOL VIST":
                 print("LAMISOL VIST")
-                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case "METALUNIC VIST":
                 print("METALUNIC VIST")
-
-                # Move box shutters to wall thickness
-                fix_y = self.detected_wall_thickness
-                translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM, -fix_y, 0)
-                box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
-                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
-
                 box_shutter_list.append(polyhedron_box_shutter)
             case "FALS CALAIX":
                 print("FALS CALAIX")
-                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case _:
                 print("Persiana Selected default")
@@ -11004,15 +10704,12 @@ class PremarcScriptObject(BaseScriptObject):
             max_falcas = 0
 
         # Top Falcas
-        y_position_top_falcas = -(self.thickness - THICKNESS_MM - THICKNESS_FALCA)
-        if self.build_ele.ComboBoxPersianas.value == "METALUNIC VIST":
-            y_position_top_falcas = -(self.detected_wall_thickness + self.build_ele.PersianaWidth.value)
-        for i in range(max_falcas+1):
+        for i in range(max_falcas + 1):
             falca = self.create_origin_falca_top()
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
-                y_position_top_falcas,
-                0
+                -(self.thickness - THICKNESS_MM - THICKNESS_FALCA),
+                0,
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
@@ -11364,94 +11061,16 @@ class PremarcScriptObject(BaseScriptObject):
         )
         return [cuboid_mosq]
 
-    def _effective_socket_width_mm(self) -> float:
-        # Mirror the encaje match block (~5771-5810). Manual encaje takes
-        # priority unless PLEC INFERIOR is selected. The -3 compensates for
-        # the extrude that fattens the polygon, so the OUTER measurement
-        # matches the palette value.
-        combo = self.build_ele.ComboBoxEncajes.value
-        if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
-            return max(0.0, float(self.build_ele.EncajeBase.value or 0) - 3.0)
-        if combo == "35*30":
-            return 32.0
-        if combo == "70*30":
-            return 67.0
-        return 0.0
-
-    def _ampit_y_inner_local_mm(self) -> float:
-        # Local Y position of the ampit slab INNER face (toward encaje).
-        #
-        # The encaje back wall polygon sits at y_local = socket_width but its
-        # extrude direction in create_socket() is "socket_frame_front" which
-        # extrudes +THICKNESS_MM=+3 mm in Y. So the encaje back wall's OUTER
-        # face (the one we must clear) is at y_local = socket_width + 3 mm.
-        # We then add 2 mm of architect-spec margin past that face. The 3 mm
-        # baseline (= depth of marco interior cercano al back) extends the
-        # ampit hasta la cara frontal del premarco cuando no hay encaje.
-        sw = self._effective_socket_width_mm()
-        encaje_back_outer = sw + float(THICKNESS_MM) if sw > 0 else 0.0
-        return max(3.0, encaje_back_outer) + 2.0
-
-    def _ampit_slab_outer_local_mm(self, spec: dict) -> float:
-        # Local-Y position of the slab + lip OUTER face (= where the front
-        # of the ampit ends, including any slab extension needed to keep
-        # the 90° lip OUTSIDE the wall interior face).
-        #
-        # Rule:
-        #   - No lip                     → slab_outer = thickness + baseline
-        #   - grosor_tope > baseline+sobresaliente
-        #     (lip would land INSIDE the wall — CERAMIC's case):
-        #     → extend the slab so the lip back sits exactly `sobresaliente`
-        #       mm PAST the wall face (the architect's "gap"):
-        #       slab_outer = thickness + sobresaliente + grosor_tope
-        #   - Otherwise (CERAMICA_MAYOR / XAPA): use the natural value:
-        #     slab_outer = thickness + baseline + sobresaliente
-        grosor_tope   = float(spec["grosor_tope"])
-        sobresaliente = float(spec["sobresaliente"])
-        baseline      = float(spec["baseline_protrusion"])
-        tope          = float(spec["tope"])
-        if tope <= 0 or grosor_tope <= 0 or sobresaliente <= 0:
-            return float(self.thickness) + baseline
-        if grosor_tope > baseline + sobresaliente:
-            return float(self.thickness) + sobresaliente + grosor_tope
-        return float(self.thickness) + baseline + sobresaliente
-
-    def _ampit_fondo_3d_total_mm(self, spec: dict) -> float:
-        # Total Y depth of the ampit material in 3D, from the slab inner
-        # face to the slab + lip OUTER face. Excludes the 2 mm panel /
-        # afegit joint gaps per screenshot 7's
-        # "EL MARGEN DE 2MM ... NO SE TIENE EN CUENTA".
-        slab_outer_local = self._ampit_slab_outer_local_mm(spec)
-        fondo = slab_outer_local - self._ampit_y_inner_local_mm()
-        if fondo < 0:
-            fondo = 0.0
-        return fondo
-
     def create_premarc_ampit(self):
-        material = self.build_ele.ampit_material.value or "CERAMIC"
-        spec = AMPIT_TYPE_SPECS.get(material, AMPIT_TYPE_SPECS["CERAMIC"])
+        fondo_ampits_top = self.thickness - 63 - 2 + 3 + 11
 
-        # Pavimento has explicit "no sobresale" rule, which conflicts with the
-        # universal aplacat rule ("ampit must keep being built as if the base
-        # were of standard length"). Per architects' literal-text directive,
-        # skip drawing the ampit altogether in this combo.
-        if material == "PAVIMENTO" and self.bottom_rebaje_enabled():
-            print("[Premarc] PAVIMENTO ampit no compatible con REB. BAIX (no sobresale): ampit omitido.")
-            return [], [], [], [], [], spec
-
-        # Encaje-aware slab inner Y (2 mm margin from the encaje back face,
-        # or from the 63 mm front assembly when sin encaje / narrow encaje).
-        y_inner_local = self._ampit_y_inner_local_mm()
-
-        # Real 3D ampit depth = slab fondo + sobresaliente. The 2 mm lateral
-        # and afegit-joint gaps are NOT counted here (screenshot 7 directive).
-        fondo_3d = self._ampit_fondo_3d_total_mm(spec)
-
-        diff = self.fondo_ampits - fondo_3d
-        # retall when palette supplies MORE than the 3D needs (cut the excess);
-        # afegit when palette supplies LESS than the 3D needs (add a panel).
-        self.retall_ampits = max(diff, 0.0)
-        self.afegit_ampits = max(-diff, 0.0)
+        diff = self.fondo_ampits - fondo_ampits_top
+        self.retall_ampits = 0
+        self.afegit_ampits = 0
+        if diff > 0:
+            self.retall_ampits = diff
+        else:
+            self.afegit_ampits = math.fabs(diff)
 
         if not self.afegit_ampits_manual:
             self.build_ele.afegit_ampits.value = self.afegit_ampits
@@ -11466,195 +11085,93 @@ class PremarcScriptObject(BaseScriptObject):
         edge_fg = None
         edge_add = None
 
-        # 2 mm clearances:
-        #   - Outermost ends: 2 mm gap to the frame uprights (left and right).
-        #   - Between panels: 2 mm gap (1 mm trimmed off each adjacent panel).
-        # Panels stay equal length for any width: choose the smallest N such that
-        #   N panels each <= llarg_ampits fit inside (width - 4) with (N-1) gaps of 2 mm,
-        #   i.e. N >= (width - 2) / (llarg_ampits + 2).
-        side_gap = 2.0
-        inter_gap = 2.0
-        # Premarc's 3 mm thickness now extends INWARD into the cavity, so the
-        # ampit must be 3 mm shorter on each lateral side to fit the real opening.
-        # This is independent of the 2 mm gap rules: the 2 mm clearance is still
-        # measured from this new (recessed) effective frame face.
-        frame_inner_inset_x = float(THICKNESS_MM)
-        usable = self.width - 2 * side_gap - 2 * frame_inner_inset_x
-        n_panels = 0
-        panel_length = 0.0
-        if usable > 0 and self.llarg_ampits > 0:
-            n_panels = max(1, int(math.ceil((self.width - 2 * frame_inner_inset_x - side_gap) / (self.llarg_ampits + inter_gap))))
-            panel_length = (usable - inter_gap * (n_panels - 1)) / n_panels
-            if panel_length <= 0:
-                n_panels = 0
-                panel_length = 0.0
+        total_ampits = self.width // self.llarg_ampits
+        length_done = 0
 
-        # Floor-plan footprint Y bounds (same for every panel):
-        #   inner = y_inner_local (encaje-aware, 2 mm margin)
-        #   outer = slab + lip OUTER face (same helper as 3D so the plan
-        #           outline always matches what create_ampit actually builds,
-        #           including the CERAMIC slab extension that keeps the
-        #           90° lip past the wall face)
-        outer_y_2d = self._ampit_slab_outer_local_mm(spec)
-
-        for i in range(n_panels):
-            x_start = frame_inner_inset_x + side_gap + i * (panel_length + inter_gap)
-            x_end = x_start + panel_length
-            if i == n_panels - 1:
-                x_end = self.width - frame_inner_inset_x - side_gap
-            current_length = x_end - x_start
-            if (ampit := self.create_ampit(x_start, current_length, y_inner_local, spec)) is not None:
-                ampit = AllplanGeo.Move(ampit, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
+        for i in range(0, int(total_ampits)):
+            if (
+                ampit := self.create_ampit(
+                    length_done, self.llarg_ampits, fondo_ampits_top
+                )
+            ) is not None:
+                ampit = AllplanGeo.Move(
+                    ampit, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+                )
                 final_result_3d.append(ampit)
                 cuboid2d = AllplanGeo.Polygon2D.CreateRectangle(
-                    AllplanGeo.Point2D(x_start, y_inner_local),
-                    AllplanGeo.Point2D(x_end, outer_y_2d),
+                    AllplanGeo.Point2D(length_done, 63 + 2),
+                    AllplanGeo.Point2D(
+                        length_done + self.llarg_ampits, fondo_ampits_top + 63 + 2
+                    ),
                 )
-                cuboid2d = AllplanGeo.Move(cuboid2d, AllplanGeo.Vector2D(0,-self.thickness))
+                cuboid2d = AllplanGeo.Move(
+                    cuboid2d, AllplanGeo.Vector2D(0, -self.thickness)
+                )
                 final_result_2d.append(cuboid2d)
 
-        edge_fg_list = []
-        edge_add_list = []
-        edge_add_cuboid_list = []
-        if n_panels > 0:
-            x_left_edge = frame_inner_inset_x + side_gap
-            x_right_edge = self.width - frame_inner_inset_x - side_gap
-            edge_fg = AllplanGeo.Line3D(
-                AllplanGeo.Point3D(x_left_edge, self.thickness, 3 + float(spec["grosor"])),
-                AllplanGeo.Point3D(x_right_edge, self.thickness, 3 + float(spec["grosor"])),
+            length_done += self.llarg_ampits
+
+        last_ampit = self.width - length_done
+        if (
+            last_ampit > 0
+            and (ampit := self.create_ampit(length_done, last_ampit, fondo_ampits_top))
+            is not None
+        ):
+            ampit = AllplanGeo.Move(
+                ampit, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
             )
-            edge_fg = AllplanGeo.Move(edge_fg, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
-            edge_fg_list = [edge_fg]
+            final_result_3d.append(ampit)
+            cuboid2d = AllplanGeo.Polygon2D.CreateRectangle(
+                AllplanGeo.Point2D(length_done, 63 + 2),
+                AllplanGeo.Point2D(length_done + last_ampit, fondo_ampits_top + 63 + 2),
+            )
+            cuboid2d = AllplanGeo.Move(
+                cuboid2d, AllplanGeo.Vector2D(0, -self.thickness)
+            )
+            final_result_2d.append(cuboid2d)
 
-            if self.afegit_ampits > 0:
-                # Joint plane sits `afegit` mm past the slab inner face,
-                # which itself is encaje-aware (y_inner_local).
-                edge_add_y = self.afegit_ampits + y_inner_local
-                edge_add = AllplanGeo.Line3D(
-                    AllplanGeo.Point3D(x_left_edge, edge_add_y, 3 + float(spec["grosor"])),
-                    AllplanGeo.Point3D(x_right_edge, edge_add_y, 3 + float(spec["grosor"])),
-                )
-                edge_add = AllplanGeo.Move(edge_add, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
-                edge_add_list = [edge_add]
+        edge_fg = AllplanGeo.Line3D(
+            AllplanGeo.Point3D(0, self.thickness, 3 + 11),
+            AllplanGeo.Point3D(self.width, self.thickness, 3 + 11),
+        )
+        edge_fg = AllplanGeo.Move(
+            edge_fg, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+        )
 
-                # 2 mm physical joint cuboid co-located with edge_add: same X span,
-                # Y centered on the joint plane, Z = ampit slab thickness (spec["grosor"]).
-                # Height must match the ampit slab per material (XAPA=2, others=11) so the
-                # cuboid never overshoots the ampit top — reported by Arnau on PR review.
-                # Layer/color/attributes match edge_add (LAYER_AMPIT_EIX_AFEGIT) at the call site.
-                # NOTE: this 2 mm gap is visualization only — it is NOT added or
-                # subtracted in the retall/afegit math (screenshot 7 directive).
-                joint_y_thickness = 2.0
-                joint_pos = AllplanGeo.AxisPlacement3D(
-                    AllplanGeo.Point3D(
-                        x_left_edge,
-                        edge_add_y - joint_y_thickness / 2,
-                        3,
-                    )
-                )
-                edge_add_cuboid = AllplanGeo.Polyhedron3D.CreateCuboid(
-                    joint_pos,
-                    x_right_edge - x_left_edge,
-                    joint_y_thickness,
-                    float(spec["grosor"]),
-                )
-                edge_add_cuboid = AllplanGeo.Move(
-                    edge_add_cuboid, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
-                )
-                edge_add_cuboid_list = [edge_add_cuboid]
+        edge_add_list = []
+        if self.afegit_ampits > 0:
+            edge_add = AllplanGeo.Line3D(
+                AllplanGeo.Point3D(0, self.afegit_ampits + 63 + 2, 3 + 11),
+                AllplanGeo.Point3D(self.width, self.afegit_ampits + 63 + 2, 3 + 11),
+            )
+            edge_add = AllplanGeo.Move(
+                edge_add, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+            )
+            edge_add_list = [edge_add]
 
         self.retall_ampits_manual = False
         self.afegit_ampits_manual = False
 
-        return final_result_3d, final_result_2d, edge_fg_list, edge_add_list, edge_add_cuboid_list, spec
+        return final_result_3d, final_result_2d, [edge_fg], edge_add_list
 
-    def create_ampit(self, init_x, llarg_ampit, y_inner_local, spec):
-        # Geometry in local Y (pre-move). After the parent's move by
-        # `-thickness`, local Y = `thickness` maps to the wall INTERIOR face
-        # (final y = 0).
-        #
-        # Architect's spec interpretation:
-        #   - grosor       : slab Z thickness
-        #   - grosor_tope  : lip Y depth (chunky cross-section width)
-        #   - tope         : lip TOTAL Z height (top of lip = slab top)
-        #   - sobresaliente: the GAP between the wall interior face and the
-        #                    lip BACK face (so the 90° lip stays past the
-        #                    wall by `sobresaliente` mm)
-        #   - baseline_protrusion: how far the slab natural outer sits past
-        #                          the interior wall face when no slab
-        #                          extension is needed
-        #
-        # The LIP geometry is kept as-is — chunky cuboid hanging from the
-        # slab's front edge, grosor_tope wide in Y, lip OUTER face aligned
-        # with the slab OUTER face. The protrusion is realized purely by
-        # EXTENDING THE SLAB (in `_ampit_slab_outer_local_mm`) — only the
-        # CERAMIC case actually needs the extension, the other materials
-        # already have grosor_tope <= baseline + sobresaliente.
-        #
-        # Resulting geometry (final coords past the wall face):
-        #   - CERAMIC:        slab y=[y_in, +35] z=[3,14]; lip y=[+5, +35] z=[-16,3]   (5 mm gap)
-        #   - CERAMICA_MAYOR: slab y=[y_in, +24] z=[3,14]; lip y=[+10,+24] z=[-20,3]   (10 mm gap)
-        #   - XAPA:           slab y=[y_in, +12] z=[3, 5]; lip y=[+10,+12] z=[-35,3]   (+6mm remate inward)
-        #   - PAVIMENTO:      slab y=[y_in,  0] z=[3,14]; no lip
-        grosor        = spec["grosor"]
-        grosor_tope   = spec["grosor_tope"]
-        tope          = spec["tope"]
-        remate        = spec["remate"]
-
-        y_slab_in  = float(y_inner_local)
-        # Slab outer comes from the single source-of-truth helper so the
-        # 3D, 2D footprint, and retall/afegit math all agree.
-        y_slab_out = self._ampit_slab_outer_local_mm(spec)
-
-        slab_fondo = y_slab_out - y_slab_in
-        if slab_fondo <= 0:
-            return None  # encaje too deep for this premarco
-
-        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(init_x, y_slab_in, 3))
-        cuboid_top = AllplanGeo.Polyhedron3D.CreateCuboid(pos_top, llarg_ampit, slab_fondo, grosor)
-
-        drop_height = float(tope) - float(grosor)
-        if tope <= 0 or grosor_tope <= 0 or drop_height <= 0:
-            return cuboid_top  # Pavimento (no lip)
-
-        # Lip = chunky cuboid hanging from the slab front edge.
-        #   Y: [y_slab_out - grosor_tope, y_slab_out]  (lip outer = slab outer)
-        #   Z: [3 - drop_height, 3 + overlap]          (just below the slab;
-        #                                               the above-slab portion
-        #                                               is already part of slab)
-        y_lip_inner = y_slab_out - float(grosor_tope)
-        z_drop_top  = 3                       # slab bottom
-        z_drop_bot  = z_drop_top - drop_height
-        # Small +Z overlap (0.1 mm) into the slab so MakeUnion does not
-        # drop the cuboid on exact face-to-face contact.
-        union_overlap = 0.1
+    def create_ampit(self, init_x, llarg_ampit, fondo_ampit):
+        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(init_x, 63 + 2, 3))
         pos_front = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(init_x, y_lip_inner, z_drop_bot)
+            AllplanGeo.Point3D(init_x, fondo_ampit + 63 + 2 - 11, 3 + 11 - 34)
+        )
+
+        cuboid_top = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_top, llarg_ampit, fondo_ampit, 11
         )
         cuboid_front = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_front, llarg_ampit, float(grosor_tope), drop_height + union_overlap
+            pos_front, llarg_ampit, 11, 34
         )
 
         ok, union = AllplanGeo.MakeUnion(cuboid_top, cuboid_front)
-        if ok is not AllplanGeo.eGeometryErrorCode.eOK:
-            return None
+        if ok is AllplanGeo.eGeometryErrorCode.eOK:
+            return union
 
-        if remate > 0:
-            # XAPA-only horizontal return at the BOTTOM of the lip going
-            # INWARD (back toward the wall). Z thickness = grosor_tope
-            # (sheet-metal thickness for XAPA = 2 mm).
-            remate_overlap = 0.1
-            pos_remate = AllplanGeo.AxisPlacement3D(
-                AllplanGeo.Point3D(init_x, y_lip_inner - remate, z_drop_bot)
-            )
-            cuboid_remate = AllplanGeo.Polyhedron3D.CreateCuboid(
-                pos_remate, llarg_ampit, remate + remate_overlap, float(grosor_tope)
-            )
-            ok_r, union_r = AllplanGeo.MakeUnion(union, cuboid_remate)
-            if ok_r is AllplanGeo.eGeometryErrorCode.eOK:
-                union = union_r
-
-        return union
+        return None
 
     def create_impermeabilitzacio(self):
         pos_top = AllplanGeo.AxisPlacement3D(
@@ -11741,7 +11258,6 @@ class PremarcScriptObject(BaseScriptObject):
             else (self.heigh / 2) - 50
         )
         pos_left = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 40, Z_position))
-        pos_left = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 40, Z_position))
 
         cuboid_retall = AllplanGeo.Polyhedron3D.CreateCuboid(pos_left, 3, 80, 100)
         Z_move = (
@@ -11753,7 +11269,6 @@ class PremarcScriptObject(BaseScriptObject):
             cuboid_retall, AllplanGeo.Vector3D(0, -160, -Z_move)
         )
         # cuboid_retall_origin = AllplanGeo.Move(cuboid_retall, AllplanGeo.Vector3D(0, -160, -self.heigh))
-        vector_move_right = AllplanGeo.Vector3D(self.width - 3, 0, 0)
         vector_move_right = AllplanGeo.Vector3D(self.width - 3, 0, 0)
         # vector_move_left = AllplanGeo.Vector3D(0,self.width, 0)
         if self.build_ele.EnableRetallGanxo.value and self.get_direction_retall_ganxo():
@@ -11782,7 +11297,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.fondo_ampits = self.build_ele.fondo_ampits.value
         self.afegit_ampits = self.build_ele.afegit_ampits.value
         self.retall_ampits = self.build_ele.retall_ampits.value
-        self.ampit_material = self.build_ele.ampit_material.value
 
         self.val_pmp_fg_wall_name = self._get_current_pmp_pare_value()
         self.val_pmp_id_premarc = self._get_current_premarc_id_value()
