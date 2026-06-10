@@ -1070,6 +1070,23 @@ class PremarcScriptObject(BaseScriptObject):
                         "de modificacion"
                     )
 
+            niche_guid = str(
+                getattr(getattr(self.build_ele, "niche_guid", None), "value", "")
+                or ""
+            )
+            if niche_guid:
+                deleted = self._delete_wall_opening(
+                    opening_guid_str=niche_guid,
+                    is_window_opening=False,
+                )
+                # Aunque el nicho ya no exista, _delete_wall_opening limpia el GUID.
+                # El PPG debe reemplazarse para persistir ese estado.
+                self._opening_deleted_on_modification_entry = True
+                print(
+                    "[Premarc] Niche eliminado al reingresar a la PPG "
+                    f"de modificacion: {'si' if deleted else 'ya no existia'}"
+                )
+
             # self.detected_wall_thickness = self.build_ele.SavedWallThickness.value
 
         self.session = requests.Session()
@@ -5023,6 +5040,8 @@ class PremarcScriptObject(BaseScriptObject):
         self._sync_placement_point_parameter()
         if hasattr(self.build_ele, "opening_guid"):
             self.build_ele.opening_guid.value = ""
+        if hasattr(self.build_ele, "niche_guid"):
+            self.build_ele.niche_guid.value = ""
         if hasattr(self.build_ele, "SavedState"):
             self.build_ele.SavedState.value = ""
 
@@ -5042,6 +5061,18 @@ class PremarcScriptObject(BaseScriptObject):
             print(f"[Premarc] Resultado borrado opening previo: {opening_deleted}")
         else:
             print("[Premarc] Eliminar premarco -> sin opening persistido para borrar")
+
+        niche_deleted = False
+        niche_prop = getattr(self.build_ele, "niche_guid", None)
+        niche_guid = str(getattr(niche_prop, "value", "") or "")
+        if niche_guid:
+            niche_deleted = self._delete_wall_opening(
+                opening_guid_str=niche_guid,
+                is_window_opening=False,
+            )
+            print(f"[Premarc] Resultado borrado niche previo: {niche_deleted}")
+        else:
+            print("[Premarc] Eliminar premarco -> sin niche persistido para borrar")
 
         old_adapter = self._get_modification_root_adapter()
         if old_adapter is None or old_adapter.IsNull():
