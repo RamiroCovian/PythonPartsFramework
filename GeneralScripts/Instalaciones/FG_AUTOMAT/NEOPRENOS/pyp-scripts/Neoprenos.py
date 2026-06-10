@@ -4748,6 +4748,67 @@ class NeoprenosScriptObject(BaseScriptObject):
         except Exception:
             return 0.0
 
+    def _build_connect_to_elements(self) -> ConnectToElements:
+        """Construye la conexión persistente al host para CREATE y MODIFY."""
+        connect_to_ele = ConnectToElements()
+
+        if not self.is_free_mode:
+            if (
+                hasattr(self.build_ele, "SolidoConnection")
+                and self.build_ele.SolidoConnection.value.uuid
+            ):
+                uuid_str = str(self.build_ele.SolidoConnection.value.uuid)
+                if uuid_str != "00000000-0000-0000-0000-000000000000":
+                    connect_to_ele.connection_elements.append(uuid_str)
+            if len(connect_to_ele.connection_elements) == 0 and self.solid_info:
+                if self.solid_info.get("guid"):
+                    connect_to_ele.connection_elements.append(self.solid_info["guid"])
+                elif self.solid_info.get("element"):
+                    try:
+                        element_guid = str(
+                            self.solid_info["element"].GetModelElementUUID()
+                        )
+                        if element_guid != "00000000-0000-0000-0000-000000000000":
+                            connect_to_ele.connection_elements.append(element_guid)
+                    except Exception:
+                        pass
+            if (
+                len(connect_to_ele.connection_elements) == 0
+                and hasattr(self.build_ele, "SolidoGUID")
+                and self.build_ele.SolidoGUID.value
+            ):
+                guid_str = str(self.build_ele.SolidoGUID.value)
+                if guid_str != "00000000-0000-0000-0000-000000000000":
+                    connect_to_ele.connection_elements.append(guid_str)
+        else:
+            if (
+                hasattr(self.build_ele, "MuroConnection")
+                and self.build_ele.MuroConnection.value.uuid
+            ):
+                uuid_str = str(self.build_ele.MuroConnection.value.uuid)
+                if uuid_str != "00000000-0000-0000-0000-000000000000":
+                    connect_to_ele.connection_elements.append(uuid_str)
+            if len(connect_to_ele.connection_elements) == 0 and self.detected_wall_guid:
+                if self.detected_wall_guid != "00000000-0000-0000-0000-000000000000":
+                    connect_to_ele.connection_elements.append(self.detected_wall_guid)
+            if len(connect_to_ele.connection_elements) == 0 and self.detected_wall:
+                try:
+                    wall_guid = str(self.detected_wall.GetModelElementUUID())
+                    if wall_guid != "00000000-0000-0000-0000-000000000000":
+                        connect_to_ele.connection_elements.append(wall_guid)
+                except Exception:
+                    pass
+            if (
+                len(connect_to_ele.connection_elements) == 0
+                and hasattr(self.build_ele, "MuroGUID")
+                and self.build_ele.MuroGUID.value
+            ):
+                guid_str = str(self.build_ele.MuroGUID.value)
+                if guid_str != "00000000-0000-0000-0000-000000000000":
+                    connect_to_ele.connection_elements.append(guid_str)
+
+        return connect_to_ele
+
     def _sync_line_from_build_ele_insert_matrix(
         self, min_displacement_mm: float = 1.0
     ) -> bool:
@@ -6121,10 +6182,19 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self._restored_from_saved_state:
             self._save_state_to_build_ele()
 
+        connect_to_ele = self._build_connect_to_elements()
+        neo_log(
+            "_execute_modify: return "
+            f"model_elems={len(model_elem_list)} "
+            f"connect={len(connect_to_ele.connection_elements)} "
+            f"handles={len(handles)}"
+        )
+
         return CreateElementResult(
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
+            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=False,
         )
