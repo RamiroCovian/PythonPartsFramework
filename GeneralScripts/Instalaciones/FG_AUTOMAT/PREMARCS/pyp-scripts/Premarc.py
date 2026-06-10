@@ -1705,6 +1705,12 @@ class PremarcScriptObject(BaseScriptObject):
         else:
             print("[Premarc] PMP_WALL_ID vacío: no se añade atributo")
 
+    def _build_box_shutter_attribute_list(self) -> BuildingElementAttributeList:
+        """Atributos de identificación del cajón de persiana."""
+        attribute_list = BuildingElementAttributeList()
+        self._add_shared_generated_element_attributes(attribute_list)
+        return attribute_list
+
     def _add_ampit_identity_attributes(
         self, attribute_list: BuildingElementAttributeList
     ) -> None:
@@ -7134,8 +7140,7 @@ class PremarcScriptObject(BaseScriptObject):
             )  # use same color from premarc
 
         if box_shutter:
-            shutter_attribute_list = BuildingElementAttributeList()
-            self._add_shared_generated_element_attributes(shutter_attribute_list)
+            shutter_attribute_list = self._build_box_shutter_attribute_list()
             init_i = len(model_ele_list) - len(box_shutter)
             for i in range(init_i, len(model_ele_list)):
                 model_ele_list.set_element_attributes(
