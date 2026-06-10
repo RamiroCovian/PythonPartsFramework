@@ -2287,6 +2287,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._inline_last_execute_result = None
         self._pending_preview_clear_after_delete = False
         self._resume_line_after_delete = False
+        self._external_neopreno_deleted = False
 
         self._set_allow_wall_change_palette_flag()
 
@@ -2359,6 +2360,10 @@ class NeoprenosScriptObject(BaseScriptObject):
         try:
             self.build_ele.NeoprenoSeleccionado.value = bool(
                 getattr(self, "_inline_selected_neopreno_active", False)
+                or (
+                    getattr(self, "is_modification_mode", False)
+                    and not getattr(self, "_external_neopreno_deleted", False)
+                )
             )
         except Exception:
             pass
@@ -4174,6 +4179,15 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self, "is_modification_mode", False
             )
 
+        if getattr(self, "_external_neopreno_deleted", False):
+            neo_log("execute: PPG reabierto eliminado -> resultado vacio")
+            return CreateElementResult(
+                elements=[],
+                handles=[],
+                preview_elements=[],
+                multi_placement=False,
+            )
+
         if (
             getattr(self, "_pending_preview_clear_after_delete", False)
             and not is_modify
@@ -5462,7 +5476,55 @@ class NeoprenosScriptObject(BaseScriptObject):
             if self._element_adapter_key(record.get("element")) != key
         ]
 
+    def _delete_reopened_neopreno(self) -> bool:
+        """Elimina el PPG abierto mediante modificacion externa."""
+        modification_list = getattr(self, "modification_ele_list", None)
+        if modification_list is None:
+            print("[DELETE][NEOPRENO] No hay elemento de modificacion")
+            return False
+
+        try:
+            adapter = modification_list.get_base_element_adapter(self.document)
+        except Exception as exc:
+            print(f"[DELETE][NEOPRENO] Error resolviendo PPG abierto: {exc}")
+            return False
+
+        if adapter is None:
+            print("[DELETE][NEOPRENO] No se encontro el PPG abierto")
+            return False
+        try:
+            if adapter.IsNull():
+                print("[DELETE][NEOPRENO] El PPG abierto ya no existe")
+                return False
+        except Exception:
+            pass
+
+        try:
+            elem_list = AllplanEleAdapter.BaseElementAdapterList([adapter])
+            AllplanBaseElements.DeleteElements(doc=self.document, elements=elem_list)
+        except Exception as exc:
+            print(f"[DELETE][NEOPRENO] Error eliminando PPG abierto: {exc}")
+            return False
+
+        self._external_neopreno_deleted = True
+        self.is_editing_existing = False
+        self.elements = []
+        self.handles = []
+        self.line_result = LineInteractorResult()
+        self.interactor_state = STOPPED
+        self.script_object_interactor = None
+        self._clear_inline_selection_visual()
+        self._update_parameter_visibility()
+        print("[DELETE][NEOPRENO] PPG reabierto eliminado")
+        return True
+
     def _delete_selected_inline_neopreno(self) -> bool:
+        if (
+            getattr(self, "is_modification_mode", False)
+            and not getattr(self, "_inline_selected_neopreno_active", False)
+        ):
+            return self._delete_reopened_neopreno()
+
         if not getattr(self, "_inline_selected_neopreno_active", False):
             print("[SELECT][NEOPRENO] Eliminar no disponible sin neopreno seleccionado")
             return False
@@ -6762,6 +6824,13 @@ class NeoprenosScriptObject(BaseScriptObject):
         return pythonparts_list
 
     def on_cancel_function(self) -> OnCancelFunctionResult:
+        if getattr(self, "_external_neopreno_deleted", False):
+            self._clear_inline_selection_visual()
+            self.interactor_state = STOPPED
+            self.script_object_interactor = None
+            neo_log("on_cancel_function: PPG reabierto eliminado -> CANCEL_INPUT")
+            return OnCancelFunctionResult.CANCEL_INPUT
+
         if getattr(self, "_inline_selected_neopreno_active", False):
             # La edición inline ya sustituyó el PPG mediante PythonPartTransaction.
             # CREATE_ELEMENTS aquí volvería a escribirlo y dejaría una copia solapada.

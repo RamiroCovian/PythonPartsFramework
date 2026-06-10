@@ -58,7 +58,7 @@
             <Text>Edición</Text>
             <TextId>e_NEO_PP_1054</TextId>
             <ValueType>Row</ValueType>
-            <Visible>PermitirCambiarMuro == True</Visible>
+            <Visible>PermitirCambiarMuro == True or NeoprenoSeleccionado == True</Visible>
             <Parameter>
                 <Name>SeleccionarNeopreno</Name>
                 <Text>Seleccionar</Text>
