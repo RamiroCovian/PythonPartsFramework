@@ -75,10 +75,6 @@ def resolve_attribute_id(document, *candidate_names: str) -> int:
 
     return 0
 
-def _site_packages_path(
-    base_path,
-):  # TODO: Eliminar este metodo antes de entregar a Arnau
-    return os.path.join(os.path.normpath(base_path), "PythonParts-site-packages")
 
 def install_packages(package):
     prg_path = AllplanSettings.AllplanPaths.GetPrgPath() + "\\"
@@ -119,14 +115,8 @@ def install_packages(package):
 
 import sys as _sys
 
-_site_etc = _site_packages_path(
-    AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()
-)  # TODO: Eliminar esta linea antes de entregar a Arnau y descomentar la siguiente
-_site_usr = _site_packages_path(
-    AllplanSettings.AllplanPaths.GetUsrPath()
-)  # TODO: Eliminar esta linea antes de entregar a Arnau y descomentar la siguiente
-# _site_etc = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
-# _site_usr = f"{AllplanSettings.AllplanPaths.GetUsrPath()}Local\\PythonParts-site-packages"
+_site_etc = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
+_site_usr = f"{AllplanSettings.AllplanPaths.GetUsrPath()}Local\\PythonParts-site-packages"
 for _p in (_site_etc, _site_usr):
     if _p not in _sys.path:
         _sys.path.insert(0, _p)
@@ -259,19 +249,19 @@ PREMARC_USE_COMANDES_OT = True
 
 # API_URL ="https://localhost:5050/ComandesOT/GetAllDenConfigsByAT1Value"
 # API_URL ="http://localhost:5000/ComandesOT/GetAllDenConfigsByAT1Value"
-API_URL ="https://192.168.30.227:8301/ComandesOT/GetAllDenConfigsByAT1Value"
+API_URL ="https://192.168.30.227:8311/ComandesOT/GetAllDenConfigsByAT1Value"
 
 # API_URL_AT1 = "https://localhost:5050/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
 # API_URL_AT1 ="http://localhost:5000/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
-API_URL_AT1 ="https://192.168.30.227:8301/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
+API_URL_AT1 ="https://192.168.30.227:8311/ComandesOT/GetAllValuesForConfig?den=PREM&config=1"
 
 # API_URL_DEFAULT = "https://localhost:5050/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
 # API_URL_DEFAULT = "http://localhost:5000/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
-API_URL_DEFAULT = "https://192.168.30.227:8301/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
+API_URL_DEFAULT = "https://192.168.30.227:8311/ComandesOT/GetAllValuesForAllConfigs?den=PREM"
 
 # LOGIN_URL_DEFAULT = "https://localhost:5050/Usuari/Login"
 # LOGIN_URL_DEFAULT = "http://localhost:5000/Usuari/Login"
-LOGIN_URL_DEFAULT = "https://192.168.30.227:8301/Usuari/Login"
+LOGIN_URL_DEFAULT = "https://192.168.30.227:8311/Usuari/Login"
 
 COLOR_THICKNESS_MAP = {
     160: 2,  # amarillo
@@ -308,90 +298,6 @@ def _warn_comandes_ot_once(message: str) -> None:
     _premarc_comandes_ot_warned = True
     print(message)
 
-# TODO: Eliminar los mock antes de enviar a Arnau
-MOCK_VALUES_FOR_CONFIG = {
-    "values": {
-        "1": 160,
-        "2": 295,
-        "3": 310,
-    }
-}
-
-MOCK_DATA_ENDPOINT = {
-    "options": [
-        {
-            "position": 1,
-            "values": [
-                {"description": "Cerrado", "value": "0"},
-                {"description": "Abierto", "value": "1"},
-            ],
-        },
-        {
-            "position": 2,
-            "values": [
-                {"description": "NO", "value": "0"},
-                {"description": "SI", "value": "1"},
-            ],
-        },
-        {
-            "position": 3,
-            "values": [
-                {"description": "NO", "value": "0"},
-                {"description": "PASSAMA LATERALS", "value": "1-2"},
-                {"description": "PASSAMA INF/SUP", "value": "3-4"},
-                {"description": "PASSAMA 4 COSTATS", "value": "1-2-3-4"},
-                {"description": "PASSAMA FALCA SUP.(LAMISOL/METAL.)", "value": "8"},
-                {"description": "PASSAMA FALCA INF. (+ de 4 m)", "value": "7"},
-                {"description": "PASSAMA FALCA SUP./INF. (+ de 6m)", "value": "8-9"},
-            ],
-        },
-        {
-            "position": 4,
-            "values": [
-                {"description": "NO", "value": "0"},
-                {"description": "35*30", "value": "1"},
-                {"description": "40*30", "value": "1"},
-                {"description": "70*30", "value": "3"},
-                {"description": "PLEC INFERIOR", "value": "4"},
-                {"description": "30*80", "value": "2"},
-            ],
-        },
-        {
-            "position": 5,
-            "values": [
-                {"description": "NO", "value": "0"},
-                {"description": "REB. DRETA", "value": "1"},
-                {"description": "REB. ESQUERRA", "value": "2"},
-                {"description": "REB. BAIXS", "value": "3"},
-                {"description": "REB. DALT", "value": "4"},
-            ],
-        },
-        {
-            "position": 6,
-            "values": [
-                {"description": "NO", "value": "0"},
-                {"description": "SI", "value": "1"},
-            ],
-        },
-        {
-            "position": 7,
-            "values": [
-                {"description": "NO", "value": "0"},
-                {"description": "35*30", "value": "1"},
-                {"description": "40*30", "value": "1"},
-                {"description": "70*30", "value": "3"},
-                {"description": "PLEC INFERIOR", "value": "4"},
-                {"description": "30*80", "value": "2"},
-            ],
-        },
-        {
-            "position": 8,
-            "values": [
-                {"description": "NO", "value": "0"},
-            ],
-        },
-    ]
-}
 
 FALCAS_MAP_NO_SLOPE = {
     "NO": "0",
@@ -1167,7 +1073,7 @@ class PremarcScriptObject(BaseScriptObject):
             # self.detected_wall_thickness = self.build_ele.SavedWallThickness.value
 
         self.session = requests.Session()
-        # self.login_to_api() #TODO: Descomentar esta linea antes de entregar a Arnau
+        # self.login_to_api()   #TODO descomentar en producción
 
         self.build_ele.SelectionWall.value = (
             "Seleccionado" if self.selected_wall else "No seleccionado"
@@ -6361,11 +6267,7 @@ class PremarcScriptObject(BaseScriptObject):
                 f"[Premarc] ComandesOT no disponible ({e}); listas dinámicas vacías. "
                 "La API solo se usa si PREMARC_USE_COMANDES_OT=1 y el servicio responde."
             )
-            print(
-                "[Premarc] API no disponible. Usando datos mock para configuraciones."
-            )  # TODO: Eliminar esta linea antes de entregar a Arnau
-            return MOCK_DATA_ENDPOINT  # TODO: Eliminar esta linea antes de entregar a Arnau
-            # return _premarc_empty_data_endpoint()
+        return _premarc_empty_data_endpoint()
 
     def get_values_for_config_API(self) -> dict:
         fallback = {"values": _premarc_fallback_config_values()}
@@ -6373,8 +6275,6 @@ class PremarcScriptObject(BaseScriptObject):
             return fallback
         try:
             url = f"{API_URL_AT1}"
-            DEFAULT_CONFIG = MOCK_VALUES_FOR_CONFIG  # TODO: Eliminar esta linea antes de entregar a Arnau y descomentar la siguiente
-            # DEFAULT_CONFIG = {"values": {}}
 
             response = self.session.get(url, verify=False)
 
@@ -6388,17 +6288,12 @@ class PremarcScriptObject(BaseScriptObject):
                 if not vals:
                     return fallback
                 return data
-            return DEFAULT_CONFIG # TODO: eliminar para entregar a Arnau
-            # return fallback
+            return fallback
         except Exception as e:
             _warn_comandes_ot_once(
                 f"[Premarc] ComandesOT no disponible ({e}); usando grosores locales."
             )
-            print(
-                "[Premarc] API no disponible. Usando grosores mock."
-            )  # TODO: Eliminar esta linea antes de entregar a Arnau
-            return DEFAULT_CONFIG
-            # return fallback
+            return fallback
 
     # Helper API
     # def get_description_by_position(self, data, position):
@@ -6548,6 +6443,11 @@ class PremarcScriptObject(BaseScriptObject):
         data = self.data_endpoint
         listaPersianas = self.get_description_by_position(data, 6)
         debe_actualizar = len(listaActual) == 0 or listaActual != listaPersianas
+
+        # TODO quitar
+        if len(listaPersianas) == 0:
+            listaPersianas = ['NO', 'MONOBLOCK OCULT', 'LAMISOL VIST', 'METALUNIC VIST', 'FALS CALAIX']
+
         if debe_actualizar:
             self.build_ele.valueListaPersianas.value = listaPersianas
 
@@ -6701,6 +6601,7 @@ class PremarcScriptObject(BaseScriptObject):
                 FALCAS_MAP,
             ),
             "at5": (
+                "" if self.build_ele.ComboBoxEncajes.value not in ESCUADRAS_MAP else
                 ESCUADRAS_MAP[self.build_ele.ComboBoxEncajes.value]
                 if self.build_ele.EnableManualEncaje.value == 0
                 else ESCUADRAS_MAP_MANUAL[
