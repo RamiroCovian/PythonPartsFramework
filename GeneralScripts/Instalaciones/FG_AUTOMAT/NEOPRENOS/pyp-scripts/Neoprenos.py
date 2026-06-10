@@ -50,6 +50,7 @@ NEOPRENOS_SCRIPT_VERSION = "1.1.0-seleccionar-insert-matrix"
 NEOPRENO_EVENT_SELECT_EXISTING = 1050
 NEOPRENO_EVENT_DESELECT_EXISTING = 1051
 NEOPRENO_EVENT_CHANGE_ACTIVE_WALL = 1052
+NEOPRENO_EVENT_DELETE_EXISTING = 1055
 NEOPRENO_OTHER_EXECUTION_MSG = (
     "No se puede seleccionar un neopreno colocado en otra ejecución.\n\n"
     "Solo puede editar neoprenos colocados en la ejecución actual.\n\n"
@@ -2349,6 +2350,17 @@ class NeoprenosScriptObject(BaseScriptObject):
         except Exception:
             pass
 
+    def _set_selected_neopreno_palette_flag(self) -> None:
+        """Controla la visibilidad del boton Eliminar en la PPG."""
+        if not hasattr(self.build_ele, "NeoprenoSeleccionado"):
+            return
+        try:
+            self.build_ele.NeoprenoSeleccionado.value = bool(
+                getattr(self, "_inline_selected_neopreno_active", False)
+            )
+        except Exception:
+            pass
+
     def _get_free_mode(self) -> bool:
         if hasattr(self.build_ele, "neopreno_libre"):
             val = self.build_ele.neopreno_libre.value
@@ -2497,6 +2509,7 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def _update_parameter_visibility(self):
         self._set_allow_wall_change_palette_flag()
+        self._set_selected_neopreno_palette_flag()
 
     def _serialize_state_to_json(self) -> str:
         """
@@ -5345,6 +5358,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             return False
         if getattr(self, "_inline_selected_neopreno_active", False):
             self._leave_inline_neopreno_edit_mode()
+        self._update_parameter_visibility()
         self.neopreno_select_result = NeoprenoSelectResult()
         self.interactor_state = SELECTING_EXISTING_NEOPRENO
         self.script_object_interactor = ExistingNeoprenoSelectInteractor(
@@ -5362,6 +5376,84 @@ class NeoprenosScriptObject(BaseScriptObject):
             self._clear_inline_selection_visual()
             self._leave_inline_neopreno_edit_mode()
         self.neopreno_select_result = NeoprenoSelectResult()
+        self._update_parameter_visibility()
+        return self._resume_neopreno_line_input(self._get_active_coord_input())
+
+    def _get_selected_inline_neopreno_adapter(self):
+        if not getattr(self, "_inline_selected_neopreno_active", False):
+            return None
+
+        idx = getattr(self, "_neopreno_record_selected_index", None)
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if idx is not None and 0 <= idx < len(records):
+            adapter = records[idx].get("element")
+            if adapter is not None:
+                try:
+                    if not adapter.IsNull():
+                        return adapter
+                except Exception:
+                    return adapter
+
+        inline_list = getattr(self, "_inline_modification_ele_list", None)
+        if inline_list is not None:
+            try:
+                adapter = inline_list.get_base_element_adapter(self.document)
+                if adapter is not None and not adapter.IsNull():
+                    return adapter
+            except Exception:
+                pass
+
+        adapter = getattr(self.neopreno_select_result, "element", None)
+        if adapter is not None:
+            try:
+                if not adapter.IsNull():
+                    return adapter
+            except Exception:
+                return adapter
+
+        return None
+
+    def _remove_created_neopreno_record_by_adapter(self, adapter) -> None:
+        key = self._element_adapter_key(adapter)
+        if not key:
+            return
+        records = getattr(self, "_created_neopreno_records", []) or []
+        self._created_neopreno_records = [
+            record
+            for record in records
+            if self._element_adapter_key(record.get("element")) != key
+        ]
+
+    def _delete_selected_inline_neopreno(self) -> bool:
+        if not getattr(self, "_inline_selected_neopreno_active", False):
+            print("[SELECT][NEOPRENO] Eliminar no disponible sin neopreno seleccionado")
+            return False
+
+        adapter = self._get_selected_inline_neopreno_adapter()
+        if adapter is None:
+            print("[SELECT][NEOPRENO] No se encontro el PPG seleccionado para borrar")
+            return False
+
+        try:
+            self._clear_inline_selection_visual()
+            elem_list = AllplanEleAdapter.BaseElementAdapterList([adapter])
+            AllplanBaseElements.DeleteElements(doc=self.document, elements=elem_list)
+            self._remove_created_neopreno_record_by_adapter(adapter)
+            print("[SELECT][NEOPRENO] Neopreno eliminado")
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error eliminando neopreno: {exc}")
+            return False
+
+        self.line_result = LineInteractorResult()
+        if hasattr(self.build_ele, "PuntoInicial"):
+            self.build_ele.PuntoInicial.value = None
+        if hasattr(self.build_ele, "PuntoFinal"):
+            self.build_ele.PuntoFinal.value = None
+        self.elements = []
+        self.handles = []
+        self._inline_last_execute_result = None
+        self.neopreno_select_result = NeoprenoSelectResult()
+        self._leave_inline_neopreno_edit_mode()
         return self._resume_neopreno_line_input(self._get_active_coord_input())
 
     def _start_active_wall_selection(self) -> bool:
@@ -5434,6 +5526,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 self._sync_neopreno_record_geometry_from_line(result.record_index)
             self._refresh_inline_execute_cache()
             self._draw_inline_selected_neopreno_preview()
+            self._update_parameter_visibility()
             print("[SELECT][NEOPRENO] Edicion inline activa")
             return True
         except Exception as exc:
@@ -5453,6 +5546,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.modification_ele_list = getattr(
             self, "_inline_original_modification_ele_list", None
         )
+        self._set_selected_neopreno_palette_flag()
 
     def _finish_inline_neopreno_edit(self) -> None:
         self._leave_inline_neopreno_edit_mode()
@@ -5828,6 +5922,8 @@ class NeoprenosScriptObject(BaseScriptObject):
             return self._start_inline_neopreno_selection()
         if event_id == NEOPRENO_EVENT_DESELECT_EXISTING:
             return self._deselect_inline_neopreno()
+        if event_id == NEOPRENO_EVENT_DELETE_EXISTING:
+            return self._delete_selected_inline_neopreno()
         if event_id == NEOPRENO_EVENT_CHANGE_ACTIVE_WALL:
             return self._start_active_wall_selection()
         return True

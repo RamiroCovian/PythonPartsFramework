@@ -59,4 +59,6 @@
     <Item><TextId>e_NEO_PP_1053</TextId><Text>Permitir cambiar muro</Text></Item>
     <Item><TextId>e_NEO_PP_1054</TextId><Text>Edición</Text></Item>
     <Item><TextId>e_NEO_SS_001</TextId><Text>SavedState</Text></Item>
+    <Item><TextId>e_NEO_PP_1055</TextId><Text>Eliminar</Text></Item>
+    <Item><TextId>e_NEO_PP_1056</TextId><Text>Neopreno seleccionado</Text></Item>
 </Element>

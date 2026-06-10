@@ -80,6 +80,17 @@
                 <Persistent>No</Persistent>
             </Parameter>
             <Parameter>
+                <Name>EliminarNeopreno</Name>
+                <Text>Eliminar</Text>
+                <EventId>1055</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Visible>NeoprenoSeleccionado == True</Visible>
+                <TextId>e_NEO_PP_1055</TextId>
+                <Persistent>No</Persistent>
+            </Parameter>
+            <Parameter>
                 <Name>CambiarMuroNeopreno</Name>
                 <Text>Cambiar muro</Text>
                 <EventId>1052</EventId>
@@ -526,6 +537,16 @@
             <Text>Permitir cambiar muro</Text>
             <TextId>e_NEO_PP_1053</TextId>
             <Value>True</Value>
+            <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
+            <Persistent>No</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>NeoprenoSeleccionado</Name>
+            <Text>Neopreno seleccionado</Text>
+            <TextId>e_NEO_PP_1056</TextId>
+            <Value>False</Value>
             <ValueType>CheckBox</ValueType>
             <Visible>False</Visible>
             <Persistent>No</Persistent>
