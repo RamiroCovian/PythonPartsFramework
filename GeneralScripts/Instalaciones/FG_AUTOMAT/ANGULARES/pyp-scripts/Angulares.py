@@ -11183,10 +11183,27 @@ class AngularLineScript(BaseScriptObject):
         )
 
     def on_cancel_function(self) -> OnCancelFunctionResult:
+        if getattr(self, "_inline_selected_angular_active", False):
+            # La edicion inline ya sustituyo el PPG mediante PythonPartTransaction.
+            # CREATE_ELEMENTS aqui lo escribiria otra vez y dejaria una copia.
+            self._clear_inline_selection_visual()
+            self.angular_select_result = AngularSelectResult()
+            self._leave_individual_angular_edit_mode()
+            self.line_result = LineInteractorResult()
+            self.position_result = PointInteractorResult()
+            self.state = STOPPED
+            self.preview_active = False
+            self.script_object_interactor = None
+            print(
+                "[SELECT][ANGULAR] Cierre: edicion inline ya persistida; "
+                "se cancela escritura final"
+            )
+            return OnCancelFunctionResult.CANCEL_INPUT
+
         # Al salir de MODIFY (ESC / cerrar), forzar estado estable para que execute no devuelva vacío
         # por un CANCEL heredado del flujo de interactors.
         if hasattr(self.build_ele, "IsModify"):
-            is_m = self.build_ele.IsModify
+            is_m = self.build_ele.IsModify()
         else:
             is_m = getattr(self, "is_modification_mode", False)
         if is_m:
