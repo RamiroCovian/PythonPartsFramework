@@ -6758,6 +6758,18 @@ class NeoprenosScriptObject(BaseScriptObject):
         return pythonparts_list
 
     def on_cancel_function(self) -> OnCancelFunctionResult:
+        if getattr(self, "_inline_selected_neopreno_active", False):
+            # La edición inline ya sustituyó el PPG mediante PythonPartTransaction.
+            # CREATE_ELEMENTS aquí volvería a escribirlo y dejaría una copia solapada.
+            self._clear_inline_selection_visual()
+            self.neopreno_select_result = NeoprenoSelectResult()
+            self._leave_inline_neopreno_edit_mode()
+            self.line_result = LineInteractorResult()
+            self.interactor_state = STOPPED
+            self.script_object_interactor = None
+            neo_log("on_cancel_function: edicion inline ya persistida -> CANCEL_INPUT")
+            return OnCancelFunctionResult.CANCEL_INPUT
+
         if hasattr(self.build_ele, "IsModify"):
             is_modify = self.build_ele.IsModify()
         else:
