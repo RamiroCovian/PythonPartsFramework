@@ -155,7 +155,7 @@
       <Name>RowSeleccionAngularIndividual</Name>
       <Text>Edición</Text>
       <ValueType>Row</ValueType>
-      <Visible>PermitirCambiarMuro == True</Visible>
+      <Visible>PermitirCambiarMuro == True or AngularSeleccionado == True</Visible>
       <Parameter>
         <Name>SeleccionarAngularIndividual</Name>
         <Text>Seleccionar</Text>
@@ -163,6 +163,7 @@
         <Value>0</Value>
         <ValueType>Button</ValueType>
         <Enable>True</Enable>
+        <Visible>PermitirCambiarMuro == True</Visible>
         <TextId>1048</TextId>
         <Persistent>No</Persistent>
       </Parameter>
@@ -173,7 +174,19 @@
         <Value>0</Value>
         <ValueType>Button</ValueType>
         <Enable>True</Enable>
+        <Visible>PermitirCambiarMuro == True</Visible>
         <TextId>1049</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+      <Parameter>
+        <Name>EliminarAngularIndividual</Name>
+        <Text>Eliminar</Text>
+        <EventId>1051</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <Visible>AngularSeleccionado == True</Visible>
+        <TextId>1051</TextId>
         <Persistent>No</Persistent>
       </Parameter>
       <Parameter>
@@ -453,6 +466,23 @@
       <ValueType>Text</ValueType>
       <Enable>False</Enable>
       <TextId>1101</TextId>
+    </Parameter>
+
+    <Parameter>
+      <Name>RowEliminarAngularGrupal</Name>
+      <Text>Eliminar grupo</Text>
+      <ValueType>Row</ValueType>
+      <Visible>AngularSeleccionado == True</Visible>
+      <Parameter>
+        <Name>EliminarAngularGrupal</Name>
+        <Text>Eliminar</Text>
+        <EventId>1051</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <TextId>1151</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
     </Parameter>
 
     <Parameter>
@@ -827,8 +857,26 @@
     </Parameter>
 
     <Parameter>
+      <Name>AngularSeleccionado</Name>
+      <Text>Angular seleccionado</Text>
+      <Value>False</Value>
+      <ValueType>CheckBox</ValueType>
+      <Visible>False</Visible>
+      <Persistent>No</Persistent>
+    </Parameter>
+
+    <Parameter>
       <Name>pmp_pare</Name>
       <Text>pmp_pare</Text>
+      <Value></Value>
+      <ValueType>String</ValueType>
+      <Visible>False</Visible>
+      <Persistent>Model</Persistent>
+      <Persistent>Model</Persistent>
+    </Parameter>
+    <Parameter>
+      <Name>pmp_pare_name</Name>
+      <Text>pmp_pare_name</Text>
       <Value></Value>
       <ValueType>String</ValueType>
       <Visible>False</Visible>

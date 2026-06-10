@@ -49,13 +49,14 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.8-sin-resaltado-rojo-cara"
+ANGULARES_SCRIPT_VERSION = "2.3.12-eliminar-angular-grupal-posicionado"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
 ANGULAR_EVENT_SELECT_EXISTING = 1048
 ANGULAR_EVENT_DESELECT_EXISTING = 1049
 ANGULAR_EVENT_CHANGE_ACTIVE_WALL = 1050
+ANGULAR_EVENT_DELETE_EXISTING = 1051
 ANGULAR_OTHER_EXECUTION_MSG = (
     "No se puede seleccionar un angular colocado en otra ejecución.\n\n"
     "Solo puede editar angulares colocados en la ejecución actual.\n\n"
@@ -1128,6 +1129,66 @@ def get_wall_ifc_id(wall_element) -> str | None:
                         str(attr_value).strip() if attr_value else ""
                     )
                     return material_value_from_508
+            except Exception:
+                continue
+
+    except Exception:
+        pass
+
+    return None
+
+def get_wall_material_name(wall_element) -> str | None:
+    """Obtiene el nombre del muro desde el atributo Material (id 508) o buscando en todos los atributos.
+    """
+
+    if not wall_element:
+        return ''
+
+    try:
+        from DocumentManager import DocumentManager
+        doc = DocumentManager.get_instance().document
+
+        attrs = wall_element.GetAttributes(AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable)
+        material_value_from_508 = None
+        for attr in attrs:
+            try:
+                attr_id = getattr(attr, "Id", None)
+                if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                    attr_id = attr[0]
+                    attr_value = attr[1]
+                else:
+                    attr_value = getattr(attr, "Value", None)
+
+                if attr_id == 508:
+                    material_value_from_508 = str(attr_value).strip() if attr_value else ""
+
+                    if material_value_from_508 and material_value_from_508 != "<undefiniert>":
+                        if "$" in material_value_from_508:
+                            wall_name = material_value_from_508.split("$")[0].strip()
+                            return wall_name if wall_name else None
+                        else:
+                            return material_value_from_508
+            except Exception:
+                continue
+
+        for attr in attrs:
+            try:
+                attr_id = getattr(attr, "Id", None)
+                if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                    attr_id = attr[0]
+                    attr_value = attr[1]
+                else:
+                    attr_value = getattr(attr, "Value", None)
+
+                if attr_value:
+                    attr_value_str = str(attr_value).strip()
+                    if "$" in attr_value_str and attr_value_str != "<undefiniert>":
+                        try:
+                            wall_name = attr_value_str.split("$")[0].strip()
+                            if wall_name:
+                                return wall_name
+                        except Exception:
+                            pass
             except Exception:
                 continue
 
@@ -3259,10 +3320,15 @@ class AngularLineScript(BaseScriptObject):
         self._inline_last_execute_result = None
         self._pending_resume_position_after_deselect = False
         self._resume_after_deselect_inline = False
+        self._native_delete_completed = False
 
         if hasattr(self.build_ele, "PermitirCambiarMuro"):
             self.build_ele.PermitirCambiarMuro.value = not getattr(
                 self, "is_modification_mode", False
+            )
+        if hasattr(self.build_ele, "AngularSeleccionado"):
+            self.build_ele.AngularSeleccionado.value = bool(
+                getattr(self, "is_modification_mode", False)
             )
 
         if self.is_modification_mode:
@@ -3755,6 +3821,14 @@ class AngularLineScript(BaseScriptObject):
                     if hasattr(self.build_ele, "pmp_pare")
                     else ""
                 ),
+                "pmp_pare_name": (
+                    str(getattr(self.build_ele.pmp_pare_name, "value", "") or "")
+                    .strip()
+                    .strip("'")
+                    .strip('"')
+                    if hasattr(self.build_ele, "pmp_pare_name")
+                    else ""
+                ),
                 "z_unique": (
                     float(getattr(self.build_ele.z_unique, "value", 0.0) or 0.0)
                     if hasattr(self.build_ele, "z_unique")
@@ -3902,6 +3976,10 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "pmp_pare"):
                 raw_pp = str(state.get("pmp_pare", "") or "").strip()
                 self.build_ele.pmp_pare.value = raw_pp.strip("'").strip('"')
+
+            if hasattr(self.build_ele, "pmp_pare_name"):
+                raw_pp = str(state.get("pmp_pare_name", "") or "").strip()
+                self.build_ele.pmp_pare_name.value = raw_pp.strip("'").strip('"')
 
             state_group_hash = (
                 str(state.get("GroupHash", state.get("group_hash", "")) or "")
@@ -4107,6 +4185,7 @@ class AngularLineScript(BaseScriptObject):
         invertido: bool,
         lleva_neopreno: bool,
         pmp_pare_value: str,
+        pmp_pare_name: str,
         saved_state_str: str,
     ) -> dict:
         """
@@ -4151,6 +4230,7 @@ class AngularLineScript(BaseScriptObject):
             "SiLlevaNeopreno": lleva_neopreno,
             "SavedState": saved_state_str if saved_state_str else "",
             "pmp_pare": pmp_pare_value if pmp_pare_value else "",
+            "pmp_pare_name": pmp_pare_name if pmp_pare_name else "",
             "GroupHash": str(
                 getattr(self, "_current_group_hash", "")
                 or getattr(self, "_group_hash_from_params", "")
@@ -5532,6 +5612,12 @@ class AngularLineScript(BaseScriptObject):
         elif self.state == SELECTING_LINE:
             if self.line_result.input_line:
                 self._process_line_input()
+                if (
+                    not self.is_modification_mode
+                    and not self._is_individual_distribution()
+                    and hasattr(self.build_ele, "AngularSeleccionado")
+                ):
+                    self.build_ele.AngularSeleccionado.value = True
 
             self.script_object_interactor = None
             self.preview_active = True
@@ -6470,8 +6556,14 @@ class AngularLineScript(BaseScriptObject):
         ):
             wall_pare = str(self.build_ele.pmp_pare.value or "").replace("'", "")
 
+        wall_name = ""
+        if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+            self.build_ele.pmp_pare_name, "value"
+        ):
+            wall_name = str(self.build_ele.pmp_pare_name.value or "").replace("'", "")
+
         model_elements = self.create_angulars(
-            geometries, edges, definition, pmp_pare=wall_pare or None
+            geometries, edges, definition, pmp_pare=wall_pare or None, pmp_pare_name=wall_name or None
         )
         return self._apply_angular_preview_display_properties(model_elements)
 
@@ -6613,6 +6705,7 @@ class AngularLineScript(BaseScriptObject):
             "UsarValorZManual",
             "ValorZIndividual",
             "pmp_pare",
+            "pmp_pare_name",
             "z_unique",
             "GroupHash",
         ):
@@ -8305,6 +8398,114 @@ class AngularLineScript(BaseScriptObject):
         print("[SELECT][ANGULAR] Continua colocacion individual")
         return True
 
+    def _delete_selected_angular(self) -> bool:
+        """Elimina el PPG seleccionado inline o reabierto en MODIFY."""
+        is_inline = getattr(self, "_inline_selected_angular_active", False)
+        is_native_modify = getattr(self, "is_modification_mode", False)
+        is_pending_group = (
+            not is_inline
+            and not is_native_modify
+            and not self._is_individual_distribution()
+            and bool(getattr(self.line_result, "input_line", None))
+        )
+        if not is_inline and not is_native_modify and not is_pending_group:
+            print("[DELETE][ANGULAR] No hay angular seleccionado")
+            return False
+
+        if is_pending_group:
+            self._clear_framework_handles_and_controls()
+            self.line_result = LineInteractorResult()
+            self.elements = []
+            self.last_geometries = []
+            self.last_definition_key = None
+            self.preview_active = False
+            if hasattr(self.build_ele, "AngularSeleccionado"):
+                self.build_ele.AngularSeleccionado.value = False
+
+            self.state = SELECTING_LINE
+            self._start_line_input()
+            coord_input = self._get_active_coord_input()
+            if coord_input is not None:
+                self.script_object_interactor.start_input(coord_input)
+            print(
+                "[DELETE][ANGULAR] Distribucion grupal pendiente eliminada; "
+                "continua definicion de linea"
+            )
+            return True
+
+        modification_list = (
+            getattr(self, "_inline_modification_ele_list", None)
+            if is_inline
+            else getattr(self, "modification_ele_list", None)
+        )
+        if not modification_list:
+            print("[DELETE][ANGULAR] Seleccion sin PPG valido")
+            return False
+
+        selected_element = self._adapter_from_modification_list(modification_list)
+        if selected_element is None:
+            print("[DELETE][ANGULAR] No se pudo resolver el adapter del PPG")
+            return False
+
+        coord_input = self._get_active_coord_input()
+        view_world_projection = (
+            coord_input.GetViewWorldProjection()
+            if coord_input
+            else AllplanIFW.ViewWorldProjection()
+        )
+        elements_to_delete = AllplanEleAdapter.BaseElementAdapterList(
+            [selected_element]
+        )
+
+        try:
+            self._clear_inline_selection_visual()
+            PythonPartTransaction(self.document).execute(
+                placement_matrix=AllplanGeo.Matrix3D(),
+                view_world_projection=view_world_projection,
+                model_ele_list=[],
+                modification_ele_list=[],
+                elements_to_delete=elements_to_delete,
+                use_system_angle=False,
+            )
+        except Exception as exc:
+            print(f"[DELETE][ANGULAR] Error eliminando el PPG: {exc}")
+            import traceback
+
+            traceback.print_exc()
+            return False
+
+        selected_index = getattr(self, "_angular_record_selected_index", None)
+        records = getattr(self, "_created_angular_records", []) or []
+        if selected_index is not None and 0 <= selected_index < len(records):
+            records.pop(selected_index)
+
+        if is_inline:
+            self._leave_individual_angular_edit_mode()
+            self.angular_select_result = AngularSelectResult()
+            self.line_result = LineInteractorResult()
+            self.position_result = PointInteractorResult()
+            self.state = SELECTING_POSITION
+            self.preview_active = False
+            self.script_object_interactor = None
+            self._pending_resume_position_after_deselect = True
+            print("[DELETE][ANGULAR] PPG eliminado; continua colocacion individual")
+            return True
+
+        self._native_delete_completed = True
+        if hasattr(self.build_ele, "AngularSeleccionado"):
+            self.build_ele.AngularSeleccionado.value = False
+        self.state = CANCEL
+        self.preview_active = False
+        self.script_object_interactor = None
+        coord_input = self._get_active_coord_input()
+        if coord_input is not None:
+            try:
+                coord_input.CancelInput()
+            except Exception as exc:
+                print(f"[DELETE][ANGULAR] No se pudo cerrar el input: {exc}")
+        print("[DELETE][ANGULAR] PPG reabierto eliminado; se cierra la edicion")
+        return True
+
     def _start_active_wall_selection(self) -> bool:
         """Boton Cambiar muro: selecciona el muro para los proximos angulares."""
         if getattr(self, "is_modification_mode", False):
@@ -8371,6 +8572,8 @@ class AngularLineScript(BaseScriptObject):
             self.is_modification_mode = False
             self.is_editing_existing = False
             self._inline_selected_angular_active = True
+            if hasattr(self.build_ele, "AngularSeleccionado"):
+                self.build_ele.AngularSeleccionado.value = True
             self._angular_record_selected_index = result.record_index
             self._palette_distribution_user_override = False
             self.is_free_mode = False
@@ -8463,6 +8666,8 @@ class AngularLineScript(BaseScriptObject):
         if getattr(self, "_inline_selected_angular_active", False):
             print("[SELECT][ANGULAR] Fin edicion PPG; sigue colocacion masiva")
         self._inline_selected_angular_active = False
+        if hasattr(self.build_ele, "AngularSeleccionado"):
+            self.build_ele.AngularSeleccionado.value = False
         self._inline_modification_ele_list = None
         self._angular_record_selected_index = None
         self._inline_last_execute_result = None
@@ -9435,6 +9640,8 @@ class AngularLineScript(BaseScriptObject):
             return self._deselect_inline_angular()
         if event_id == ANGULAR_EVENT_CHANGE_ACTIVE_WALL:
             return self._start_active_wall_selection()
+        if event_id == ANGULAR_EVENT_DELETE_EXISTING:
+            return self._delete_selected_angular()
         return True
 
     def set_active_palette_page_index(self, page_index: int) -> None:
@@ -9671,6 +9878,7 @@ class AngularLineScript(BaseScriptObject):
         edges: list[AllplanGeo.Line3D],
         definition: dict,
         pmp_pare: str = None,
+        pmp_pare_name: str = None,
     ) -> List[AllplanBasisElements.ModelElement3D]:
         """Crea ModelElement3D individuales con los angulares aplicando layer, color y PMP_PARE.
 
@@ -9698,6 +9906,8 @@ class AngularLineScript(BaseScriptObject):
         # Si es None, usar string vacío
         if pmp_pare is None:
             pmp_pare = ""
+        if pmp_pare_name is None:
+            pmp_pare_name = ""
 
         attr_id = getattr(self, "attr_pmp_pare_id", 0)
         attr_wall_id = getattr(self, "attr_pmp_wall_id", 0)
@@ -9732,8 +9942,8 @@ class AngularLineScript(BaseScriptObject):
 
             attr_list = BuildingElementAttributeList()
 
-            if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+            if attr_id > 0 and pmp_pare_name:
+                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
                 attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
@@ -9763,8 +9973,8 @@ class AngularLineScript(BaseScriptObject):
 
             attr_list = BuildingElementAttributeList()
 
-            if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+            if attr_id > 0 and pmp_pare_name:
+                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
                 attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
@@ -9794,8 +10004,8 @@ class AngularLineScript(BaseScriptObject):
 
             attr_list = BuildingElementAttributeList()
 
-            if attr_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_id, pmp_pare.replace("'", ""))
+            if attr_id > 0 and pmp_pare_name:
+                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
 
             if attr_wall_id > 0 and pmp_pare:
                 attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
@@ -9833,6 +10043,7 @@ class AngularLineScript(BaseScriptObject):
         is_free_mode: bool = None,
         is_modify: bool = False,
         pmp_pare: str = None,
+        pmp_pare_name: str = None,
     ) -> List[PythonPart]:
         """
         Convierte una lista de ModelElement3D en PythonParts individuales.
@@ -9882,8 +10093,9 @@ class AngularLineScript(BaseScriptObject):
 
                 #  Usar pmp_pare pasado como parámetro (NO leer desde build_ele)
                 wall_pare = pmp_pare.replace("'", "") if pmp_pare else ""
-                if wall_pare and attr_pmp_id > 0:
-                    attr_list.add_attribute(attr_pmp_id, wall_pare)
+                wall_name = pmp_pare_name.replace("'", "") if pmp_pare_name else ""
+                if wall_name and attr_pmp_id > 0:
+                    attr_list.add_attribute(attr_pmp_id, wall_name)
 
                 if attr_wall_id and attr_wall_id > 0:
                     attr_list.add_attribute(attr_wall_id, wall_pare)
@@ -10024,6 +10236,10 @@ class AngularLineScript(BaseScriptObject):
             "[EXECUTE]  z_unique y pmp_pare existen en build_ele (con Persistent>MODEL_AND_FAVORITE)"
         )
 
+        if getattr(self, "_native_delete_completed", False):
+            print("[DELETE][ANGULAR] Execute omitido: el PPG ya fue eliminado")
+            return CreateElementResult()
+
         if hasattr(self.build_ele, "IsModify"):
             is_modify = self.build_ele.IsModify
         else:
@@ -10125,18 +10341,26 @@ class AngularLineScript(BaseScriptObject):
 
         #  Detectar muro → calcular PMP_PARE → guardar en build_ele
         wall_pare = None
+        wall_name = None
         wall = self._get_wall_element() if hasattr(self, "_get_wall_element") else None
         if wall:
             try:
                 wall_id = get_wall_ifc_id(wall)
+                wall_str = get_wall_material_name(wall)
                 if wall_id:
                     wall_pare = wall_id
-                    print(f"[CREATE] PMP_PARE calculado desde muro: {wall_pare}")
+                    print(f"[CREATE] PMP_WALL_ID calculado desde muro: {wall_pare}")
+                if wall_str:
+                    wall_name = wall_str
+                    print(f"[CREATE] PMP_PARE calculado desde muro: {wall_name}")
             except Exception as e:
                 print(f"[CREATE]  Error obteniendo material del muro: {e}")
 
         if not wall_pare:
             wall_pare = "MURO_NO_DEFINIDO"
+
+        if not wall_name:
+            wall_name = "MURO_NO_DEFINIDO"
 
         #  Guardar pmp_pare en build_ele (ahora existe en .pyp con Persistent>MODEL_AND_FAVORITE)
         if hasattr(self.build_ele, "pmp_pare") and hasattr(
@@ -10144,7 +10368,20 @@ class AngularLineScript(BaseScriptObject):
         ):
             try:
                 self.build_ele.pmp_pare.value = wall_pare.replace("'", "")
-                print(f"[CREATE]  pmp_pare guardado en build_ele: '{wall_pare}'")
+                print(f"[CREATE]  PMP_WALL_ID guardado en build_ele: '{wall_pare}'")
+            except Exception as e:
+                print(f"[CREATE]  ERROR al guardar PMP_WALL_ID en build_ele: {e}")
+
+        print(
+            f"[CREATE]  PMP_WALL_ID también se guardará en build_ele y en atributos del elemento"
+        )
+
+        if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+            self.build_ele.pmp_pare_name, "value"
+        ):
+            try:
+                self.build_ele.pmp_pare_name.value = wall_name.replace("'", "")
+                print(f"[CREATE]  pmp_pare guardado en build_ele: '{wall_name}'")
             except Exception as e:
                 print(f"[CREATE]  ERROR al guardar pmp_pare en build_ele: {e}")
 
@@ -10246,7 +10483,7 @@ class AngularLineScript(BaseScriptObject):
 
         #  create_angulars() - SIEMPRE aplica PMP_PARE
         self.elements = self.create_angulars(
-            geometries, edges, definition, pmp_pare=wall_pare
+            geometries, edges, definition, pmp_pare=wall_pare, pmp_pare_name=wall_name
         )
 
         if not self.elements:
@@ -10281,6 +10518,7 @@ class AngularLineScript(BaseScriptObject):
             is_free_mode=self.is_free_mode,
             is_modify=False,
             pmp_pare=wall_pare,
+            pmp_pare_name=wall_name
         )
 
         if not individual_pythonparts:
@@ -10348,6 +10586,7 @@ class AngularLineScript(BaseScriptObject):
             invertido=invertido,
             lleva_neopreno=lleva_neopreno,
             pmp_pare_value=wall_pare or "",
+            pmp_pare_name=wall_name or "",
             saved_state_str=saved_state_str or "",
         )
         print(
@@ -10464,6 +10703,7 @@ class AngularLineScript(BaseScriptObject):
         lleva_neopreno = False
         largo_neopre_value = 0.0
         wall_pare = ""
+        wall_name = ""
 
         start_point = (
             getattr(self.build_ele.PuntoInicial, "value", None)
@@ -10630,8 +10870,19 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "pmp_pare")
             else ""
         )
+        wall_name = (
+            str(getattr(self.build_ele.pmp_pare_name, "value", "") or "")
+            .strip()
+            .replace("'", "")
+            if hasattr(self.build_ele, "pmp_pare_name")
+            else ""
+        )
         if not wall_pare:
             wall_pare = "SIN_PARE"
+
+        if not wall_name:
+            wall_name = "SIN_PARE"
+
         if hasattr(self.build_ele, "angular_libre") and hasattr(
             self.build_ele.angular_libre, "value"
         ):
@@ -10705,6 +10956,21 @@ class AngularLineScript(BaseScriptObject):
             if not wall_pare:
                 wall_pare = "SIN_PARE"
             print(f"[EDIT]  pmp_pare: '{wall_pare}'")
+
+        if not wall_name:
+            wall_name = ""
+            if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+                self.build_ele.pmp_pare_name, "value"
+            ):
+                try:
+                    wall_name = (
+                        str(self.build_ele.pmp_pare_name.value).strip().replace("'", "")
+                    )
+                except Exception:
+                    pass
+            if not wall_name:
+                wall_name = "SIN_PARE"
+            print(f"[EDIT]  pmp_pare_name: '{wall_name}'")
 
         # EDIT: conservar el hash anterior solo como diagnóstico/fallback.
         # El hash que se devuelve al grupo se recalcula con los parámetros actuales,
@@ -10844,7 +11110,7 @@ class AngularLineScript(BaseScriptObject):
 
         #  create_angulars() - Pasa is_modify=True (aunque ya no importa, se aplica PMP_PARE igual)
         self.elements = self.create_angulars(
-            geometries, edges, definition, pmp_pare=wall_pare
+            geometries, edges, definition, pmp_pare=wall_pare, pmp_pare_name=wall_name
         )
 
         if not self.elements:
@@ -10865,6 +11131,7 @@ class AngularLineScript(BaseScriptObject):
             is_free_mode=self.is_free_mode,
             is_modify=True,
             pmp_pare=wall_pare,
+            pmp_pare_name=wall_name
         )
 
         if not individual_pp:
@@ -10957,6 +11224,14 @@ class AngularLineScript(BaseScriptObject):
             else wall_pare
         )
 
+        wall_name_edit = (
+            str(getattr(self.build_ele.pmp_pare_name, "value", "") or "")
+            .strip()
+            .replace("'", "")
+            if hasattr(self.build_ele, "pmp_pare_name")
+            else wall_name
+        )
+
         print("[CHECK] z_unique antes del group:", z_unique)
         global_params = self._build_group_global_params(
             z_unique=z_unique,
@@ -10971,6 +11246,7 @@ class AngularLineScript(BaseScriptObject):
             invertido=invertido_edit,
             lleva_neopreno=lleva_neopreno_edit,
             pmp_pare_value=wall_pare_edit or "",
+            pmp_pare_name=wall_name_edit or "",
             saved_state_str=saved_state_edit or "",
         )
         print(
@@ -11037,10 +11313,30 @@ class AngularLineScript(BaseScriptObject):
         )
 
     def on_cancel_function(self) -> OnCancelFunctionResult:
+        if getattr(self, "_native_delete_completed", False):
+            return OnCancelFunctionResult.CANCEL_INPUT
+
+        if getattr(self, "_inline_selected_angular_active", False):
+            # La edicion inline ya sustituyo el PPG mediante PythonPartTransaction.
+            # CREATE_ELEMENTS aqui lo escribiria otra vez y dejaria una copia.
+            self._clear_inline_selection_visual()
+            self.angular_select_result = AngularSelectResult()
+            self._leave_individual_angular_edit_mode()
+            self.line_result = LineInteractorResult()
+            self.position_result = PointInteractorResult()
+            self.state = STOPPED
+            self.preview_active = False
+            self.script_object_interactor = None
+            print(
+                "[SELECT][ANGULAR] Cierre: edicion inline ya persistida; "
+                "se cancela escritura final"
+            )
+            return OnCancelFunctionResult.CANCEL_INPUT
+
         # Al salir de MODIFY (ESC / cerrar), forzar estado estable para que execute no devuelva vacío
         # por un CANCEL heredado del flujo de interactors.
         if hasattr(self.build_ele, "IsModify"):
-            is_m = self.build_ele.IsModify
+            is_m = self.build_ele.IsModify()
         else:
             is_m = getattr(self, "is_modification_mode", False)
         if is_m:
