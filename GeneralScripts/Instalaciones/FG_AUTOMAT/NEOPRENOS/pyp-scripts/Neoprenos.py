@@ -2285,6 +2285,8 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._created_neopreno_records: list[dict] = []
         self._neopreno_record_selected_index = None
         self._inline_last_execute_result = None
+        self._pending_preview_clear_after_delete = False
+        self._resume_line_after_delete = False
 
         self._set_allow_wall_change_palette_flag()
 
@@ -3521,6 +3523,13 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def start_next_input(self):
         """Gestiona la transicion entre interactors."""
+        if getattr(self, "_resume_line_after_delete", False):
+            self._resume_line_after_delete = False
+            self._clear_inline_selection_visual()
+            self._resume_neopreno_line_input(self._get_active_coord_input())
+            neo_log("start_next_input: linea reanudada tras vaciar preview eliminado")
+            return
+
         neo_log(f"start_next_input: estado={self.interactor_state}")
         if self.interactor_state == SELECTING_WALL:
             if self.wall_select_result.is_selected:
@@ -4057,7 +4066,8 @@ class NeoprenosScriptObject(BaseScriptObject):
 
     def on_preview_draw(self):
         if getattr(self, "_inline_selected_neopreno_active", False):
-            self._draw_inline_selected_neopreno_preview(clear_before=False)
+            # El marco ya forma parte de preview_elements en execute().
+            # Dibujarlo tambien aqui crea un preview directo independiente.
             return
 
         if (
@@ -4162,6 +4172,21 @@ class NeoprenosScriptObject(BaseScriptObject):
         else:
             is_modify = self.is_editing_existing or getattr(
                 self, "is_modification_mode", False
+            )
+
+        if (
+            getattr(self, "_pending_preview_clear_after_delete", False)
+            and not is_modify
+        ):
+            self._pending_preview_clear_after_delete = False
+            self._resume_line_after_delete = True
+            self.start_next_input()
+            neo_log("execute: resultado vacio tras eliminar neopreno")
+            return CreateElementResult(
+                elements=[],
+                handles=[],
+                preview_elements=[],
+                multi_placement=True,
             )
 
         if getattr(self, "_inline_selected_neopreno_active", False) and not is_modify:
@@ -5383,6 +5408,17 @@ class NeoprenosScriptObject(BaseScriptObject):
         if not getattr(self, "_inline_selected_neopreno_active", False):
             return None
 
+        # Tras editar con handles, la transaccion sustituye el PPG. La lista de
+        # modificacion contiene el NOIGUID vigente y es la fuente autoritativa.
+        inline_list = getattr(self, "_inline_modification_ele_list", None)
+        if inline_list is not None:
+            try:
+                adapter = inline_list.get_base_element_adapter(self.document)
+                if adapter is not None and not adapter.IsNull():
+                    return adapter
+            except Exception:
+                pass
+
         idx = getattr(self, "_neopreno_record_selected_index", None)
         records = getattr(self, "_created_neopreno_records", []) or []
         if idx is not None and 0 <= idx < len(records):
@@ -5394,15 +5430,6 @@ class NeoprenosScriptObject(BaseScriptObject):
                 except Exception:
                     return adapter
 
-        inline_list = getattr(self, "_inline_modification_ele_list", None)
-        if inline_list is not None:
-            try:
-                adapter = inline_list.get_base_element_adapter(self.document)
-                if adapter is not None and not adapter.IsNull():
-                    return adapter
-            except Exception:
-                pass
-
         adapter = getattr(self.neopreno_select_result, "element", None)
         if adapter is not None:
             try:
@@ -5413,11 +5440,22 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         return None
 
-    def _remove_created_neopreno_record_by_adapter(self, adapter) -> None:
-        key = self._element_adapter_key(adapter)
+    def _remove_created_neopreno_record_by_adapter(
+        self,
+        adapter,
+        adapter_key: str = "",
+        record_index: int | None = None,
+    ) -> None:
+        # DeleteElements invalida el adapter; conservar la clave previa evita
+        # que el registro eliminado permanezca en la sesion.
+        records = getattr(self, "_created_neopreno_records", []) or []
+        if record_index is not None and 0 <= record_index < len(records):
+            del records[record_index]
+            return
+
+        key = adapter_key or self._element_adapter_key(adapter)
         if not key:
             return
-        records = getattr(self, "_created_neopreno_records", []) or []
         self._created_neopreno_records = [
             record
             for record in records
@@ -5434,11 +5472,16 @@ class NeoprenosScriptObject(BaseScriptObject):
             print("[SELECT][NEOPRENO] No se encontro el PPG seleccionado para borrar")
             return False
 
+        adapter_key = self._element_adapter_key(adapter)
+        record_index = getattr(self, "_neopreno_record_selected_index", None)
         try:
-            self._clear_inline_selection_visual()
             elem_list = AllplanEleAdapter.BaseElementAdapterList([adapter])
             AllplanBaseElements.DeleteElements(doc=self.document, elements=elem_list)
-            self._remove_created_neopreno_record_by_adapter(adapter)
+            self._remove_created_neopreno_record_by_adapter(
+                adapter,
+                adapter_key,
+                record_index,
+            )
             print("[SELECT][NEOPRENO] Neopreno eliminado")
         except Exception as exc:
             print(f"[SELECT][NEOPRENO] Error eliminando neopreno: {exc}")
@@ -5454,7 +5497,14 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._inline_last_execute_result = None
         self.neopreno_select_result = NeoprenoSelectResult()
         self._leave_inline_neopreno_edit_mode()
-        return self._resume_neopreno_line_input(self._get_active_coord_input())
+        # El evento de paleta fuerza un execute() despues de retornar. Se deja
+        # el script sin interactor para que ese execute sustituya el resultado
+        # anterior, que todavia contiene el marco auxiliar.
+        self._clear_inline_selection_visual()
+        self.interactor_state = STOPPED
+        self.script_object_interactor = None
+        self._pending_preview_clear_after_delete = True
+        return True
 
     def _start_active_wall_selection(self) -> bool:
         """Boton Cambiar muro: selecciona el host para los siguientes neoprenos."""
@@ -5525,7 +5575,6 @@ class NeoprenosScriptObject(BaseScriptObject):
             if result.record_index is not None:
                 self._sync_neopreno_record_geometry_from_line(result.record_index)
             self._refresh_inline_execute_cache()
-            self._draw_inline_selected_neopreno_preview()
             self._update_parameter_visibility()
             print("[SELECT][NEOPRENO] Edicion inline activa")
             return True
@@ -5752,30 +5801,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._inline_last_execute_result = result
         return result
 
-    def _draw_inline_selected_neopreno_preview(
-        self, clear_before: bool = False
-    ) -> bool:
-        """Refuerzo visual del marco auxiliar (encima del preview del framework)."""
-        if not getattr(self, "_inline_selected_neopreno_active", False):
-            return False
-
-        overlay = self._get_inline_selection_preview_overlay()
-        if not overlay:
-            print(
-                "[SELECT][NEOPRENO] Sin linea auxiliar: no hay eje PuntoInicial/PuntoFinal"
-            )
-            return False
-
-        doc = self._get_inline_preview_document()
-        try:
-            AllplanBaseElements.DrawElementPreview(
-                doc, AllplanGeo.Matrix3D(), overlay, clear_before, None
-            )
-            return True
-        except Exception as exc:
-            print(f"[SELECT][NEOPRENO] Error dibujando lineas auxiliares: {exc}")
-            return False
-
     def _clear_framework_handles_and_controls(self) -> None:
         """Quita handles nativos y cotas dinamicas del input."""
         try:
@@ -5790,33 +5815,13 @@ class NeoprenosScriptObject(BaseScriptObject):
     def _clear_inline_selection_visual(self) -> None:
         """Borra marco auxiliar y preview 3D del neopreno en edicion inline."""
         self._clear_framework_handles_and_controls()
-        doc = self._get_inline_preview_document()
-        if doc is None:
-            return
-
-        to_clear: list[Any] = []
-        cached = getattr(self, "_inline_last_execute_result", None)
-        if cached is not None:
-            to_clear.extend(list(cached.elements or []))
-            to_clear.extend(list(cached.preview_elements or []))
-        session_elements = getattr(self, "elements", None) or []
-        if session_elements:
-            to_clear.extend(list(session_elements))
-
-        aux_overlay = self._get_inline_selection_preview_overlay()
-        if aux_overlay:
-            to_clear.extend(aux_overlay)
-
-        if not to_clear:
-            return
-
         try:
-            AllplanBaseElements.DrawElementPreview(
-                doc, AllplanGeo.Matrix3D(), to_clear, True, None
-            )
-            print(
-                f"[SELECT][NEOPRENO] Preview inline limpiado ({len(to_clear)} elementos)"
-            )
+            AllplanBaseElements.CloseElementPreview()
+        except Exception as exc:
+            print(f"[SELECT][NEOPRENO] Error cerrando preview inline: {exc}")
+        try:
+            AllplanBaseElements.ClearElementPreview()
+            print("[SELECT][NEOPRENO] Preview inline limpiado")
         except Exception as exc:
             print(f"[SELECT][NEOPRENO] Error limpiando preview inline: {exc}")
 
@@ -5914,7 +5919,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         if idx is not None:
             self._sync_neopreno_record_geometry_from_line(idx)
         self._refresh_inline_execute_cache()
-        self._draw_inline_selected_neopreno_preview()
         return True
 
     def on_control_event(self, event_id: int):
@@ -6817,4 +6821,7 @@ class NeoprenosScriptObject(BaseScriptObject):
             self._pending_create_edit = False
             return OnCancelFunctionResult.CREATE_ELEMENTS
 
+        # Cierre definitivo de la ejecucion. Limpia cualquier preview que haya
+        # quedado asociado al interactor anterior, incluso tras eliminar.
+        self._clear_inline_selection_visual()
         return OnCancelFunctionResult.CANCEL_INPUT
