@@ -3702,6 +3702,8 @@ class PremarcScriptObject(BaseScriptObject):
             "EncajeAltura": self.build_ele.EncajeAltura.value,
             "RebajesOptions": rebajes_01,
             "ComboBoxPersianas": self.build_ele.ComboBoxPersianas.value,
+            "PersianaHeight": self.build_ele.PersianaHeight.value,
+            "PersianaWidth": self.build_ele.PersianaWidth.value,
             "ComboBoxEscuadras": self.build_ele.ComboBoxEscuadras.value,
             "ComboBoxTubos": self.build_ele.ComboBoxTubos.value,
             "TypeTubos": self.build_ele.TypeTubos.value,
@@ -3775,6 +3777,12 @@ class PremarcScriptObject(BaseScriptObject):
             int(x) for x in state.get("RebajesOptions", [])
         ]
         self.build_ele.ComboBoxPersianas.value = state["ComboBoxPersianas"]
+        self.build_ele.PersianaHeight.value = state.get(
+            "PersianaHeight", self.build_ele.PersianaHeight.value
+        )
+        self.build_ele.PersianaWidth.value = state.get(
+            "PersianaWidth", self.build_ele.PersianaWidth.value
+        )
         self.build_ele.ComboBoxEscuadras.value = state["ComboBoxEscuadras"]
         self.build_ele.ComboBoxTubos.value = state["ComboBoxTubos"]
         self.build_ele.TypeTubos.value = state["TypeTubos"]
