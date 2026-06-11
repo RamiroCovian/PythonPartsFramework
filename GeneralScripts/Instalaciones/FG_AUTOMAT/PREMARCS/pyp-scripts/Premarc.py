@@ -7343,7 +7343,8 @@ class PremarcScriptObject(BaseScriptObject):
 
         shutter_height = (
             self.build_ele.PersianaHeight.value
-            if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT"
+            if self.build_ele.ComboBoxPersianas.value
+            in ("MONOBLOCK OCULT", "METALUNIC VIST")
             else 0.0
         )
         lateral_xps_height = self.heigh + shutter_height
