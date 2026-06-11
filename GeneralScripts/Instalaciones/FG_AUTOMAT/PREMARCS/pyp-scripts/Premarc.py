@@ -1070,22 +1070,22 @@ class PremarcScriptObject(BaseScriptObject):
                         "de modificacion"
                     )
 
-            niche_guid = str(
-                getattr(getattr(self.build_ele, "niche_guid", None), "value", "")
-                or ""
-            )
-            if niche_guid:
-                deleted = self._delete_wall_opening(
-                    opening_guid_str=niche_guid,
-                    is_window_opening=False,
-                )
-                # Aunque el nicho ya no exista, _delete_wall_opening limpia el GUID.
-                # El PPG debe reemplazarse para persistir ese estado.
-                self._opening_deleted_on_modification_entry = True
-                print(
-                    "[Premarc] Niche eliminado al reingresar a la PPG "
-                    f"de modificacion: {'si' if deleted else 'ya no existia'}"
-                )
+            # niche_guid = str(
+            #     getattr(getattr(self.build_ele, "niche_guid", None), "value", "")
+            #     or ""
+            # )
+            # if niche_guid:
+            #     deleted = self._delete_wall_opening(
+            #         opening_guid_str=niche_guid,
+            #         is_window_opening=False,
+            #     )
+            #     # Aunque el nicho ya no exista, _delete_wall_opening limpia el GUID.
+            #     # El PPG debe reemplazarse para persistir ese estado.
+            #     self._opening_deleted_on_modification_entry = True
+            #     print(
+            #         "[Premarc] Niche eliminado al reingresar a la PPG "
+            #         f"de modificacion: {'si' if deleted else 'ya no existia'}"
+            #     )
 
             # self.detected_wall_thickness = self.build_ele.SavedWallThickness.value
 
@@ -5048,8 +5048,8 @@ class PremarcScriptObject(BaseScriptObject):
         self._sync_placement_point_parameter()
         if hasattr(self.build_ele, "opening_guid"):
             self.build_ele.opening_guid.value = ""
-        if hasattr(self.build_ele, "niche_guid"):
-            self.build_ele.niche_guid.value = ""
+        # if hasattr(self.build_ele, "niche_guid"):
+        #     self.build_ele.niche_guid.value = ""
         if hasattr(self.build_ele, "SavedState"):
             self.build_ele.SavedState.value = ""
 
@@ -5070,17 +5070,17 @@ class PremarcScriptObject(BaseScriptObject):
         else:
             print("[Premarc] Eliminar premarco -> sin opening persistido para borrar")
 
-        niche_deleted = False
-        niche_prop = getattr(self.build_ele, "niche_guid", None)
-        niche_guid = str(getattr(niche_prop, "value", "") or "")
-        if niche_guid:
-            niche_deleted = self._delete_wall_opening(
-                opening_guid_str=niche_guid,
-                is_window_opening=False,
-            )
-            print(f"[Premarc] Resultado borrado niche previo: {niche_deleted}")
-        else:
-            print("[Premarc] Eliminar premarco -> sin niche persistido para borrar")
+        # niche_deleted = False
+        # niche_prop = getattr(self.build_ele, "niche_guid", None)
+        # niche_guid = str(getattr(niche_prop, "value", "") or "")
+        # if niche_guid:
+        #     niche_deleted = self._delete_wall_opening(
+        #         opening_guid_str=niche_guid,
+        #         is_window_opening=False,
+        #     )
+        #     print(f"[Premarc] Resultado borrado niche previo: {niche_deleted}")
+        # else:
+        #     print("[Premarc] Eliminar premarco -> sin niche persistido para borrar")
 
         old_adapter = self._get_modification_root_adapter()
         if old_adapter is None or old_adapter.IsNull():
@@ -5264,9 +5264,9 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _create_wall_opening(
         self,
-        height: float | None = None,
-        width: float | None = None,
-        bottom_z: float | None = None,
+        # height: float | None = None,  # niche
+        # width: float | None = None,  # niche
+        # bottom_z: float | None = None,  # niche
         modify_existing: bool = False,
     ):
         if not self.selected_wall or self.selected_wall.IsNull():
@@ -5285,16 +5285,20 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
         pos = self.placement_pnt
-        llarg = width if width is not None else self.build_ele.width.value
-        alt = height if height is not None else self.build_ele.heigh.value
-        bottom_z_ = bottom_z if bottom_z is not None else (pos.Z - alt)
+        # llarg = width if width is not None else self.build_ele.width.value
+        # alt = height if height is not None else self.build_ele.heigh.value
+        # bottom_z_ = bottom_z if bottom_z is not None else (pos.Z - alt)
+        llarg = self.build_ele.width.value
+        alt = self.build_ele.heigh.value
+        bottom_z_ = pos.Z - alt
 
         axis_ele = AllplanEleAdapter.AxisElementAdapter(self.selected_wall)
         if axis_ele.IsNull():
             print("[Premarc] Sin eje, skip opening")
         #     return
             return False
-        gruix = axis_ele.GetThickness() if width is None else float(width)
+        # gruix = axis_ele.GetThickness() if width is None else float(width)
+        gruix = axis_ele.GetThickness()
         wall_axis = axis_ele.GetAxis()  # Line2D: eje central del muro
 
         # ── 1. Proyectar el click sobre el eje del muro ──────────────────────
@@ -5334,23 +5338,20 @@ class PremarcScriptObject(BaseScriptObject):
         # ── 2. Construir cuboid orientado con el eje del muro ────────────────
         # Esquina inicial: punto proyectado, centrado perpendicularmente en el eje
 
-        wall_thickness = axis_ele.GetThickness()  # espesor total real del muro
-        dist_n = (pos.X - proj_x) * nx + (pos.Y - proj_y) * ny  # positivo = click por el lado +n
+        # wall_thickness = axis_ele.GetThickness()
+        # dist_n = (pos.X - proj_x) * nx + (pos.Y - proj_y) * ny
 
-        if width is None:
-        # Comportamiento original: centrado en el eje (opening a todo el espesor)
-            start_x = proj_x - (gruix / 2.0) * nx
-            start_y = proj_y - (gruix / 2.0) * ny
-        else:
-            # Partial width: arrancar desde la cara más cercana al click (dist_n)
-            if dist_n >= 0:
-                # Cara front está en proj + (wall_thickness/2)*n
-                start_x = proj_x + (wall_thickness / 2.0 - gruix) * nx
-                start_y = proj_y + (wall_thickness / 2.0 - gruix) * ny
-            else:
-                # Cara front está en proj - (wall_thickness/2)*n
-                start_x = proj_x - (wall_thickness / 2.0) * nx
-                start_y = proj_y - (wall_thickness / 2.0) * ny
+        # Opening estandar: centrado en el eje y a todo el espesor.
+        start_x = proj_x - (gruix / 2.0) * nx
+        start_y = proj_y - (gruix / 2.0) * ny
+        # if width is not None:
+        #     # Niche: profundidad parcial desde la cara mas cercana al click.
+        #     if dist_n >= 0:
+        #         start_x = proj_x + (wall_thickness / 2.0 - gruix) * nx
+        #         start_y = proj_y + (wall_thickness / 2.0 - gruix) * ny
+        #     else:
+        #         start_x = proj_x - (wall_thickness / 2.0) * nx
+        #         start_y = proj_y - (wall_thickness / 2.0) * ny
 
         # Matriz de rotación: alinea el eje X del cuboid (1,0,0) con la dirección del muro
         rot_mat = AllplanGeo.Matrix3D()
@@ -5393,17 +5394,16 @@ class PremarcScriptObject(BaseScriptObject):
             start_2d, llarg, wall_axis, wall_geo, placement_line
         )
 
-        if width is None:
-            # Llamada sin argumentos → WindowOpening (premarc standard)
-            opening_prop = AllplanArchElements.WindowOpeningProperties()
-            opening_prop.Independent2DInteraction = False
+        # Llamada sin argumentos -> WindowOpening (premarc standard)
+        opening_prop = AllplanArchElements.WindowOpeningProperties()
+        opening_prop.Independent2DInteraction = False
 
-            plane_ref = AllplanArchElements.PlaneReferences(
-                self.document, AllplanEleAdapter.BaseElementAdapter()
-            )
-            plane_ref.SetBottomOffset(bottom_z_)
-            plane_ref.SetHeight(alt)
-            opening_prop.PlaneReferences = plane_ref
+        plane_ref = AllplanArchElements.PlaneReferences(
+            self.document, AllplanEleAdapter.BaseElementAdapter()
+        )
+        plane_ref.SetBottomOffset(bottom_z_)
+        plane_ref.SetHeight(alt)
+        opening_prop.PlaneReferences = plane_ref
 
         #     geom       = opening_prop.GetGeometryProperties()
         #     geom.Depth = gruix
@@ -5494,12 +5494,11 @@ class PremarcScriptObject(BaseScriptObject):
             opening_guid = opening_adapter.GetModelElementUUID()  # objeto GUID
             opening_guid_str = str(opening_guid)  # string persistible
             print(f"[Premarc] Opening GUID: {opening_guid_str}")
-            if width is None:
-                # window opening premarc
-                self.build_ele.opening_guid.value = opening_guid_str
-            else:
-                # niche opening persiana
-                self.build_ele.niche_guid.value = opening_guid_str
+            # window opening premarc
+            self.build_ele.opening_guid.value = opening_guid_str
+            # if width is not None:
+            #     # niche opening persiana
+            #     self.build_ele.niche_guid.value = opening_guid_str
             # self.build_ele.opening_guid.value = opening_guid_str
             self._opening_created_width = llarg
             self._opening_created_heigh = alt
@@ -5579,7 +5578,7 @@ class PremarcScriptObject(BaseScriptObject):
     def _delete_wall_opening(
         self,
         opening_guid_str: str | None = None,
-        is_window_opening: bool = True,
+        # is_window_opening: bool = True,  # niche
     ):
         if opening_guid_str is None:
             opening_guid_str = self.build_ele.opening_guid.value
@@ -5600,10 +5599,9 @@ class PremarcScriptObject(BaseScriptObject):
             print(
                 "[Premarc] Opening ya no existe en el documento actual, limpiando GUID"
             )
-            if is_window_opening:
-                self.build_ele.opening_guid.value = ""
-            elif hasattr(self.build_ele, "niche_guid"):
-                self.build_ele.niche_guid.value = ""
+            self.build_ele.opening_guid.value = ""
+            # if not is_window_opening and hasattr(self.build_ele, "niche_guid"):
+            #     self.build_ele.niche_guid.value = ""
             return False
 
         ele_list = AllplanEleAdapter.BaseElementAdapterList()
@@ -5611,10 +5609,9 @@ class PremarcScriptObject(BaseScriptObject):
 
         AllplanBaseElements.DeleteElements(doc, ele_list)
 
-        if is_window_opening:
-            self.build_ele.opening_guid.value = ""
-        elif hasattr(self.build_ele, "niche_guid"):
-            self.build_ele.niche_guid.value = ""
+        self.build_ele.opening_guid.value = ""
+        # if not is_window_opening and hasattr(self.build_ele, "niche_guid"):
+        #     self.build_ele.niche_guid.value = ""
         self._opening_created_width = 0
         self._opening_created_heigh = 0
         print("[delete_wall_opening] Opening borrado OK")
