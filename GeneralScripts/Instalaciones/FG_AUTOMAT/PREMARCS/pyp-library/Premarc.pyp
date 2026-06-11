@@ -607,6 +607,7 @@
                 <Value>136</Value>
                 <ValueType>Double</ValueType>
                 <Enable>ComboBoxPersianas != "LAMISOL VIST"</Enable>
+                <MaxValue>(manual_thickness if enable_manual_thickness else thickness) - thickness_wall if ComboBoxPersianas == "METALUNIC VIST" else 100000</MaxValue>
             </Parameter>
 
 
