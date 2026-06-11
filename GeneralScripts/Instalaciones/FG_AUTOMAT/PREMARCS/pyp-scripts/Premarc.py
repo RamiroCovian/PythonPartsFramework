@@ -7344,11 +7344,22 @@ class PremarcScriptObject(BaseScriptObject):
         if self.xps_thickness_ind:
             xps_thickness_ind_size = self.xps_thickness
 
+        shutter_height = (
+            self.build_ele.PersianaHeight.value
+            if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT"
+            else 0.0
+        )
+        lateral_xps_height = self.heigh + shutter_height
+
         pos_bottom = AllplanGeo.AxisPlacement3D(
             AllplanGeo.Point3D(0 - xps_thickness, 0, 0 - xps_thickness)
         )
         pos_top = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0 - xps_thickness, 0, 0 + self.heigh)
+            AllplanGeo.Point3D(
+                0 - xps_thickness,
+                0,
+                self.heigh + shutter_height,
+            )
         )
         pos_left = AllplanGeo.AxisPlacement3D(
             AllplanGeo.Point3D(0 - xps_thickness, 0, 0)
@@ -7382,7 +7393,10 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
         cuboid_left = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_left, xps_thickness, xps_thickness_ind_size, self.heigh
+            pos_left,
+            xps_thickness,
+            xps_thickness_ind_size,
+            lateral_xps_height,
         )
         cuboid_left = AllplanGeo.Move(
             cuboid_left,
@@ -7392,7 +7406,10 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
         cuboid_right = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_right, xps_thickness, xps_thickness_ind_size, self.heigh
+            pos_right,
+            xps_thickness,
+            xps_thickness_ind_size,
+            lateral_xps_height,
         )
         cuboid_right = AllplanGeo.Move(
             cuboid_right,
