@@ -7540,6 +7540,8 @@ class PremarcScriptObject(BaseScriptObject):
             extruded_solid.SetDirection(
                 AllplanGeo.Vector3D(1 * (self.width + THICKNESS_MM * 2), 0, 0)
             )
+        elif direction == "box_shutter_inside_premarc":
+            extruded_solid.SetDirection(AllplanGeo.Vector3D(self.width, 0, 0))
         else:
             extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 0, 1))
 
@@ -10144,9 +10146,11 @@ class PremarcScriptObject(BaseScriptObject):
 
                 # Move box shutters to wall thickness
                 fix_y = self.detected_wall_thickness
-                translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM, -fix_y, 0)
+                translation_vector = AllplanGeo.Vector3D(0, -fix_y, 0)
                 box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
-                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
+                error_code, polyhedron_box_shutter = self.extrude_frame(
+                    box_shutter_moved, "box_shutter_inside_premarc"
+                )
 
                 box_shutter_list.append(polyhedron_box_shutter)
             case "FALS CALAIX":
