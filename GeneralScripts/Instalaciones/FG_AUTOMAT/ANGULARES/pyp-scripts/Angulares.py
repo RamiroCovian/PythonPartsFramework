@@ -34,7 +34,7 @@ from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResul
 from TypeCollections.ModelEleList import ModelEleList
 from TypeCollections.ModificationElementList import ModificationElementList
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
-from PythonPartTransaction import ConnectToElements, PythonPartTransaction
+from PythonPartTransaction import PythonPartTransaction
 from HandleProperties import HandleProperties
 from HandlePropertiesService import HandlePropertiesService
 from HandleParameterData import HandleParameterData
@@ -42,20 +42,21 @@ from HandleParameterType import HandleParameterType
 from HandleDirection import HandleDirection
 from BuildingElementAttributeList import BuildingElementAttributeList
 
-HOLE_DIAMETER = 14.0
+HOLE_DIAMETER = 18.0
 HOLE_RADIUS = HOLE_DIAMETER / 2.0
 
 ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.8-sin-resaltado-rojo-cara"
+ANGULARES_SCRIPT_VERSION = "2.3.15-sin-asociacion-automatica-muro"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
 ANGULAR_EVENT_SELECT_EXISTING = 1048
 ANGULAR_EVENT_DESELECT_EXISTING = 1049
 ANGULAR_EVENT_CHANGE_ACTIVE_WALL = 1050
+ANGULAR_EVENT_DELETE_EXISTING = 1051
 ANGULAR_OTHER_EXECUTION_MSG = (
     "No se puede seleccionar un angular colocado en otra ejecución.\n\n"
     "Solo puede editar angulares colocados en la ejecución actual.\n\n"
@@ -3319,10 +3320,15 @@ class AngularLineScript(BaseScriptObject):
         self._inline_last_execute_result = None
         self._pending_resume_position_after_deselect = False
         self._resume_after_deselect_inline = False
+        self._native_delete_completed = False
 
         if hasattr(self.build_ele, "PermitirCambiarMuro"):
             self.build_ele.PermitirCambiarMuro.value = not getattr(
                 self, "is_modification_mode", False
+            )
+        if hasattr(self.build_ele, "AngularSeleccionado"):
+            self.build_ele.AngularSeleccionado.value = bool(
+                getattr(self, "is_modification_mode", False)
             )
 
         if self.is_modification_mode:
@@ -4320,19 +4326,6 @@ class AngularLineScript(BaseScriptObject):
                     if not is_default or self._restored_from_saved_state:
                         self.line_result.input_line = AllplanGeo.Line3D(p1, p2)
 
-            muro_guid_prop = getattr(self.build_ele, "MuroGUID", None)
-            muro_connection_prop = getattr(self.build_ele, "MuroConnection", None)
-
-            if muro_guid_prop and hasattr(muro_guid_prop, "value"):
-                pass
-
-            if muro_connection_prop and hasattr(muro_connection_prop, "value"):
-                conn = muro_connection_prop.value
-                if hasattr(conn, "uuid"):
-                    pass
-                if hasattr(conn, "element"):
-                    pass
-
             if getattr(self, "is_modification_mode", False):
                 self._apply_face_context_from_build_ele_only()
                 return
@@ -4350,26 +4343,6 @@ class AngularLineScript(BaseScriptObject):
                 # self.wall_allplan_id = get_wall_ifc_id(wall_element)
                 if hasattr(self.build_ele, "MuroGUID"):
                     self.build_ele.MuroGUID.value = real_wall_guid
-
-                if hasattr(self.build_ele, "MuroConnection"):
-                    try:
-                        conn = self.build_ele.MuroConnection.value
-                        if (
-                            not hasattr(conn, "element")
-                            or not conn.element.IsValid()
-                            or (
-                                hasattr(conn, "uuid")
-                                and str(conn.uuid)
-                                == "00000000-0000-0000-0000-000000000000"
-                            )
-                        ):
-                            conn.element = wall_element
-                    except Exception as e:
-                        try:
-                            conn = self.build_ele.MuroConnection.value
-                            conn.element = wall_element
-                        except Exception as e2:
-                            pass
 
                 if getattr(self, "is_modification_mode", False):
                     self._apply_face_context_from_build_ele_only()
@@ -4423,25 +4396,6 @@ class AngularLineScript(BaseScriptObject):
                     if hasattr(self.build_ele, "MuroGUID"):
                         self.build_ele.MuroGUID.value = self.detected_wall_guid
 
-                    if hasattr(self.build_ele, "MuroConnection"):
-                        try:
-                            conn = self.build_ele.MuroConnection.value
-                            if (
-                                not hasattr(conn, "element")
-                                or not conn.element.IsValid()
-                                or (
-                                    hasattr(conn, "uuid")
-                                    and str(conn.uuid)
-                                    == "00000000-0000-0000-0000-000000000000"
-                                )
-                            ):
-                                conn.element = wall_element
-                        except Exception:
-                            try:
-                                conn = self.build_ele.MuroConnection.value
-                                conn.element = wall_element
-                            except Exception:
-                                pass
             else:
                 pass
 
@@ -4528,7 +4482,6 @@ class AngularLineScript(BaseScriptObject):
         if self.is_free_mode:
             return False
 
-        has_connection = hasattr(self.build_ele, "MuroConnection")
         has_guid = hasattr(self.build_ele, "MuroGUID")
         has_uv = (
             hasattr(self.build_ele, "PosicionRelativaU")
@@ -4540,24 +4493,11 @@ class AngularLineScript(BaseScriptObject):
         if not has_uv:
             return False
 
-        if has_connection:
-            conn = self.build_ele.MuroConnection.value
-            return hasattr(conn, "element") and conn.element.IsValid()
-
         return has_guid and bool(self.build_ele.MuroGUID.value)
 
     def _get_wall_element(self):
         """Obtiene el elemento muro desde la conexión o GUID"""
         wall_element = None
-
-        if hasattr(self.build_ele, "MuroConnection"):
-            conn = self.build_ele.MuroConnection.value
-            if conn:
-                if hasattr(conn, "element"):
-                    if conn.element.IsValid():
-                        wall_element = conn.element
-        else:
-            pass
 
         if not wall_element or (
             hasattr(wall_element, "IsNull") and wall_element.IsNull()
@@ -5390,26 +5330,6 @@ class AngularLineScript(BaseScriptObject):
                 if hasattr(self.build_ele, "MuroGUID"):
                     self.build_ele.MuroGUID.value = self.detected_wall_guid
 
-                if hasattr(self.build_ele, "MuroConnection"):
-                    try:
-                        conn = self.build_ele.MuroConnection.value
-                        if (
-                            not hasattr(conn, "element")
-                            or not conn.element.IsValid()
-                            or (
-                                hasattr(conn, "uuid")
-                                and str(conn.uuid)
-                                == "00000000-0000-0000-0000-000000000000"
-                            )
-                        ):
-                            conn.element = wall_element
-                    except Exception:
-                        try:
-                            conn = self.build_ele.MuroConnection.value
-                            conn.element = wall_element
-                        except Exception:
-                            pass
-
             if hasattr(self.build_ele, "LongitudLinea"):
                 line_length = vector_from_points(new_start, new_end).GetLength()
                 self.build_ele.LongitudLinea.value = line_length
@@ -5606,6 +5526,12 @@ class AngularLineScript(BaseScriptObject):
         elif self.state == SELECTING_LINE:
             if self.line_result.input_line:
                 self._process_line_input()
+                if (
+                    not self.is_modification_mode
+                    and not self._is_individual_distribution()
+                    and hasattr(self.build_ele, "AngularSeleccionado")
+                ):
+                    self.build_ele.AngularSeleccionado.value = True
 
             self.script_object_interactor = None
             self.preview_active = True
@@ -5682,9 +5608,6 @@ class AngularLineScript(BaseScriptObject):
         self.face_local_system = None
 
         # self.wall_allplan_id = get_wall_ifc_id(selected_element)
-
-        if hasattr(self.build_ele, "MuroConnection"):
-            self.build_ele.MuroConnection.value.element = selected_element
 
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
@@ -6114,7 +6037,6 @@ class AngularLineScript(BaseScriptObject):
         self.face_normal = self.face_select_result.face_normal
         self.face_polygon = self.face_select_result.face_polygon
 
-        element_guid_str = self.face_select_result.element_guid
         selected_element = self.face_select_result.element
 
         self.detected_wall = selected_element
@@ -6123,29 +6045,6 @@ class AngularLineScript(BaseScriptObject):
         self.detected_wall_guid = real_wall_guid
 
         # self.wall_allplan_id = get_wall_ifc_id(selected_element)
-
-        if hasattr(self.build_ele, "MuroConnection"):
-            self.build_ele.MuroConnection.value.element = selected_element
-
-            if (
-                str(self.build_ele.MuroConnection.value.uuid)
-                == "00000000-0000-0000-0000-000000000000"
-            ):
-                element_guid = (
-                    AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(
-                        element_guid_str
-                    )
-                )
-                element_from_guid = AllplanBaseElements.ElementsService.GetElement(
-                    element_guid
-                )
-
-                if element_from_guid and element_from_guid.IsValid():
-                    self.build_ele.MuroConnection.value.element = element_from_guid
-                    real_wall_guid = str(element_from_guid.GetModelElementUUID())
-                    self.detected_wall_guid = real_wall_guid
-        else:
-            pass
 
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
@@ -6638,10 +6537,7 @@ class AngularLineScript(BaseScriptObject):
             else:
                 view_world_projection = AllplanIFW.ViewWorldProjection()
 
-            transaction = PythonPartTransaction(
-                self.document,
-                connect_to_ele=result.connect_to_ele,
-            )
+            transaction = PythonPartTransaction(self.document)
             created_elements = transaction.execute(
                 placement_matrix=AllplanGeo.Matrix3D(),
                 view_world_projection=view_world_projection,
@@ -8386,6 +8282,114 @@ class AngularLineScript(BaseScriptObject):
         print("[SELECT][ANGULAR] Continua colocacion individual")
         return True
 
+    def _delete_selected_angular(self) -> bool:
+        """Elimina el PPG seleccionado inline o reabierto en MODIFY."""
+        is_inline = getattr(self, "_inline_selected_angular_active", False)
+        is_native_modify = getattr(self, "is_modification_mode", False)
+        is_pending_group = (
+            not is_inline
+            and not is_native_modify
+            and not self._is_individual_distribution()
+            and bool(getattr(self.line_result, "input_line", None))
+        )
+        if not is_inline and not is_native_modify and not is_pending_group:
+            print("[DELETE][ANGULAR] No hay angular seleccionado")
+            return False
+
+        if is_pending_group:
+            self._clear_framework_handles_and_controls()
+            self.line_result = LineInteractorResult()
+            self.elements = []
+            self.last_geometries = []
+            self.last_definition_key = None
+            self.preview_active = False
+            if hasattr(self.build_ele, "AngularSeleccionado"):
+                self.build_ele.AngularSeleccionado.value = False
+
+            self.state = SELECTING_LINE
+            self._start_line_input()
+            coord_input = self._get_active_coord_input()
+            if coord_input is not None:
+                self.script_object_interactor.start_input(coord_input)
+            print(
+                "[DELETE][ANGULAR] Distribucion grupal pendiente eliminada; "
+                "continua definicion de linea"
+            )
+            return True
+
+        modification_list = (
+            getattr(self, "_inline_modification_ele_list", None)
+            if is_inline
+            else getattr(self, "modification_ele_list", None)
+        )
+        if not modification_list:
+            print("[DELETE][ANGULAR] Seleccion sin PPG valido")
+            return False
+
+        selected_element = self._adapter_from_modification_list(modification_list)
+        if selected_element is None:
+            print("[DELETE][ANGULAR] No se pudo resolver el adapter del PPG")
+            return False
+
+        coord_input = self._get_active_coord_input()
+        view_world_projection = (
+            coord_input.GetViewWorldProjection()
+            if coord_input
+            else AllplanIFW.ViewWorldProjection()
+        )
+        elements_to_delete = AllplanEleAdapter.BaseElementAdapterList(
+            [selected_element]
+        )
+
+        try:
+            self._clear_inline_selection_visual()
+            PythonPartTransaction(self.document).execute(
+                placement_matrix=AllplanGeo.Matrix3D(),
+                view_world_projection=view_world_projection,
+                model_ele_list=[],
+                modification_ele_list=[],
+                elements_to_delete=elements_to_delete,
+                use_system_angle=False,
+            )
+        except Exception as exc:
+            print(f"[DELETE][ANGULAR] Error eliminando el PPG: {exc}")
+            import traceback
+
+            traceback.print_exc()
+            return False
+
+        selected_index = getattr(self, "_angular_record_selected_index", None)
+        records = getattr(self, "_created_angular_records", []) or []
+        if selected_index is not None and 0 <= selected_index < len(records):
+            records.pop(selected_index)
+
+        if is_inline:
+            self._leave_individual_angular_edit_mode()
+            self.angular_select_result = AngularSelectResult()
+            self.line_result = LineInteractorResult()
+            self.position_result = PointInteractorResult()
+            self.state = SELECTING_POSITION
+            self.preview_active = False
+            self.script_object_interactor = None
+            self._pending_resume_position_after_deselect = True
+            print("[DELETE][ANGULAR] PPG eliminado; continua colocacion individual")
+            return True
+
+        self._native_delete_completed = True
+        if hasattr(self.build_ele, "AngularSeleccionado"):
+            self.build_ele.AngularSeleccionado.value = False
+        self.state = CANCEL
+        self.preview_active = False
+        self.script_object_interactor = None
+        coord_input = self._get_active_coord_input()
+        if coord_input is not None:
+            try:
+                coord_input.CancelInput()
+            except Exception as exc:
+                print(f"[DELETE][ANGULAR] No se pudo cerrar el input: {exc}")
+        print("[DELETE][ANGULAR] PPG reabierto eliminado; se cierra la edicion")
+        return True
+
     def _start_active_wall_selection(self) -> bool:
         """Boton Cambiar muro: selecciona el muro para los proximos angulares."""
         if getattr(self, "is_modification_mode", False):
@@ -8452,6 +8456,8 @@ class AngularLineScript(BaseScriptObject):
             self.is_modification_mode = False
             self.is_editing_existing = False
             self._inline_selected_angular_active = True
+            if hasattr(self.build_ele, "AngularSeleccionado"):
+                self.build_ele.AngularSeleccionado.value = True
             self._angular_record_selected_index = result.record_index
             self._palette_distribution_user_override = False
             self.is_free_mode = False
@@ -8544,6 +8550,8 @@ class AngularLineScript(BaseScriptObject):
         if getattr(self, "_inline_selected_angular_active", False):
             print("[SELECT][ANGULAR] Fin edicion PPG; sigue colocacion masiva")
         self._inline_selected_angular_active = False
+        if hasattr(self.build_ele, "AngularSeleccionado"):
+            self.build_ele.AngularSeleccionado.value = False
         self._inline_modification_ele_list = None
         self._angular_record_selected_index = None
         self._inline_last_execute_result = None
@@ -8669,14 +8677,6 @@ class AngularLineScript(BaseScriptObject):
         """
         overlay = self._get_inline_selection_preview_overlay()
         handles = self._build_inline_edit_handles_result().handles
-        connect_to_ele = ConnectToElements()
-        if hasattr(self.build_ele, "MuroGUID") and getattr(
-            self.build_ele.MuroGUID, "value", None
-        ):
-            mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
-            if mg:
-                connect_to_ele.connection_elements.append(mg)
-
         base_elements = list(model_list or [])
         preview_overlay = list(overlay)
         if not base_elements and preview_overlay:
@@ -8688,7 +8688,6 @@ class AngularLineScript(BaseScriptObject):
             handles=handles,
             preview_elements=preview_overlay,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=True,
         )
@@ -8766,10 +8765,7 @@ class AngularLineScript(BaseScriptObject):
             else:
                 view_world_projection = AllplanIFW.ViewWorldProjection()
 
-            transaction = PythonPartTransaction(
-                self.document,
-                connect_to_ele=result.connect_to_ele,
-            )
+            transaction = PythonPartTransaction(self.document)
             created_elements = transaction.execute(
                 placement_matrix=AllplanGeo.Matrix3D(),
                 view_world_projection=view_world_projection,
@@ -9249,25 +9245,6 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "MuroGUID"):
                 self.build_ele.MuroGUID.value = real_wall_guid
 
-            if hasattr(self.build_ele, "MuroConnection"):
-                try:
-                    conn = self.build_ele.MuroConnection.value
-                    if (
-                        not hasattr(conn, "element")
-                        or not conn.element.IsValid()
-                        or (
-                            hasattr(conn, "uuid")
-                            and str(conn.uuid) == "00000000-0000-0000-0000-000000000000"
-                        )
-                    ):
-                        conn.element = self.detected_wall
-                except Exception:
-                    try:
-                        conn = self.build_ele.MuroConnection.value
-                        conn.element = self.detected_wall
-                    except Exception:
-                        pass
-
         line = self._apply_manual_z_to_distribution_line(line, update_from_line=True)
         self.line_result.input_line = line
 
@@ -9516,6 +9493,8 @@ class AngularLineScript(BaseScriptObject):
             return self._deselect_inline_angular()
         if event_id == ANGULAR_EVENT_CHANGE_ACTIVE_WALL:
             return self._start_active_wall_selection()
+        if event_id == ANGULAR_EVENT_DELETE_EXISTING:
+            return self._delete_selected_angular()
         return True
 
     def set_active_palette_page_index(self, page_index: int) -> None:
@@ -9652,7 +9631,6 @@ class AngularLineScript(BaseScriptObject):
                     placement_point=getattr(
                         cached, "placement_point", AllplanGeo.Point3D(0.0, 0.0, 0.0)
                     ),
-                    connect_to_ele=getattr(cached, "connect_to_ele", None),
                     uuid_parameter_name=getattr(
                         cached, "uuid_parameter_name", "PythonPartUUID"
                     ),
@@ -10050,6 +10028,64 @@ class AngularLineScript(BaseScriptObject):
                 if is_free_mode is not None:
                     params["FreeMode"] = bool(is_free_mode)
 
+                # Los volumenes internos tambien son PythonParts editables. Allplan puede
+                # iniciar MODIFY desde uno de ellos en lugar del PythonPartGroup padre,
+                # por lo que deben llevar el mismo contrato geometrico que el grupo.
+                # StartX/EndX se conservan para trazabilidad y compatibilidad.
+                params.update(
+                    {
+                        "PuntoInicial": start_point,
+                        "PuntoFinal": end_point,
+                        "TipoAngular": angular_key or "",
+                        "TipoDistribucion": (
+                            "Individual"
+                            if self._get_distribution_type()
+                            == DISTRIBUTION_INDIVIDUAL
+                            else "Grupal"
+                        ),
+                        "SeparacionAngulares": float(
+                            getattr(
+                                getattr(self.build_ele, "SeparacionAngulares", None),
+                                "value",
+                                10.0,
+                            )
+                            or 10.0
+                        ),
+                        "RotacionManual": float(rotation_deg or 0.0),
+                        "RotacionEjeX": self._get_angle_degrees("RotacionEjeX"),
+                        "RotacionEjeY": self._get_angle_degrees("RotacionEjeY"),
+                        "InvertirAngular": bool(invert_side),
+                        "SiLlevaNeopreno": bool(
+                            getattr(
+                                getattr(self.build_ele, "SiLlevaNeopreno", None),
+                                "value",
+                                False,
+                            )
+                        ),
+                        "UsarValorZManual": self._is_manual_z_enabled(),
+                        "ValorZIndividual": float(
+                            getattr(
+                                getattr(self.build_ele, "ValorZIndividual", None),
+                                "value",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                        "pmp_pare": wall_pare,
+                        "pmp_pare_name": wall_name,
+                        "z_unique": float(
+                            getattr(
+                                getattr(self.build_ele, "z_unique", None),
+                                "value",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                    }
+                )
+                params.update(self._wall_face_params_from_build_ele())
+                params["SavedState"] = self._serialize_state_to_json()
+
                 hash_params = {
                     "Index": idx,
                     "ElementType": params.get("ElementType", ""),
@@ -10109,6 +10145,10 @@ class AngularLineScript(BaseScriptObject):
         print(
             "[EXECUTE]  z_unique y pmp_pare existen en build_ele (con Persistent>MODEL_AND_FAVORITE)"
         )
+
+        if getattr(self, "_native_delete_completed", False):
+            print("[DELETE][ANGULAR] Execute omitido: el PPG ya fue eliminado")
+            return CreateElementResult()
 
         if hasattr(self.build_ele, "IsModify"):
             is_modify = self.build_ele.IsModify
@@ -10516,11 +10556,6 @@ class AngularLineScript(BaseScriptObject):
             )
         )
 
-        #  Crear connect_to_ele si hay muro
-        connect_to_ele = ConnectToElements()
-        if hasattr(self.build_ele, "MuroGUID") and self.build_ele.MuroGUID.value:
-            connect_to_ele.connection_elements.append(self.build_ele.MuroGUID.value)
-
         # Guardar SavedState al final (CREATE siempre)
         self._save_state_to_build_ele()
 
@@ -10534,7 +10569,6 @@ class AngularLineScript(BaseScriptObject):
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=distribution_type == DISTRIBUTION_INDIVIDUAL,
         )
@@ -10585,8 +10619,43 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "PuntoFinal")
             else None
         )
-        # Fallback a SavedState SOLO si falta algo
-        if start_point is None or end_point is None:
+        saved_start = saved_state_to_point3d(parsed_saved_state_edit, "p0")
+        saved_end = saved_state_to_point3d(parsed_saved_state_edit, "p1")
+
+        # (0,0,0)->(1000,0,0) es el valor inicial del .pyp, no evidencia de
+        # persistencia valida. Si SavedState contiene otra linea, debe prevalecer.
+        points_are_pyp_defaults = False
+        if start_point is not None and end_point is not None:
+            points_are_pyp_defaults = (
+                abs(float(start_point.X)) <= 1e-6
+                and abs(float(start_point.Y)) <= 1e-6
+                and abs(float(start_point.Z)) <= 1e-6
+                and abs(float(end_point.X) - 1000.0) <= 1e-6
+                and abs(float(end_point.Y)) <= 1e-6
+                and abs(float(end_point.Z)) <= 1e-6
+            )
+
+        restore_saved_line = (
+            saved_start is not None
+            and saved_end is not None
+            and (
+                start_point is None
+                or end_point is None
+                or points_are_pyp_defaults
+            )
+        )
+        if restore_saved_line:
+            start_point, end_point = saved_start, saved_end
+            if hasattr(self.build_ele, "PuntoInicial"):
+                self.build_ele.PuntoInicial.value = start_point
+            if hasattr(self.build_ele, "PuntoFinal"):
+                self.build_ele.PuntoFinal.value = end_point
+            reason = "defaults del .pyp" if points_are_pyp_defaults else "puntos ausentes"
+            print(
+                f"[EDIT] Puntos desde SavedState ({reason}): "
+                f"{start_point} â†’ {end_point}"
+            )
+        elif start_point is None or end_point is None:
             state = parsed_saved_state_edit
             p0_fallback = saved_state_to_point3d(state, "p0")
             p1_fallback = saved_state_to_point3d(state, "p1")
@@ -11156,20 +11225,13 @@ class AngularLineScript(BaseScriptObject):
             None if self.is_free_mode else self.face_point,
         )
 
-        connect_to_ele_edit = ConnectToElements()
-        if hasattr(self.build_ele, "MuroGUID") and getattr(
-            self.build_ele.MuroGUID, "value", None
-        ):
-            mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
-            if mg:
-                connect_to_ele_edit.connection_elements.append(mg)
-
         multi_pl = (
             normalize_distribution_type(distribution_type_edit)
             == DISTRIBUTION_INDIVIDUAL
         )
 
-        #  RETURN FINAL: mismo contrato que CREATE (connect_to_ele + multi_placement) para que Allplan sustituya el PPG bien.
+        # RETURN FINAL sin asociacion automatica al muro. El GUID y el sistema
+        # local de la cara siguen persistidos como referencia geometrica.
         #  Si se pasa elements_to_delete, Allplan borra el grupo y luego añade el nuevo; un fallo en ese flujo hace que el angular desaparezca.
         self.state = STOPPED
         print(f"[EDIT]  Edición completada: {len(model_elem_list)} elementos")
@@ -11177,12 +11239,14 @@ class AngularLineScript(BaseScriptObject):
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
-            connect_to_ele=connect_to_ele_edit,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=multi_pl,
         )
 
     def on_cancel_function(self) -> OnCancelFunctionResult:
+        if getattr(self, "_native_delete_completed", False):
+            return OnCancelFunctionResult.CANCEL_INPUT
+
         if getattr(self, "_inline_selected_angular_active", False):
             # La edicion inline ya sustituyo el PPG mediante PythonPartTransaction.
             # CREATE_ELEMENTS aqui lo escribiria otra vez y dejaria una copia.

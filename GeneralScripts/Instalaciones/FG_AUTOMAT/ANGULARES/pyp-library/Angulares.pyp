@@ -20,7 +20,7 @@
       <Value>ANG200_L460</Value>
       <ValueType>RadioButtonGroup</ValueType>
       <TextId>1001</TextId>
-      <Persistent>No</Persistent>
+      <Persistent>Model</Persistent>
 
       <Parameter>
         <Name>Separador1</Name>
@@ -155,7 +155,7 @@
       <Name>RowSeleccionAngularIndividual</Name>
       <Text>Edición</Text>
       <ValueType>Row</ValueType>
-      <Visible>PermitirCambiarMuro == True</Visible>
+      <Visible>PermitirCambiarMuro == True or AngularSeleccionado == True</Visible>
       <Parameter>
         <Name>SeleccionarAngularIndividual</Name>
         <Text>Seleccionar</Text>
@@ -163,6 +163,7 @@
         <Value>0</Value>
         <ValueType>Button</ValueType>
         <Enable>True</Enable>
+        <Visible>PermitirCambiarMuro == True</Visible>
         <TextId>1048</TextId>
         <Persistent>No</Persistent>
       </Parameter>
@@ -173,7 +174,19 @@
         <Value>0</Value>
         <ValueType>Button</ValueType>
         <Enable>True</Enable>
+        <Visible>PermitirCambiarMuro == True</Visible>
         <TextId>1049</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+      <Parameter>
+        <Name>EliminarAngularIndividual</Name>
+        <Text>Eliminar</Text>
+        <EventId>1051</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <Visible>AngularSeleccionado == True</Visible>
+        <TextId>1051</TextId>
         <Persistent>No</Persistent>
       </Parameter>
       <Parameter>
@@ -196,6 +209,7 @@
       <ValueType>Length</ValueType>
       <Visible>False</Visible>
       <TextId>1005</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -259,6 +273,7 @@
       <Enable>False</Enable>
       <ReadOnly>z_unique > 0</ReadOnly>
       <TextId>2007</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -328,7 +343,7 @@
       <Value>ANG200_L460</Value>
       <ValueType>RadioButtonGroup</ValueType>
       <TextId>1001</TextId>
-      <Persistent>No</Persistent>
+      <Persistent>Model</Persistent>
 
       <Parameter>
         <Name>Separador1_Grupal</Name>
@@ -456,11 +471,29 @@
     </Parameter>
 
     <Parameter>
+      <Name>RowEliminarAngularGrupal</Name>
+      <Text>Eliminar grupo</Text>
+      <ValueType>Row</ValueType>
+      <Visible>AngularSeleccionado == True</Visible>
+      <Parameter>
+        <Name>EliminarAngularGrupal</Name>
+        <Text>Eliminar</Text>
+        <EventId>1051</EventId>
+        <Value>0</Value>
+        <ValueType>Button</ValueType>
+        <Enable>True</Enable>
+        <TextId>1151</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+    </Parameter>
+
+    <Parameter>
       <Name>SeparacionAngulares</Name>
       <Text>Separación entre angulares</Text>
       <Value>10</Value>
       <ValueType>Length</ValueType>
       <TextId>1005</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -499,6 +532,7 @@
       <Enable>False</Enable>
       <ReadOnly>z_unique > 0</ReadOnly>
       <TextId>2007</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -581,14 +615,14 @@
     </Parameter>
 
     <Parameter>
-      <Name>MuroConnection</Name>
+      <Name>LegacyWallReferenceDisabled</Name>
       <Text>Conexión con muro</Text>
       <TextId>1009</TextId>
       <Value></Value>
       <Visible>False</Visible>
       <Enable>False</Enable>
-      <ValueType>TimeStampConnection</ValueType>
-      <Persistent>Model</Persistent>
+      <ValueType>Text</ValueType>
+      <Persistent>No</Persistent>
     </Parameter>
 
     <Parameter>
@@ -814,13 +848,22 @@
       <Value>0</Value>
       <ValueType>Double</ValueType>
       <Visible>False</Visible>
-      <Persistent>No</Persistent>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
       <Name>PermitirCambiarMuro</Name>
       <Text>Permitir cambiar muro</Text>
       <Value>True</Value>
+      <ValueType>CheckBox</ValueType>
+      <Visible>False</Visible>
+      <Persistent>No</Persistent>
+    </Parameter>
+
+    <Parameter>
+      <Name>AngularSeleccionado</Name>
+      <Text>Angular seleccionado</Text>
+      <Value>False</Value>
       <ValueType>CheckBox</ValueType>
       <Visible>False</Visible>
       <Persistent>No</Persistent>
