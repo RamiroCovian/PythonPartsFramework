@@ -26,7 +26,7 @@ from HandleParameterData import HandleParameterData
 from HandleParameterType import HandleParameterType
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
 from PythonPartUtil import PythonPartUtil
-from PythonPartTransaction import ConnectToElements, PythonPartTransaction
+from PythonPartTransaction import PythonPartTransaction
 from TypeCollections.ModificationElementList import ModificationElementList
 from ScriptObjectInteractors.BaseScriptObjectInteractor import (
     BaseScriptObjectInteractor,
@@ -46,7 +46,7 @@ SELECTING_WALL = 2
 SELECTING_LINE = 3
 SELECTING_EXISTING_NEOPRENO = 4
 
-NEOPRENOS_SCRIPT_VERSION = "1.1.0-seleccionar-insert-matrix"
+NEOPRENOS_SCRIPT_VERSION = "1.1.1-sin-asociacion-automatica-host"
 NEOPRENO_EVENT_SELECT_EXISTING = 1050
 NEOPRENO_EVENT_DESELECT_EXISTING = 1051
 NEOPRENO_EVENT_CHANGE_ACTIVE_WALL = 1052
@@ -2844,17 +2844,11 @@ class NeoprenosScriptObject(BaseScriptObject):
         return False
 
     def _load_saved_connection_info(self):
-        """Carga la informacion de conexion guardada cuando se esta editando."""
+        """Carga la referencia guardada al host mediante GUID."""
         if self.is_free_mode:
             if (
-                hasattr(self.build_ele, "MuroConnection")
-                and self.build_ele.MuroConnection.value
-                and hasattr(self.build_ele.MuroConnection.value, "element")
-                and self.build_ele.MuroConnection.value.element.IsValid()
+                hasattr(self.build_ele, "MuroGUID") and self.build_ele.MuroGUID.value
             ):
-                self.detected_wall = self.build_ele.MuroConnection.value.element
-                self.detected_wall_guid = str(self.detected_wall.GetModelElementUUID())
-            elif hasattr(self.build_ele, "MuroGUID") and self.build_ele.MuroGUID.value:
                 self.detected_wall_guid = self.build_ele.MuroGUID.value
                 try:
                     wall_guid = AllplanEleAdapter.GUID.FromString(
@@ -2863,31 +2857,14 @@ class NeoprenosScriptObject(BaseScriptObject):
                     self.detected_wall = AllplanEleAdapter.BaseElementAdapter.FromGUID(
                         wall_guid, self.document
                     )
-                    if self.detected_wall and not self.detected_wall.IsNull():
-                        if hasattr(self.build_ele, "MuroConnection"):
-                            self.build_ele.MuroConnection.value.element = (
-                                self.detected_wall
-                            )
                 except Exception:
                     pass
-            elif (
-                hasattr(self.build_ele, "MuroConnection")
-                and self.build_ele.MuroConnection.value.uuid
-            ):
-                self.detected_wall_guid = str(self.build_ele.MuroConnection.value.uuid)
         else:
             if (
                 hasattr(self.build_ele, "SolidoGUID")
                 and self.build_ele.SolidoGUID.value
             ):
                 self.solid_info = {"guid": self.build_ele.SolidoGUID.value}
-            elif (
-                hasattr(self.build_ele, "SolidoConnection")
-                and self.build_ele.SolidoConnection.value.uuid
-            ):
-                self.solid_info = {
-                    "guid": str(self.build_ele.SolidoConnection.value.uuid)
-                }
 
     def _get_face_local_system(self) -> dict[str, Any] | None:
         if not self.face_polygon or not self.face_normal:
@@ -3059,22 +3036,13 @@ class NeoprenosScriptObject(BaseScriptObject):
     def _get_solid_element(self):
         solid_element = None
 
-        if hasattr(self.build_ele, "SolidoConnection"):
-            conn = self.build_ele.SolidoConnection.value
-            if hasattr(conn, "element") and conn.element.IsValid():
-                solid_element = conn.element
-
-        if not solid_element or solid_element.IsNull():
-            if (
-                hasattr(self.build_ele, "SolidoGUID")
-                and self.build_ele.SolidoGUID.value
-            ):
-                solid_guid = AllplanEleAdapter.GUID.FromString(
-                    self.build_ele.SolidoGUID.value
-                )
-                solid_element = AllplanEleAdapter.BaseElementAdapter.FromGUID(
-                    solid_guid, self.document
-                )
+        if hasattr(self.build_ele, "SolidoGUID") and self.build_ele.SolidoGUID.value:
+            solid_guid = AllplanEleAdapter.GUID.FromString(
+                self.build_ele.SolidoGUID.value
+            )
+            solid_element = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                solid_guid, self.document
+            )
 
         return solid_element
 
@@ -3635,23 +3603,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         if not self.wall_ifc_id:
             self._warn_unidentifiable_parent_element()
 
-        if hasattr(self.build_ele, "MuroConnection"):
-            self.build_ele.MuroConnection.value.element = selected_element
-            if (
-                str(self.build_ele.MuroConnection.value.uuid)
-                == "00000000-0000-0000-0000-000000000000"
-            ):
-                try:
-                    element_guid = AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(
-                        real_wall_guid
-                    )
-                    element_from_guid = AllplanBaseElements.ElementsService.GetElement(
-                        element_guid
-                    )
-                    if element_from_guid and element_from_guid.IsValid():
-                        self.build_ele.MuroConnection.value.element = element_from_guid
-                except Exception:
-                    pass
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
 
@@ -3734,26 +3685,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         )
         if not self.wall_ifc_id:
             self._warn_unidentifiable_parent_element()
-
-        if hasattr(self.build_ele, "SolidoConnection"):
-            self.build_ele.SolidoConnection.value.element = selected_element
-            if (
-                str(self.build_ele.SolidoConnection.value.uuid)
-                == "00000000-0000-0000-0000-000000000000"
-            ):
-                try:
-                    element_guid = AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(
-                        element_guid_str
-                    )
-                    element_from_guid = AllplanBaseElements.ElementsService.GetElement(
-                        element_guid
-                    )
-                    if element_from_guid and element_from_guid.IsValid():
-                        self.build_ele.SolidoConnection.value.element = (
-                            element_from_guid
-                        )
-                except Exception:
-                    pass
 
         if hasattr(self.build_ele, "SolidoGUID"):
             self.build_ele.SolidoGUID.value = element_guid_str
@@ -4573,74 +4504,6 @@ class NeoprenosScriptObject(BaseScriptObject):
 
         self.handles = handles
 
-        connect_to_ele = ConnectToElements()
-
-        if not self.is_free_mode:
-            if (
-                hasattr(self.build_ele, "SolidoConnection")
-                and self.build_ele.SolidoConnection.value.uuid
-            ):
-                uuid_str = str(self.build_ele.SolidoConnection.value.uuid)
-                if uuid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(uuid_str)
-            if len(connect_to_ele.connection_elements) == 0 and self.solid_info:
-                if self.solid_info.get("guid"):
-                    connect_to_ele.connection_elements.append(self.solid_info["guid"])
-                elif self.solid_info.get("element"):
-                    try:
-                        element_guid = str(
-                            self.solid_info["element"].GetModelElementUUID()
-                        )
-                        if element_guid != "00000000-0000-0000-0000-000000000000":
-                            connect_to_ele.connection_elements.append(element_guid)
-                    except Exception:
-                        pass
-            if (
-                len(connect_to_ele.connection_elements) == 0
-                and hasattr(self.build_ele, "SolidoGUID")
-                and self.build_ele.SolidoGUID.value
-            ):
-                guid_str = str(self.build_ele.SolidoGUID.value)
-                if guid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(guid_str)
-        else:
-            if (
-                hasattr(self.build_ele, "MuroConnection")
-                and self.build_ele.MuroConnection.value.uuid
-            ):
-                uuid_str = str(self.build_ele.MuroConnection.value.uuid)
-                if uuid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(uuid_str)
-            if len(connect_to_ele.connection_elements) == 0 and self.detected_wall_guid:
-                if self.detected_wall_guid != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(self.detected_wall_guid)
-            if len(connect_to_ele.connection_elements) == 0 and self.detected_wall:
-                try:
-                    wall_guid = str(self.detected_wall.GetModelElementUUID())
-                    if wall_guid != "00000000-0000-0000-0000-000000000000":
-                        connect_to_ele.connection_elements.append(wall_guid)
-                except Exception:
-                    pass
-            if (
-                len(connect_to_ele.connection_elements) == 0
-                and hasattr(self.build_ele, "MuroGUID")
-                and self.build_ele.MuroGUID.value
-            ):
-                guid_str = str(self.build_ele.MuroGUID.value)
-                if guid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(guid_str)
-
-        if len(connect_to_ele.connection_elements) == 0:
-            neo_log(
-                "_execute_create: sin conexion a muro/solido -> mensaje y CreateElementResult([])"
-            )
-            AllplanUtil.ShowMessageBox(
-                "Error: No se pudo establecer conexion con el elemento.\n\n"
-                "El neopreno necesita estar conectado a un muro o solido para guardarse correctamente.",
-                AllplanUtil.MB_OK,
-            )
-            return CreateElementResult([])
-
         self._save_state_to_build_ele()
 
         return_handles = handles if self._pending_create_edit else []
@@ -4648,7 +4511,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         neo_log(
             "_execute_create: return "
             f"model_elems={len(model_elem_list)} "
-            f"connect={len(connect_to_ele.connection_elements)} "
             f"handles={len(return_handles)} "
             f"multi_placement={return_multi_placement}"
         )
@@ -4657,7 +4519,6 @@ class NeoprenosScriptObject(BaseScriptObject):
             elements=model_elem_list,
             handles=return_handles,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=return_multi_placement,
         )
@@ -4799,67 +4660,6 @@ class NeoprenosScriptObject(BaseScriptObject):
             return float(translation.GetLength()) if translation else 0.0
         except Exception:
             return 0.0
-
-    def _build_connect_to_elements(self) -> ConnectToElements:
-        """Construye la conexión persistente al host para CREATE y MODIFY."""
-        connect_to_ele = ConnectToElements()
-
-        if not self.is_free_mode:
-            if (
-                hasattr(self.build_ele, "SolidoConnection")
-                and self.build_ele.SolidoConnection.value.uuid
-            ):
-                uuid_str = str(self.build_ele.SolidoConnection.value.uuid)
-                if uuid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(uuid_str)
-            if len(connect_to_ele.connection_elements) == 0 and self.solid_info:
-                if self.solid_info.get("guid"):
-                    connect_to_ele.connection_elements.append(self.solid_info["guid"])
-                elif self.solid_info.get("element"):
-                    try:
-                        element_guid = str(
-                            self.solid_info["element"].GetModelElementUUID()
-                        )
-                        if element_guid != "00000000-0000-0000-0000-000000000000":
-                            connect_to_ele.connection_elements.append(element_guid)
-                    except Exception:
-                        pass
-            if (
-                len(connect_to_ele.connection_elements) == 0
-                and hasattr(self.build_ele, "SolidoGUID")
-                and self.build_ele.SolidoGUID.value
-            ):
-                guid_str = str(self.build_ele.SolidoGUID.value)
-                if guid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(guid_str)
-        else:
-            if (
-                hasattr(self.build_ele, "MuroConnection")
-                and self.build_ele.MuroConnection.value.uuid
-            ):
-                uuid_str = str(self.build_ele.MuroConnection.value.uuid)
-                if uuid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(uuid_str)
-            if len(connect_to_ele.connection_elements) == 0 and self.detected_wall_guid:
-                if self.detected_wall_guid != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(self.detected_wall_guid)
-            if len(connect_to_ele.connection_elements) == 0 and self.detected_wall:
-                try:
-                    wall_guid = str(self.detected_wall.GetModelElementUUID())
-                    if wall_guid != "00000000-0000-0000-0000-000000000000":
-                        connect_to_ele.connection_elements.append(wall_guid)
-                except Exception:
-                    pass
-            if (
-                len(connect_to_ele.connection_elements) == 0
-                and hasattr(self.build_ele, "MuroGUID")
-                and self.build_ele.MuroGUID.value
-            ):
-                guid_str = str(self.build_ele.MuroGUID.value)
-                if guid_str != "00000000-0000-0000-0000-000000000000":
-                    connect_to_ele.connection_elements.append(guid_str)
-
-        return connect_to_ele
 
     def _sync_line_from_build_ele_insert_matrix(
         self, min_displacement_mm: float = 1.0
@@ -5348,10 +5148,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 view_world_projection = coord_input.GetViewWorldProjection()
             else:
                 view_world_projection = AllplanIFW.ViewWorldProjection()
-            transaction = PythonPartTransaction(
-                self.document,
-                connect_to_ele=result.connect_to_ele,
-            )
+            transaction = PythonPartTransaction(self.document)
             created_elements = transaction.execute(
                 placement_matrix=AllplanGeo.Matrix3D(),
                 view_world_projection=view_world_projection,
@@ -5787,14 +5584,6 @@ class NeoprenosScriptObject(BaseScriptObject):
         """
         overlay = self._get_inline_selection_preview_overlay()
         handles = self._build_inline_edit_handles_result().handles
-        connect_to_ele = ConnectToElements()
-        if hasattr(self.build_ele, "MuroGUID") and getattr(
-            self.build_ele.MuroGUID, "value", None
-        ):
-            mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
-            if mg:
-                connect_to_ele.connection_elements.append(mg)
-
         base_elements = list(model_list or [])
         preview_overlay = list(overlay)
         if not base_elements and preview_overlay:
@@ -5806,7 +5595,6 @@ class NeoprenosScriptObject(BaseScriptObject):
             handles=handles,
             preview_elements=preview_overlay,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=True,
         )
@@ -5910,10 +5698,7 @@ class NeoprenosScriptObject(BaseScriptObject):
                 view_world_projection = coord_input.GetViewWorldProjection()
             else:
                 view_world_projection = AllplanIFW.ViewWorldProjection()
-            transaction = PythonPartTransaction(
-                self.document,
-                connect_to_ele=result.connect_to_ele,
-            )
+            transaction = PythonPartTransaction(self.document)
             created_elements = transaction.execute(
                 placement_matrix=AllplanGeo.Matrix3D(),
                 view_world_projection=view_world_projection,
@@ -6344,11 +6129,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self._restored_from_saved_state:
             self._save_state_to_build_ele()
 
-        connect_to_ele = self._build_connect_to_elements()
         neo_log(
             "_execute_modify: return "
             f"model_elems={len(model_elem_list)} "
-            f"connect={len(connect_to_ele.connection_elements)} "
             f"handles={len(handles)}"
         )
 
@@ -6356,7 +6139,6 @@ class NeoprenosScriptObject(BaseScriptObject):
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
-            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=False,
         )
@@ -6501,7 +6283,6 @@ class NeoprenosScriptObject(BaseScriptObject):
                     placement_point=getattr(
                         cached, "placement_point", AllplanGeo.Point3D(0.0, 0.0, 0.0)
                     ),
-                    connect_to_ele=getattr(cached, "connect_to_ele", None),
                     uuid_parameter_name=getattr(
                         cached, "uuid_parameter_name", "PythonPartUUID"
                     ),

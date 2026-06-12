@@ -104,11 +104,12 @@
         </Parameter>
 
         <Parameter>
-            <Name>SolidoConnection</Name>
+            <Name>LegacySolidReferenceDisabled</Name>
             <Text>Conexión al Sólido</Text>
             <TextId>e_NEO_PP_307</TextId>
             <Value></Value>
-            <ValueType>TimeStampConnection</ValueType>
+            <ValueType>Text</ValueType>
+            <Persistent>No</Persistent>
             <Visible>False</Visible>
         </Parameter>
 
@@ -453,11 +454,12 @@
         </Parameter>
 
         <Parameter>
-            <Name>MuroConnection</Name>
+            <Name>LegacyWallReferenceDisabled</Name>
             <Text>Conexión al Muro</Text>
             <TextId>e_NEO_PP_346</TextId>
             <Value></Value>
-            <ValueType>TimeStampConnection</ValueType>
+            <ValueType>Text</ValueType>
+            <Persistent>No</Persistent>
             <Visible>False</Visible>
             <Enable>False</Enable>
             <ReadOnly>False</ReadOnly>
