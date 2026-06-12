@@ -615,14 +615,14 @@
     </Parameter>
 
     <Parameter>
-      <Name>MuroConnection</Name>
+      <Name>LegacyWallReferenceDisabled</Name>
       <Text>Conexión con muro</Text>
       <TextId>1009</TextId>
       <Value></Value>
       <Visible>False</Visible>
       <Enable>False</Enable>
-      <ValueType>TimeStampConnection</ValueType>
-      <Persistent>Model</Persistent>
+      <ValueType>Text</ValueType>
+      <Persistent>No</Persistent>
     </Parameter>
 
     <Parameter>

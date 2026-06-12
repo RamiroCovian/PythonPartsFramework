@@ -34,7 +34,7 @@ from ScriptObjectInteractors.OnCancelFunctionResult import OnCancelFunctionResul
 from TypeCollections.ModelEleList import ModelEleList
 from TypeCollections.ModificationElementList import ModificationElementList
 from PythonPart import PythonPart, PythonPartGroup, View2D3D
-from PythonPartTransaction import ConnectToElements, PythonPartTransaction
+from PythonPartTransaction import PythonPartTransaction
 from HandleProperties import HandleProperties
 from HandlePropertiesService import HandlePropertiesService
 from HandleParameterData import HandleParameterData
@@ -42,14 +42,14 @@ from HandleParameterType import HandleParameterType
 from HandleDirection import HandleDirection
 from BuildingElementAttributeList import BuildingElementAttributeList
 
-HOLE_DIAMETER = 14.0
+HOLE_DIAMETER = 18.0
 HOLE_RADIUS = HOLE_DIAMETER / 2.0
 
 ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.13-persistencia-completa-pythonparts-hijos"
+ANGULARES_SCRIPT_VERSION = "2.3.15-sin-asociacion-automatica-muro"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -4326,19 +4326,6 @@ class AngularLineScript(BaseScriptObject):
                     if not is_default or self._restored_from_saved_state:
                         self.line_result.input_line = AllplanGeo.Line3D(p1, p2)
 
-            muro_guid_prop = getattr(self.build_ele, "MuroGUID", None)
-            muro_connection_prop = getattr(self.build_ele, "MuroConnection", None)
-
-            if muro_guid_prop and hasattr(muro_guid_prop, "value"):
-                pass
-
-            if muro_connection_prop and hasattr(muro_connection_prop, "value"):
-                conn = muro_connection_prop.value
-                if hasattr(conn, "uuid"):
-                    pass
-                if hasattr(conn, "element"):
-                    pass
-
             if getattr(self, "is_modification_mode", False):
                 self._apply_face_context_from_build_ele_only()
                 return
@@ -4356,26 +4343,6 @@ class AngularLineScript(BaseScriptObject):
                 # self.wall_allplan_id = get_wall_ifc_id(wall_element)
                 if hasattr(self.build_ele, "MuroGUID"):
                     self.build_ele.MuroGUID.value = real_wall_guid
-
-                if hasattr(self.build_ele, "MuroConnection"):
-                    try:
-                        conn = self.build_ele.MuroConnection.value
-                        if (
-                            not hasattr(conn, "element")
-                            or not conn.element.IsValid()
-                            or (
-                                hasattr(conn, "uuid")
-                                and str(conn.uuid)
-                                == "00000000-0000-0000-0000-000000000000"
-                            )
-                        ):
-                            conn.element = wall_element
-                    except Exception as e:
-                        try:
-                            conn = self.build_ele.MuroConnection.value
-                            conn.element = wall_element
-                        except Exception as e2:
-                            pass
 
                 if getattr(self, "is_modification_mode", False):
                     self._apply_face_context_from_build_ele_only()
@@ -4429,25 +4396,6 @@ class AngularLineScript(BaseScriptObject):
                     if hasattr(self.build_ele, "MuroGUID"):
                         self.build_ele.MuroGUID.value = self.detected_wall_guid
 
-                    if hasattr(self.build_ele, "MuroConnection"):
-                        try:
-                            conn = self.build_ele.MuroConnection.value
-                            if (
-                                not hasattr(conn, "element")
-                                or not conn.element.IsValid()
-                                or (
-                                    hasattr(conn, "uuid")
-                                    and str(conn.uuid)
-                                    == "00000000-0000-0000-0000-000000000000"
-                                )
-                            ):
-                                conn.element = wall_element
-                        except Exception:
-                            try:
-                                conn = self.build_ele.MuroConnection.value
-                                conn.element = wall_element
-                            except Exception:
-                                pass
             else:
                 pass
 
@@ -4534,7 +4482,6 @@ class AngularLineScript(BaseScriptObject):
         if self.is_free_mode:
             return False
 
-        has_connection = hasattr(self.build_ele, "MuroConnection")
         has_guid = hasattr(self.build_ele, "MuroGUID")
         has_uv = (
             hasattr(self.build_ele, "PosicionRelativaU")
@@ -4546,24 +4493,11 @@ class AngularLineScript(BaseScriptObject):
         if not has_uv:
             return False
 
-        if has_connection:
-            conn = self.build_ele.MuroConnection.value
-            return hasattr(conn, "element") and conn.element.IsValid()
-
         return has_guid and bool(self.build_ele.MuroGUID.value)
 
     def _get_wall_element(self):
         """Obtiene el elemento muro desde la conexión o GUID"""
         wall_element = None
-
-        if hasattr(self.build_ele, "MuroConnection"):
-            conn = self.build_ele.MuroConnection.value
-            if conn:
-                if hasattr(conn, "element"):
-                    if conn.element.IsValid():
-                        wall_element = conn.element
-        else:
-            pass
 
         if not wall_element or (
             hasattr(wall_element, "IsNull") and wall_element.IsNull()
@@ -5396,26 +5330,6 @@ class AngularLineScript(BaseScriptObject):
                 if hasattr(self.build_ele, "MuroGUID"):
                     self.build_ele.MuroGUID.value = self.detected_wall_guid
 
-                if hasattr(self.build_ele, "MuroConnection"):
-                    try:
-                        conn = self.build_ele.MuroConnection.value
-                        if (
-                            not hasattr(conn, "element")
-                            or not conn.element.IsValid()
-                            or (
-                                hasattr(conn, "uuid")
-                                and str(conn.uuid)
-                                == "00000000-0000-0000-0000-000000000000"
-                            )
-                        ):
-                            conn.element = wall_element
-                    except Exception:
-                        try:
-                            conn = self.build_ele.MuroConnection.value
-                            conn.element = wall_element
-                        except Exception:
-                            pass
-
             if hasattr(self.build_ele, "LongitudLinea"):
                 line_length = vector_from_points(new_start, new_end).GetLength()
                 self.build_ele.LongitudLinea.value = line_length
@@ -5694,9 +5608,6 @@ class AngularLineScript(BaseScriptObject):
         self.face_local_system = None
 
         # self.wall_allplan_id = get_wall_ifc_id(selected_element)
-
-        if hasattr(self.build_ele, "MuroConnection"):
-            self.build_ele.MuroConnection.value.element = selected_element
 
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
@@ -6126,7 +6037,6 @@ class AngularLineScript(BaseScriptObject):
         self.face_normal = self.face_select_result.face_normal
         self.face_polygon = self.face_select_result.face_polygon
 
-        element_guid_str = self.face_select_result.element_guid
         selected_element = self.face_select_result.element
 
         self.detected_wall = selected_element
@@ -6135,29 +6045,6 @@ class AngularLineScript(BaseScriptObject):
         self.detected_wall_guid = real_wall_guid
 
         # self.wall_allplan_id = get_wall_ifc_id(selected_element)
-
-        if hasattr(self.build_ele, "MuroConnection"):
-            self.build_ele.MuroConnection.value.element = selected_element
-
-            if (
-                str(self.build_ele.MuroConnection.value.uuid)
-                == "00000000-0000-0000-0000-000000000000"
-            ):
-                element_guid = (
-                    AllplanEleAdapter.BaseElementAdapterParentElementService.FromString(
-                        element_guid_str
-                    )
-                )
-                element_from_guid = AllplanBaseElements.ElementsService.GetElement(
-                    element_guid
-                )
-
-                if element_from_guid and element_from_guid.IsValid():
-                    self.build_ele.MuroConnection.value.element = element_from_guid
-                    real_wall_guid = str(element_from_guid.GetModelElementUUID())
-                    self.detected_wall_guid = real_wall_guid
-        else:
-            pass
 
         if hasattr(self.build_ele, "MuroGUID"):
             self.build_ele.MuroGUID.value = real_wall_guid
@@ -6650,10 +6537,7 @@ class AngularLineScript(BaseScriptObject):
             else:
                 view_world_projection = AllplanIFW.ViewWorldProjection()
 
-            transaction = PythonPartTransaction(
-                self.document,
-                connect_to_ele=result.connect_to_ele,
-            )
+            transaction = PythonPartTransaction(self.document)
             created_elements = transaction.execute(
                 placement_matrix=AllplanGeo.Matrix3D(),
                 view_world_projection=view_world_projection,
@@ -8793,14 +8677,6 @@ class AngularLineScript(BaseScriptObject):
         """
         overlay = self._get_inline_selection_preview_overlay()
         handles = self._build_inline_edit_handles_result().handles
-        connect_to_ele = ConnectToElements()
-        if hasattr(self.build_ele, "MuroGUID") and getattr(
-            self.build_ele.MuroGUID, "value", None
-        ):
-            mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
-            if mg:
-                connect_to_ele.connection_elements.append(mg)
-
         base_elements = list(model_list or [])
         preview_overlay = list(overlay)
         if not base_elements and preview_overlay:
@@ -8812,7 +8688,6 @@ class AngularLineScript(BaseScriptObject):
             handles=handles,
             preview_elements=preview_overlay,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=True,
         )
@@ -8890,10 +8765,7 @@ class AngularLineScript(BaseScriptObject):
             else:
                 view_world_projection = AllplanIFW.ViewWorldProjection()
 
-            transaction = PythonPartTransaction(
-                self.document,
-                connect_to_ele=result.connect_to_ele,
-            )
+            transaction = PythonPartTransaction(self.document)
             created_elements = transaction.execute(
                 placement_matrix=AllplanGeo.Matrix3D(),
                 view_world_projection=view_world_projection,
@@ -9373,25 +9245,6 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "MuroGUID"):
                 self.build_ele.MuroGUID.value = real_wall_guid
 
-            if hasattr(self.build_ele, "MuroConnection"):
-                try:
-                    conn = self.build_ele.MuroConnection.value
-                    if (
-                        not hasattr(conn, "element")
-                        or not conn.element.IsValid()
-                        or (
-                            hasattr(conn, "uuid")
-                            and str(conn.uuid) == "00000000-0000-0000-0000-000000000000"
-                        )
-                    ):
-                        conn.element = self.detected_wall
-                except Exception:
-                    try:
-                        conn = self.build_ele.MuroConnection.value
-                        conn.element = self.detected_wall
-                    except Exception:
-                        pass
-
         line = self._apply_manual_z_to_distribution_line(line, update_from_line=True)
         self.line_result.input_line = line
 
@@ -9778,7 +9631,6 @@ class AngularLineScript(BaseScriptObject):
                     placement_point=getattr(
                         cached, "placement_point", AllplanGeo.Point3D(0.0, 0.0, 0.0)
                     ),
-                    connect_to_ele=getattr(cached, "connect_to_ele", None),
                     uuid_parameter_name=getattr(
                         cached, "uuid_parameter_name", "PythonPartUUID"
                     ),
@@ -10704,11 +10556,6 @@ class AngularLineScript(BaseScriptObject):
             )
         )
 
-        #  Crear connect_to_ele si hay muro
-        connect_to_ele = ConnectToElements()
-        if hasattr(self.build_ele, "MuroGUID") and self.build_ele.MuroGUID.value:
-            connect_to_ele.connection_elements.append(self.build_ele.MuroGUID.value)
-
         # Guardar SavedState al final (CREATE siempre)
         self._save_state_to_build_ele()
 
@@ -10722,7 +10569,6 @@ class AngularLineScript(BaseScriptObject):
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0.0, 0.0, 0.0),
-            connect_to_ele=connect_to_ele,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=distribution_type == DISTRIBUTION_INDIVIDUAL,
         )
@@ -11379,20 +11225,13 @@ class AngularLineScript(BaseScriptObject):
             None if self.is_free_mode else self.face_point,
         )
 
-        connect_to_ele_edit = ConnectToElements()
-        if hasattr(self.build_ele, "MuroGUID") and getattr(
-            self.build_ele.MuroGUID, "value", None
-        ):
-            mg = str(self.build_ele.MuroGUID.value or "").strip().strip("'").strip('"')
-            if mg:
-                connect_to_ele_edit.connection_elements.append(mg)
-
         multi_pl = (
             normalize_distribution_type(distribution_type_edit)
             == DISTRIBUTION_INDIVIDUAL
         )
 
-        #  RETURN FINAL: mismo contrato que CREATE (connect_to_ele + multi_placement) para que Allplan sustituya el PPG bien.
+        # RETURN FINAL sin asociacion automatica al muro. El GUID y el sistema
+        # local de la cara siguen persistidos como referencia geometrica.
         #  Si se pasa elements_to_delete, Allplan borra el grupo y luego añade el nuevo; un fallo en ese flujo hace que el angular desaparezca.
         self.state = STOPPED
         print(f"[EDIT]  Edición completada: {len(model_elem_list)} elementos")
@@ -11400,7 +11239,6 @@ class AngularLineScript(BaseScriptObject):
             elements=model_elem_list,
             handles=handles,
             placement_point=AllplanGeo.Point3D(0, 0, 0),
-            connect_to_ele=connect_to_ele_edit,
             uuid_parameter_name="PythonPartUUID",
             multi_placement=multi_pl,
         )
