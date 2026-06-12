@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.12-eliminar-angular-grupal-posicionado"
+ANGULARES_SCRIPT_VERSION = "2.3.13-persistencia-completa-pythonparts-hijos"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -10176,6 +10176,64 @@ class AngularLineScript(BaseScriptObject):
                 if is_free_mode is not None:
                     params["FreeMode"] = bool(is_free_mode)
 
+                # Los volumenes internos tambien son PythonParts editables. Allplan puede
+                # iniciar MODIFY desde uno de ellos en lugar del PythonPartGroup padre,
+                # por lo que deben llevar el mismo contrato geometrico que el grupo.
+                # StartX/EndX se conservan para trazabilidad y compatibilidad.
+                params.update(
+                    {
+                        "PuntoInicial": start_point,
+                        "PuntoFinal": end_point,
+                        "TipoAngular": angular_key or "",
+                        "TipoDistribucion": (
+                            "Individual"
+                            if self._get_distribution_type()
+                            == DISTRIBUTION_INDIVIDUAL
+                            else "Grupal"
+                        ),
+                        "SeparacionAngulares": float(
+                            getattr(
+                                getattr(self.build_ele, "SeparacionAngulares", None),
+                                "value",
+                                10.0,
+                            )
+                            or 10.0
+                        ),
+                        "RotacionManual": float(rotation_deg or 0.0),
+                        "RotacionEjeX": self._get_angle_degrees("RotacionEjeX"),
+                        "RotacionEjeY": self._get_angle_degrees("RotacionEjeY"),
+                        "InvertirAngular": bool(invert_side),
+                        "SiLlevaNeopreno": bool(
+                            getattr(
+                                getattr(self.build_ele, "SiLlevaNeopreno", None),
+                                "value",
+                                False,
+                            )
+                        ),
+                        "UsarValorZManual": self._is_manual_z_enabled(),
+                        "ValorZIndividual": float(
+                            getattr(
+                                getattr(self.build_ele, "ValorZIndividual", None),
+                                "value",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                        "pmp_pare": wall_pare,
+                        "pmp_pare_name": wall_name,
+                        "z_unique": float(
+                            getattr(
+                                getattr(self.build_ele, "z_unique", None),
+                                "value",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                    }
+                )
+                params.update(self._wall_face_params_from_build_ele())
+                params["SavedState"] = self._serialize_state_to_json()
+
                 hash_params = {
                     "Index": idx,
                     "ElementType": params.get("ElementType", ""),
@@ -10715,8 +10773,43 @@ class AngularLineScript(BaseScriptObject):
             if hasattr(self.build_ele, "PuntoFinal")
             else None
         )
-        # Fallback a SavedState SOLO si falta algo
-        if start_point is None or end_point is None:
+        saved_start = saved_state_to_point3d(parsed_saved_state_edit, "p0")
+        saved_end = saved_state_to_point3d(parsed_saved_state_edit, "p1")
+
+        # (0,0,0)->(1000,0,0) es el valor inicial del .pyp, no evidencia de
+        # persistencia valida. Si SavedState contiene otra linea, debe prevalecer.
+        points_are_pyp_defaults = False
+        if start_point is not None and end_point is not None:
+            points_are_pyp_defaults = (
+                abs(float(start_point.X)) <= 1e-6
+                and abs(float(start_point.Y)) <= 1e-6
+                and abs(float(start_point.Z)) <= 1e-6
+                and abs(float(end_point.X) - 1000.0) <= 1e-6
+                and abs(float(end_point.Y)) <= 1e-6
+                and abs(float(end_point.Z)) <= 1e-6
+            )
+
+        restore_saved_line = (
+            saved_start is not None
+            and saved_end is not None
+            and (
+                start_point is None
+                or end_point is None
+                or points_are_pyp_defaults
+            )
+        )
+        if restore_saved_line:
+            start_point, end_point = saved_start, saved_end
+            if hasattr(self.build_ele, "PuntoInicial"):
+                self.build_ele.PuntoInicial.value = start_point
+            if hasattr(self.build_ele, "PuntoFinal"):
+                self.build_ele.PuntoFinal.value = end_point
+            reason = "defaults del .pyp" if points_are_pyp_defaults else "puntos ausentes"
+            print(
+                f"[EDIT] Puntos desde SavedState ({reason}): "
+                f"{start_point} â†’ {end_point}"
+            )
+        elif start_point is None or end_point is None:
             state = parsed_saved_state_edit
             p0_fallback = saved_state_to_point3d(state, "p0")
             p1_fallback = saved_state_to_point3d(state, "p1")

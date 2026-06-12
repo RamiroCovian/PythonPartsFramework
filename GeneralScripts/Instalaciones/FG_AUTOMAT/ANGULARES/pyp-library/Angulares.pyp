@@ -20,7 +20,7 @@
       <Value>ANG200_L460</Value>
       <ValueType>RadioButtonGroup</ValueType>
       <TextId>1001</TextId>
-      <Persistent>No</Persistent>
+      <Persistent>Model</Persistent>
 
       <Parameter>
         <Name>Separador1</Name>
@@ -209,6 +209,7 @@
       <ValueType>Length</ValueType>
       <Visible>False</Visible>
       <TextId>1005</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -272,6 +273,7 @@
       <Enable>False</Enable>
       <ReadOnly>z_unique > 0</ReadOnly>
       <TextId>2007</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -341,7 +343,7 @@
       <Value>ANG200_L460</Value>
       <ValueType>RadioButtonGroup</ValueType>
       <TextId>1001</TextId>
-      <Persistent>No</Persistent>
+      <Persistent>Model</Persistent>
 
       <Parameter>
         <Name>Separador1_Grupal</Name>
@@ -491,6 +493,7 @@
       <Value>10</Value>
       <ValueType>Length</ValueType>
       <TextId>1005</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -529,6 +532,7 @@
       <Enable>False</Enable>
       <ReadOnly>z_unique > 0</ReadOnly>
       <TextId>2007</TextId>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
@@ -844,7 +848,7 @@
       <Value>0</Value>
       <ValueType>Double</ValueType>
       <Visible>False</Visible>
-      <Persistent>No</Persistent>
+      <Persistent>Model</Persistent>
     </Parameter>
 
     <Parameter>
