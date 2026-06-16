@@ -164,13 +164,6 @@
             <Visible>True</Visible>
 
             <Parameter>
-                <Name>XPSthicknessInd</Name>
-                <Text>XPS gruix manual</Text>
-                <Value>False</Value>
-                <ValueType>CheckBox</ValueType>
-            </Parameter>
-
-            <Parameter>
                 <Name>XPSthickness</Name>
                 <Text>Grosor</Text>
                 <Value>295</Value>
@@ -306,13 +299,6 @@
                 <ValueType>Double</ValueType>
             </Parameter>
 
-            <Parameter>
-                <Name>xps_type</Name>
-                <Text>Type</Text>
-                <Value>XPS</Value>
-                <ValueList>XPS|PIR</ValueList>
-                <ValueType>StringComboBox</ValueType>
-            </Parameter>
 
             <Parameter>
                 <Name>id_premarc</Name>
@@ -599,6 +585,7 @@
                 <Text>Altura Persianas</Text>
                 <Value>260</Value>
                 <ValueType>Double</ValueType>
+                <Persistent>Model</Persistent>
             </Parameter>
 
             <Parameter>
@@ -608,6 +595,7 @@
                 <ValueType>Double</ValueType>
                 <Enable>ComboBoxPersianas != "LAMISOL VIST"</Enable>
                 <MaxValue>(manual_thickness if enable_manual_thickness else thickness) - thickness_wall if ComboBoxPersianas == "METALUNIC VIST" else 100000</MaxValue>
+                <Persistent>Model</Persistent>
             </Parameter>
 
 
@@ -891,7 +879,63 @@
         </Parameter>
     </Page>
 
-    <!-- <Page>
+    <Page>
+        <Name>XPS_zone</Name>
+        <Text>Propiedades XPS </Text>
+
+        <Parameter>
+            <Name>xps_type</Name>
+            <Text>Type</Text>
+            <Value>XPS</Value>
+            <ValueList>XPS|PIR</ValueList>
+            <ValueType>StringComboBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>XPSthicknessInd</Name>
+            <Text>XPS gruix manual</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>ShowXPS</Name>
+            <Text>Mostrar XPS completa</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableTopXPS</Name>
+            <Text>Deshabilitar XPS superior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableBottomXPS</Name>
+            <Text>Deshabilitar XPS inferior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableLeftXPS</Name>
+            <Text>Deshabilitar XPS izquierda</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableRightXPS</Name>
+            <Text>Deshabilitar XPS derecha</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+    </Page>
+
+    <Page>
         <Name>__HiddenPage__</Name>
         <Text></Text>
         <Parameter>
@@ -902,6 +946,6 @@
             <Persistent>Model</Persistent>
         </Parameter>
 
-    </Page> -->
+    </Page>
 
 </Element>
