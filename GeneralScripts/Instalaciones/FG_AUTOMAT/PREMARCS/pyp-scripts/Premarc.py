@@ -7735,17 +7735,6 @@ class PremarcScriptObject(BaseScriptObject):
                     elems.remove(cuboid_top)
                     if add_xps_bool_fals_calaix:
                         elems.extend(self.create_xps_fals_calaix())
-                        elems.extend(
-                            self.create_upper_xps_side_extensions(
-                                self.thickness - wall_thickness_xps - 3,
-                                self.build_ele.PersianaHeight.value,
-                            )
-                        )
-                        upper_top_extensions = self.create_upper_xps_top_extension(
-                            self.thickness - wall_thickness_xps - 3,
-                            self.build_ele.PersianaHeight.value,
-                        )
-                        elems.extend(upper_top_extensions)
             case "LAMISOL VIST":
                 if cuboid_top in elems:
                     elems.remove(cuboid_top)
@@ -10789,8 +10778,13 @@ class PremarcScriptObject(BaseScriptObject):
 
     def create_box_shutter(self):  # Cajon de persiana
         # Box shutters
+        wall_thickness_xps = self._xps_wall_thickness_mm()
         BOX_SHUTTER_HEIGHT = self.build_ele.PersianaHeight.value
-        BOX_SHUTTER_WIDTH = self.detected_wall_thickness if self.build_ele.ComboBoxPersianas.value == "LAMISOL VIST" else self.build_ele.PersianaWidth.value
+        BOX_SHUTTER_WIDTH = (
+            wall_thickness_xps
+            if self.build_ele.ComboBoxPersianas.value == "LAMISOL VIST"
+            else self.build_ele.PersianaWidth.value
+        )
         box_shutter = AllplanGeo.Polygon3D()
         box_shutter += AllplanGeo.Point3D(0, 0, 0)
         box_shutter += AllplanGeo.Point3D(0, 0, BOX_SHUTTER_HEIGHT)
