@@ -135,7 +135,7 @@ except ImportError:
     print("instalando paquetes: formulas")
     import urllib3 as urllib3
 
-XPS_LAYER = "PMP_XPS_PREMARCS"
+XPS_LAYER = "XPS_PREMARCS"
 FRAME_LAYER = "PREMARCS"
 WINDOW_LAYER = "PMP_FUSTERIES"
 AMPIT_LAYER = "PMP_AMPITS"
@@ -6034,6 +6034,18 @@ class PremarcScriptObject(BaseScriptObject):
             return manual_value
         return 40.0 if xps_type == "XPS" else 120.0
 
+    def _xps_wall_thickness_mm(self) -> float:
+        """Return the wall thickness reference used by XPS calculations.
+
+        XPS must be driven by the manual wall thickness from the palette, not by
+        auto-detected host wall thickness, because detection is not reliable
+        enough for production geometry.
+        """
+        try:
+            return float(self.build_ele.thickness_wall.value or 0.0)
+        except Exception:
+            return 0.0
+
     def _build_xps_premarc_detail(self) -> str:
         """Build the PMP_XPS_PREMARC_DETAIL attribute string for the current state."""
         try:
@@ -7593,12 +7605,13 @@ class PremarcScriptObject(BaseScriptObject):
         return model_ele_list
 
     def create_xps_premarc(self):
+        wall_thickness_xps = self._xps_wall_thickness_mm()
 
-        if self.thickness <= self.build_ele.thickness_wall.value:
+        if self.thickness <= wall_thickness_xps:
             return []
 
         xps_thickness = self.xps_thickness if self.xps_thickness_ind else (40 if self.xps_type == "XPS" else 120)
-        xps_depth = self.thickness - self.build_ele.thickness_wall.value - 3
+        xps_depth = self.thickness - wall_thickness_xps - 3
 
         pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0 - xps_thickness, 0 + 3, 0 - xps_thickness))
         pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0 - xps_thickness, 0 + 3, 0 + self.heigh))
@@ -7659,31 +7672,101 @@ class PremarcScriptObject(BaseScriptObject):
 
 
         # Manage Disable XPS for Persianas
-        add_xps_bool = self.thickness - self.detected_wall_thickness - self.build_ele.PersianaWidth.value > xps_thickness
-        add_xps_bool_fals_calaix = self.thickness - self.detected_wall_thickness - 3 > xps_thickness
+        metalunic_upper_xps_depth = xps_depth
+        metalunic_inner_xps_depth = (
+            self.thickness
+            - wall_thickness_xps
+            - self.build_ele.PersianaWidth.value
+            - 3
+        )
+        add_xps_bool = metalunic_upper_xps_depth > 0
+        add_xps_bool_fals_calaix = self.thickness - wall_thickness_xps - 3 > xps_thickness
+        upper_top_extensions = []
         match self.build_ele.ComboBoxPersianas.value:
             case "METALUNIC VIST":
+                print(
+                    "[Premarc][XPS][METALUNIC] "
+                    f"thickness={float(self.thickness):.1f}, "
+                    f"wall_manual={float(wall_thickness_xps):.1f}, "
+                    f"persiana_width={float(self.build_ele.PersianaWidth.value):.1f}, "
+                    f"persiana_height={float(self.build_ele.PersianaHeight.value):.1f}, "
+                    f"xps_thickness={float(xps_thickness):.1f}, "
+                    f"metalunic_upper_xps_depth={float(metalunic_upper_xps_depth):.1f}, "
+                    f"metalunic_inner_xps_depth={float(metalunic_inner_xps_depth):.1f}"
+                )
                 if cuboid_top in elems:
                     elems.remove(cuboid_top)
                     if add_xps_bool:
+                        print(
+                            "[Premarc][XPS][METALUNIC] "
+                            "Creando XPS metalunic + laterales superiores + tapa superior"
+                        )
                         elems.extend(self.create_xps_metalunic())
+                        elems.extend(
+                            self.create_upper_xps_side_extensions(
+                                metalunic_upper_xps_depth,
+                                self.build_ele.PersianaHeight.value,
+                            )
+                        )
+                        upper_top_extensions = self.create_upper_xps_top_extension(
+                            metalunic_upper_xps_depth,
+                            self.build_ele.PersianaHeight.value,
+                        )
+                        elems.extend(upper_top_extensions)
+                    else:
+                        print(
+                            "[Premarc][XPS][METALUNIC] "
+                            "No se crea XPS superior: metalunic_upper_xps_depth <= 0"
+                        )
             case "MONOBLOCK OCULT":
                 if cuboid_top in elems:
                     elems.remove(cuboid_top)
+                    elems.extend(
+                        self.create_upper_xps_side_extensions(
+                            xps_depth, self.build_ele.PersianaHeight.value
+                        )
+                    )
+                    upper_top_extensions = self.create_upper_xps_top_extension(
+                        xps_depth, self.build_ele.PersianaHeight.value
+                    )
+                    elems.extend(upper_top_extensions)
             case "FALS CALAIX":
                 if cuboid_top in elems:
                     elems.remove(cuboid_top)
                     if add_xps_bool_fals_calaix:
                         elems.extend(self.create_xps_fals_calaix())
+                        elems.extend(
+                            self.create_upper_xps_side_extensions(
+                                self.thickness - wall_thickness_xps - 3,
+                                self.build_ele.PersianaHeight.value,
+                            )
+                        )
+                        upper_top_extensions = self.create_upper_xps_top_extension(
+                            self.thickness - wall_thickness_xps - 3,
+                            self.build_ele.PersianaHeight.value,
+                        )
+                        elems.extend(upper_top_extensions)
             case "LAMISOL VIST":
                 if cuboid_top in elems:
                     elems.remove(cuboid_top)
+                    elems.extend(
+                        self.create_upper_xps_side_extensions(
+                            xps_depth, self.build_ele.PersianaHeight.value
+                        )
+                    )
+                    upper_top_extensions = self.create_upper_xps_top_extension(
+                        xps_depth, self.build_ele.PersianaHeight.value
+                    )
+                    elems.extend(upper_top_extensions)
 
 
         # Manage Disable XPS
         if self.build_ele.DisableTopXPS.value:
             if cuboid_top in elems:
                 elems.remove(cuboid_top)
+            for upper_top in upper_top_extensions:
+                if upper_top in elems:
+                    elems.remove(upper_top)
             # Check if XPS enters the space available
 
 
@@ -7701,15 +7784,16 @@ class PremarcScriptObject(BaseScriptObject):
 
 
     def create_xps_metalunic(self):
+        wall_thickness_xps = self._xps_wall_thickness_mm()
         xps_thickness = self.xps_thickness if self.xps_thickness_ind else (40 if self.xps_type == "XPS" else 120)
-        xps_depth = self.thickness - self.detected_wall_thickness - self.build_ele.PersianaWidth.value - 3
+        xps_depth = self.thickness - wall_thickness_xps - self.build_ele.PersianaWidth.value - 3
 
         position_vertical = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D( -xps_thickness, 0 , 0))
         position_horizontal = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D( -xps_thickness, 0 , 0))
 
         if xps_depth > 0:
             cuboid_vertical = AllplanGeo.Polyhedron3D.CreateCuboid(position_vertical, self.width + (xps_thickness * 2), xps_thickness, self.build_ele.PersianaHeight.value)
-            cuboid_vertical = AllplanGeo.Move(cuboid_vertical, AllplanGeo.Vector3D(0,-(self.detected_wall_thickness + self.build_ele.PersianaWidth.value + xps_thickness),0))
+            cuboid_vertical = AllplanGeo.Move(cuboid_vertical, AllplanGeo.Vector3D(0,-(wall_thickness_xps + self.build_ele.PersianaWidth.value + xps_thickness),0))
 
             cuboid_horizontal = AllplanGeo.Polyhedron3D.CreateCuboid(position_horizontal, self.width + (xps_thickness * 2), xps_depth, xps_thickness)
             cuboid_horizontal = AllplanGeo.Move(cuboid_horizontal, AllplanGeo.Vector3D(0,-(self.thickness - 3),0))
@@ -7728,8 +7812,9 @@ class PremarcScriptObject(BaseScriptObject):
         return []
 
     def create_xps_fals_calaix(self):
+        wall_thickness_xps = self._xps_wall_thickness_mm()
         xps_thickness = self.xps_thickness if self.xps_thickness_ind else (40 if self.xps_type == "XPS" else 120)
-        xps_depth = self.thickness - self.detected_wall_thickness - 3
+        xps_depth = self.thickness - wall_thickness_xps - 3
 
         position_horizontal = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D( -xps_thickness, 0 , 0))
 
@@ -7739,6 +7824,63 @@ class PremarcScriptObject(BaseScriptObject):
             return [cuboid_horizontal]
 
         return []
+
+    def create_upper_xps_side_extensions(self, depth: float, height: float):
+        """Create the two XPS side extensions above the opening top.
+
+        Local reference:
+        - opening top plane is z=0 after the common move(0, -thickness, -heigh)
+        - positive local Z grows upward above the opening
+        """
+        if depth <= 0 or height <= 0:
+            return []
+
+        xps_thickness = (
+            self.xps_thickness
+            if self.xps_thickness_ind
+            else (40 if self.xps_type == "XPS" else 120)
+        )
+
+        pos_left_top = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(-xps_thickness, 3, self.heigh)
+        )
+        pos_right_top = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(self.width, 3, self.heigh)
+        )
+
+        cuboid_left_top = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_left_top, xps_thickness, depth, height
+        )
+        cuboid_right_top = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_right_top, xps_thickness, depth, height
+        )
+
+        move_vec = AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+        cuboid_left_top = AllplanGeo.Move(cuboid_left_top, move_vec)
+        cuboid_right_top = AllplanGeo.Move(cuboid_right_top, move_vec)
+        return [cuboid_left_top, cuboid_right_top]
+
+    def create_upper_xps_top_extension(self, depth: float, height: float):
+        """Create the XPS top piece above the shutter zone."""
+        if depth <= 0 or height <= 0:
+            return []
+
+        xps_thickness = (
+            self.xps_thickness
+            if self.xps_thickness_ind
+            else (40 if self.xps_type == "XPS" else 120)
+        )
+
+        pos_top_upper = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(-xps_thickness, 3, self.heigh + height)
+        )
+        cuboid_top_upper = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_top_upper, self.width + (xps_thickness * 2), depth, xps_thickness
+        )
+        cuboid_top_upper = AllplanGeo.Move(
+            cuboid_top_upper, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+        )
+        return [cuboid_top_upper]
 
     # TODO: MODIFICACION PRUEBAS XPS L
 
