@@ -542,8 +542,18 @@ AMPIT_TYPE_SPECS = {
     "PAVIMENTO":      {"grosor": 11, "grosor_tope": 0,  "tope": 0,  "sobresaliente": 0,  "baseline_protrusion": 0,  "remate": 0, "color": 19, "layer": AMPIT_LAYER},
 }
 
-IFC_ID_ATTRIBUTE_ID = 683
+# IMP IMPERMEABILIZACIONES — 3 tipos. grosor en mm (Z), color de la paleta
+# del proyecto Allplan (6=rojo, 4=verde, 3=cyan/turquesa según paleta enviada
+# por el dev). code A/B/C es el valor legacy del atributo
+# PMP_TIPUS_IMPERMEABILITZACIO ya serializado en archivos viejos: mantener
+# para backward compat.
+IMPERM_TYPE_SPECS = {
+    "Water-Stop":     {"grosor": 1.0, "color": 6, "code": "C", "layer": IMPERM_LAYER},
+    "PVC":            {"grosor": 1.5, "color": 4, "code": "B", "layer": IMPERM_LAYER},
+    "Tela Asfàltica": {"grosor": 3.0, "color": 3, "code": "A", "layer": IMPERM_LAYER},
+}
 
+IFC_ID_ATTRIBUTE_ID = 683
 
 def create_element_hash(element_type: str, stable: bool = False, **params) -> str:
     # En modificacion debe ser estable para no perder relaciones del PPG.
@@ -7561,30 +7571,33 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in ampit_2d:
                 model_ele_list.append_geometry_2d(elem, props_ampit_typed)
 
-        layer_imperm_id = AllplanBaseElements.LayerService.GetIDByShortName(
-            IMPERM_LAYER, self.document
-        )
-        props_imperm = AllplanBaseElements.CommonProperties()
-        props_imperm.Layer = layer_imperm_id
+        if self.build_ele.EnableImpermeabilizacio.value:
+            layer_imperm_id = AllplanBaseElements.LayerService.GetIDByShortName(IMPERM_LAYER, self.document)
+            props_imperm = AllplanBaseElements.CommonProperties()
+            props_imperm.Layer = layer_imperm_id
 
-        if self.build_ele.imperm_type.value == "Tela Asfàltica":
-            imperm_type = "A"
-            props_imperm.Color = 122
-        elif self.build_ele.imperm_type.value == "PVC":
-            imperm_type = "B"
-            props_imperm.Color = 74
-        else:
-            imperm_type = "C"
-            props_imperm.Color = 106
+            imperm_type_name = self.build_ele.imperm_type.value
+            imperm_spec = IMPERM_TYPE_SPECS.get(
+                imperm_type_name, IMPERM_TYPE_SPECS["Water-Stop"]
+            )
+            imperm_type = imperm_spec["code"]
+            props_imperm.Color = imperm_spec["color"]
 
-        imperm = self.create_impermeabilitzacio()
-        for elem in imperm:
-            model_ele_list.append_geometry_3d(elem, props_imperm)
+            imperm_model = self._resolve_imperm_model()
+            imperm_detail = self._resolve_imperm_detail(imperm_type_name, imperm_model)
+            imperm_muntatge = self.build_ele.imperm_muntatge.value
+
+            imperm = self.create_impermeabilitzacio()
+            for elem in imperm:
+                model_ele_list.append_geometry_3d(elem, props_imperm)
 
         imperm_attribute_list = BuildingElementAttributeList()
         imperm_attribute_list.add_attribute(
             self.pmp_tipus_impermeabilitzacio_id, imperm_type
         )
+        if imperm_detail:
+            imperm_attribute_list.add_attribute(self.pmp_fg_fus_tipus_impermeabilitzacio_detail_id, imperm_detail)
+        imperm_attribute_list.add_attribute(self.pmp_fg_fusteria_tipus_muntatge_id, imperm_muntatge)
         self._add_shared_generated_element_attributes(imperm_attribute_list)
         init_i = len(model_ele_list) - len(imperm)
         for i in range(init_i, len(model_ele_list)):
@@ -8760,14 +8773,23 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _u_accessory_bottom_plane_z(self) -> float:
         """
-        Z of the lowest face of the U-beam (z0): opening plane minus U_PROFILE_Z_INTO_AMPIT_DIP_MM
-        so the profile sits one step into the premarc dip (same magnitude as frame_bottom extrusion).
+        Z of the lowest face of the U-beam (z0).
+
+        Per Arnau 2026-06-11: the U must sit ABOVE the imp + premarco lip.
+        Previously the formula subtracted U_PROFILE_Z_INTO_AMPIT_DIP_MM (=3)
+        which sank the U into the dip and let the imp rise leg poke through
+        the top. Two corrections:
+
+        1. Drop the `- dip` so the U sits flush with the sill top (+3mm lift
+           relative to the previous formula — the "3mm más arriba" Arnau
+           asked for, salva the premarco lip).
+        2. Add `+ grosor_imp` when impermeabilizacio is active so the imp
+           slab fits between the premarco and the U bottom face.
         """
         adj = float(U_PROFILE_BASE_Z_ADJUST_MM)
         z_top = self._u_sill_top_z_mm()
         eps = float(U_SILL_CONTACT_Z_EPSILON_MM)
-        dip = float(U_PROFILE_Z_INTO_AMPIT_DIP_MM)
-        return z_top + eps + adj - dip
+        return z_top + eps + adj + self._grosor_imp_mm()
 
     def _u_channel_bottom(self) -> AllplanGeo.Polyhedron3D:
         """
@@ -12016,6 +12038,18 @@ class PremarcScriptObject(BaseScriptObject):
             return 67.0
         return 0.0
 
+    def _effective_socket_height_mm(self) -> float:
+        # Mirrors _effective_socket_width_mm for the Z axis. Needed because
+        # the manual-encaje branch at ~L6139 reads EncajeAltura into LOCAL
+        # vars and never writes self.socket_height — so callers that need
+        # the real escalon height must use this helper instead.
+        combo = self.build_ele.ComboBoxEncajes.value
+        if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
+            return max(0.0, float(self.build_ele.EncajeAltura.value or 0) - 3.0)
+        if combo in ("35*30", "70*30"):
+            return 27.0
+        return 0.0
+
     def _ampit_y_inner_local_mm(self) -> float:
         # Local Y position of the ampit slab INNER face (toward encaje).
         #
@@ -12026,9 +12060,16 @@ class PremarcScriptObject(BaseScriptObject):
         # We then add 2 mm of architect-spec margin past that face. The 3 mm
         # baseline (= depth of marco interior cercano al back) extends the
         # ampit hasta la cara frontal del premarco cuando no hay encaje.
+        #
+        # When the imp is active, the imp rise sits in this gap at
+        # y = sw + 3 with width = grosor_imp. The ampit inner face must stay
+        # at least 0.5 mm past the rise's +Y face to remain visually distinct
+        # in section views — so the margin expands when grosor_imp > 1.5 mm
+        # (i.e., for Tela Asfàltica). Water-Stop and PVC keep the 2 mm margin.
         sw = self._effective_socket_width_mm()
         encaje_back_outer = sw + float(THICKNESS_MM) if sw > 0 else 0.0
-        return max(3.0, encaje_back_outer) + 2.0
+        margin = max(2.0, self._grosor_imp_mm() + 0.5)
+        return max(3.0, encaje_back_outer) + margin
 
     def _ampit_slab_outer_local_mm(self, spec: dict) -> float:
         # Local-Y position of the slab + lip OUTER face (= where the front
@@ -12076,6 +12117,11 @@ class PremarcScriptObject(BaseScriptObject):
         if material == "PAVIMENTO" and self.bottom_rebaje_enabled():
             print("[Premarc] PAVIMENTO ampit no compatible con REB. BAIX (no sobresale): ampit omitido.")
             return [], [], [], [], [], spec
+
+        # Z base of the ampit slab. Lifted by grosor_imp when impermeabilizacion
+        # is enabled so the ampit sits on top of the imp instead of clashing.
+        # grosor_imp = 0 when imp is off → baseline Z=3 (depth of marco interior).
+        z_base_ampit = 3 + self._grosor_imp_mm()
 
         # Encaje-aware slab inner Y (2 mm margin from the encaje back face,
         # or from the 63 mm front assembly when sin encaje / narrow encaje).
@@ -12158,8 +12204,8 @@ class PremarcScriptObject(BaseScriptObject):
             x_left_edge = frame_inner_inset_x + side_gap
             x_right_edge = self.width - frame_inner_inset_x - side_gap
             edge_fg = AllplanGeo.Line3D(
-                AllplanGeo.Point3D(x_left_edge, self.thickness, 3 + float(spec["grosor"])),
-                AllplanGeo.Point3D(x_right_edge, self.thickness, 3 + float(spec["grosor"])),
+                AllplanGeo.Point3D(x_left_edge, self.thickness, z_base_ampit + float(spec["grosor"])),
+                AllplanGeo.Point3D(x_right_edge, self.thickness, z_base_ampit + float(spec["grosor"])),
             )
             edge_fg = AllplanGeo.Move(edge_fg, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
             edge_fg_list = [edge_fg]
@@ -12169,8 +12215,8 @@ class PremarcScriptObject(BaseScriptObject):
                 # which itself is encaje-aware (y_inner_local).
                 edge_add_y = self.afegit_ampits + y_inner_local
                 edge_add = AllplanGeo.Line3D(
-                    AllplanGeo.Point3D(x_left_edge, edge_add_y, 3 + float(spec["grosor"])),
-                    AllplanGeo.Point3D(x_right_edge, edge_add_y, 3 + float(spec["grosor"])),
+                    AllplanGeo.Point3D(x_left_edge, edge_add_y, z_base_ampit + float(spec["grosor"])),
+                    AllplanGeo.Point3D(x_right_edge, edge_add_y, z_base_ampit + float(spec["grosor"])),
                 )
                 edge_add = AllplanGeo.Move(edge_add, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
                 edge_add_list = [edge_add]
@@ -12187,7 +12233,7 @@ class PremarcScriptObject(BaseScriptObject):
                     AllplanGeo.Point3D(
                         x_left_edge,
                         edge_add_y - joint_y_thickness / 2,
-                        3,
+                        z_base_ampit,
                     )
                 )
                 edge_add_cuboid = AllplanGeo.Polyhedron3D.CreateCuboid(
@@ -12239,6 +12285,11 @@ class PremarcScriptObject(BaseScriptObject):
         tope          = spec["tope"]
         remate        = spec["remate"]
 
+        # Z base lifted by grosor_imp when impermeabilizacion is enabled
+        # (the ampit slab sits on top of the imp). Stays at 3 when imp is off,
+        # preserving the legacy geometry described in the docstring above.
+        z_base_ampit = 3 + self._grosor_imp_mm()
+
         y_slab_in  = float(y_inner_local)
         # Slab outer comes from the single source-of-truth helper so the
         # 3D, 2D footprint, and retall/afegit math all agree.
@@ -12248,7 +12299,7 @@ class PremarcScriptObject(BaseScriptObject):
         if slab_fondo <= 0:
             return None  # encaje too deep for this premarco
 
-        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(init_x, y_slab_in, 3))
+        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(init_x, y_slab_in, z_base_ampit))
         cuboid_top = AllplanGeo.Polyhedron3D.CreateCuboid(pos_top, llarg_ampit, slab_fondo, grosor)
 
         drop_height = float(tope) - float(grosor)
@@ -12257,11 +12308,12 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Lip = chunky cuboid hanging from the slab front edge.
         #   Y: [y_slab_out - grosor_tope, y_slab_out]  (lip outer = slab outer)
-        #   Z: [3 - drop_height, 3 + overlap]          (just below the slab;
-        #                                               the above-slab portion
-        #                                               is already part of slab)
+        #   Z: [z_base_ampit - drop_height, z_base_ampit + overlap]
+        #                                            (just below the slab;
+        #                                             the above-slab portion
+        #                                             is already part of slab)
         y_lip_inner = y_slab_out - float(grosor_tope)
-        z_drop_top  = 3                       # slab bottom
+        z_drop_top  = z_base_ampit            # slab bottom
         z_drop_bot  = z_drop_top - drop_height
         # Small +Z overlap (0.1 mm) into the slab so MakeUnion does not
         # drop the cuboid on exact face-to-face contact.
@@ -12294,47 +12346,239 @@ class PremarcScriptObject(BaseScriptObject):
 
         return union
 
+    def _grosor_imp_mm(self):
+        """Z thickness of the active impermeabilizacio in mm (0 if disabled).
+
+        Used by the ampit code to lift Z by `grosor_imp` so the ampit sits on
+        top of the imp instead of clashing with it.
+        """
+        if not self.build_ele.EnableImpermeabilizacio.value:
+            return 0.0
+        spec = IMPERM_TYPE_SPECS.get(
+            self.build_ele.imperm_type.value, IMPERM_TYPE_SPECS["Water-Stop"]
+        )
+        return float(spec["grosor"])
+
+    def _resolve_imperm_model(self):
+        """Pick the imp 3D model. Priority: bandeja_U > sobre_encaje > pliegue_90 > plano_recto.
+
+        Encaje detection ORs EnableManualEncaje with the combo value so the
+        combo's default literal 'Encajes' (API-offline fallback) does not
+        block the sobre_encaje model when the user has a manual encaje set.
+        """
+        if self.build_ele.ShowAccessorUPerimeter.value:
+            return "con_bandeja_U"
+        has_encaje = (
+            self.build_ele.EnableManualEncaje.value
+            or self.build_ele.ComboBoxEncajes.value not in ("Encajes", "")
+        )
+        if has_encaje:
+            return "sobre_encaje"
+        if self.build_ele.EnableImpermPliegue90.value:
+            return "pliegue_90"
+        return "plano_recto"
+
+    def _resolve_imperm_detail(self, imperm_type, model):
+        """Detail code per Arnau's spec table (ASF-1/2, WS-1/2, PVC-1/2/3).
+
+        Tela Asfaltica:   ASF-1 (encaje)        | ASF-2 (pliegue 90)
+        Water-Stop:       WS-1 (encaje, fondo_premarco > grosor_pared)
+                          WS-2 (encaje, fondo_premarco == grosor_pared)
+        PVC:              PVC-1 (pliegue 90)    | PVC-2 (encaje)
+                          PVC-3 (base plana)
+
+        Returns "" when the combination is outside the spec (caller can
+        decide whether to skip writing the attribute or warn).
+        """
+        if imperm_type == "Tela Asfàltica":
+            if model == "sobre_encaje":
+                return "ASF-1"
+            if model == "pliegue_90":
+                return "ASF-2"
+            return ""
+
+        if imperm_type == "Water-Stop":
+            if model == "sobre_encaje":
+                grosor_premarc = float(self.thickness_premarc or 0)
+                grosor_pared = float(self.detected_wall_thickness or 0)
+                if grosor_premarc > grosor_pared:
+                    return "WS-1"
+                if grosor_premarc == grosor_pared:
+                    return "WS-2"
+                # fondo_premarco < grosor_pared: not in Arnau's table — fall
+                # back to WS-2 (closest geometric case) until clarified.
+                return "WS-2"
+            return ""
+
+        if imperm_type == "PVC":
+            if model == "pliegue_90":
+                return "PVC-1"
+            if model == "sobre_encaje":
+                return "PVC-2"
+            if model == "plano_recto":
+                return "PVC-3"
+            return ""
+
+        return ""
+
     def create_impermeabilitzacio(self):
-        pos_top = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, self.socket_width, 3)
+        spec = IMPERM_TYPE_SPECS.get(
+            self.build_ele.imperm_type.value, IMPERM_TYPE_SPECS["Water-Stop"]
         )
-        pos_front_socket = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, self.socket_width, 3)
-        )
-        pos_top_socket = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, -3, self.socket_height)
-        )
+        grosor = float(spec["grosor"])
+        model = self._resolve_imperm_model()
 
-        imperm_top = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_top, self.width, self.thickness - self.socket_width, 3
-        )
-        imperm_front_socket = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_front_socket, self.width, 3, self.socket_height
-        )
-        imperm_top_socket = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_top_socket, self.width, self.socket_width + 3, 3
-        )
+        if model == "con_bandeja_U":
+            return self._imperm_con_bandeja_U(grosor)
+        if model == "sobre_encaje":
+            return self._imperm_sobre_encaje(grosor)
+        if model == "pliegue_90":
+            return self._imperm_pliegue_90(grosor)
+        return self._imperm_plano_recto(grosor)
 
-        err, union = AllplanGeo.MakeUnion(imperm_top, imperm_front_socket)
+    def _imperm_plano_recto(self, grosor):
+        """Horizontal slab covering the wall top — no folds."""
+        pos = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, 3))
+        imperm = AllplanGeo.Polyhedron3D.CreateCuboid(pos, self.width, self.thickness, grosor)
+        imperm = AllplanGeo.Move(imperm, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+        return [imperm]
+
+    def _imperm_pliegue_90(self, grosor):
+        """Horizontal slab + an UPWARD 90° flap at the encaje-side end.
+
+        Per Arnau feedback 2026-06-10: the 90° fold goes UP from the top of
+        the slab, on the INNER end of the premarco (Y=0), which is the zone
+        where the encaje step lands when the encaje is activated. The first
+        attempt placed the flap on the exterior (Y=thickness) — wrong side.
+        """
+        PLIEGUE_LARGO_MM = 50.0
+        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, 3))
+        pos_pliegue = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(0, 0, 3 + grosor)
+        )
+        imperm_top = AllplanGeo.Polyhedron3D.CreateCuboid(pos_top, self.width, self.thickness, grosor)
+        imperm_pliegue = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_pliegue, self.width, grosor, PLIEGUE_LARGO_MM
+        )
+        err, union = AllplanGeo.MakeUnion(imperm_top, imperm_pliegue)
         if err == AllplanGeo.eGeometryErrorCode.eOK:
-            err, union = AllplanGeo.MakeUnion(union, imperm_top_socket)
+            imperm = AllplanGeo.Move(union, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+            return [imperm]
+        imperm_top = AllplanGeo.Move(imperm_top, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+        imperm_pliegue = AllplanGeo.Move(imperm_pliegue, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+        return [imperm_top, imperm_pliegue]
+
+    def _imperm_sobre_encaje(self, grosor):
+        """Z-step with the rise sitting in the 2 mm air gap between the encaje
+        back wall extrusion and the ampit slab inner face — the rise touches
+        the encaje back wall outer face, leaving (2 - grosor) mm between the
+        rise's +Y face and the ampit inner face so the two are visually
+        distinct in section views.
+
+        Uses _effective_socket_*_mm helpers (not self.socket_*) because the
+        manual-encaje branch never updates self.socket_* — those would stay
+        at the 30/30 defaults and produce a phantom step in the wrong place.
+        """
+        sock_w = self._effective_socket_width_mm()
+        sock_h = self._effective_socket_height_mm()
+        if sock_w <= 0 or sock_h <= 0:
+            # No real encaje geometry → fall back to a plain slab.
+            return self._imperm_plano_recto(grosor)
+
+        y_rise = sock_w + float(THICKNESS_MM)  # encaje back wall outer face
+
+        pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, y_rise, 3))
+        # Rise spans the full Z height from wall top to top-slab body top so
+        # volumes overlap with both slabs — MakeUnion needs volume overlap,
+        # not just face contact, to fuse the pieces into one polyhedron.
+        pos_rise = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, y_rise, 3))
+        # Encaje TOP face is at local Z = sock_h (NOT 3+sock_h — the +3 is the
+        # marco-interior offset for the bottom slab origin, not the encaje
+        # height reference). The top slab BOTTOM face sits at the encaje top,
+        # body extending `grosor` upward. Tela Asfàltica worked "by
+        # coincidence" with the old formula because grosor=3 matched the +3
+        # offset; Water-Stop and PVC ended up floating above the encaje.
+        # Top slab Y starts at Y=0 (flush with encaje exterior face); the
+        # previous -grosor overhang was a "drip lip" Arnau rejected on
+        # 2026-06-17 — must stay al ras with the encaje right edge.
+        pos_top = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(0, 0, sock_h)
+        )
+
+        imperm_bottom = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_bottom, self.width, self.thickness - y_rise, grosor
+        )
+        imperm_rise = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_rise, self.width, grosor, sock_h - 3 + grosor
+        )
+        imperm_top = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_top, self.width, y_rise + grosor, grosor
+        )
+
+        err, union = AllplanGeo.MakeUnion(imperm_bottom, imperm_rise)
+        if err == AllplanGeo.eGeometryErrorCode.eOK:
+            err, union = AllplanGeo.MakeUnion(union, imperm_top)
             if err == AllplanGeo.eGeometryErrorCode.eOK:
-                imperm = AllplanGeo.Move(
-                    union, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
-                )
+                imperm = AllplanGeo.Move(union, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
                 return [imperm]
 
-        imperm_top = AllplanGeo.Move(
-            imperm_top, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+        imperm_bottom = AllplanGeo.Move(imperm_bottom, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+        imperm_rise = AllplanGeo.Move(imperm_rise, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+        imperm_top = AllplanGeo.Move(imperm_top, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+        return [imperm_bottom, imperm_rise, imperm_top]
+
+    def _imperm_con_bandeja_U(self, grosor):
+        """Extended slab + vertical rise on the outer face of the U.
+
+        Per Arnau feedback 2026-06-10 (final iteration): same rule as for
+        pliegue_90 — "los 90º se hacen arriba". The vertical leg on the
+        outer face of the U rises UP from the slab top (not down).
+
+        U profile geometry (constants from the top of the file):
+          - U_OVERHANG_Y_MM = 24 (how far the U hangs past the wall exterior)
+          - U_LEG_HEIGHT_MM = 30 (Z height of the U — used as rise length)
+        """
+        U_DEPTH = float(U_OVERHANG_Y_MM)        # 24
+        U_RISE_HEIGHT = float(U_LEG_HEIGHT_MM)  # 30 — rise matches U height
+
+        # 1. Slab extending from the U outer face (Y_pre = -U_DEPTH) all the
+        # way to the interior wall face (Y_pre = thickness).
+        slab_y_start = -U_DEPTH
+        slab_y_span = U_DEPTH + self.thickness
+        pos_top = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(0, slab_y_start, 3)
         )
-        imperm_front_socket = AllplanGeo.Move(
-            imperm_front_socket, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
-        )
-        imperm_top_socket = AllplanGeo.Move(
-            imperm_top_socket, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+        imperm_top = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_top, self.width, slab_y_span, grosor
         )
 
-        return [imperm_top, imperm_front_socket, imperm_top_socket]
+        # 2. Vertical RISE on the OUTER face of the U (Y_pre = -U_DEPTH).
+        # Starts at the top of the slab and rises upward.
+        pos_rise = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(0, -U_DEPTH, 3 + grosor)
+        )
+        imperm_rise = AllplanGeo.Polyhedron3D.CreateCuboid(
+            pos_rise, self.width, grosor, U_RISE_HEIGHT
+        )
+
+        pieces = [imperm_top, imperm_rise]
+        union = pieces[0]
+        union_ok = True
+        for p in pieces[1:]:
+            err, union = AllplanGeo.MakeUnion(union, p)
+            if err != AllplanGeo.eGeometryErrorCode.eOK:
+                union_ok = False
+                break
+
+        if union_ok:
+            return [AllplanGeo.Move(
+                union, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
+            )]
+
+        return [
+            AllplanGeo.Move(p, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
+            for p in pieces
+        ]
 
     def create_real_inside_space(self):
         position = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, -1, -self.heigh))

@@ -867,6 +867,26 @@
                 <Value>False</Value>
                 <ValueType>CheckBox</ValueType>
             </Parameter>
+        </Parameter>
+    </Page>
+
+    <Page>
+        <Name>ImpermeabilizacionesProperties</Name>
+        <Text>Impermeabilizaciones</Text>
+
+        <Parameter>
+            <Name>impermeabilizaciones</Name>
+            <Text>Impermeabilizaciones</Text>
+            <Value>False</Value>
+            <ValueType>Expander</ValueType>
+            <Visible>True</Visible>
+
+            <Parameter>
+                <Name>EnableImpermeabilizacio</Name>
+                <Text>Mostrar Impermeabilización</Text>
+                <Value>1</Value>
+                <ValueType>CheckBox</ValueType>
+            </Parameter>
 
             <Parameter>
                 <Name>imperm_type</Name>
@@ -874,7 +894,24 @@
                 <Value>Water-Stop</Value>
                 <ValueList>Water-Stop|PVC|Tela Asfàltica</ValueList>
                 <ValueType>StringComboBox</ValueType>
-                <Visible>True</Visible>
+                <Enable>EnableImpermeabilizacio</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>EnableImpermPliegue90</Name>
+                <Text>Pliegue a 90°</Text>
+                <Value>0</Value>
+                <ValueType>CheckBox</ValueType>
+                <Enable>EnableImpermeabilizacio</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>imperm_muntatge</Name>
+                <Text>Imperm. Muntatge</Text>
+                <Value>OBRA</Value>
+                <ValueList>OBRA|FABRICA</ValueList>
+                <ValueType>StringComboBox</ValueType>
+                <Enable>EnableImpermeabilizacio</Enable>
             </Parameter>
         </Parameter>
     </Page>
