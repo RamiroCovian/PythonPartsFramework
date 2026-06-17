@@ -10786,11 +10786,12 @@ class PremarcScriptObject(BaseScriptObject):
             else self.build_ele.PersianaWidth.value
         )
         box_shutter = AllplanGeo.Polygon3D()
-        box_shutter += AllplanGeo.Point3D(0, 0, 0)
-        box_shutter += AllplanGeo.Point3D(0, 0, BOX_SHUTTER_HEIGHT)
-        box_shutter += AllplanGeo.Point3D(0, -BOX_SHUTTER_WIDTH, BOX_SHUTTER_HEIGHT)
-        box_shutter += AllplanGeo.Point3D(0, -BOX_SHUTTER_WIDTH, 0)
-        box_shutter += AllplanGeo.Point3D(0, 0, 0)
+        box_shutter_x = 0
+        box_shutter += AllplanGeo.Point3D(box_shutter_x, 0, 0)
+        box_shutter += AllplanGeo.Point3D(box_shutter_x, 0, BOX_SHUTTER_HEIGHT)
+        box_shutter += AllplanGeo.Point3D(box_shutter_x, -BOX_SHUTTER_WIDTH, BOX_SHUTTER_HEIGHT)
+        box_shutter += AllplanGeo.Point3D(box_shutter_x, -BOX_SHUTTER_WIDTH, 0)
+        box_shutter += AllplanGeo.Point3D(box_shutter_x, 0, 0)
 
         # Manage config UI
         box_shutter_list = []
@@ -10809,13 +10810,14 @@ class PremarcScriptObject(BaseScriptObject):
                 box_shutter_list.append(polyhedron_box_shutter)
             case "LAMISOL VIST":
                 print("LAMISOL VIST")
-                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter, "box_shutter")
+                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-THICKNESS_MM, 0, 0))
+                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case "METALUNIC VIST":
                 print("METALUNIC VIST")
 
                 # Move box shutters to wall thickness
-                fix_y = self.detected_wall_thickness
+                fix_y = wall_thickness_xps
                 translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM, -fix_y, 0)
                 box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
@@ -10823,7 +10825,8 @@ class PremarcScriptObject(BaseScriptObject):
                 box_shutter_list.append(polyhedron_box_shutter)
             case "FALS CALAIX":
                 print("FALS CALAIX")
-                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter, "box_shutter")
+                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-THICKNESS_MM, 0, 0))
+                error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case _:
                 print("Persiana Selected default")
