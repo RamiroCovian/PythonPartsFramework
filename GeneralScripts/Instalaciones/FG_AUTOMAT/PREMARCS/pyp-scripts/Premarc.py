@@ -7748,20 +7748,6 @@ class PremarcScriptObject(BaseScriptObject):
                     elems.remove(cuboid_top)
                     if add_xps_bool_fals_calaix:
                         elems.extend(self.create_xps_fals_calaix())
-            case "LAMISOL VIST":
-                if cuboid_top in elems:
-                    elems.remove(cuboid_top)
-                    elems.extend(
-                        self.create_upper_xps_side_extensions(
-                            xps_depth, self.build_ele.PersianaHeight.value
-                        )
-                    )
-                    upper_top_extensions = self.create_upper_xps_top_extension(
-                        xps_depth, self.build_ele.PersianaHeight.value
-                    )
-                    elems.extend(upper_top_extensions)
-
-
         # Manage Disable XPS
         if self.build_ele.DisableTopXPS.value:
             if cuboid_top in elems:
