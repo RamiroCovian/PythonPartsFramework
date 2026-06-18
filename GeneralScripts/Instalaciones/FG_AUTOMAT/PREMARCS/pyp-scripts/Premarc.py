@@ -198,19 +198,6 @@ PREMARC_SELECTION_AUX_PEN = 15
 PREMARC_SELECTION_AUX_CROSS_HALF_MM = 300.0
 PREMARC_SELECTION_AUX_OFFSET_MM = 80.0
 THICKNESS_MM = 3
-REBAJE_DRETA_OFFSET_X_MM = -3.0
-REBAJE_DRETA_OFFSET_Y_MM = 0.0
-REBAJE_DRETA_OFFSET_Z_MM = 0.0
-REBAJE_ESQUERRA_OFFSET_X_MM = 3.0
-REBAJE_ESQUERRA_OFFSET_Y_MM = 0.0
-REBAJE_ESQUERRA_OFFSET_Z_MM = 0.0
-REBAJE_BAIX_OFFSET_X_MM = 0.0
-REBAJE_BAIX_OFFSET_Y_MM = 0.0
-REBAJE_BAIX_OFFSET_Z_MM = 3.0
-PENDIENTE_REBAJE_BAIX_OFFSET_Z_MM = -3.69
-REBAJE_DALT_OFFSET_X_MM = 0.0
-REBAJE_DALT_OFFSET_Y_MM = 0.0
-REBAJE_DALT_OFFSET_Z_MM = -3.0
 SQUARE_THICKNESS = 60
 SQUARE_VERTEX_OFFSET = math.sqrt(
     SQUARE_THICKNESS**2 + SQUARE_THICKNESS**2
@@ -7069,12 +7056,20 @@ class PremarcScriptObject(BaseScriptObject):
         props_frame_base_no_slope = AllplanBaseElements.CommonProperties()
         props_frame_base_no_slope.Color = 48
         props_frame_base_no_slope.Layer = layer_frame_id
-        frame, frame_base_no_slope, _substract_rebajes = self.create_premarc_frame()
+        layer_retall_ganxo = AllplanBaseElements.LayerService.GetIDByShortName(
+            RETALL_GANXO_LAYER, self.document
+        )
+        props_rebajes_debug = AllplanBaseElements.CommonProperties()
+        props_rebajes_debug.Color = 25
+        props_rebajes_debug.Layer = layer_retall_ganxo
+        frame, frame_base_no_slope, substract_rebajes = self.create_premarc_frame()
         self._append_frame_elements_to_model_list(model_ele_list, props_frame, frame)
         if frame_base_no_slope:
             model_ele_list.append_geometry_3d(
                 frame_base_no_slope, props_frame_base_no_slope
             )
+        for substract_rebaje in substract_rebajes:
+            model_ele_list.append_geometry_3d(substract_rebaje, props_rebajes_debug)
         self._pink_sill_poly = frame_base_no_slope
         u_poly = self.create_u_accessory_polyhedron()
         if u_poly is not None:
@@ -8149,13 +8144,13 @@ class PremarcScriptObject(BaseScriptObject):
         extruded_solid = AllplanGeo.ExtrudedAreaSolid3D()
 
         if direction == "frame_top":
-            extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 0, -1 * THICKNESS_MM))
-        elif direction == "frame_bottom":
             extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 0, 1 * THICKNESS_MM))
+        elif direction == "frame_bottom":
+            extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 0, -1 * THICKNESS_MM))
         elif direction == "frame_left":
-            extruded_solid.SetDirection(AllplanGeo.Vector3D(1 * THICKNESS_MM, 0, 0))
-        elif direction == "frame_right":
             extruded_solid.SetDirection(AllplanGeo.Vector3D(-1 * THICKNESS_MM, 0, 0))
+        elif direction == "frame_right":
+            extruded_solid.SetDirection(AllplanGeo.Vector3D(1 * THICKNESS_MM, 0, 0))
         elif direction == "frame_finish_top":
             extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 1 * THICKNESS_MM, 0))
         elif direction == "frame_finish_bottom":
@@ -8878,12 +8873,17 @@ class PremarcScriptObject(BaseScriptObject):
             []
         )  # List to store other elements like REA, falcas, etc.
 
+        frame_x_min = -float(THICKNESS_MM)
+        frame_x_max = float(self.width) + float(THICKNESS_MM)
+        frame_z_top = float(THICKNESS_MM)
+        frame_z_bottom = -float(self.heigh) - float(THICKNESS_MM)
+
         frame_bottom = AllplanGeo.Polygon3D()
-        frame_bottom += AllplanGeo.Point3D(0, -self.thickness, -self.heigh)
-        frame_bottom += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh)
-        frame_bottom += AllplanGeo.Point3D(self.width, 0, -self.heigh)
-        frame_bottom += AllplanGeo.Point3D(0, 0, -self.heigh)
-        frame_bottom += AllplanGeo.Point3D(0, -self.thickness, -self.heigh)
+        frame_bottom += AllplanGeo.Point3D(frame_x_min, -self.thickness, -self.heigh)
+        frame_bottom += AllplanGeo.Point3D(frame_x_max, -self.thickness, -self.heigh)
+        frame_bottom += AllplanGeo.Point3D(frame_x_max, 0, -self.heigh)
+        frame_bottom += AllplanGeo.Point3D(frame_x_min, 0, -self.heigh)
+        frame_bottom += AllplanGeo.Point3D(frame_x_min, -self.thickness, -self.heigh)
 
         error_code, polyhedron_bottom = self.extrude_frame(frame_bottom, "frame_bottom")
 
@@ -8899,11 +8899,11 @@ class PremarcScriptObject(BaseScriptObject):
         self._refresh_bottom_sill_top_z_cache(polyhedron_bottom)
 
         frame_top = AllplanGeo.Polygon3D()
-        frame_top += AllplanGeo.Point3D(0, -self.thickness, 0)
-        frame_top += AllplanGeo.Point3D(self.width, -self.thickness, 0)
-        frame_top += AllplanGeo.Point3D(self.width, 0, 0)
-        frame_top += AllplanGeo.Point3D(0, 0, 0)
-        frame_top += AllplanGeo.Point3D(0, -self.thickness, 0)
+        frame_top += AllplanGeo.Point3D(frame_x_min, -self.thickness, 0)
+        frame_top += AllplanGeo.Point3D(frame_x_max, -self.thickness, 0)
+        frame_top += AllplanGeo.Point3D(frame_x_max, 0, 0)
+        frame_top += AllplanGeo.Point3D(frame_x_min, 0, 0)
+        frame_top += AllplanGeo.Point3D(frame_x_min, -self.thickness, 0)
 
         error_code, polyhedron_top = self.extrude_frame(frame_top, "frame_top")
 
@@ -8926,21 +8926,21 @@ class PremarcScriptObject(BaseScriptObject):
         polyhedron_premarc_list.append(polyhedron_top)
 
         frame_left = AllplanGeo.Polygon3D()
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh)
-        frame_left += AllplanGeo.Point3D(0, 0, -self.heigh)
-        frame_left += AllplanGeo.Point3D(0, 0, 0)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, 0)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
 
         error_code, polyhedron_left = self.extrude_frame(frame_left, "frame_left")
         polyhedron_premarc_list.append(polyhedron_left)
 
         frame_right = AllplanGeo.Polygon3D()
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh)
-        frame_right += AllplanGeo.Point3D(self.width, 0, -self.heigh)
-        frame_right += AllplanGeo.Point3D(self.width, 0, 0)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, 0)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
 
         error_code, polyhedron_right = self.extrude_frame(frame_right, "frame_right")
         polyhedron_premarc_list.append(polyhedron_right)
@@ -9293,7 +9293,7 @@ class PremarcScriptObject(BaseScriptObject):
         rotated_frame_premarc = AllplanGeo.Rotate(
             polyhedron_top_expanded, rotation_axis, rotation_angle
         )
-        translation_vector = AllplanGeo.Vector3D(0, -0.1, -(self.heigh))
+        translation_vector = AllplanGeo.Vector3D(0, -0.1, -(self.heigh + THICKNESS_MM))
         polyhedron_bottom_grade = AllplanGeo.Move(
             rotated_frame_premarc, translation_vector
         )
@@ -9404,6 +9404,11 @@ class PremarcScriptObject(BaseScriptObject):
             "bottom left", poly_bottom_left_whithout_open
         )
 
+        debug_rebaje_solids = []
+        show_rebajes_debug = bool(
+            getattr(getattr(self.build_ele, "ShowRebajesDebug", None), "value", False)
+        )
+
         ### Build substract rebajes ###
         # Top rebaje
         position = AllplanGeo.AxisPlacement3D(
@@ -9438,39 +9443,6 @@ class PremarcScriptObject(BaseScriptObject):
             AllplanGeo.Vector3D(self.width + THICKNESS_MM, 0, 0),
         )
 
-        rebaje_dalt_offset = AllplanGeo.Vector3D(
-            REBAJE_DALT_OFFSET_X_MM,
-            REBAJE_DALT_OFFSET_Y_MM,
-            REBAJE_DALT_OFFSET_Z_MM,
-        )
-        rebaje_baix_offset = AllplanGeo.Vector3D(
-            REBAJE_BAIX_OFFSET_X_MM,
-            REBAJE_BAIX_OFFSET_Y_MM,
-            REBAJE_BAIX_OFFSET_Z_MM,
-        )
-        rebaje_esquerra_offset = AllplanGeo.Vector3D(
-            REBAJE_ESQUERRA_OFFSET_X_MM,
-            REBAJE_ESQUERRA_OFFSET_Y_MM,
-            REBAJE_ESQUERRA_OFFSET_Z_MM,
-        )
-        rebaje_dreta_offset = AllplanGeo.Vector3D(
-            REBAJE_DRETA_OFFSET_X_MM,
-            REBAJE_DRETA_OFFSET_Y_MM,
-            REBAJE_DRETA_OFFSET_Z_MM,
-        )
-
-        substract_rebajes_top = AllplanGeo.Move(
-            substract_rebajes_top, rebaje_dalt_offset
-        )
-        substract_rebajes_bottom = AllplanGeo.Move(
-            substract_rebajes_bottom, rebaje_baix_offset
-        )
-        substract_rebajes_left = AllplanGeo.Move(
-            substract_rebajes_left, rebaje_esquerra_offset
-        )
-        substract_rebajes_right = AllplanGeo.Move(
-            substract_rebajes_right, rebaje_dreta_offset
-        )
 
         # bottom grade with rebaje
         transformation_matrix = AllplanGeo.Matrix3D()
@@ -9482,24 +9454,38 @@ class PremarcScriptObject(BaseScriptObject):
 
         scale_factor_x = (self.width + THICKNESS_MM * 2) / self.width
         center_x = (self.width * scale_factor_x) / 2 - THICKNESS_MM
-        axis_point = AllplanGeo.Point3D(center_x, 0, -self.heigh)
+        axis_point = AllplanGeo.Point3D(
+            center_x, -float(LENGTH_REBAJES_MM), -self.heigh
+        )
         rotation_axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
-        # Calculate rotation angle based on thickness
-        CO = 10
-        CA = self.thickness_premarc - LENGTH_REBAJES_MM
-
-        angulo_radianes = math.atan2(CO, CA)
+        # With REB. BAIX the effective sloped length is the hypotenuse after
+        # removing the rebaje depth, so use asin(opposite / hypotenuse).
+        CO = 10.0
+        hipotenusa = max(float(self.thickness_premarc) - float(LENGTH_REBAJES_MM), abs(CO))
+        angulo_radianes = math.asin(CO / hipotenusa)
         angulo_grados = math.degrees(angulo_radianes)
-
+        if show_rebajes_debug:
+            print(
+                "[Premarc][REB. BAIX][PENDIENTE] "
+                f"CO={CO:.3f}, hipotenusa={hipotenusa:.3f}, "
+                f"axis_y={-float(LENGTH_REBAJES_MM):.3f}, "
+                f"angulo_grados={angulo_grados:.6f}"
+            )
         rotation_angle = AllplanGeo.Angle.FromDeg(-angulo_grados)
 
-        polyhedron_bottom_grade_with_rebaje = AllplanGeo.Rotate(
-            bottom_rebaje, rotation_axis, rotation_angle
+        polyhedron_bottom_grade = AllplanGeo.Rotate(
+            polyhedron_bottom, rotation_axis, rotation_angle
         )
-        polyhedron_bottom_grade_with_rebaje = AllplanGeo.Move(
-            polyhedron_bottom_grade_with_rebaje,
-            AllplanGeo.Vector3D(0, 0, PENDIENTE_REBAJE_BAIX_OFFSET_Z_MM),
+        error_code, polyhedron_bottom_grade_with_rebaje = AllplanGeo.MakeSubtraction(
+            polyhedron_bottom_grade, substract_rebajes_bottom
         )
+        if error_code != AllplanGeo.eGeometryErrorCode.eOK:
+            print(
+                "[Premarc][REB. BAIX][PENDIENTE] "
+                f"MakeSubtraction tras rotacion fallo: {error_code}; "
+                "se usa fondo rotado sin rebaje"
+            )
+            polyhedron_bottom_grade_with_rebaje = polyhedron_bottom_grade
 
         # Solids fix corners
 
@@ -9534,45 +9520,8 @@ class PremarcScriptObject(BaseScriptObject):
         )
         list_solid_fix_corners.append(substract_bottom_right_corner)
 
-        substract_top_left_corner = AllplanGeo.Move(
-            substract_top_left_corner,
-            AllplanGeo.Vector3D(
-                REBAJE_DALT_OFFSET_X_MM + REBAJE_ESQUERRA_OFFSET_X_MM,
-                REBAJE_DALT_OFFSET_Y_MM + REBAJE_ESQUERRA_OFFSET_Y_MM,
-                REBAJE_DALT_OFFSET_Z_MM + REBAJE_ESQUERRA_OFFSET_Z_MM,
-            ),
-        )
-        substract_top_right_corner = AllplanGeo.Move(
-            substract_top_right_corner,
-            AllplanGeo.Vector3D(
-                REBAJE_DALT_OFFSET_X_MM + REBAJE_DRETA_OFFSET_X_MM,
-                REBAJE_DALT_OFFSET_Y_MM + REBAJE_DRETA_OFFSET_Y_MM,
-                REBAJE_DALT_OFFSET_Z_MM + REBAJE_DRETA_OFFSET_Z_MM,
-            ),
-        )
-        substract_bottom_left_corner = AllplanGeo.Move(
-            substract_bottom_left_corner,
-            AllplanGeo.Vector3D(
-                REBAJE_BAIX_OFFSET_X_MM + REBAJE_ESQUERRA_OFFSET_X_MM,
-                REBAJE_BAIX_OFFSET_Y_MM + REBAJE_ESQUERRA_OFFSET_Y_MM,
-                REBAJE_BAIX_OFFSET_Z_MM + REBAJE_ESQUERRA_OFFSET_Z_MM,
-            ),
-        )
-        substract_bottom_right_corner = AllplanGeo.Move(
-            substract_bottom_right_corner,
-            AllplanGeo.Vector3D(
-                REBAJE_BAIX_OFFSET_X_MM + REBAJE_DRETA_OFFSET_X_MM,
-                REBAJE_BAIX_OFFSET_Y_MM + REBAJE_DRETA_OFFSET_Y_MM,
-                REBAJE_BAIX_OFFSET_Z_MM + REBAJE_DRETA_OFFSET_Z_MM,
-            ),
-        )
 
         ## End rebajes ##
-
-        debug_rebaje_solids = []
-        show_rebajes_debug = bool(
-            getattr(getattr(self.build_ele, "ShowRebajesDebug", None), "value", False)
-        )
 
         poly_base_no_slope = None
         # open_closed_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
@@ -10803,6 +10752,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Manage config UI
         box_shutter_list = []
+        shutter_lateral_offset = float(THICKNESS_MM)
         match (self.build_ele.ComboBoxPersianas.value):
             case "NO":
                 print("Persiana Selected NO. Nothing to do")
@@ -10811,14 +10761,14 @@ class PremarcScriptObject(BaseScriptObject):
                 print("MONOBLOCK OCULT")
                 # Move box shutters to offset from front
                 fix_y = self.thickness - self.build_ele.PersianaWidth.value
-                translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM, -(fix_y), 0)
+                translation_vector = AllplanGeo.Vector3D(-shutter_lateral_offset, -(fix_y), 0)
                 box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
 
                 box_shutter_list.append(polyhedron_box_shutter)
             case "LAMISOL VIST":
                 print("LAMISOL VIST")
-                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-THICKNESS_MM, 0, 0))
+                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-shutter_lateral_offset, 0, 0))
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case "METALUNIC VIST":
@@ -10826,14 +10776,14 @@ class PremarcScriptObject(BaseScriptObject):
 
                 # Move box shutters to wall thickness
                 fix_y = wall_thickness_xps
-                translation_vector = AllplanGeo.Vector3D(-THICKNESS_MM, -fix_y, 0)
+                translation_vector = AllplanGeo.Vector3D(-shutter_lateral_offset, -fix_y, 0)
                 box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
 
                 box_shutter_list.append(polyhedron_box_shutter)
             case "FALS CALAIX":
                 print("FALS CALAIX")
-                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-THICKNESS_MM, 0, 0))
+                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-shutter_lateral_offset, 0, 0))
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case _:
@@ -12104,10 +12054,11 @@ class PremarcScriptObject(BaseScriptObject):
             print("[Premarc] PAVIMENTO ampit no compatible con REB. BAIX (no sobresale): ampit omitido.")
             return [], [], [], [], [], spec
 
-        # Z base of the ampit slab. Lifted by grosor_imp when impermeabilizacion
-        # is enabled so the ampit sits on top of the imp instead of clashing.
-        # grosor_imp = 0 when imp is off → baseline Z=3 (depth of marco interior).
-        z_base_ampit = 3 + self._grosor_imp_mm()
+        # Z base of the ampit slab. The bottom sheet thickness now extends
+        # outward below the opening, so the clear opening bottom remains z=0
+        # in premarc-local coordinates. Lift by grosor_imp only when
+        # impermeabilizacion is active.
+        z_base_ampit = self._grosor_imp_mm()
 
         # Encaje-aware slab inner Y (2 mm margin from the encaje back face,
         # or from the 63 mm front assembly when sin encaje / narrow encaje).
@@ -12144,11 +12095,10 @@ class PremarcScriptObject(BaseScriptObject):
         #   i.e. N >= (width - 2) / (llarg_ampits + 2).
         side_gap = 2.0
         inter_gap = 2.0
-        # Premarc's 3 mm thickness now extends INWARD into the cavity, so the
-        # ampit must be 3 mm shorter on each lateral side to fit the real opening.
-        # This is independent of the 2 mm gap rules: the 2 mm clearance is still
-        # measured from this new (recessed) effective frame face.
-        frame_inner_inset_x = float(THICKNESS_MM)
+        # The 3 mm side sheet thickness extends OUTWARD into the concrete, so
+        # the real opening remains bounded by x=0 and x=width. The ampit only
+        # applies the architectural 2 mm side clearance from that opening.
+        frame_inner_inset_x = 0.0
         usable = self.width - 2 * side_gap - 2 * frame_inner_inset_x
         n_panels = 0
         panel_length = 0.0
@@ -12272,9 +12222,9 @@ class PremarcScriptObject(BaseScriptObject):
         remate        = spec["remate"]
 
         # Z base lifted by grosor_imp when impermeabilizacion is enabled
-        # (the ampit slab sits on top of the imp). Stays at 3 when imp is off,
-        # preserving the legacy geometry described in the docstring above.
-        z_base_ampit = 3 + self._grosor_imp_mm()
+        # (the ampit slab sits on top of the imp). With the bottom sheet
+        # thickness outside the opening, the base is z=0 when imp is off.
+        z_base_ampit = self._grosor_imp_mm()
 
         y_slab_in  = float(y_inner_local)
         # Slab outer comes from the single source-of-truth helper so the
@@ -12424,7 +12374,7 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _imperm_plano_recto(self, grosor):
         """Horizontal slab covering the wall top — no folds."""
-        pos = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, 3))
+        pos = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, 0))
         imperm = AllplanGeo.Polyhedron3D.CreateCuboid(pos, self.width, self.thickness, grosor)
         imperm = AllplanGeo.Move(imperm, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh))
         return [imperm]
@@ -12438,9 +12388,9 @@ class PremarcScriptObject(BaseScriptObject):
         attempt placed the flap on the exterior (Y=thickness) — wrong side.
         """
         PLIEGUE_LARGO_MM = 50.0
-        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, 3))
+        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, 0))
         pos_pliegue = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, 0, 3 + grosor)
+            AllplanGeo.Point3D(0, 0, grosor)
         )
         imperm_top = AllplanGeo.Polyhedron3D.CreateCuboid(pos_top, self.width, self.thickness, grosor)
         imperm_pliegue = AllplanGeo.Polyhedron3D.CreateCuboid(
@@ -12473,17 +12423,13 @@ class PremarcScriptObject(BaseScriptObject):
 
         y_rise = sock_w + float(THICKNESS_MM)  # encaje back wall outer face
 
-        pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, y_rise, 3))
+        pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, y_rise, 0))
         # Rise spans the full Z height from wall top to top-slab body top so
         # volumes overlap with both slabs — MakeUnion needs volume overlap,
         # not just face contact, to fuse the pieces into one polyhedron.
-        pos_rise = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, y_rise, 3))
-        # Encaje TOP face is at local Z = sock_h (NOT 3+sock_h — the +3 is the
-        # marco-interior offset for the bottom slab origin, not the encaje
-        # height reference). The top slab BOTTOM face sits at the encaje top,
-        # body extending `grosor` upward. Tela Asfàltica worked "by
-        # coincidence" with the old formula because grosor=3 matched the +3
-        # offset; Water-Stop and PVC ended up floating above the encaje.
+        pos_rise = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, y_rise, 0))
+        # Encaje TOP face is at local Z = sock_h. The top slab BOTTOM face
+        # sits at the encaje top, body extending `grosor` upward.
         # Top slab Y starts at Y=0 (flush with encaje exterior face); the
         # previous -grosor overhang was a "drip lip" Arnau rejected on
         # 2026-06-17 — must stay al ras with the encaje right edge.
@@ -12495,7 +12441,7 @@ class PremarcScriptObject(BaseScriptObject):
             pos_bottom, self.width, self.thickness - y_rise, grosor
         )
         imperm_rise = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_rise, self.width, grosor, sock_h - 3 + grosor
+            pos_rise, self.width, grosor, sock_h + grosor
         )
         imperm_top = AllplanGeo.Polyhedron3D.CreateCuboid(
             pos_top, self.width, y_rise + grosor, grosor
@@ -12532,7 +12478,7 @@ class PremarcScriptObject(BaseScriptObject):
         slab_y_start = -U_DEPTH
         slab_y_span = U_DEPTH + self.thickness
         pos_top = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, slab_y_start, 3)
+            AllplanGeo.Point3D(0, slab_y_start, 0)
         )
         imperm_top = AllplanGeo.Polyhedron3D.CreateCuboid(
             pos_top, self.width, slab_y_span, grosor
@@ -12541,7 +12487,7 @@ class PremarcScriptObject(BaseScriptObject):
         # 2. Vertical RISE on the OUTER face of the U (Y_pre = -U_DEPTH).
         # Starts at the top of the slab and rises upward.
         pos_rise = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, -U_DEPTH, 3 + grosor)
+            AllplanGeo.Point3D(0, -U_DEPTH, grosor)
         )
         imperm_rise = AllplanGeo.Polyhedron3D.CreateCuboid(
             pos_rise, self.width, grosor, U_RISE_HEIGHT
@@ -12608,8 +12554,9 @@ class PremarcScriptObject(BaseScriptObject):
             if self.build_ele.Z_RetallGanxo.value < self.heigh
             else (self.heigh / 2) - 50
         )
-        pos_left = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 40, Z_position))
-        pos_left = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 40, Z_position))
+        pos_left = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(-THICKNESS_MM, 40, Z_position)
+        )
 
         cuboid_retall = AllplanGeo.Polyhedron3D.CreateCuboid(pos_left, 3, 80, 100)
         Z_move = (
@@ -12621,14 +12568,12 @@ class PremarcScriptObject(BaseScriptObject):
             cuboid_retall, AllplanGeo.Vector3D(0, -160, -Z_move)
         )
         # cuboid_retall_origin = AllplanGeo.Move(cuboid_retall, AllplanGeo.Vector3D(0, -160, -self.heigh))
-        vector_move_right = AllplanGeo.Vector3D(self.width - 3, 0, 0)
-        vector_move_right = AllplanGeo.Vector3D(self.width - 3, 0, 0)
-        # vector_move_left = AllplanGeo.Vector3D(0,self.width, 0)
+        vector_move_right = AllplanGeo.Vector3D(self.width + THICKNESS_MM, 0, 0)
         if self.build_ele.EnableRetallGanxo.value and self.get_direction_retall_ganxo():
             if self.get_direction_retall_ganxo() == "RIGHT":
-                cuboid_retall = cuboid_retall_origin
-            elif self.get_direction_retall_ganxo() == "LEFT":
                 cuboid_retall = AllplanGeo.Move(cuboid_retall_origin, vector_move_right)
+            elif self.get_direction_retall_ganxo() == "LEFT":
+                cuboid_retall = cuboid_retall_origin
             return cuboid_retall
         else:
             return None

@@ -546,6 +546,14 @@
                 <Dimensions>len(valueListaRebajes) if valueListaRebajes else 0</Dimensions>
                 <ValueListStartRow>1</ValueListStartRow>
             </Parameter>
+
+            <Parameter>
+                <Name>ShowRebajesDebug</Name>
+                <Text>Mostrar solidos debug rebajes</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>True</Visible>
+            </Parameter>
         </Parameter>
 
         <Parameter>
