@@ -9917,7 +9917,7 @@ class AngularLineScript(BaseScriptObject):
         definition: dict,
         pmp_pare: str = None,
         pmp_pare_name: str = None,
-    ) -> List[AllplanBasisElements.ModelElement3D]:
+    ) -> ModelEleList:
         """Crea ModelElement3D individuales con los angulares aplicando layer, color y PMP_PARE.
 
         En CREATE y EDIT se reaplican atributos usando el valor persistido en build_ele.
@@ -9930,7 +9930,7 @@ class AngularLineScript(BaseScriptObject):
         Returns:
             List[ModelElement3D]: Lista de elementos 3D creados
         """
-        elements = []
+        elements = ModelEleList()
 
         layer_id = AllplanBaseElements.LayerService.GetIDByShortName(
             ANG_LAYER, self.document
@@ -9975,8 +9975,9 @@ class AngularLineScript(BaseScriptObject):
         if lleva_neopreno:
             grosor_length_value = get_neoprene_length_meters(definition)
 
-        for line in geometries:
-            elem = AllplanBasisElements.ModelElement3D(props, line)
+        for geom in geometries:
+            elements.append_geometry_3d(geom, props)
+            # elem = AllplanBasisElements.ModelElement3D(props, geom)
 
             attr_list = BuildingElementAttributeList()
 
@@ -10002,43 +10003,14 @@ class AngularLineScript(BaseScriptObject):
                 attr_list.add_attribute(attr_grosor_neopre_id, grosor_length_value)
 
             if attr_list.get_attribute_list():
-                elem.SetAttributes(attr_list.get_attribute_list())
+                elements.set_element_attributes(len(elements) - 1, attr_list.get_attribute_list())
+                # elem.SetAttributes(attr_list.get_attribute_list())
 
-            elements.append(elem)
+            # elements.append(elem)
 
-        for line in edges:
-            elem = AllplanBasisElements.ModelElement3D(props, line)
-
-            attr_list = BuildingElementAttributeList()
-
-            if attr_id > 0 and pmp_pare_name:
-                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
-
-            if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
-
-            if attr_detall_id > 0:
-                attr_list.add_attribute(attr_detall_id, "")
-
-            if attr_forats_id > 0:
-                attr_list.add_attribute(attr_forats_id, num_forats)
-
-            if attr_nom_id > 0 and nom_value:
-                attr_list.add_attribute(attr_nom_id, nom_value)
-
-            if attr_neopre_id > 0:
-                attr_list.add_attribute(attr_neopre_id, neopre_value)
-
-            if attr_grosor_neopre_id > 0:
-                attr_list.add_attribute(attr_grosor_neopre_id, grosor_length_value)
-
-            if attr_list.get_attribute_list():
-                elem.SetAttributes(attr_list.get_attribute_list())
-
-            elements.append(elem)
-
-        for line in edges:
-            elem = AllplanBasisElements.ModelElement3D(props, line)
+        for geom in edges:
+            elements.append_geometry_3d(geom, props)
+            # elem = AllplanBasisElements.ModelElement3D(props, geom)
 
             attr_list = BuildingElementAttributeList()
 
@@ -10064,15 +10036,16 @@ class AngularLineScript(BaseScriptObject):
                 attr_list.add_attribute(attr_grosor_neopre_id, grosor_length_value)
 
             if attr_list.get_attribute_list():
-                elem.SetAttributes(attr_list.get_attribute_list())
+                elements.set_element_attributes(len(elements) - 1, attr_list.get_attribute_list())
+                # elem.SetAttributes(attr_list.get_attribute_list())
 
-            elements.append(elem)
+            # elements.append(elem)
 
         return elements
 
     def create_individual_pythonparts_from_elements(
         self,
-        elements_list: List[AllplanBasisElements.ModelElement3D],
+        elements_list: ModelEleList,
         start_point: AllplanGeo.Point3D = None,
         end_point: AllplanGeo.Point3D = None,
         angular_key: str = None,
