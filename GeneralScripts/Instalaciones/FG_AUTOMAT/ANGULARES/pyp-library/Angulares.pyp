@@ -137,6 +137,30 @@
         <TextId>2008</TextId>
       </Parameter>
 
+      <Parameter>
+        <Name>TituloAngularJuntaD</Name>
+        <Text>Angular de junta D.</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2011</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Junta_D</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_JUNTA_D</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1024</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador5</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2009</TextId>
+      </Parameter>
+
     </Parameter>
 
     <Parameter>
@@ -458,6 +482,30 @@
         <Text>─────────────────────</Text>
         <ValueType>Separator</ValueType>
         <TextId>2108</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloAngularJuntaD_Grupal</Name>
+        <Text>Angular de junta D.</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2111</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Junta_D_Grupal</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_JUNTA_D</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1124</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador5_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2109</TextId>
       </Parameter>
 
     </Parameter>

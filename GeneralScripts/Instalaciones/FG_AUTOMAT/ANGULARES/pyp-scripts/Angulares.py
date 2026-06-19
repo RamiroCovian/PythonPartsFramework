@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.15-sin-asociacion-automatica-muro"
+ANGULARES_SCRIPT_VERSION = "2.3.18-angular-junta-d-horizontal-holes"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -457,15 +457,23 @@ def get_hole_coordinates(angular_key: str) -> dict:
         row_name = "superior" if row_idx == 0 else "inferior"
 
         for hole_x in row["x_positions"]:
+            if definition.get("hole_plane") == "vertical":
+                local_coords = (hole_x, 0.0, hole_y)
+            else:
+                local_coords = (hole_x, hole_y, 0.0)
             holes.append(
                 {
                     "index": hole_index,
-                    "local_coords": (hole_x, hole_y, 0.0),
+                    "local_coords": local_coords,
                     "row": row_name,
                     "x": hole_x,
-                    "y": hole_y,
-                    "z": 0.0,
-                    "description": f"Taladro {hole_index} ({row_name}): posición X={hole_x}mm, Y={hole_y}mm",
+                    "y": local_coords[1],
+                    "z": local_coords[2],
+                    "description": (
+                        f"Taladro {hole_index} ({row_name}): coordenadas locales "
+                        f"X={local_coords[0]}mm, Y={local_coords[1]}mm, "
+                        f"Z={local_coords[2]}mm"
+                    ),
                 }
             )
             hole_index += 1
@@ -569,6 +577,23 @@ ANGULAR_CATALOG = {
         ),
         "color": 8,
     },
+    "ANG_JUNTA_D": {
+        "label": "Angular de junta D. 200x200x20 (310) - 2 taladros",
+        "length": 310.0,
+        "vertical": 200.0,
+        "horizontal": 200.0,
+        "thickness": 20.0,
+        # La cota encadenada 73 + 14 + 136 + 14 + 73 da centros X=80/230.
+        "hole_rows": _rows(
+            top_y=200.0 - 40.0,
+            bottom_y=0.0,
+            top_positions=[80.0, 230.0],
+            bottom_positions=[],
+        ),
+        "hole_diameter": 14.0,
+        "hole_plane": "horizontal",
+        "color": 8,
+    },
     "TENSOR": {
         "label": "Tensor",
         "length": 200.0,
@@ -595,29 +620,9 @@ def get_num_forats_from_definition(definition: dict) -> int:
     if definition.get("is_tensor", False):
         return 4
 
-    length = definition.get("length", 0.0)
-
-    if abs(length - 460.0) < 1e-6:
-        return 5
-    elif abs(length - 310.0) < 1e-6:
-        return 4
-    elif abs(length - 150.0) < 1e-6:
-        return 2
-    else:
-        hole_rows = definition.get("hole_rows", [])
-        if hole_rows:
-            total_holes = 0
-            for row in hole_rows:
-                positions = row.get("positions", [])
-                total_holes += len(positions)
-            if total_holes == 5:
-                return 5
-            elif total_holes == 4:
-                return 4
-            elif total_holes == 2:
-                return 2
-
-        return 4
+    return sum(
+        len(row.get("x_positions", [])) for row in definition.get("hole_rows", [])
+    )
 
 
 def get_nom_from_angular_key(angular_key: str) -> str:
@@ -636,6 +641,7 @@ def get_nom_from_angular_key(angular_key: str) -> str:
         "ANG250_L460": "ANGULARS SUPORT 250 x 5 FORATS (460)",
         "ANG250_L310": "ANGULARS SUPORT 250 x 4 FORATS (310)",
         "ANG250_L150": "ANGULARS SUPORT 250x250x25 (150)",
+        "ANG_JUNTA_D": "ANGULAR DE JUNTA D. 200x200x20 (310)",
         "TENSOR": "TENSORS 4 FORATS",
     }
 
@@ -2053,15 +2059,22 @@ def create_single_angular(
         if fillet_err == AllplanGeo.eFilletErrorCode.eNO_ERROR:
             geometry = filleted_geometry
 
+    hole_radius = float(definition.get("hole_diameter", HOLE_DIAMETER)) / 2.0
     for row in definition["hole_rows"]:
         hole_y = row["y"]
         for hole_x in row["x_positions"]:
-            hole_origin = local_to_world(
-                angular_origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0
-            )
-            hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, z_dir)
+            if definition.get("hole_plane") == "vertical":
+                hole_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, hole_x, 0.0, hole_y
+                )
+                hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, y_dir)
+            else:
+                hole_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0
+                )
+                hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, z_dir)
             hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(
-                hole_axis, HOLE_RADIUS, thickness
+                hole_axis, hole_radius, thickness
             )
             err, geometry = AllplanGeo.MakeSubtraction(geometry, hole_cylinder)
             if err != AllplanGeo.eGeometryErrorCode.eOK:
