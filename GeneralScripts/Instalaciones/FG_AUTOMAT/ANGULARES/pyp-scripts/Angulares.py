@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.21-angular-junta-d-slot-edge-40"
+ANGULARES_SCRIPT_VERSION = "2.3.24-new-angulars-colors"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -428,6 +428,19 @@ def _rows(top_y, bottom_y, top_positions, bottom_positions):
     return rows
 
 
+def get_round_hole_sets(definition: dict) -> list[dict]:
+    """Normaliza las perforaciones redondas definidas en una o varias caras."""
+    hole_sets = [
+        {
+            "plane": definition.get("hole_plane", "horizontal"),
+            "diameter": float(definition.get("hole_diameter", HOLE_DIAMETER)),
+            "rows": definition.get("hole_rows", []),
+        }
+    ]
+    hole_sets.extend(definition.get("additional_hole_sets", []))
+    return hole_sets
+
+
 def get_hole_coordinates(angular_key: str) -> dict:
     """Obtiene las coordenadas de todos los taladros para un tipo de angular.
 
@@ -452,32 +465,36 @@ def get_hole_coordinates(angular_key: str) -> dict:
     holes = []
     hole_index = 1
 
-    for row_idx, row in enumerate(definition["hole_rows"]):
-        hole_y = row["y"]
-        row_name = "superior" if row_idx == 0 else "inferior"
+    for hole_set in get_round_hole_sets(definition):
+        plane = hole_set.get("plane", "horizontal")
+        for row_idx, row in enumerate(hole_set.get("rows", [])):
+            hole_y = row["y"]
+            row_name = "superior" if row_idx == 0 else "inferior"
 
-        for hole_x in row["x_positions"]:
-            if definition.get("hole_plane") == "vertical":
-                local_coords = (hole_x, 0.0, hole_y)
-            else:
-                local_coords = (hole_x, hole_y, 0.0)
-            holes.append(
-                {
-                    "index": hole_index,
-                    "type": "round",
-                    "local_coords": local_coords,
-                    "row": row_name,
-                    "x": hole_x,
-                    "y": local_coords[1],
-                    "z": local_coords[2],
-                    "description": (
-                        f"Taladro {hole_index} ({row_name}): coordenadas locales "
-                        f"X={local_coords[0]}mm, Y={local_coords[1]}mm, "
-                        f"Z={local_coords[2]}mm"
-                    ),
-                }
-            )
-            hole_index += 1
+            for hole_x in row["x_positions"]:
+                if plane == "vertical":
+                    local_coords = (hole_x, 0.0, hole_y)
+                else:
+                    local_coords = (hole_x, hole_y, 0.0)
+                holes.append(
+                    {
+                        "index": hole_index,
+                        "type": "round",
+                        "plane": plane,
+                        "local_coords": local_coords,
+                        "row": row_name,
+                        "x": hole_x,
+                        "y": local_coords[1],
+                        "z": local_coords[2],
+                        "diameter": float(hole_set["diameter"]),
+                        "description": (
+                            f"Taladro {hole_index} ({plane}, {row_name}): "
+                            f"coordenadas locales X={local_coords[0]}mm, "
+                            f"Y={local_coords[1]}mm, Z={local_coords[2]}mm"
+                        ),
+                    }
+                )
+                hole_index += 1
 
     for slot_row in definition.get("slot_rows", []):
         for slot_x in slot_row.get("x_positions", []):
@@ -629,7 +646,35 @@ ANGULAR_CATALOG = {
                 "diameter": 14.0,
             }
         ],
-        "color": 8,
+        "color": 34,
+    },
+    "ANG_REMUNTA": {
+        "label": "Angular remunta 200x200x20 (310) - 4 taladros",
+        "length": 310.0,
+        "vertical": 200.0,
+        "horizontal": 200.0,
+        "thickness": 20.0,
+        "hole_rows": _rows(
+            top_y=200.0 - 40.0,
+            bottom_y=0.0,
+            top_positions=[50.0, 260.0],
+            bottom_positions=[],
+        ),
+        "hole_diameter": 14.0,
+        "hole_plane": "vertical",
+        "additional_hole_sets": [
+            {
+                "plane": "horizontal",
+                "diameter": 14.0,
+                "rows": _rows(
+                    top_y=200.0 - 40.0,
+                    bottom_y=0.0,
+                    top_positions=[50.0, 260.0],
+                    bottom_positions=[],
+                ),
+            }
+        ],
+        "color": 226,
     },
     "TENSOR": {
         "label": "Tensor",
@@ -658,7 +703,9 @@ def get_num_forats_from_definition(definition: dict) -> int:
         return 4
 
     round_holes = sum(
-        len(row.get("x_positions", [])) for row in definition.get("hole_rows", [])
+        len(row.get("x_positions", []))
+        for hole_set in get_round_hole_sets(definition)
+        for row in hole_set.get("rows", [])
     )
     slots = sum(
         len(row.get("x_positions", [])) for row in definition.get("slot_rows", [])
@@ -683,6 +730,7 @@ def get_nom_from_angular_key(angular_key: str) -> str:
         "ANG250_L310": "ANGULARS SUPORT 250 x 4 FORATS (310)",
         "ANG250_L150": "ANGULARS SUPORT 250x250x25 (150)",
         "ANG_JUNTA_D": "ANGULAR DE JUNTA D. 200x200x20 (310)",
+        "ANG_REMUNTA": "ANGULAR REMUNTA 200x200x20 (310)",
         "TENSOR": "TENSORS 4 FORATS",
     }
 
@@ -2100,26 +2148,32 @@ def create_single_angular(
         if fillet_err == AllplanGeo.eFilletErrorCode.eNO_ERROR:
             geometry = filleted_geometry
 
-    hole_radius = float(definition.get("hole_diameter", HOLE_DIAMETER)) / 2.0
-    for row in definition["hole_rows"]:
-        hole_y = row["y"]
-        for hole_x in row["x_positions"]:
-            if definition.get("hole_plane") == "vertical":
-                hole_origin = local_to_world(
-                    angular_origin, x_dir, y_dir, z_dir, hole_x, 0.0, hole_y
+    for hole_set in get_round_hole_sets(definition):
+        plane = hole_set.get("plane", "horizontal")
+        hole_radius = float(hole_set.get("diameter", HOLE_DIAMETER)) / 2.0
+        for row in hole_set.get("rows", []):
+            hole_y = row["y"]
+            for hole_x in row["x_positions"]:
+                if plane == "vertical":
+                    hole_origin = local_to_world(
+                        angular_origin, x_dir, y_dir, z_dir, hole_x, 0.0, hole_y
+                    )
+                    hole_axis = AllplanGeo.AxisPlacement3D(
+                        hole_origin, x_dir, y_dir
+                    )
+                else:
+                    hole_origin = local_to_world(
+                        angular_origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0
+                    )
+                    hole_axis = AllplanGeo.AxisPlacement3D(
+                        hole_origin, x_dir, z_dir
+                    )
+                hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(
+                    hole_axis, hole_radius, thickness
                 )
-                hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, y_dir)
-            else:
-                hole_origin = local_to_world(
-                    angular_origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0
-                )
-                hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, z_dir)
-            hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(
-                hole_axis, hole_radius, thickness
-            )
-            err, geometry = AllplanGeo.MakeSubtraction(geometry, hole_cylinder)
-            if err != AllplanGeo.eGeometryErrorCode.eOK:
-                continue
+                err, geometry = AllplanGeo.MakeSubtraction(geometry, hole_cylinder)
+                if err != AllplanGeo.eGeometryErrorCode.eOK:
+                    continue
 
     for slot_row in definition.get("slot_rows", []):
         plane = slot_row.get("plane")

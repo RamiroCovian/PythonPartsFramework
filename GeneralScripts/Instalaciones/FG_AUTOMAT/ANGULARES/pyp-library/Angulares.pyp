@@ -161,6 +161,30 @@
         <TextId>2009</TextId>
       </Parameter>
 
+      <Parameter>
+        <Name>TituloAngularRemunta</Name>
+        <Text>Angular remunta</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2012</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Remunta</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_REMUNTA</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1201</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador6</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2013</TextId>
+      </Parameter>
+
     </Parameter>
 
     <Parameter>
@@ -506,6 +530,30 @@
         <Text>─────────────────────</Text>
         <ValueType>Separator</ValueType>
         <TextId>2109</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloAngularRemunta_Grupal</Name>
+        <Text>Angular remunta</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2112</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Remunta_Grupal</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_REMUNTA</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1202</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador6_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2113</TextId>
       </Parameter>
 
     </Parameter>
