@@ -49,7 +49,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.18-angular-junta-d-horizontal-holes"
+ANGULARES_SCRIPT_VERSION = "2.3.21-angular-junta-d-slot-edge-40"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -464,6 +464,7 @@ def get_hole_coordinates(angular_key: str) -> dict:
             holes.append(
                 {
                     "index": hole_index,
+                    "type": "round",
                     "local_coords": local_coords,
                     "row": row_name,
                     "x": hole_x,
@@ -473,6 +474,32 @@ def get_hole_coordinates(angular_key: str) -> dict:
                         f"Taladro {hole_index} ({row_name}): coordenadas locales "
                         f"X={local_coords[0]}mm, Y={local_coords[1]}mm, "
                         f"Z={local_coords[2]}mm"
+                    ),
+                }
+            )
+            hole_index += 1
+
+    for slot_row in definition.get("slot_rows", []):
+        for slot_x in slot_row.get("x_positions", []):
+            if slot_row.get("plane") == "vertical":
+                local_coords = (slot_x, 0.0, float(slot_row["z_center"]))
+            else:
+                local_coords = (slot_x, float(slot_row["y_center"]), 0.0)
+            holes.append(
+                {
+                    "index": hole_index,
+                    "type": "slot",
+                    "local_coords": local_coords,
+                    "row": str(slot_row.get("plane", "")),
+                    "x": local_coords[0],
+                    "y": local_coords[1],
+                    "z": local_coords[2],
+                    "diameter": float(slot_row["diameter"]),
+                    "overall_length": float(slot_row["overall_length"]),
+                    "description": (
+                        f"Coliso {hole_index}: centro local X={local_coords[0]}mm, "
+                        f"Y={local_coords[1]}mm, longitud total="
+                        f"{slot_row['overall_length']}mm, ancho={slot_row['diameter']}mm"
                     ),
                 }
             )
@@ -578,7 +605,7 @@ ANGULAR_CATALOG = {
         "color": 8,
     },
     "ANG_JUNTA_D": {
-        "label": "Angular de junta D. 200x200x20 (310) - 2 taladros",
+        "label": "Angular de junta D. 200x200x20 (310) - 2 taladros + 2 colisos",
         "length": 310.0,
         "vertical": 200.0,
         "horizontal": 200.0,
@@ -592,6 +619,16 @@ ANGULAR_CATALOG = {
         ),
         "hole_diameter": 14.0,
         "hole_plane": "horizontal",
+        "slot_rows": [
+            {
+                "plane": "vertical",
+                "direction": "z",
+                "x_positions": [80.0, 230.0],
+                "z_center": 140.0,
+                "overall_length": 40.0,
+                "diameter": 14.0,
+            }
+        ],
         "color": 8,
     },
     "TENSOR": {
@@ -620,9 +657,13 @@ def get_num_forats_from_definition(definition: dict) -> int:
     if definition.get("is_tensor", False):
         return 4
 
-    return sum(
+    round_holes = sum(
         len(row.get("x_positions", [])) for row in definition.get("hole_rows", [])
     )
+    slots = sum(
+        len(row.get("x_positions", [])) for row in definition.get("slot_rows", [])
+    )
+    return round_holes + slots
 
 
 def get_nom_from_angular_key(angular_key: str) -> str:
@@ -2079,6 +2120,84 @@ def create_single_angular(
             err, geometry = AllplanGeo.MakeSubtraction(geometry, hole_cylinder)
             if err != AllplanGeo.eGeometryErrorCode.eOK:
                 continue
+
+    for slot_row in definition.get("slot_rows", []):
+        plane = slot_row.get("plane")
+        direction = slot_row.get("direction")
+        if (plane, direction) not in (("horizontal", "y"), ("vertical", "z")):
+            continue
+
+        diameter = float(slot_row.get("diameter", HOLE_DIAMETER))
+        overall_length = float(slot_row.get("overall_length", 0.0))
+        center_distance = overall_length - diameter
+        if diameter <= 0.0 or center_distance < 0.0:
+            continue
+
+        radius = diameter / 2.0
+        center = float(
+            slot_row.get("y_center" if plane == "horizontal" else "z_center", 0.0)
+        )
+        slot_start = center - center_distance / 2.0
+        slot_end = center + center_distance / 2.0
+
+        for slot_x in slot_row.get("x_positions", []):
+            if plane == "horizontal":
+                start_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, slot_start, 0.0
+                )
+                end_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, slot_end, 0.0
+                )
+                start_axis = AllplanGeo.AxisPlacement3D(start_origin, x_dir, z_dir)
+                end_axis = AllplanGeo.AxisPlacement3D(end_origin, x_dir, z_dir)
+                bridge_offset = (slot_x - radius, slot_start, 0.0)
+                bridge_dimensions = (diameter, center_distance, thickness)
+            else:
+                start_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, 0.0, slot_start
+                )
+                end_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, 0.0, slot_end
+                )
+                start_axis = AllplanGeo.AxisPlacement3D(start_origin, x_dir, y_dir)
+                end_axis = AllplanGeo.AxisPlacement3D(end_origin, x_dir, y_dir)
+                bridge_offset = (slot_x - radius, 0.0, slot_start)
+                bridge_dimensions = (diameter, thickness, center_distance)
+
+            start_cylinder = AllplanGeo.BRep3D.CreateCylinder(
+                start_axis, radius, thickness
+            )
+            end_cylinder = AllplanGeo.BRep3D.CreateCylinder(
+                end_axis, radius, thickness
+            )
+
+            bridge_axis = axis_with_offset(
+                angular_origin,
+                x_dir,
+                y_dir,
+                z_dir,
+                *bridge_offset,
+            )
+            bridge = AllplanGeo.BRep3D.CreateCuboid(bridge_axis, *bridge_dimensions)
+
+            union_err, slot_cutter = AllplanGeo.MakeUnion(start_cylinder, bridge)
+            if union_err == AllplanGeo.eGeometryErrorCode.eOK:
+                union_err, complete_cutter = AllplanGeo.MakeUnion(
+                    slot_cutter, end_cylinder
+                )
+                if union_err == AllplanGeo.eGeometryErrorCode.eOK:
+                    slot_cutter = complete_cutter
+                    err, cut_geometry = AllplanGeo.MakeSubtraction(
+                        geometry, slot_cutter
+                    )
+                    if err == AllplanGeo.eGeometryErrorCode.eOK:
+                        geometry = cut_geometry
+                        continue
+
+            for cutter in (start_cylinder, bridge, end_cylinder):
+                err, cut_geometry = AllplanGeo.MakeSubtraction(geometry, cutter)
+                if err == AllplanGeo.eGeometryErrorCode.eOK:
+                    geometry = cut_geometry
 
     return geometry
 
