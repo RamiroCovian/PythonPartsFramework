@@ -737,6 +737,22 @@ def get_nom_from_angular_key(angular_key: str) -> str:
     return nom_mapping.get(angular_key, "")
 
 
+def get_article_code_from_angular_key(angular_key: str) -> str:
+    """Obtiene el codigo de articulo para DEN y pmp_CARTICULO."""
+    article_mapping = {
+        "ANG200_L460": "FG01_001_001",
+        "ANG200_L310": "FG01_001_002",
+        "ANG200_L150": "FG01_001_003",
+        "ANG250_L460": "FG01_001_004",
+        "ANG250_L310": "FG01_001_005",
+        "ANG250_L150": "FG01_001_006",
+        "ANG_JUNTA_D": "FG01_002_001",
+        "ANG_REMUNTA": "FG01_002_002",
+    }
+
+    return article_mapping.get(angular_key, "")
+
+
 def vector_from_points(
     start_point: AllplanGeo.Point3D, end_point: AllplanGeo.Point3D
 ) -> AllplanGeo.Vector3D:
@@ -6472,6 +6488,12 @@ class AngularLineScript(BaseScriptObject):
                 self.document, "PMP_FG_ANG_NEOPRE"
             )
         )
+        self.attr_den_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "DEN"
+        )
+        self.attr_pmp_carticulo_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_CARTICULO"
+        )
         self._preview_attribute_ids_ready = True
 
     def _apply_angular_preview_display_properties(
@@ -9954,6 +9976,8 @@ class AngularLineScript(BaseScriptObject):
         attr_nom_id = getattr(self, "attr_pmp_fg_ang_nom_id", 0)
         attr_neopre_id = getattr(self, "attr_pmp_fg_angular_neopre_id", 0)
         attr_grosor_neopre_id = getattr(self, "attr_pmp_fg_ang_neopre_id", 0)
+        attr_den_id = getattr(self, "attr_den_id", 0)
+        attr_pmp_carticulo_id = getattr(self, "attr_pmp_carticulo_id", 0)
 
         # Atributos PMP_FG_*: recalcular y setear al final (salida, no entrada). Valores desde build_ele.
         num_forats = get_num_forats_from_definition(definition)
@@ -9963,6 +9987,7 @@ class AngularLineScript(BaseScriptObject):
             else None
         )
         nom_value = get_nom_from_angular_key(angular_key) if angular_key else ""
+        article_code = get_article_code_from_angular_key(angular_key) if angular_key else ""
 
         lleva_neopreno = (
             bool(getattr(self.build_ele.SiLlevaNeopreno, "value", False))
@@ -9996,6 +10021,12 @@ class AngularLineScript(BaseScriptObject):
             if attr_nom_id > 0 and nom_value:
                 attr_list.add_attribute(attr_nom_id, nom_value)
 
+            if attr_den_id > 0 and article_code:
+                attr_list.add_attribute(attr_den_id, article_code)
+
+            if attr_pmp_carticulo_id > 0 and article_code:
+                attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
+
             if attr_neopre_id > 0:
                 attr_list.add_attribute(attr_neopre_id, neopre_value)
 
@@ -10028,6 +10059,12 @@ class AngularLineScript(BaseScriptObject):
 
             if attr_nom_id > 0 and nom_value:
                 attr_list.add_attribute(attr_nom_id, nom_value)
+
+            if attr_den_id > 0 and article_code:
+                attr_list.add_attribute(attr_den_id, article_code)
+
+            if attr_pmp_carticulo_id > 0 and article_code:
+                attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
 
             if attr_neopre_id > 0:
                 attr_list.add_attribute(attr_neopre_id, neopre_value)
@@ -10101,6 +10138,8 @@ class AngularLineScript(BaseScriptObject):
                 attr_nom_id = getattr(self, "attr_pmp_fg_ang_nom_id", 0)
                 attr_neopre_id = getattr(self, "attr_pmp_fg_angular_neopre_id", 0)
                 attr_largo_neopre_id = getattr(self, "attr_pmp_fg_ang_neopre_id", 0)
+                attr_den_id = getattr(self, "attr_den_id", 0)
+                attr_pmp_carticulo_id = getattr(self, "attr_pmp_carticulo_id", 0)
 
                 #  Usar pmp_pare pasado como parámetro (NO leer desde build_ele)
                 wall_pare = pmp_pare.replace("'", "") if pmp_pare else ""
@@ -10124,6 +10163,15 @@ class AngularLineScript(BaseScriptObject):
                     nom_value = get_nom_from_angular_key(angular_key)
                     if nom_value:
                         attr_list.add_attribute(attr_nom_id, nom_value)
+
+                article_code = (
+                    get_article_code_from_angular_key(angular_key) if angular_key else ""
+                )
+                if attr_den_id > 0 and article_code:
+                    attr_list.add_attribute(attr_den_id, article_code)
+
+                if attr_pmp_carticulo_id > 0 and article_code:
+                    attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
 
                 if attr_neopre_id > 0:
                     lleva_neopreno = False
@@ -10548,6 +10596,12 @@ class AngularLineScript(BaseScriptObject):
             AllplanBaseElements.AttributeService.GetAttributeID(
                 self.document, "PMP_FG_ANG_NEOPRE"
             )
+        )
+        self.attr_den_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "DEN"
+        )
+        self.attr_pmp_carticulo_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_CARTICULO"
         )
 
         #  create_angulars() - SIEMPRE aplica PMP_PARE
@@ -11204,6 +11258,12 @@ class AngularLineScript(BaseScriptObject):
             AllplanBaseElements.AttributeService.GetAttributeID(
                 self.document, "PMP_FG_ANG_NEOPRE"
             )
+        )
+        self.attr_den_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "DEN"
+        )
+        self.attr_pmp_carticulo_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_CARTICULO"
         )
 
         #  create_angulars() - Pasa is_modify=True (aunque ya no importa, se aplica PMP_PARE igual)
