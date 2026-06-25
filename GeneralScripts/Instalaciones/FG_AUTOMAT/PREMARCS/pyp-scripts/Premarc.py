@@ -7680,7 +7680,24 @@ class PremarcScriptObject(BaseScriptObject):
 
 
         # Manage Disable XPS for Persianas
-        metalunic_upper_xps_depth = xps_depth
+        metalunic_upper_xps_depth = min(
+            max(float(self.build_ele.PersianaWidth.value), 0.0),
+            max(float(xps_depth), 0.0),
+        )
+        metalunic_upper_xps_y = (
+            self.thickness
+            - wall_thickness_xps
+            - metalunic_upper_xps_depth
+        )
+        metalunic_upper_top_xps_depth = min(
+            metalunic_upper_xps_depth + 40.0,
+            max(float(xps_depth), 0.0),
+        )
+        metalunic_upper_top_xps_y = (
+            self.thickness
+            - wall_thickness_xps
+            - metalunic_upper_top_xps_depth
+        )
         metalunic_inner_xps_depth = (
             self.thickness
             - wall_thickness_xps
@@ -7689,7 +7706,7 @@ class PremarcScriptObject(BaseScriptObject):
         )
         add_xps_bool = metalunic_upper_xps_depth > 0
         add_xps_bool_fals_calaix = self.thickness - wall_thickness_xps - 3 > xps_thickness
-        upper_top_extensions = []
+        shutter_xps_elems = []
         match self.build_ele.ComboBoxPersianas.value:
             case "METALUNIC VIST":
                 print(
@@ -7700,6 +7717,9 @@ class PremarcScriptObject(BaseScriptObject):
                     f"persiana_height={float(self.build_ele.PersianaHeight.value):.1f}, "
                     f"xps_thickness={float(xps_thickness):.1f}, "
                     f"metalunic_upper_xps_depth={float(metalunic_upper_xps_depth):.1f}, "
+                    f"metalunic_upper_xps_y={float(metalunic_upper_xps_y):.1f}, "
+                    f"metalunic_upper_top_xps_depth={float(metalunic_upper_top_xps_depth):.1f}, "
+                    f"metalunic_upper_top_xps_y={float(metalunic_upper_top_xps_y):.1f}, "
                     f"metalunic_inner_xps_depth={float(metalunic_inner_xps_depth):.1f}"
                 )
                 if cuboid_top in elems:
@@ -7709,17 +7729,22 @@ class PremarcScriptObject(BaseScriptObject):
                             "[Premarc][XPS][METALUNIC] "
                             "Creando XPS metalunic + laterales superiores + tapa superior"
                         )
-                        elems.extend(self.create_xps_metalunic())
-                        elems.extend(
-                            self.create_upper_xps_side_extensions(
-                                metalunic_upper_xps_depth,
-                                self.build_ele.PersianaHeight.value,
-                            )
-                        )
-                        upper_top_extensions = self.create_upper_xps_top_extension(
+                        metalunic_xps = self.create_xps_metalunic()
+                        upper_side_extensions = self.create_upper_xps_side_extensions(
                             metalunic_upper_xps_depth,
                             self.build_ele.PersianaHeight.value,
+                            metalunic_upper_xps_y,
                         )
+                        upper_top_extensions = self.create_upper_xps_top_extension(
+                            metalunic_upper_top_xps_depth,
+                            self.build_ele.PersianaHeight.value,
+                            metalunic_upper_top_xps_y,
+                        )
+                        shutter_xps_elems.extend(metalunic_xps)
+                        shutter_xps_elems.extend(upper_side_extensions)
+                        shutter_xps_elems.extend(upper_top_extensions)
+                        elems.extend(metalunic_xps)
+                        elems.extend(upper_side_extensions)
                         elems.extend(upper_top_extensions)
                     else:
                         print(
@@ -7729,27 +7754,30 @@ class PremarcScriptObject(BaseScriptObject):
             case "MONOBLOCK OCULT":
                 if cuboid_top in elems:
                     elems.remove(cuboid_top)
-                    elems.extend(
-                        self.create_upper_xps_side_extensions(
-                            xps_depth, self.build_ele.PersianaHeight.value
-                        )
+                    upper_side_extensions = self.create_upper_xps_side_extensions(
+                        xps_depth, self.build_ele.PersianaHeight.value
                     )
+                    shutter_xps_elems.extend(upper_side_extensions)
+                    elems.extend(upper_side_extensions)
                     upper_top_extensions = self.create_upper_xps_top_extension(
                         xps_depth, self.build_ele.PersianaHeight.value
                     )
+                    shutter_xps_elems.extend(upper_top_extensions)
                     elems.extend(upper_top_extensions)
             case "FALS CALAIX":
                 if cuboid_top in elems:
                     elems.remove(cuboid_top)
                     if add_xps_bool_fals_calaix:
-                        elems.extend(self.create_xps_fals_calaix())
+                        fals_calaix_xps = self.create_xps_fals_calaix()
+                        shutter_xps_elems.extend(fals_calaix_xps)
+                        elems.extend(fals_calaix_xps)
         # Manage Disable XPS
         if self.build_ele.DisableTopXPS.value:
             if cuboid_top in elems:
                 elems.remove(cuboid_top)
-            for upper_top in upper_top_extensions:
-                if upper_top in elems:
-                    elems.remove(upper_top)
+            for shutter_xps in shutter_xps_elems:
+                if shutter_xps in elems:
+                    elems.remove(shutter_xps)
             # Check if XPS enters the space available
 
 
@@ -7808,12 +7836,13 @@ class PremarcScriptObject(BaseScriptObject):
 
         return []
 
-    def create_upper_xps_side_extensions(self, depth: float, height: float):
+    def create_upper_xps_side_extensions(self, depth: float, height: float, y_offset: float = 3.0):
         """Create the two XPS side extensions above the opening top.
 
         Local reference:
         - opening top plane is z=0 after the common move(0, -thickness, -heigh)
         - positive local Z grows upward above the opening
+        - y_offset is expressed before the common move; final Y = y_offset - thickness
         """
         if depth <= 0 or height <= 0:
             return []
@@ -7825,10 +7854,10 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
         pos_left_top = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(-xps_thickness, 3, self.heigh)
+            AllplanGeo.Point3D(-xps_thickness, y_offset, self.heigh)
         )
         pos_right_top = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(self.width, 3, self.heigh)
+            AllplanGeo.Point3D(self.width, y_offset, self.heigh)
         )
 
         cuboid_left_top = AllplanGeo.Polyhedron3D.CreateCuboid(
@@ -7843,7 +7872,7 @@ class PremarcScriptObject(BaseScriptObject):
         cuboid_right_top = AllplanGeo.Move(cuboid_right_top, move_vec)
         return [cuboid_left_top, cuboid_right_top]
 
-    def create_upper_xps_top_extension(self, depth: float, height: float):
+    def create_upper_xps_top_extension(self, depth: float, height: float, y_offset: float = 3.0):
         """Create the XPS top piece above the shutter zone."""
         if depth <= 0 or height <= 0:
             return []
@@ -7855,7 +7884,7 @@ class PremarcScriptObject(BaseScriptObject):
         )
 
         pos_top_upper = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(-xps_thickness, 3, self.heigh + height)
+            AllplanGeo.Point3D(-xps_thickness, y_offset, self.heigh + height)
         )
         cuboid_top_upper = AllplanGeo.Polyhedron3D.CreateCuboid(
             pos_top_upper, self.width + (xps_thickness * 2), depth, xps_thickness
