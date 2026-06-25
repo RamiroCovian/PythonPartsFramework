@@ -6385,7 +6385,8 @@ class AngularLineScript(BaseScriptObject):
     ) -> AllplanGeo.Line3D:
         """Construye una línea interna de pieza desde el punto clicado."""
         self._last_individual_position_valid = False
-        if not self._resolve_individual_face_from_wall(position):
+        has_active_face = bool(self.face_polygon and self.face_normal and self.face_point)
+        if not has_active_face and not self._resolve_individual_face_from_wall(position):
             return AllplanGeo.Line3D()
         self._last_individual_position_valid = True
 
