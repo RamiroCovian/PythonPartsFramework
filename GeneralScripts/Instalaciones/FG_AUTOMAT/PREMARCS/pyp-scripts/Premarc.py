@@ -7619,23 +7619,36 @@ class PremarcScriptObject(BaseScriptObject):
             return []
 
         xps_thickness = self.xps_thickness if self.xps_thickness_ind else (40 if self.xps_type == "XPS" else 120)
-        xps_depth = self.thickness - wall_thickness_xps - 3
+        sheet_offset = float(THICKNESS_MM)
+        xps_depth = self.thickness - wall_thickness_xps - sheet_offset
 
-        pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0 - xps_thickness, 0 + 3, 0 - xps_thickness))
-        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0 - xps_thickness, 0 + 3, 0 + self.heigh))
-        pos_left = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0 - xps_thickness, 0 + 3, 0))
-        pos_right = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0 + self.width, 0 + 3, 0))
+        if xps_depth <= 0:
+            return []
 
-        cuboid_bottom = AllplanGeo.Polyhedron3D.CreateCuboid(pos_bottom, self.width + (xps_thickness * 2), xps_depth, xps_thickness)
+        horizontal_x = -xps_thickness - sheet_offset
+        horizontal_width = self.width + ((xps_thickness + sheet_offset) * 2)
+        left_x = -xps_thickness - sheet_offset
+        right_x = self.width + sheet_offset
+        bottom_z = -xps_thickness - sheet_offset
+        vertical_z = -sheet_offset
+        vertical_height = self.heigh + (sheet_offset * 2)
+        xps_y = sheet_offset
+
+        pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, xps_y, bottom_z))
+        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, xps_y, 0 + self.heigh))
+        pos_left = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(left_x, xps_y, vertical_z))
+        pos_right = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(right_x, xps_y, vertical_z))
+
+        cuboid_bottom = AllplanGeo.Polyhedron3D.CreateCuboid(pos_bottom, horizontal_width, xps_depth, xps_thickness)
         cuboid_bottom = AllplanGeo.Move(cuboid_bottom, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
 
-        cuboid_top = AllplanGeo.Polyhedron3D.CreateCuboid(pos_top, self.width + (xps_thickness * 2), xps_depth, xps_thickness)
+        cuboid_top = AllplanGeo.Polyhedron3D.CreateCuboid(pos_top, horizontal_width, xps_depth, xps_thickness)
         cuboid_top = AllplanGeo.Move(cuboid_top, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
 
-        cuboid_left = AllplanGeo.Polyhedron3D.CreateCuboid(pos_left, xps_thickness,xps_depth, self.heigh)
+        cuboid_left = AllplanGeo.Polyhedron3D.CreateCuboid(pos_left, xps_thickness,xps_depth, vertical_height)
         cuboid_left = AllplanGeo.Move(cuboid_left, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
 
-        cuboid_right = AllplanGeo.Polyhedron3D.CreateCuboid(pos_right, xps_thickness, xps_depth, self.heigh)
+        cuboid_right = AllplanGeo.Polyhedron3D.CreateCuboid(pos_right, xps_thickness, xps_depth, vertical_height)
         cuboid_right = AllplanGeo.Move(cuboid_right, AllplanGeo.Vector3D(0,-self.thickness,-self.heigh))
 
         elems = [cuboid_bottom, cuboid_top, cuboid_left, cuboid_right]
@@ -7702,10 +7715,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.thickness
             - wall_thickness_xps
             - self.build_ele.PersianaWidth.value
-            - 3
+            - sheet_offset
         )
         add_xps_bool = metalunic_upper_xps_depth > 0
-        add_xps_bool_fals_calaix = self.thickness - wall_thickness_xps - 3 > xps_thickness
+        add_xps_bool_fals_calaix = self.thickness - wall_thickness_xps - sheet_offset > xps_thickness
         shutter_xps_elems = []
         match self.build_ele.ComboBoxPersianas.value:
             case "METALUNIC VIST":
@@ -7797,17 +7810,21 @@ class PremarcScriptObject(BaseScriptObject):
     def create_xps_metalunic(self):
         wall_thickness_xps = self._xps_wall_thickness_mm()
         xps_thickness = self.xps_thickness if self.xps_thickness_ind else (40 if self.xps_type == "XPS" else 120)
-        xps_depth = self.thickness - wall_thickness_xps - self.build_ele.PersianaWidth.value - 3
+        sheet_offset = float(THICKNESS_MM)
+        xps_depth = self.thickness - wall_thickness_xps - self.build_ele.PersianaWidth.value - sheet_offset
+        horizontal_x = -xps_thickness - sheet_offset
+        horizontal_width = self.width + ((xps_thickness + sheet_offset) * 2)
+        shutter_upper_z = sheet_offset
 
-        position_vertical = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D( -xps_thickness, 0 , 0))
-        position_horizontal = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D( -xps_thickness, 0 , 0))
+        position_vertical = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, 0 , shutter_upper_z))
+        position_horizontal = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, 0 , shutter_upper_z))
 
         if xps_depth > 0:
-            cuboid_vertical = AllplanGeo.Polyhedron3D.CreateCuboid(position_vertical, self.width + (xps_thickness * 2), xps_thickness, self.build_ele.PersianaHeight.value)
+            cuboid_vertical = AllplanGeo.Polyhedron3D.CreateCuboid(position_vertical, horizontal_width, xps_thickness, self.build_ele.PersianaHeight.value)
             cuboid_vertical = AllplanGeo.Move(cuboid_vertical, AllplanGeo.Vector3D(0,-(wall_thickness_xps + self.build_ele.PersianaWidth.value + xps_thickness),0))
 
-            cuboid_horizontal = AllplanGeo.Polyhedron3D.CreateCuboid(position_horizontal, self.width + (xps_thickness * 2), xps_depth, xps_thickness)
-            cuboid_horizontal = AllplanGeo.Move(cuboid_horizontal, AllplanGeo.Vector3D(0,-(self.thickness - 3),0))
+            cuboid_horizontal = AllplanGeo.Polyhedron3D.CreateCuboid(position_horizontal, horizontal_width, xps_depth, xps_thickness)
+            cuboid_horizontal = AllplanGeo.Move(cuboid_horizontal, AllplanGeo.Vector3D(0,-(self.thickness - sheet_offset),0))
 
             polyhedrons = AllplanGeo.Polyhedron3DList()
 
@@ -7825,24 +7842,29 @@ class PremarcScriptObject(BaseScriptObject):
     def create_xps_fals_calaix(self):
         wall_thickness_xps = self._xps_wall_thickness_mm()
         xps_thickness = self.xps_thickness if self.xps_thickness_ind else (40 if self.xps_type == "XPS" else 120)
-        xps_depth = self.thickness - wall_thickness_xps - 3
+        sheet_offset = float(THICKNESS_MM)
+        xps_depth = self.thickness - wall_thickness_xps - sheet_offset
+        horizontal_x = -xps_thickness - sheet_offset
+        horizontal_width = self.width + ((xps_thickness + sheet_offset) * 2)
+        shutter_upper_z = sheet_offset
 
-        position_horizontal = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D( -xps_thickness, 0 , 0))
+        position_horizontal = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, 0 , shutter_upper_z))
 
         if xps_depth > 0:
-            cuboid_horizontal = AllplanGeo.Polyhedron3D.CreateCuboid(position_horizontal, self.width + (xps_thickness * 2), xps_depth, xps_thickness)
-            cuboid_horizontal = AllplanGeo.Move(cuboid_horizontal, AllplanGeo.Vector3D(0,-(self.thickness - 3),0))
+            cuboid_horizontal = AllplanGeo.Polyhedron3D.CreateCuboid(position_horizontal, horizontal_width, xps_depth, xps_thickness)
+            cuboid_horizontal = AllplanGeo.Move(cuboid_horizontal, AllplanGeo.Vector3D(0,-(self.thickness - sheet_offset),0))
             return [cuboid_horizontal]
 
         return []
 
-    def create_upper_xps_side_extensions(self, depth: float, height: float, y_offset: float = 3.0):
+    def create_upper_xps_side_extensions(self, depth: float, height: float, y_offset: float = THICKNESS_MM):
         """Create the two XPS side extensions above the opening top.
 
         Local reference:
         - opening top plane is z=0 after the common move(0, -thickness, -heigh)
         - positive local Z grows upward above the opening
         - y_offset is expressed before the common move; final Y = y_offset - thickness
+        - shutter XPS starts 3 mm above the opening top to clear the premarc sheet
         """
         if depth <= 0 or height <= 0:
             return []
@@ -7852,12 +7874,16 @@ class PremarcScriptObject(BaseScriptObject):
             if self.xps_thickness_ind
             else (40 if self.xps_type == "XPS" else 120)
         )
+        sheet_offset = float(THICKNESS_MM)
+        left_x = -xps_thickness - sheet_offset
+        right_x = self.width + sheet_offset
+        shutter_upper_z = float(THICKNESS_MM)
 
         pos_left_top = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(-xps_thickness, y_offset, self.heigh)
+            AllplanGeo.Point3D(left_x, y_offset, self.heigh + shutter_upper_z)
         )
         pos_right_top = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(self.width, y_offset, self.heigh)
+            AllplanGeo.Point3D(right_x, y_offset, self.heigh + shutter_upper_z)
         )
 
         cuboid_left_top = AllplanGeo.Polyhedron3D.CreateCuboid(
@@ -7872,7 +7898,7 @@ class PremarcScriptObject(BaseScriptObject):
         cuboid_right_top = AllplanGeo.Move(cuboid_right_top, move_vec)
         return [cuboid_left_top, cuboid_right_top]
 
-    def create_upper_xps_top_extension(self, depth: float, height: float, y_offset: float = 3.0):
+    def create_upper_xps_top_extension(self, depth: float, height: float, y_offset: float = THICKNESS_MM):
         """Create the XPS top piece above the shutter zone."""
         if depth <= 0 or height <= 0:
             return []
@@ -7882,12 +7908,16 @@ class PremarcScriptObject(BaseScriptObject):
             if self.xps_thickness_ind
             else (40 if self.xps_type == "XPS" else 120)
         )
+        sheet_offset = float(THICKNESS_MM)
+        horizontal_x = -xps_thickness - sheet_offset
+        horizontal_width = self.width + ((xps_thickness + sheet_offset) * 2)
+        shutter_upper_z = sheet_offset
 
         pos_top_upper = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(-xps_thickness, y_offset, self.heigh + height)
+            AllplanGeo.Point3D(horizontal_x, y_offset, self.heigh + height + shutter_upper_z)
         )
         cuboid_top_upper = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_top_upper, self.width + (xps_thickness * 2), depth, xps_thickness
+            pos_top_upper, horizontal_width, depth, xps_thickness
         )
         cuboid_top_upper = AllplanGeo.Move(
             cuboid_top_upper, AllplanGeo.Vector3D(0, -self.thickness, -self.heigh)
@@ -10782,6 +10812,7 @@ class PremarcScriptObject(BaseScriptObject):
         # Manage config UI
         box_shutter_list = []
         shutter_lateral_offset = float(THICKNESS_MM)
+        shutter_z_offset = float(THICKNESS_MM)
         match (self.build_ele.ComboBoxPersianas.value):
             case "NO":
                 print("Persiana Selected NO. Nothing to do")
@@ -10790,14 +10821,14 @@ class PremarcScriptObject(BaseScriptObject):
                 print("MONOBLOCK OCULT")
                 # Move box shutters to offset from front
                 fix_y = self.thickness - self.build_ele.PersianaWidth.value
-                translation_vector = AllplanGeo.Vector3D(-shutter_lateral_offset, -(fix_y), 0)
+                translation_vector = AllplanGeo.Vector3D(-shutter_lateral_offset, -(fix_y), shutter_z_offset)
                 box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
 
                 box_shutter_list.append(polyhedron_box_shutter)
             case "LAMISOL VIST":
                 print("LAMISOL VIST")
-                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-shutter_lateral_offset, 0, 0))
+                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-shutter_lateral_offset, 0, shutter_z_offset))
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case "METALUNIC VIST":
@@ -10805,14 +10836,14 @@ class PremarcScriptObject(BaseScriptObject):
 
                 # Move box shutters to wall thickness
                 fix_y = wall_thickness_xps
-                translation_vector = AllplanGeo.Vector3D(-shutter_lateral_offset, -fix_y, 0)
+                translation_vector = AllplanGeo.Vector3D(-shutter_lateral_offset, -fix_y, shutter_z_offset)
                 box_shutter_moved = AllplanGeo.Move(box_shutter, translation_vector)
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
 
                 box_shutter_list.append(polyhedron_box_shutter)
             case "FALS CALAIX":
                 print("FALS CALAIX")
-                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-shutter_lateral_offset, 0, 0))
+                box_shutter_moved = AllplanGeo.Move(box_shutter, AllplanGeo.Vector3D(-shutter_lateral_offset, 0, shutter_z_offset))
                 error_code, polyhedron_box_shutter = self.extrude_frame(box_shutter_moved, "box_shutter")
                 box_shutter_list.append(polyhedron_box_shutter)
             case _:
