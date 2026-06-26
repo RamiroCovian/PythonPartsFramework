@@ -7702,8 +7702,11 @@ class PremarcScriptObject(BaseScriptObject):
             - wall_thickness_xps
             - metalunic_upper_xps_depth
         )
+        metalunic_upper_top_cover = (
+            float(xps_thickness) if self.xps_type == "PIR" else 40.0
+        )
         metalunic_upper_top_xps_depth = min(
-            metalunic_upper_xps_depth + 40.0,
+            metalunic_upper_xps_depth + metalunic_upper_top_cover,
             max(float(xps_depth), 0.0),
         )
         metalunic_upper_top_xps_y = (
