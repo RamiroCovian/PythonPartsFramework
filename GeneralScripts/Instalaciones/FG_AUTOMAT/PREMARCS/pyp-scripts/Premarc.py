@@ -6685,9 +6685,22 @@ class PremarcScriptObject(BaseScriptObject):
 
         # TODO quitar
         if len(listaAbiertoCerrado) == 0:
-            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA']
+            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT + REA', 'OBERT PER DALT + REA VARIANT', 'OBERT PER BAIX', 'OBERT PER BAIX + REA', 'OBERT PER BAIX + REA VARIANT']
 
-        if debe_actualizar:
+        opciones_locales_anadidas = False
+        for option in (
+            "OBERT PER DALT",
+            "OBERT PER DALT + REA",
+            "OBERT PER DALT + REA VARIANT",
+            "OBERT PER BAIX",
+            "OBERT PER BAIX + REA",
+            "OBERT PER BAIX + REA VARIANT",
+        ):
+            if option not in listaAbiertoCerrado:
+                listaAbiertoCerrado.append(option)
+                opciones_locales_anadidas = True
+
+        if debe_actualizar or opciones_locales_anadidas:
             self.build_ele.valueListaAbiertoCerrado.value = listaAbiertoCerrado
 
     def crearListaPendiente(self):
@@ -7478,7 +7491,9 @@ class PremarcScriptObject(BaseScriptObject):
         for elem in mosquitera:
             model_ele_list.append_geometry_3d(elem, props_mosquitera)
 
-        if self.build_ele.EnableAmpit.value:
+        bottom_open = self.is_bottom_open_premarc()
+
+        if self.build_ele.EnableAmpit.value and not bottom_open:
             ampit, ampit_2d, ampit_edge_fg, ampit_edge_add, ampit_edge_add_cuboid, ampit_spec = self.create_premarc_ampit()
 
             # Per-type layer + FORCED color. A FRESH CommonProperties() instance
@@ -7566,7 +7581,7 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in ampit_2d:
                 model_ele_list.append_geometry_2d(elem, props_ampit_typed)
 
-        if self.build_ele.EnableImpermeabilizacio.value:
+        if self.build_ele.EnableImpermeabilizacio.value and not bottom_open:
             layer_imperm_id = AllplanBaseElements.LayerService.GetIDByShortName(IMPERM_LAYER, self.document)
             props_imperm = AllplanBaseElements.CommonProperties()
             props_imperm.Layer = layer_imperm_id
@@ -7586,19 +7601,19 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in imperm:
                 model_ele_list.append_geometry_3d(elem, props_imperm)
 
-        imperm_attribute_list = BuildingElementAttributeList()
-        imperm_attribute_list.add_attribute(
-            self.pmp_tipus_impermeabilitzacio_id, imperm_type
-        )
-        if imperm_detail:
-            imperm_attribute_list.add_attribute(self.pmp_fg_fus_tipus_impermeabilitzacio_detail_id, imperm_detail)
-        imperm_attribute_list.add_attribute(self.pmp_fg_fusteria_tipus_muntatge_id, imperm_muntatge)
-        self._add_shared_generated_element_attributes(imperm_attribute_list)
-        init_i = len(model_ele_list) - len(imperm)
-        for i in range(init_i, len(model_ele_list)):
-            model_ele_list.set_element_attributes(
-                i, imperm_attribute_list.get_attribute_list()
+            imperm_attribute_list = BuildingElementAttributeList()
+            imperm_attribute_list.add_attribute(
+                self.pmp_tipus_impermeabilitzacio_id, imperm_type
             )
+            if imperm_detail:
+                imperm_attribute_list.add_attribute(self.pmp_fg_fus_tipus_impermeabilitzacio_detail_id, imperm_detail)
+            imperm_attribute_list.add_attribute(self.pmp_fg_fusteria_tipus_muntatge_id, imperm_muntatge)
+            self._add_shared_generated_element_attributes(imperm_attribute_list)
+            init_i = len(model_ele_list) - len(imperm)
+            for i in range(init_i, len(model_ele_list)):
+                model_ele_list.set_element_attributes(
+                    i, imperm_attribute_list.get_attribute_list()
+                )
 
         poly_inside_space, poly_real_space = self.create_real_inside_space()
         if poly_inside_space:
@@ -7659,6 +7674,18 @@ class PremarcScriptObject(BaseScriptObject):
                 elems.remove(cuboid_right)
             case "OBERT FEMELLA ESQUERRA":
                 elems.remove(cuboid_left)
+            case "OBERT PER DALT":
+                elems.remove(cuboid_top)
+            case "OBERT PER DALT + REA":
+                elems.remove(cuboid_top)
+            case "OBERT PER DALT + REA VARIANT":
+                elems.remove(cuboid_top)
+            case "OBERT PER BAIX":
+                elems.remove(cuboid_bottom)
+            case "OBERT PER BAIX + REA":
+                elems.remove(cuboid_bottom)
+            case "OBERT PER BAIX + REA VARIANT":
+                elems.remove(cuboid_bottom)
             case "OBERT FEMELLA DRETA + REA":
                 elems.remove(cuboid_right)
             case "OBERT FEMELLA ESQUERRA + REA":
@@ -9632,6 +9659,43 @@ class PremarcScriptObject(BaseScriptObject):
                                 print("Error in intersection")
                                 pass
 
+            case (
+                "OBERT PER DALT"
+                | "OBERT PER DALT + REA"
+                | "OBERT PER DALT + REA VARIANT"
+            ):
+                print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
+                if polyhedron_top in polyhedron_premarc_list:
+                    try:
+                        polyhedron_premarc_list.remove(polyhedron_top)
+                    except ValueError:
+                        print("Error in remove polyhedron top")
+                if polyhedron_finish_top in polyhedron_premarc_list:
+                    try:
+                        polyhedron_premarc_list.remove(polyhedron_finish_top)
+                    except ValueError:
+                        print("Error in remove polyhedron finish top")
+
+                if self.build_ele.ComboBoxPendiente.value == "NO":
+                    poly_base_no_slope = AllplanGeo.Polyhedron3D(polyhedron_bottom)
+
+            case (
+                "OBERT PER BAIX"
+                | "OBERT PER BAIX + REA"
+                | "OBERT PER BAIX + REA VARIANT"
+            ):
+                print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
+                if polyhedron_bottom in polyhedron_premarc_list:
+                    try:
+                        polyhedron_premarc_list.remove(polyhedron_bottom)
+                    except ValueError:
+                        print("Error in remove polyhedron bottom")
+                if polyhedron_finish_bottom in polyhedron_premarc_list:
+                    try:
+                        polyhedron_premarc_list.remove(polyhedron_finish_bottom)
+                    except ValueError:
+                        print("Error in remove polyhedron finish bottom")
+
             case "OBERT FEMELLA DRETA":
                 print("Selected OBERT FEMELLA DRETA")  # Open premarc with right femella
                 if polyhedron_right in polyhedron_premarc_list:
@@ -10742,6 +10806,13 @@ class PremarcScriptObject(BaseScriptObject):
         d = dict(list_rebajes)
         return (d.get("REB. BAIX") == 1 or d.get("REB. BAIXS") == 1) and d.get("NO") == 0
 
+    def is_bottom_open_premarc(self):
+        return self.build_ele.ComboBoxAbiertoCerrado.value in (
+            "OBERT PER BAIX",
+            "OBERT PER BAIX + REA",
+            "OBERT PER BAIX + REA VARIANT",
+        )
+
     def get_direction_open_premarc(self):
         direction_open_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
         values_direction_right = [
@@ -10756,10 +10827,30 @@ class PremarcScriptObject(BaseScriptObject):
             "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA",
             "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA",
         ]
+        values_direction_top = [
+            "OBERT PER DALT + REA",
+        ]
+        values_direction_top_variant = [
+            "OBERT PER DALT + REA VARIANT",
+        ]
+        values_direction_bottom = [
+            "OBERT PER BAIX + REA",
+        ]
+        values_direction_bottom_variant = [
+            "OBERT PER BAIX + REA VARIANT",
+        ]
         if direction_open_premarc in values_direction_right:
             return "RIGHT"
         elif direction_open_premarc in values_direction_left:
             return "LEFT"
+        elif direction_open_premarc in values_direction_top:
+            return "TOP"
+        elif direction_open_premarc in values_direction_top_variant:
+            return "TOP_VARIANT"
+        elif direction_open_premarc in values_direction_bottom:
+            return "BOTTOM"
+        elif direction_open_premarc in values_direction_bottom_variant:
+            return "BOTTOM_VARIANT"
         else:
             return "NOTHING"
 
@@ -11083,7 +11174,29 @@ class PremarcScriptObject(BaseScriptObject):
         elems_moved = []
         cuboids_moved = []
         cylinders_moved = []
-        if self.get_direction_open_premarc() == "RIGHT":
+        direction_open = self.get_direction_open_premarc()
+
+        def create_horizontal_rea(z_positions, variant=False):
+            rea_length = self.width + REA_extra * 2
+            rea_x = -REA_extra
+            y_positions = (
+                (-space_y, -(space_y + REA_x_y))
+                if variant
+                else (-space_y, -space_y)
+            )
+            result = []
+            for z_pos, y_pos in zip(z_positions, y_positions):
+                pos_rea = AllplanGeo.AxisPlacement3D(
+                    AllplanGeo.Point3D(rea_x, y_pos, z_pos)
+                )
+                result.append(
+                    AllplanGeo.Polyhedron3D.CreateCuboid(
+                        pos_rea, rea_length, -REA_x_y, -REA_x_y
+                    )
+                )
+            return result
+
+        if direction_open == "RIGHT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
             #     elems_moved.append(elem_moved)
@@ -11103,6 +11216,31 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cylinders:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_left)
                 cylinders_moved.append(elem_moved)
+        elif direction_open == "TOP":
+            cuboids_moved = create_horizontal_rea(
+                (-offset_rea, -(offset_rea + REA_x_y))
+            )
+            cylinders_moved = []
+        elif direction_open == "TOP_VARIANT":
+            cuboids_moved = create_horizontal_rea((-offset_rea, -offset_rea), True)
+            cylinders_moved = []
+        elif direction_open == "BOTTOM":
+            cuboids_moved = create_horizontal_rea(
+                (
+                    -self.heigh + offset_rea + REA_x_y,
+                    -self.heigh + offset_rea + REA_x_y * 2,
+                )
+            )
+            cylinders_moved = []
+        elif direction_open == "BOTTOM_VARIANT":
+            cuboids_moved = create_horizontal_rea(
+                (
+                    -self.heigh + offset_rea + REA_x_y,
+                    -self.heigh + offset_rea + REA_x_y,
+                ),
+                True,
+            )
+            cylinders_moved = []
         else:
             cuboids_moved = []
             cylinders_moved = []
@@ -11331,6 +11469,36 @@ class PremarcScriptObject(BaseScriptObject):
         # Rule: remove squares related to open sides (right or left)
         print("Manage Open Premarc in optionals elements (squares - Escuadras)")
         match self.build_ele.ComboBoxAbiertoCerrado.value:
+            case (
+                "OBERT PER DALT"
+                | "OBERT PER DALT + REA"
+                | "OBERT PER DALT + REA VARIANT"
+            ):
+                top_squares = (
+                    polyhedron_square_left_top,
+                    polyhedron_square_right_top,
+                )
+                for original_square, moved_square in zip(original_squares, squares_moved):
+                    if original_square in top_squares:
+                        try:
+                            squares.remove(moved_square)
+                        except ValueError:
+                            print(f"Error in remove polyhedron square: {moved_square}")
+            case (
+                "OBERT PER BAIX"
+                | "OBERT PER BAIX + REA"
+                | "OBERT PER BAIX + REA VARIANT"
+            ):
+                bottom_squares = (
+                    polyhedron_square_left_bottom,
+                    polyhedron_square_right_bottom,
+                )
+                for original_square, moved_square in zip(original_squares, squares_moved):
+                    if original_square in bottom_squares:
+                        try:
+                            squares.remove(moved_square)
+                        except ValueError:
+                            print(f"Error in remove polyhedron square: {moved_square}")
             case "OBERT FEMELLA DRETA":
                 for square in (
                     polyhedron_square_right_top,
