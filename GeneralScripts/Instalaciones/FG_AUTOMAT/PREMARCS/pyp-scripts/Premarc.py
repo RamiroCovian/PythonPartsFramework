@@ -11179,10 +11179,20 @@ class PremarcScriptObject(BaseScriptObject):
         def create_horizontal_rea(z_positions, variant=False):
             rea_length = self.width + REA_extra * 2
             rea_x = -REA_extra
+            try:
+                wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
+            except Exception:
+                wall_thickness = 0.0
+            if wall_thickness <= 0:
+                wall_thickness = float(self.detected_wall_thickness or 0.0)
+            wall_center_y = -wall_thickness / 2
+            # Cuboids are created with a negative Y depth (-REA_x_y). For a
+            # single tube, start Y must be center + half depth. For variant,
+            # center the two adjacent tubes as one 2*REA_x_y package.
             y_positions = (
-                (-space_y, -(space_y + REA_x_y))
+                (wall_center_y + REA_x_y, wall_center_y)
                 if variant
-                else (-space_y, -space_y)
+                else (wall_center_y + REA_x_y / 2, wall_center_y + REA_x_y / 2)
             )
             result = []
             for z_pos, y_pos in zip(z_positions, y_positions):
