@@ -10270,7 +10270,7 @@ class PremarcScriptObject(BaseScriptObject):
             case _:
                 print("Selected default")
 
-        if poly_base_no_slope is None:
+        if poly_base_no_slope is None and not self.is_bottom_open_premarc():
             if self.build_ele.ComboBoxPendiente.value == "SI":
                 if self.bottom_rebaje_enabled():
                     poly_base_no_slope = AllplanGeo.Polyhedron3D(
