@@ -7645,8 +7645,9 @@ class PremarcScriptObject(BaseScriptObject):
         left_x = -xps_thickness - sheet_offset
         right_x = self.width + sheet_offset
         bottom_z = -xps_thickness - sheet_offset
-        vertical_z = -sheet_offset
-        vertical_height = self.heigh + (sheet_offset * 2)
+        vertical_z = 0.0 if self.is_bottom_open_premarc() else -sheet_offset
+        vertical_top_z = self.heigh if self.is_top_open_premarc() else self.heigh + sheet_offset
+        vertical_height = vertical_top_z - vertical_z
         xps_y = sheet_offset
 
         pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, xps_y, bottom_z))
@@ -8966,6 +8967,8 @@ class PremarcScriptObject(BaseScriptObject):
         frame_x_max = float(self.width) + float(THICKNESS_MM)
         frame_z_top = float(THICKNESS_MM)
         frame_z_bottom = -float(self.heigh) - float(THICKNESS_MM)
+        side_frame_z_bottom = -float(self.heigh) if self.is_bottom_open_premarc() else frame_z_bottom
+        side_frame_z_top = 0.0 if self.is_top_open_premarc() else frame_z_top
 
         frame_bottom = AllplanGeo.Polygon3D()
         frame_bottom += AllplanGeo.Point3D(frame_x_min, -self.thickness, -self.heigh)
@@ -9015,21 +9018,21 @@ class PremarcScriptObject(BaseScriptObject):
         polyhedron_premarc_list.append(polyhedron_top)
 
         frame_left = AllplanGeo.Polygon3D()
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
-        frame_left += AllplanGeo.Point3D(0, 0, frame_z_bottom)
-        frame_left += AllplanGeo.Point3D(0, 0, frame_z_top)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_top)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, side_frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, side_frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_bottom)
 
         error_code, polyhedron_left = self.extrude_frame(frame_left, "frame_left")
         polyhedron_premarc_list.append(polyhedron_left)
 
         frame_right = AllplanGeo.Polygon3D()
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
-        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_bottom)
-        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_top)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_top)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, side_frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, side_frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_bottom)
 
         error_code, polyhedron_right = self.extrude_frame(frame_right, "frame_right")
         polyhedron_premarc_list.append(polyhedron_right)
@@ -10811,6 +10814,13 @@ class PremarcScriptObject(BaseScriptObject):
             "OBERT PER BAIX",
             "OBERT PER BAIX + REA",
             "OBERT PER BAIX + REA VARIANT",
+        )
+
+    def is_top_open_premarc(self):
+        return self.build_ele.ComboBoxAbiertoCerrado.value in (
+            "OBERT PER DALT",
+            "OBERT PER DALT + REA",
+            "OBERT PER DALT + REA VARIANT",
         )
 
     def get_direction_open_premarc(self):
