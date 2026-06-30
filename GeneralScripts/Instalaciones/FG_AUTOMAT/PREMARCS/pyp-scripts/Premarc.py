@@ -56,6 +56,8 @@ from .solid_opening import SolidOpening
 import requests
 
 ZERO_MODEL_GUID = "00000000-0000-0000-0000-000000000000"
+SPACE_VOLUME_TRANSPARENCY = 100
+SPACE_VOLUME_SURFACE_NAME = "premarc_space_volume_transparent_100.surf"
 
 
 def resolve_attribute_id(document, *candidate_names: str) -> int:
@@ -7099,6 +7101,46 @@ class PremarcScriptObject(BaseScriptObject):
                 model_ele_list.append_geometry_3d(u_poly, props_u)
         return model_ele_list
 
+    def _space_volume_texture_definition(self):
+        texture_def = getattr(self, "_space_volume_texture_def", None)
+        if texture_def is not None:
+            return texture_def
+
+        try:
+            surface_def = AllplanBasisElements.SurfaceDefinition.Create()
+            surface_def.DiffuseColor = AllplanBasisElements.ARGB(255, 255, 255, 255)
+            surface_def.Transparency = SPACE_VOLUME_TRANSPARENCY
+
+            surface_path = AllplanBaseElements.DocumentResourceService.CreateSurface(
+                self.document,
+                AllplanSettings.AllplanPaths.GetCurPrjDesignPath(),
+                SPACE_VOLUME_SURFACE_NAME,
+                surface_def,
+                False,
+            )
+            if not surface_path:
+                return None
+
+            texture_def = AllplanBasisElements.TextureDefinition(surface_path)
+            self._space_volume_texture_def = texture_def
+            return texture_def
+        except Exception as exc:
+            print(f"[Premarc][SPACE_VOLUME] transparent surface unavailable: {exc}")
+            return None
+
+    def _append_space_volume(
+        self,
+        model_ele_list: ModelEleList,
+        polyhedron: AllplanGeo.Polyhedron3D,
+        props: AllplanBaseElements.CommonProperties,
+    ):
+        texture_def = self._space_volume_texture_definition()
+        if texture_def is None:
+            model_ele_list.append_geometry_3d(polyhedron, props)
+            return
+
+        model_ele_list.append_geometry_3d_with_texture(polyhedron, texture_def, props)
+
     def create_premarc(self):
         if getattr(self, "_in_placement_preview", False):
             return self._create_premarc_placement_preview_only()
@@ -7233,15 +7275,15 @@ class PremarcScriptObject(BaseScriptObject):
             SPACE_LAYER_REAL, self.document
         )
         props_space_real = AllplanBaseElements.CommonProperties()
-        props_space_real.Color = 6  # red. Change to same color as premarc
         props_space_real.Layer = layer_space_real_id
+        props_space_real.ColorByLayer = True
 
         layer_space_inner_id = AllplanBaseElements.LayerService.GetIDByShortName(
             SPACE_LAYER_INNER, self.document
         )
         props_space_inner = AllplanBaseElements.CommonProperties()
-        props_space_inner.Color = 6  # red. Change to same color as premarc
         props_space_inner.Layer = layer_space_inner_id
+        props_space_inner.ColorByLayer = True
 
         layer_retall_ganxo = AllplanBaseElements.LayerService.GetIDByShortName(
             RETALL_GANXO_LAYER, self.document
@@ -7617,9 +7659,11 @@ class PremarcScriptObject(BaseScriptObject):
 
         poly_inside_space, poly_real_space = self.create_real_inside_space()
         if poly_inside_space:
-            model_ele_list.append_geometry_3d(poly_inside_space, props_space_inner)
+            self._append_space_volume(
+                model_ele_list, poly_inside_space, props_space_inner
+            )
         if poly_real_space:
-            model_ele_list.append_geometry_3d(poly_real_space, props_space_real)
+            self._append_space_volume(model_ele_list, poly_real_space, props_space_real)
 
         retall_representation = self.create_retall_representation()
         if retall_representation:
@@ -7645,8 +7689,9 @@ class PremarcScriptObject(BaseScriptObject):
         left_x = -xps_thickness - sheet_offset
         right_x = self.width + sheet_offset
         bottom_z = -xps_thickness - sheet_offset
-        vertical_z = -sheet_offset
-        vertical_height = self.heigh + (sheet_offset * 2)
+        vertical_z = 0.0 if self.is_bottom_open_premarc() else -sheet_offset
+        vertical_top_z = self.heigh if self.is_top_open_premarc() else self.heigh + sheet_offset
+        vertical_height = vertical_top_z - vertical_z
         xps_y = sheet_offset
 
         pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, xps_y, bottom_z))
@@ -8966,6 +9011,8 @@ class PremarcScriptObject(BaseScriptObject):
         frame_x_max = float(self.width) + float(THICKNESS_MM)
         frame_z_top = float(THICKNESS_MM)
         frame_z_bottom = -float(self.heigh) - float(THICKNESS_MM)
+        side_frame_z_bottom = -float(self.heigh) if self.is_bottom_open_premarc() else frame_z_bottom
+        side_frame_z_top = 0.0 if self.is_top_open_premarc() else frame_z_top
 
         frame_bottom = AllplanGeo.Polygon3D()
         frame_bottom += AllplanGeo.Point3D(frame_x_min, -self.thickness, -self.heigh)
@@ -9015,21 +9062,21 @@ class PremarcScriptObject(BaseScriptObject):
         polyhedron_premarc_list.append(polyhedron_top)
 
         frame_left = AllplanGeo.Polygon3D()
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
-        frame_left += AllplanGeo.Point3D(0, 0, frame_z_bottom)
-        frame_left += AllplanGeo.Point3D(0, 0, frame_z_top)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_top)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, side_frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, side_frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_bottom)
 
         error_code, polyhedron_left = self.extrude_frame(frame_left, "frame_left")
         polyhedron_premarc_list.append(polyhedron_left)
 
         frame_right = AllplanGeo.Polygon3D()
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
-        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_bottom)
-        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_top)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_top)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, side_frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, side_frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_bottom)
 
         error_code, polyhedron_right = self.extrude_frame(frame_right, "frame_right")
         polyhedron_premarc_list.append(polyhedron_right)
@@ -10270,7 +10317,7 @@ class PremarcScriptObject(BaseScriptObject):
             case _:
                 print("Selected default")
 
-        if poly_base_no_slope is None:
+        if poly_base_no_slope is None and not self.is_bottom_open_premarc():
             if self.build_ele.ComboBoxPendiente.value == "SI":
                 if self.bottom_rebaje_enabled():
                     poly_base_no_slope = AllplanGeo.Polyhedron3D(
@@ -10813,6 +10860,13 @@ class PremarcScriptObject(BaseScriptObject):
             "OBERT PER BAIX + REA VARIANT",
         )
 
+    def is_top_open_premarc(self):
+        return self.build_ele.ComboBoxAbiertoCerrado.value in (
+            "OBERT PER DALT",
+            "OBERT PER DALT + REA",
+            "OBERT PER DALT + REA VARIANT",
+        )
+
     def get_direction_open_premarc(self):
         direction_open_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
         values_direction_right = [
@@ -11179,10 +11233,20 @@ class PremarcScriptObject(BaseScriptObject):
         def create_horizontal_rea(z_positions, variant=False):
             rea_length = self.width + REA_extra * 2
             rea_x = -REA_extra
+            try:
+                wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
+            except Exception:
+                wall_thickness = 0.0
+            if wall_thickness <= 0:
+                wall_thickness = float(self.detected_wall_thickness or 0.0)
+            wall_center_y = -wall_thickness / 2
+            # Cuboids are created with a negative Y depth (-REA_x_y). For a
+            # single tube, start Y must be center + half depth. For variant,
+            # center the two adjacent tubes as one 2*REA_x_y package.
             y_positions = (
-                (-space_y, -(space_y + REA_x_y))
+                (wall_center_y + REA_x_y, wall_center_y)
                 if variant
-                else (-space_y, -space_y)
+                else (wall_center_y + REA_x_y / 2, wall_center_y + REA_x_y / 2)
             )
             result = []
             for z_pos, y_pos in zip(z_positions, y_positions):
