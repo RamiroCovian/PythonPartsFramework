@@ -455,8 +455,7 @@
             <Parameter>
                 <Name>PassamaOptions</Name>
                 <Text>Opciones Passama</Text>
-                <TextDyn>valueListaPassama[$list_row] if valueListaPassama and
-                    len(valueListaPassama) > $list_row else ""</TextDyn>
+                <TextDyn>valueListaPassama[$list_row] if valueListaPassama and len(valueListaPassama) > $list_row else ""</TextDyn>
                 <Value>[False, False, False, False, False]</Value>
                 <ValueType>CheckBox</ValueType>
                 <Dimensions>len(valueListaPassama) if valueListaPassama else 0</Dimensions>
@@ -541,8 +540,7 @@
             <Parameter>
                 <Name>RebajesOptions</Name>
                 <Text>Opciones Rebajes</Text>
-                <TextDyn>valueListaRebajes[$list_row] if valueListaRebajes and
-                    len(valueListaRebajes) > $list_row else ""</TextDyn>
+                <TextDyn>valueListaRebajes[$list_row] if valueListaRebajes and len(valueListaRebajes) > $list_row else ""</TextDyn>
                 <Value>[False, False, False, False, False, False, False]</Value>
                 <ValueType>CheckBox</ValueType>
                 <Dimensions>len(valueListaRebajes) if valueListaRebajes else 0</Dimensions>
@@ -596,8 +594,7 @@
                 <Value>136</Value>
                 <ValueType>Double</ValueType>
                 <Enable>ComboBoxPersianas != "LAMISOL VIST"</Enable>
-                <MaxValue>(manual_thickness if enable_manual_thickness else thickness) -
-                    thickness_wall if ComboBoxPersianas == "METALUNIC VIST" else 100000</MaxValue>
+                <MaxValue>(manual_thickness if enable_manual_thickness else thickness) - thickness_wall if ComboBoxPersianas == "METALUNIC VIST" else 100000</MaxValue>
                 <Persistent>Model</Persistent>
             </Parameter>
 

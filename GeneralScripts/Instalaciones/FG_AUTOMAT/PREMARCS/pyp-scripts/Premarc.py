@@ -6687,14 +6687,16 @@ class PremarcScriptObject(BaseScriptObject):
 
         # TODO quitar
         if len(listaAbiertoCerrado) == 0:
-            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT + REA', 'OBERT PER DALT + REA VARIANT', 'OBERT PER BAIX', 'OBERT PER BAIX + REA', 'OBERT PER BAIX + REA VARIANT']
+            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT VARIANT', 'OBERT PER DALT + REA', 'OBERT PER DALT + REA VARIANT', 'OBERT PER BAIX', 'OBERT PER BAIX VARIANT', 'OBERT PER BAIX + REA', 'OBERT PER BAIX + REA VARIANT']
 
         opciones_locales_anadidas = False
         for option in (
             "OBERT PER DALT",
+            "OBERT PER DALT VARIANT",
             "OBERT PER DALT + REA",
             "OBERT PER DALT + REA VARIANT",
             "OBERT PER BAIX",
+            "OBERT PER BAIX VARIANT",
             "OBERT PER BAIX + REA",
             "OBERT PER BAIX + REA VARIANT",
         ):
@@ -7721,11 +7723,15 @@ class PremarcScriptObject(BaseScriptObject):
                 elems.remove(cuboid_left)
             case "OBERT PER DALT":
                 elems.remove(cuboid_top)
+            case "OBERT PER DALT VARIANT":
+                elems.remove(cuboid_top)
             case "OBERT PER DALT + REA":
                 elems.remove(cuboid_top)
             case "OBERT PER DALT + REA VARIANT":
                 elems.remove(cuboid_top)
             case "OBERT PER BAIX":
+                elems.remove(cuboid_bottom)
+            case "OBERT PER BAIX VARIANT":
                 elems.remove(cuboid_bottom)
             case "OBERT PER BAIX + REA":
                 elems.remove(cuboid_bottom)
@@ -8342,6 +8348,15 @@ class PremarcScriptObject(BaseScriptObject):
     def get_square_y_offset(self):
         return self.build_ele.thickness_wall.value / 2 - SQUARE_THICKNESS / 2
 
+    def _wall_thickness_for_tube_centering(self) -> float:
+        try:
+            wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
+        except Exception:
+            wall_thickness = 0.0
+        if wall_thickness <= 0:
+            wall_thickness = float(self.detected_wall_thickness or 0.0)
+        return wall_thickness
+
     # def create_vertical_tub(self)->AllplanGeo.Polyhedron3D:
     #     frame_tub_bottom = AllplanGeo.Polygon3D()
     #     frame_tub_bottom += AllplanGeo.Point3D(0, -(self.thickness/2-TUB_WIDTH_LENGTH/2), 0)
@@ -8364,7 +8379,7 @@ class PremarcScriptObject(BaseScriptObject):
 
     def create_vertical_tub(self) -> AllplanGeo.Polyhedron3D:
         # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self.build_ele.thickness_wall.value / 2
+        wall_center = self._wall_thickness_for_tube_centering() / 2
         frame_tub_bottom = AllplanGeo.Polygon3D()
         frame_tub_bottom += AllplanGeo.Point3D(
             0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
@@ -8387,7 +8402,7 @@ class PremarcScriptObject(BaseScriptObject):
     def create_horizontal_tub(self) -> AllplanGeo.Polyhedron3D:
 
         # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self.build_ele.thickness_wall.value / 2
+        wall_center = self._wall_thickness_for_tube_centering() / 2
         frame_tub_left = AllplanGeo.Polygon3D()
         frame_tub_left += AllplanGeo.Point3D(
             0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
@@ -9708,6 +9723,7 @@ class PremarcScriptObject(BaseScriptObject):
 
             case (
                 "OBERT PER DALT"
+                | "OBERT PER DALT VARIANT"
                 | "OBERT PER DALT + REA"
                 | "OBERT PER DALT + REA VARIANT"
             ):
@@ -9728,6 +9744,7 @@ class PremarcScriptObject(BaseScriptObject):
 
             case (
                 "OBERT PER BAIX"
+                | "OBERT PER BAIX VARIANT"
                 | "OBERT PER BAIX + REA"
                 | "OBERT PER BAIX + REA VARIANT"
             ):
@@ -10856,6 +10873,7 @@ class PremarcScriptObject(BaseScriptObject):
     def is_bottom_open_premarc(self):
         return self.build_ele.ComboBoxAbiertoCerrado.value in (
             "OBERT PER BAIX",
+            "OBERT PER BAIX VARIANT",
             "OBERT PER BAIX + REA",
             "OBERT PER BAIX + REA VARIANT",
         )
@@ -10863,34 +10881,50 @@ class PremarcScriptObject(BaseScriptObject):
     def is_top_open_premarc(self):
         return self.build_ele.ComboBoxAbiertoCerrado.value in (
             "OBERT PER DALT",
+            "OBERT PER DALT VARIANT",
             "OBERT PER DALT + REA",
             "OBERT PER DALT + REA VARIANT",
         )
 
+    def _is_open_premarc_rea(self) -> bool:
+        return "+ REA" in str(self.build_ele.ComboBoxAbiertoCerrado.value or "")
+
     def get_direction_open_premarc(self):
         direction_open_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
         values_direction_right = [
+            "OBERT FEMELLA DRETA",
             "OBERT FEMELLA DRETA + REA",
+            "OBERT NO FEMELLA DRETA",
             "OBERT NO FEMELLA DRETA + REA",
+            "SUP. FEMELLA / INF NO FEMELLA DRET.",
             "SUP. FEMELLA / INF NO FEMELLA DRET. + REA",
+            "SUP. NO FEMELLA / INF. FEMELLA DRET.",
             "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA",
         ]
         values_direction_left = [
+            "OBERT FEMELLA ESQUERRA",
             "OBERT FEMELLA ESQUERRA + REA",
+            "OBERT NO FEMELLA ESQUERRA",
             "OBERT NO FEMELLA ESQUERRA + REA",
+            "SUP. FEMELLA / INF NO FEMELLA ESQ.",
             "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA",
+            "SUP. NO FEMELLA / INF. FEMELLA ESQ.",
             "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA",
         ]
         values_direction_top = [
+            "OBERT PER DALT",
             "OBERT PER DALT + REA",
         ]
         values_direction_top_variant = [
+            "OBERT PER DALT VARIANT",
             "OBERT PER DALT + REA VARIANT",
         ]
         values_direction_bottom = [
+            "OBERT PER BAIX",
             "OBERT PER BAIX + REA",
         ]
         values_direction_bottom_variant = [
+            "OBERT PER BAIX VARIANT",
             "OBERT PER BAIX + REA VARIANT",
         ]
         if direction_open_premarc in values_direction_right:
@@ -11220,26 +11254,23 @@ class PremarcScriptObject(BaseScriptObject):
 
         ### manage config UI
         offset_rea = 250
-        space_y = 60
-        translation_vector_rigth = AllplanGeo.Vector3D(
-            self.width - offset_rea - REA_x_y * 2, -space_y, 0
-        )
-        translation_vector_left = AllplanGeo.Vector3D(offset_rea, -space_y, 0)
         elems_moved = []
         cuboids_moved = []
         cylinders_moved = []
         direction_open = self.get_direction_open_premarc()
+        include_rea_cylinders = self._is_open_premarc_rea()
 
-        def create_horizontal_rea(z_positions, variant=False):
-            rea_length = self.width + REA_extra * 2
-            rea_x = -REA_extra
-            try:
-                wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
-            except Exception:
-                wall_thickness = 0.0
-            if wall_thickness <= 0:
-                wall_thickness = float(self.detected_wall_thickness or 0.0)
-            wall_center_y = -wall_thickness / 2
+        def get_wall_center_y():
+            return -self._wall_thickness_for_tube_centering() / 2
+
+        wall_center_y = get_wall_center_y()
+        side_tub_y = wall_center_y + REA_x_y / 2
+        translation_vector_rigth = AllplanGeo.Vector3D(
+            self.width - offset_rea - REA_x_y * 2, side_tub_y, 0
+        )
+        translation_vector_left = AllplanGeo.Vector3D(offset_rea, side_tub_y, 0)
+
+        def horizontal_tube_positions(z_positions, variant=False):
             # Cuboids are created with a negative Y depth (-REA_x_y). For a
             # single tube, start Y must be center + half depth. For variant,
             # center the two adjacent tubes as one 2*REA_x_y package.
@@ -11248,8 +11279,13 @@ class PremarcScriptObject(BaseScriptObject):
                 if variant
                 else (wall_center_y + REA_x_y / 2, wall_center_y + REA_x_y / 2)
             )
+            return list(zip(z_positions, y_positions))
+
+        def create_horizontal_rea(z_positions, variant=False):
+            rea_length = self.width + REA_extra * 2
+            rea_x = -REA_extra
             result = []
-            for z_pos, y_pos in zip(z_positions, y_positions):
+            for z_pos, y_pos in horizontal_tube_positions(z_positions, variant):
                 pos_rea = AllplanGeo.AxisPlacement3D(
                     AllplanGeo.Point3D(rea_x, y_pos, z_pos)
                 )
@@ -11260,6 +11296,64 @@ class PremarcScriptObject(BaseScriptObject):
                 )
             return result
 
+        def create_x_rea_cylinder(x_start, y_pos, z_pos, length):
+            cylinder = AllplanGeo.Cylinder3D(
+                5, 5, AllplanGeo.Point3D(0, 0, length)
+            )
+            error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
+                cylinder, 36
+            )
+            rotation_axis = AllplanGeo.Axis3D(
+                AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 1, 0)
+            )
+            polyhedron_cylinder = AllplanGeo.Rotate(
+                polyhedron_cylinder, rotation_axis, AllplanGeo.Angle.FromDeg(90)
+            )
+            return AllplanGeo.Move(
+                polyhedron_cylinder, AllplanGeo.Vector3D(x_start, y_pos, z_pos)
+            )
+
+        def create_horizontal_rea_cylinders(z_positions, variant=False):
+            tube_positions = horizontal_tube_positions(z_positions, variant)
+            if not tube_positions:
+                return []
+
+            y_min = min(y_pos - REA_x_y for _, y_pos in tube_positions)
+            y_max = max(y_pos for _, y_pos in tube_positions)
+            z_min = min(z_pos - REA_x_y for z_pos, _ in tube_positions)
+            z_max = max(z_pos for z_pos, _ in tube_positions)
+            y_span = y_max - y_min
+            z_span = z_max - z_min
+
+            if z_span >= y_span:
+                y_center = (y_min + y_max) / 2
+                cylinder_positions = (
+                    (y_center + 5, z_max + 5),
+                    (y_center - 5, z_max + 5),
+                    (y_center + 5, z_min - 5),
+                    (y_center - 5, z_min - 5),
+                )
+            else:
+                z_center = (z_min + z_max) / 2
+                cylinder_positions = (
+                    (y_max + 5, z_center + 5),
+                    (y_max + 5, z_center - 5),
+                    (y_min - 5, z_center + 5),
+                    (y_min - 5, z_center - 5),
+                )
+
+            left_x = -(REA_Z_ORIGIN + REA_Z_FINAL)
+            right_x = self.width + REA_Z_ORIGIN
+            result = []
+            for y_pos, z_pos in cylinder_positions:
+                result.append(
+                    create_x_rea_cylinder(left_x, y_pos, z_pos, REA_Z_FINAL)
+                )
+                result.append(
+                    create_x_rea_cylinder(right_x, y_pos, z_pos, REA_Z_FINAL)
+                )
+            return result
+
         if direction_open == "RIGHT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
@@ -11267,9 +11361,10 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cuboids:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
                 cuboids_moved.append(elem_moved)
-            for elem in cylinders:
-                elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
-                cylinders_moved.append(elem_moved)
+            if include_rea_cylinders:
+                for elem in cylinders:
+                    elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
+                    cylinders_moved.append(elem_moved)
         elif self.get_direction_open_premarc() == "LEFT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_left)
@@ -11277,34 +11372,48 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cuboids:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_left)
                 cuboids_moved.append(elem_moved)
-            for elem in cylinders:
-                elem_moved = AllplanGeo.Move(elem, translation_vector_left)
-                cylinders_moved.append(elem_moved)
+            if include_rea_cylinders:
+                for elem in cylinders:
+                    elem_moved = AllplanGeo.Move(elem, translation_vector_left)
+                    cylinders_moved.append(elem_moved)
         elif direction_open == "TOP":
-            cuboids_moved = create_horizontal_rea(
-                (-offset_rea, -(offset_rea + REA_x_y))
+            z_positions = (-offset_rea, -(offset_rea + REA_x_y))
+            cuboids_moved = create_horizontal_rea(z_positions)
+            cylinders_moved = (
+                create_horizontal_rea_cylinders(z_positions)
+                if include_rea_cylinders
+                else []
             )
-            cylinders_moved = []
         elif direction_open == "TOP_VARIANT":
-            cuboids_moved = create_horizontal_rea((-offset_rea, -offset_rea), True)
-            cylinders_moved = []
+            z_positions = (-offset_rea, -offset_rea)
+            cuboids_moved = create_horizontal_rea(z_positions, True)
+            cylinders_moved = (
+                create_horizontal_rea_cylinders(z_positions, True)
+                if include_rea_cylinders
+                else []
+            )
         elif direction_open == "BOTTOM":
-            cuboids_moved = create_horizontal_rea(
-                (
-                    -self.heigh + offset_rea + REA_x_y,
-                    -self.heigh + offset_rea + REA_x_y * 2,
-                )
+            z_positions = (
+                -self.heigh + offset_rea + REA_x_y,
+                -self.heigh + offset_rea + REA_x_y * 2,
             )
-            cylinders_moved = []
+            cuboids_moved = create_horizontal_rea(z_positions)
+            cylinders_moved = (
+                create_horizontal_rea_cylinders(z_positions)
+                if include_rea_cylinders
+                else []
+            )
         elif direction_open == "BOTTOM_VARIANT":
-            cuboids_moved = create_horizontal_rea(
-                (
-                    -self.heigh + offset_rea + REA_x_y,
-                    -self.heigh + offset_rea + REA_x_y,
-                ),
-                True,
+            z_positions = (
+                -self.heigh + offset_rea + REA_x_y,
+                -self.heigh + offset_rea + REA_x_y,
             )
-            cylinders_moved = []
+            cuboids_moved = create_horizontal_rea(z_positions, True)
+            cylinders_moved = (
+                create_horizontal_rea_cylinders(z_positions, True)
+                if include_rea_cylinders
+                else []
+            )
         else:
             cuboids_moved = []
             cylinders_moved = []
@@ -11500,12 +11609,14 @@ class PremarcScriptObject(BaseScriptObject):
         match self.build_ele.ComboBoxAbiertoCerrado.value:
             case (
                 "OBERT PER DALT"
+                | "OBERT PER DALT VARIANT"
                 | "OBERT PER DALT + REA"
                 | "OBERT PER DALT + REA VARIANT"
             ):
                 open_square_positions.update(("left_top", "right_top"))
             case (
                 "OBERT PER BAIX"
+                | "OBERT PER BAIX VARIANT"
                 | "OBERT PER BAIX + REA"
                 | "OBERT PER BAIX + REA VARIANT"
             ):
