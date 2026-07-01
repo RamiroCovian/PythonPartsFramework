@@ -11445,23 +11445,77 @@ class PremarcScriptObject(BaseScriptObject):
         # polyhedron_square_left_top, polyhedron_square_right_top, polyhedron_square_left_bottom, polyhedron_square_right_bottom = self.create_premarc_optionals_elements_test()
 
         ## Escuadras
-        squares = []
-        original_squares = []
+        square_positions = {
+            "left_top": polyhedron_square_left_top,
+            "right_top": polyhedron_square_right_top,
+            "left_bottom": polyhedron_square_left_bottom,
+            "right_bottom": polyhedron_square_right_bottom,
+        }
+
+        open_square_positions = set()
+        match self.build_ele.ComboBoxAbiertoCerrado.value:
+            case (
+                "OBERT PER DALT"
+                | "OBERT PER DALT + REA"
+                | "OBERT PER DALT + REA VARIANT"
+            ):
+                open_square_positions.update(("left_top", "right_top"))
+            case (
+                "OBERT PER BAIX"
+                | "OBERT PER BAIX + REA"
+                | "OBERT PER BAIX + REA VARIANT"
+            ):
+                open_square_positions.update(("left_bottom", "right_bottom"))
+            case (
+                "OBERT FEMELLA DRETA"
+                | "OBERT FEMELLA DRETA + REA"
+                | "OBERT NO FEMELLA DRETA"
+                | "OBERT NO FEMELLA DRETA + REA"
+                | "SUP. FEMELLA / INF NO FEMELLA DRET."
+                | "SUP. FEMELLA / INF NO FEMELLA DRET. + REA"
+                | "SUP. NO FEMELLA / INF. FEMELLA DRET."
+                | "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA"
+            ):
+                open_square_positions.update(("right_top", "right_bottom"))
+            case (
+                "OBERT FEMELLA ESQUERRA"
+                | "OBERT FEMELLA ESQUERRA + REA"
+                | "OBERT NO FEMELLA ESQUERRA"
+                | "OBERT NO FEMELLA ESQUERRA + REA"
+                | "SUP. FEMELLA / INF NO FEMELLA ESQ."
+                | "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA"
+                | "SUP. NO FEMELLA / INF. FEMELLA ESQ."
+                | "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA"
+            ):
+                open_square_positions.update(("left_top", "left_bottom"))
+
+        selected_square_positions = []
         match self.build_ele.ComboBoxEscuadras.value:
             case "NO":
                 print("Escuadra Selected NO")
             case "2":
-                print("Escuadra Selected 2 de arriba")
-                original_squares.append(polyhedron_square_left_top)
-                original_squares.append(polyhedron_square_right_top)
+                if {"left_top", "right_top"}.issubset(open_square_positions):
+                    print("Escuadra Selected 2 de abajo por premarco abierto arriba")
+                    selected_square_positions.extend(("left_bottom", "right_bottom"))
+                else:
+                    print("Escuadra Selected 2 de arriba")
+                    selected_square_positions.extend(("left_top", "right_top"))
             case "4":
-                print("Escuadra Selected 4 (2 arriba y 2 abajo)")
-                original_squares.append(polyhedron_square_left_top)
-                original_squares.append(polyhedron_square_right_top)
-                original_squares.append(polyhedron_square_left_bottom)
-                original_squares.append(polyhedron_square_right_bottom)
+                print("Escuadra Selected 4 (filtradas por lados abiertos)")
+                selected_square_positions.extend(
+                    ("left_top", "right_top", "left_bottom", "right_bottom")
+                )
             case _:
                 print("Escuadra Selected default")
+
+        selected_square_positions = [
+            position
+            for position in selected_square_positions
+            if position not in open_square_positions
+        ]
+        original_squares = [
+            square_positions[position] for position in selected_square_positions
+        ]
 
         # Move squares to the correct position
         # Rules:
@@ -11484,187 +11538,6 @@ class PremarcScriptObject(BaseScriptObject):
             squares_moved.append(elem_moved)
 
         squares = squares_moved
-
-        # Manage Open Premarc for squares
-        # Rule: remove squares related to open sides (right or left)
-        print("Manage Open Premarc in optionals elements (squares - Escuadras)")
-        match self.build_ele.ComboBoxAbiertoCerrado.value:
-            case (
-                "OBERT PER DALT"
-                | "OBERT PER DALT + REA"
-                | "OBERT PER DALT + REA VARIANT"
-            ):
-                top_squares = (
-                    polyhedron_square_left_top,
-                    polyhedron_square_right_top,
-                )
-                for original_square, moved_square in zip(original_squares, squares_moved):
-                    if original_square in top_squares:
-                        try:
-                            squares.remove(moved_square)
-                        except ValueError:
-                            print(f"Error in remove polyhedron square: {moved_square}")
-            case (
-                "OBERT PER BAIX"
-                | "OBERT PER BAIX + REA"
-                | "OBERT PER BAIX + REA VARIANT"
-            ):
-                bottom_squares = (
-                    polyhedron_square_left_bottom,
-                    polyhedron_square_right_bottom,
-                )
-                for original_square, moved_square in zip(original_squares, squares_moved):
-                    if original_square in bottom_squares:
-                        try:
-                            squares.remove(moved_square)
-                        except ValueError:
-                            print(f"Error in remove polyhedron square: {moved_square}")
-            case "OBERT FEMELLA DRETA":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "OBERT FEMELLA ESQUERRA":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "OBERT FEMELLA DRETA + REA":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "OBERT FEMELLA ESQUERRA + REA":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "OBERT NO FEMELLA DRETA":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "OBERT NO FEMELLA ESQUERRA":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "OBERT NO FEMELLA DRETA + REA":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "OBERT NO FEMELLA ESQUERRA + REA":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. FEMELLA / INF NO FEMELLA DRET.":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. FEMELLA / INF NO FEMELLA ESQ.":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. FEMELLA / INF NO FEMELLA DRET. + REA":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. NO FEMELLA / INF. FEMELLA DRET.":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. NO FEMELLA / INF. FEMELLA ESQ.":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA":
-                for square in (
-                    polyhedron_square_right_top,
-                    polyhedron_square_right_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA":
-                for square in (
-                    polyhedron_square_left_top,
-                    polyhedron_square_left_bottom,
-                ):
-                    try:
-                        squares.remove(square)
-                    except ValueError:
-                        print(f"Error in remove polyhedron square: {square}")
-            case _:
-                print("Selected default")
 
         print(f"\n\n")
 
