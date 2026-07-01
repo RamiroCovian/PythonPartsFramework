@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<StringTable>
+    <String>
+        <ID>1</ID>
+        <Text>Solido 3D Neopreno PythonPart</Text>
+    </String>
+    <String>
+        <ID>2</ID>
+        <Text>Propiedades</Text>
+    </String>
+    <String>
+        <ID>3</ID>
+        <Text>Punto Inicial</Text>
+    </String>
+    <String>
+        <ID>4</ID>
+        <Text>Punto Final</Text>
+    </String>
+    <String>
+        <ID>5</ID>
+        <Text>Ancho</Text>
+    </String>
+    <String>
+        <ID>6</ID>
+        <Text>Grosor</Text>
+    </String>
+    <String>
+        <ID>7</ID>
+        <Text>Grosor</Text>
+    </String>
+    <String>
+        <ID>8</ID>
+        <Text>5mm - Fuxia</Text>
+    </String>
+    <String>
+        <ID>9</ID>
+        <Text>10mm - Verde</Text>
+    </String>
+    <String>
+        <ID>10</ID>
+        <Text>20mm - Rosa</Text>
+    </String>
+    <String>
+        <ID>11</ID>
+        <Text>30mm - Naranja</Text>
+    </String>
+    <String>
+        <ID>12</ID>
+        <Text>40mm - Turquesa</Text>
+    </String>
+    <String>
+        <ID>13</ID>
+        <Text>Color</Text>
+    </String>
+    <String>
+        <ID>14</ID>
+        <Text>Grosor de pluma</Text>
+    </String>
+    <String>
+        <ID>15</ID>
+        <Text>Tipo de linea</Text>
+    </String>
+    <String>
+        <ID>16</ID>
+        <Text>Capa</Text>
+    </String>
+    <String>
+        <ID>17</ID>
+        <Text>Informacion</Text>
+    </String>
+    <String>
+        <ID>18</ID>
+        <Text>Longitud de linea de referencia (mm)</Text>
+    </String>
+    <String>
+        <ID>19</ID>
+        <Text>Informacion del Solido 3D Neopreno PythonPart</Text>
+    </String>
+    <String>
+        <ID>20</ID>
+        <Text>Longitud</Text>
+    </String>
+    <String>
+        <ID>21</ID>
+        <Text>Este solido 3D de neopreno es un paralelepipedo rectangular generado a partir de una linea de referencia.
+
+La linea define el centro longitudinal del neopreno y se extiende por la base del prisma.
+
+Dimensiones:
+- Largo: Longitud de la linea de referencia (calculada automaticamente)
+- Ancho: 50mm (fijo e inmutable)
+- Grosor: Seleccionable mediante radio buttons (5mm, 10mm, 20mm, 30mm, 40mm)
+
+Caracteristicas del PythonPart:
+- Solo se puede seleccionar un grosor a la vez
+- Al seleccionar un nuevo grosor, el anterior se desactiva automaticamente
+- El ancho es fijo (50mm) y no se puede modificar
+- La longitud se calcula automaticamente entre los puntos inicial y final
+- Preview en tiempo real mientras se dibuja la linea
+- Handles para modificar los puntos de la linea de referencia</Text>
+    </String>
+</StringTable>

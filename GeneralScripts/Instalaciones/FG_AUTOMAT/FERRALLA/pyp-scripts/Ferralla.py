@@ -287,7 +287,7 @@ class CustomLineScript(BaseScriptObject):
 
 
             AllplanBaseElements.DrawElementPreview(self.document, AllplanGeometry.Matrix3D(),
-                                          model_list, True, None)
+                                        model_list, True, None)
 
         return
 

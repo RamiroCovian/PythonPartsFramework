@@ -164,13 +164,6 @@
             <Visible>True</Visible>
 
             <Parameter>
-                <Name>XPSthicknessInd</Name>
-                <Text>XPS gruix manual</Text>
-                <Value>False</Value>
-                <ValueType>CheckBox</ValueType>
-            </Parameter>
-
-            <Parameter>
                 <Name>XPSthickness</Name>
                 <Text>Grosor</Text>
                 <Value>295</Value>
@@ -275,6 +268,15 @@
             </Parameter>
 
             <Parameter>
+                <Name>niche_guid</Name>
+                <Text>opening_guid</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+                <Visible>False</Visible>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
                 <Name>valueListaGrosor</Name>
                 <Text>Lista dinámica Grosor</Text>
                 <Value>[]</Value>
@@ -297,13 +299,6 @@
                 <ValueType>Double</ValueType>
             </Parameter>
 
-            <Parameter>
-                <Name>xps_type</Name>
-                <Text>Type</Text>
-                <Value>XPS</Value>
-                <ValueList>XPS|PIR</ValueList>
-                <ValueType>StringComboBox</ValueType>
-            </Parameter>
 
             <Parameter>
                 <Name>id_premarc</Name>
@@ -350,50 +345,6 @@
                     pit_span_from_outer_lip|pit_into_opening|pit_inward|pit_outer_face|half_embed</ValueList>
                 <ValueType>StringComboBox</ValueType>
                 <Visible>False</Visible>
-            </Parameter>
-        </Parameter>
-
-        <Parameter>
-            <Name>ampits</Name>
-            <Text>Ampits</Text>
-            <Value>False</Value>
-            <ValueType>Expander</ValueType>
-            <Visible>True</Visible>
-            <Parameter>
-                <Name>fondo_ampits</Name>
-                <Text>Fondo Ampits</Text>
-                <Value>330</Value>
-                <ValueType>Double</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>llarg_ampits</Name>
-                <Text>Llarg Ampits</Text>
-                <Value>1000</Value>
-                <ValueType>Double</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>afegit_ampits</Name>
-                <Text>Afegit Ampits</Text>
-                <Value>0</Value>
-                <ValueType>Double</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>retall_ampits</Name>
-                <Text>Retall Ampits</Text>
-                <Value>0</Value>
-                <ValueType>Double</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>imperm_type</Name>
-                <Text>Tipus Impermeabilització</Text>
-                <Value>Water-Stop</Value>
-                <ValueList>Water-Stop|PVC|Tela Asfàltica</ValueList>
-                <ValueType>StringComboBox</ValueType>
-                <Visible>True</Visible>
             </Parameter>
         </Parameter>
         <Parameter>
@@ -504,7 +455,8 @@
             <Parameter>
                 <Name>PassamaOptions</Name>
                 <Text>Opciones Passama</Text>
-                <TextDyn>valueListaPassama[$list_row] if valueListaPassama and len(valueListaPassama) > $list_row else ""</TextDyn>
+                <TextDyn>valueListaPassama[$list_row] if valueListaPassama and
+                    len(valueListaPassama) > $list_row else ""</TextDyn>
                 <Value>[False, False, False, False, False]</Value>
                 <ValueType>CheckBox</ValueType>
                 <Dimensions>len(valueListaPassama) if valueListaPassama else 0</Dimensions>
@@ -589,21 +541,13 @@
             <Parameter>
                 <Name>RebajesOptions</Name>
                 <Text>Opciones Rebajes</Text>
-                <TextDyn>valueListaRebajes[$list_row] if valueListaRebajes and len(valueListaRebajes) > $list_row else ""</TextDyn>
+                <TextDyn>valueListaRebajes[$list_row] if valueListaRebajes and
+                    len(valueListaRebajes) > $list_row else ""</TextDyn>
                 <Value>[False, False, False, False, False, False, False]</Value>
                 <ValueType>CheckBox</ValueType>
                 <Dimensions>len(valueListaRebajes) if valueListaRebajes else 0</Dimensions>
                 <ValueListStartRow>1</ValueListStartRow>
             </Parameter>
-
-            <Parameter>
-                <Name>ShowRebajesDebug</Name>
-                <Text>Mostrar solidos debug rebajes</Text>
-                <Value>False</Value>
-                <ValueType>CheckBox</ValueType>
-                <Visible>False</Visible>
-            </Parameter>
-
         </Parameter>
 
         <Parameter>
@@ -637,6 +581,26 @@
                 <ValueType>CheckBox</ValueType>
                 <Visible>False</Visible>
             </Parameter>
+
+            <Parameter>
+                <Name>PersianaHeight</Name>
+                <Text>Altura Persianas</Text>
+                <Value>260</Value>
+                <ValueType>Double</ValueType>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
+            <Parameter>
+                <Name>PersianaWidth</Name>
+                <Text>Grosor Persianas</Text>
+                <Value>136</Value>
+                <ValueType>Double</ValueType>
+                <Enable>ComboBoxPersianas != "LAMISOL VIST"</Enable>
+                <MaxValue>(manual_thickness if enable_manual_thickness else thickness) -
+                    thickness_wall if ComboBoxPersianas == "METALUNIC VIST" else 100000</MaxValue>
+                <Persistent>Model</Persistent>
+            </Parameter>
+
 
         </Parameter>
 
@@ -790,7 +754,8 @@
             <Name>AtributsExpander</Name>
             <Text>Atributs Premarcs</Text>
             <ValueType>Expander</ValueType>
-            <Value>True</Value>
+            <Value>False</Value>
+            <Visible>True</Visible>
 
             <Parameter>
                 <Name>INPUT_PMP_ID_PREMARC</Name>
@@ -819,7 +784,198 @@
 
     </Page>
 
-    <!-- <Page>
+    <Page>
+        <Name>AmpitsProperties</Name>
+        <Text>Ampits</Text>
+
+        <Parameter>
+            <Name>ampits</Name>
+            <Text>Ampits</Text>
+            <Value>False</Value>
+            <ValueType>Expander</ValueType>
+            <Visible>True</Visible>
+
+            <Parameter>
+                <Name>EnableAmpit</Name>
+                <Text>Mostrar Ampit</Text>
+                <Value>1</Value>
+                <ValueType>CheckBox</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>fondo_ampits</Name>
+                <Text>Fondo Ampits</Text>
+                <Value>330</Value>
+                <ValueType>Double</ValueType>
+                <Enable>EnableAmpit</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>llarg_ampits</Name>
+                <Text>Llarg Ampits</Text>
+                <Value>1000</Value>
+                <ValueType>Double</ValueType>
+                <Enable>EnableAmpit</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>afegit_ampits</Name>
+                <Text>Afegit Ampits</Text>
+                <Value>0</Value>
+                <ValueType>Double</ValueType>
+                <Enable>EnableAmpit</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>retall_ampits</Name>
+                <Text>Retall Ampits</Text>
+                <Value>0</Value>
+                <ValueType>Double</ValueType>
+                <Enable>EnableAmpit</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>ampit_material</Name>
+                <Text>Ampit Material</Text>
+                <Value>CERAMIC</Value>
+                <ValueList>CERAMIC|CERAMICA_MAYOR|XAPA|PAVIMENTO</ValueList>
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>ampit_muntatge</Name>
+                <Text>Ampit Muntatge</Text>
+                <Value>OBRA</Value>
+                <ValueList>OBRA|FABRICA</ValueList>
+                <ValueType>StringComboBox</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>ampit_parts</Name>
+                <Text>ID Fusteria (PARTS)</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>ampit_ref_1</Name>
+                <Text>ID Premarc (REF_1)</Text>
+                <Value></Value>
+                <ValueType>String</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>is_puerta_entrada</Name>
+                <Text>Premarco Puerta Entrada</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+            </Parameter>
+        </Parameter>
+    </Page>
+
+    <Page>
+        <Name>ImpermeabilizacionesProperties</Name>
+        <Text>Impermeabilizaciones</Text>
+
+        <Parameter>
+            <Name>impermeabilizaciones</Name>
+            <Text>Impermeabilizaciones</Text>
+            <Value>False</Value>
+            <ValueType>Expander</ValueType>
+            <Visible>True</Visible>
+
+            <Parameter>
+                <Name>EnableImpermeabilizacio</Name>
+                <Text>Mostrar Impermeabilización</Text>
+                <Value>1</Value>
+                <ValueType>CheckBox</ValueType>
+            </Parameter>
+
+            <Parameter>
+                <Name>imperm_type</Name>
+                <Text>Tipus Impermeabilització</Text>
+                <Value>Water-Stop</Value>
+                <ValueList>Water-Stop|PVC|Tela Asfàltica</ValueList>
+                <ValueType>StringComboBox</ValueType>
+                <Enable>EnableImpermeabilizacio</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>EnableImpermPliegue90</Name>
+                <Text>Pliegue a 90°</Text>
+                <Value>0</Value>
+                <ValueType>CheckBox</ValueType>
+                <Enable>EnableImpermeabilizacio</Enable>
+            </Parameter>
+
+            <Parameter>
+                <Name>imperm_muntatge</Name>
+                <Text>Imperm. Muntatge</Text>
+                <Value>OBRA</Value>
+                <ValueList>OBRA|FABRICA</ValueList>
+                <ValueType>StringComboBox</ValueType>
+                <Enable>EnableImpermeabilizacio</Enable>
+            </Parameter>
+        </Parameter>
+    </Page>
+
+    <Page>
+        <Name>XPS_zone</Name>
+        <Text>Propiedades XPS </Text>
+
+        <Parameter>
+            <Name>xps_type</Name>
+            <Text>Type</Text>
+            <Value>XPS</Value>
+            <ValueList>XPS|PIR</ValueList>
+            <ValueType>StringComboBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>XPSthicknessInd</Name>
+            <Text>XPS gruix manual</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>ShowXPS</Name>
+            <Text>Mostrar XPS completa</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableTopXPS</Name>
+            <Text>Deshabilitar XPS superior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableBottomXPS</Name>
+            <Text>Deshabilitar XPS inferior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableLeftXPS</Name>
+            <Text>Deshabilitar XPS izquierda</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableRightXPS</Name>
+            <Text>Deshabilitar XPS derecha</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+    </Page>
+
+    <Page>
         <Name>__HiddenPage__</Name>
         <Text></Text>
         <Parameter>
@@ -830,6 +986,6 @@
             <Persistent>Model</Persistent>
         </Parameter>
 
-    </Page> -->
+    </Page>
 
 </Element>
