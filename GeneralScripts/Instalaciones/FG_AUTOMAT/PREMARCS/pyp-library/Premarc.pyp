@@ -370,6 +370,23 @@
                 <ValueType>StringComboBox</ValueType>
             </Parameter>
 
+            <Parameter>
+                <Name>ComboBoxREAEspecial</Name>
+                <Text>REA especial</Text>
+                <Value>REAs en L (Estandar)</Value>
+                <ValueList>REAs en C|REAs en L (Estandar)|REAs en L 340|REAs en L 450|REAs en L dinamica</ValueList>
+                <ValueType>StringComboBox</ValueType>
+                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>LongitudREAEspecialLDinamica</Name>
+                <Text>Sobresaliente REA L</Text>
+                <Value>280</Value>
+                <ValueType>Double</ValueType>
+                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado and ComboBoxREAEspecial == "REAs en L dinamica"</Visible>
+            </Parameter>
+
 
             <Parameter>
                 <Name>EnableRetallGanxo</Name>
