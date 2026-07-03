@@ -11301,9 +11301,13 @@ class PremarcScriptObject(BaseScriptObject):
                 )
             return result
 
+        rea_cylinder_radius = 6
+
         def create_z_rea_cylinder(x_pos, y_pos, z_pos, length):
             cylinder = AllplanGeo.Cylinder3D(
-                6, 6, AllplanGeo.Point3D(0, 0, length)
+                rea_cylinder_radius,
+                rea_cylinder_radius,
+                AllplanGeo.Point3D(0, 0, length),
             )
             error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
                 cylinder, 36
@@ -11314,7 +11318,9 @@ class PremarcScriptObject(BaseScriptObject):
 
         def create_x_rea_cylinder(x_pos, y_pos, z_pos, length):
             cylinder = AllplanGeo.Cylinder3D(
-                6, 6, AllplanGeo.Point3D(0, 0, length)
+                rea_cylinder_radius,
+                rea_cylinder_radius,
+                AllplanGeo.Point3D(0, 0, length),
             )
             error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
                 cylinder, 36
@@ -11329,17 +11335,23 @@ class PremarcScriptObject(BaseScriptObject):
                 polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
             )
 
-        def create_rea_c_shape(x_inner, y_pos, z_bar, x_direction, z_leg_direction):
+        def create_rea_c_shape(x_inner, y_pos, z_bar, offset_z_pos, x_direction, z_leg_direction):
+            """Para cambiar la geometría interna de la C"""
+            offset_z_pos_horizontal_cylinder = 6
+            offset_x_pos_vertical_cylinder = 6
+            offset_z_pos_vertical_cylinder = 12
+
             c_leg_z = 150
             c_span_x = 240
             x_outer = x_inner + x_direction * c_span_x
             x_start = min(x_inner, x_outer)
+            x_end = max(x_inner, x_outer)
             z_leg_end = z_bar + z_leg_direction * c_leg_z
             z_start = min(z_bar, z_leg_end)
             return [
-                create_z_rea_cylinder(x_inner, y_pos, z_start, c_leg_z),
-                create_z_rea_cylinder(x_outer, y_pos, z_start, c_leg_z),
-                create_x_rea_cylinder(x_start, y_pos, z_bar, c_span_x),
+                create_z_rea_cylinder(x_start + offset_x_pos_vertical_cylinder, y_pos, z_start + offset_z_pos_vertical_cylinder + offset_z_pos, c_leg_z),
+                create_z_rea_cylinder(x_end - offset_x_pos_vertical_cylinder, y_pos, z_start + offset_z_pos_vertical_cylinder + offset_z_pos, c_leg_z),
+                create_x_rea_cylinder(x_start, y_pos, z_bar + offset_z_pos_horizontal_cylinder, c_span_x),
             ]
 
         def create_horizontal_rea_cylinders(z_positions, variant=False):
@@ -11374,11 +11386,13 @@ class PremarcScriptObject(BaseScriptObject):
             return result
 
         def create_horizontal_special_c_reas(z_positions, variant=False):
+            """Para cambiar dónde aparece cada C"""
             tube_positions = horizontal_tube_positions(z_positions, variant)
             if not tube_positions:
                 return []
 
             c_offset_from_tube_end = 75
+            horizontal_cylinder_diameter = 12
             tube_x_start = -REA_extra - tube_sheet_extension
             tube_x_end = self.width + REA_extra + tube_sheet_extension
             left_x_inner = tube_x_start - c_offset_from_tube_end
@@ -11395,20 +11409,20 @@ class PremarcScriptObject(BaseScriptObject):
             z_max = max(z_pos for z_pos, _ in tube_positions)
             z_center = (z_min + z_max) / 2
             upper_u_bar_z = z_center + REA_x_y
-            lower_n_bar_z = z_center - REA_x_y
+            lower_n_bar_z = z_center - REA_x_y - horizontal_cylinder_diameter
 
             result = []
             result.extend(
-                create_rea_c_shape(left_x_inner, upper_y_center, upper_u_bar_z, 1, 1)
+                create_rea_c_shape(left_x_inner, upper_y_center, upper_u_bar_z, -12, 1, 1)
             )
             result.extend(
-                create_rea_c_shape(left_x_inner, lower_y_center, lower_n_bar_z, 1, -1)
+                create_rea_c_shape(left_x_inner, lower_y_center, lower_n_bar_z, 0, 1, -1)
             )
             result.extend(
-                create_rea_c_shape(right_x_inner, upper_y_center, upper_u_bar_z, -1, 1)
+                create_rea_c_shape(right_x_inner, upper_y_center, upper_u_bar_z, -12, -1, 1)
             )
             result.extend(
-                create_rea_c_shape(right_x_inner, lower_y_center, lower_n_bar_z, -1, -1)
+                create_rea_c_shape(right_x_inner, lower_y_center, lower_n_bar_z, 0, -1, -1)
             )
             return result
 
