@@ -11312,6 +11312,36 @@ class PremarcScriptObject(BaseScriptObject):
                 polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
             )
 
+        def create_x_rea_cylinder(x_pos, y_pos, z_pos, length):
+            cylinder = AllplanGeo.Cylinder3D(
+                6, 6, AllplanGeo.Point3D(0, 0, length)
+            )
+            error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
+                cylinder, 36
+            )
+            rotation_axis = AllplanGeo.Axis3D(
+                AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 1, 0)
+            )
+            polyhedron_cylinder = AllplanGeo.Rotate(
+                polyhedron_cylinder, rotation_axis, AllplanGeo.Angle.FromDeg(90)
+            )
+            return AllplanGeo.Move(
+                polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
+            )
+
+        def create_rea_c_shape(x_inner, y_pos, z_bar, x_direction, z_leg_direction):
+            c_leg_z = 150
+            c_span_x = 240
+            x_outer = x_inner + x_direction * c_span_x
+            x_start = min(x_inner, x_outer)
+            z_leg_end = z_bar + z_leg_direction * c_leg_z
+            z_start = min(z_bar, z_leg_end)
+            return [
+                create_z_rea_cylinder(x_inner, y_pos, z_start, c_leg_z),
+                create_z_rea_cylinder(x_outer, y_pos, z_start, c_leg_z),
+                create_x_rea_cylinder(x_start, y_pos, z_bar, c_span_x),
+            ]
+
         def create_horizontal_rea_cylinders(z_positions, variant=False):
             tube_positions = horizontal_tube_positions(z_positions, variant)
             if not tube_positions:
@@ -11343,6 +11373,51 @@ class PremarcScriptObject(BaseScriptObject):
                     )
             return result
 
+        def create_horizontal_special_c_reas(z_positions, variant=False):
+            tube_positions = horizontal_tube_positions(z_positions, variant)
+            if not tube_positions:
+                return []
+
+            c_offset_from_tube_end = 75
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            left_x_inner = tube_x_start - c_offset_from_tube_end
+            right_x_inner = tube_x_end + c_offset_from_tube_end
+
+            upper_tube = max(tube_positions, key=lambda item: item[0])
+            lower_tube = min(tube_positions, key=lambda item: item[0])
+
+            upper_z_pos, upper_y_pos = upper_tube
+            lower_z_pos, lower_y_pos = lower_tube
+            upper_y_center = upper_y_pos - REA_x_y / 2
+            lower_y_center = lower_y_pos - REA_x_y / 2
+            z_min = min(z_pos - REA_x_y for z_pos, _ in tube_positions)
+            z_max = max(z_pos for z_pos, _ in tube_positions)
+            z_center = (z_min + z_max) / 2
+            upper_u_bar_z = z_center + REA_x_y
+            lower_n_bar_z = z_center - REA_x_y
+
+            result = []
+            result.extend(
+                create_rea_c_shape(left_x_inner, upper_y_center, upper_u_bar_z, 1, 1)
+            )
+            result.extend(
+                create_rea_c_shape(left_x_inner, lower_y_center, lower_n_bar_z, 1, -1)
+            )
+            result.extend(
+                create_rea_c_shape(right_x_inner, upper_y_center, upper_u_bar_z, -1, 1)
+            )
+            result.extend(
+                create_rea_c_shape(right_x_inner, lower_y_center, lower_n_bar_z, -1, -1)
+            )
+            return result
+
+        def selected_special_rea_type():
+            return str(
+                getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+                or ""
+            )
+
         if direction_open == "RIGHT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
@@ -11368,41 +11443,45 @@ class PremarcScriptObject(BaseScriptObject):
         elif direction_open == "TOP":
             z_positions = (-offset_rea, -(offset_rea + REA_x_y))
             cuboids_moved = create_horizontal_rea(z_positions)
-            cylinders_moved = (
-                create_horizontal_rea_cylinders(z_positions)
-                if include_rea_cylinders
-                else []
-            )
+            if include_rea_cylinders:
+                cylinders_moved = create_horizontal_rea_cylinders(z_positions)
+            elif selected_special_rea_type() == "REAs en C":
+                cylinders_moved = create_horizontal_special_c_reas(z_positions)
+            else:
+                cylinders_moved = []
         elif direction_open == "TOP_VARIANT":
             z_positions = (-offset_rea, -offset_rea)
             cuboids_moved = create_horizontal_rea(z_positions, True)
-            cylinders_moved = (
-                create_horizontal_rea_cylinders(z_positions, True)
-                if include_rea_cylinders
-                else []
-            )
+            if include_rea_cylinders:
+                cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
+            elif selected_special_rea_type() == "REAs en C":
+                cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
+            else:
+                cylinders_moved = []
         elif direction_open == "BOTTOM":
             z_positions = (
                 -self.heigh + offset_rea + REA_x_y,
                 -self.heigh + offset_rea + REA_x_y * 2,
             )
             cuboids_moved = create_horizontal_rea(z_positions)
-            cylinders_moved = (
-                create_horizontal_rea_cylinders(z_positions)
-                if include_rea_cylinders
-                else []
-            )
+            if include_rea_cylinders:
+                cylinders_moved = create_horizontal_rea_cylinders(z_positions)
+            elif selected_special_rea_type() == "REAs en C":
+                cylinders_moved = create_horizontal_special_c_reas(z_positions)
+            else:
+                cylinders_moved = []
         elif direction_open == "BOTTOM_VARIANT":
             z_positions = (
                 -self.heigh + offset_rea + REA_x_y,
                 -self.heigh + offset_rea + REA_x_y,
             )
             cuboids_moved = create_horizontal_rea(z_positions, True)
-            cylinders_moved = (
-                create_horizontal_rea_cylinders(z_positions, True)
-                if include_rea_cylinders
-                else []
-            )
+            if include_rea_cylinders:
+                cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
+            elif selected_special_rea_type() == "REAs en C":
+                cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
+            else:
+                cylinders_moved = []
         else:
             cuboids_moved = []
             cylinders_moved = []
