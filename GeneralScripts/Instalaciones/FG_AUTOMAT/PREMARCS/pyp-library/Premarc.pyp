@@ -373,8 +373,8 @@
             <Parameter>
                 <Name>ComboBoxREAEspecial</Name>
                 <Text>REA especial</Text>
-                <Value>REAs en L (Estandar)</Value>
-                <ValueList>REAs en C|REAs en L (Estandar)|REAs en L 340|REAs en L 450|REAs en L dinamica</ValueList>
+                <Value>REAs en L STD CORTA</Value>
+                <ValueList>REAs en C|REAs en L STD CORTA|REAs en L STD|REAs en L 340|REAs en L 450|REAs en L dinamica</ValueList>
                 <ValueType>StringComboBox</ValueType>
                 <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
@@ -390,9 +390,25 @@
             <Parameter>
                 <Name>SobresalienteTubosREA</Name>
                 <Text>Sobresaliente tubos REA</Text>
-                <Value>200</Value>
+                <Value>150</Value>
                 <ValueType>Double</ValueType>
                 <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>LongitudREALXLadoAbierto</Name>
+                <Text>Largo X REA L lado abierto</Text>
+                <Value>390</Value>
+                <ValueType>Double</ValueType>
+                <Visible>(ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>LongitudREALXLadoInterior</Name>
+                <Text>Largo X REA L lado interior</Text>
+                <Value>340</Value>
+                <ValueType>Double</ValueType>
+                <Visible>(ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
 
             <Parameter>

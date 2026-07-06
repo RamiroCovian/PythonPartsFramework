@@ -236,6 +236,8 @@ REA_C_OPEN_FIRST_GROUP_DISTANCE_MM = 250
 REA_C_OPEN_DEFAULT_FREE_GAP_MM = 40
 REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM = 380
 REA_TUBE_DEFAULT_EXTRA_MM = 200
+REA_TUBE_DEFAULT_EXTRA_C_MM = 165
+REA_TUBE_DEFAULT_EXTRA_L_STANDARD_MM = 150
 LENGTH_REBAJES_MM = 19
 
 PREMARC_USE_COMANDES_OT = True
@@ -4320,6 +4322,32 @@ class PremarcScriptObject(BaseScriptObject):
         else:
             return False
 
+    def _default_rea_tube_extra_for_special_type(self, special_type: str = None) -> float:
+        special_type = str(
+            special_type
+            if special_type is not None
+            else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+            or ""
+        )
+        if special_type == "REAs en C":
+            return REA_TUBE_DEFAULT_EXTRA_C_MM
+        if special_type in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}:
+            return REA_TUBE_DEFAULT_EXTRA_L_STANDARD_MM
+        return REA_TUBE_DEFAULT_EXTRA_MM
+
+    def _default_rea_l_x_lengths_for_special_type(self, special_type: str = None):
+        special_type = str(
+            special_type
+            if special_type is not None
+            else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+            or ""
+        )
+        if special_type == "REAs en L STD":
+            return 500, 450
+        if special_type in {"REAs en L STD CORTA", "REAs en L (Estandar)"}:
+            return 390, 340
+        return 390, 340
+
     def modify_element_property(self, name: str, _value: Any) -> bool:
         """modify the element property
 
@@ -4346,6 +4374,19 @@ class PremarcScriptObject(BaseScriptObject):
         if name == "INPUT_PMP_ID_PREMARC":
             self.build_ele.id_premarc.value = str(_value).strip()
             return False
+
+        if name == "ComboBoxREAEspecial":
+            if hasattr(self.build_ele, "SobresalienteTubosREA"):
+                self.build_ele.SobresalienteTubosREA.value = (
+                    self._default_rea_tube_extra_for_special_type(_value)
+                )
+            if str(_value) in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}:
+                open_x_leg, inner_x_leg = self._default_rea_l_x_lengths_for_special_type(_value)
+                if hasattr(self.build_ele, "LongitudREALXLadoAbierto"):
+                    self.build_ele.LongitudREALXLadoAbierto.value = open_x_leg
+                if hasattr(self.build_ele, "LongitudREALXLadoInterior"):
+                    self.build_ele.LongitudREALXLadoInterior.value = inner_x_leg
+            return True
 
         if name == "afegit_ampits":
             self.afegit_ampits = self.build_ele.afegit_ampits.value
@@ -11042,18 +11083,19 @@ class PremarcScriptObject(BaseScriptObject):
         cylinders = []
 
         REA_x_y = 40
+        default_rea_extra = self._default_rea_tube_extra_for_special_type()
         rea_extra_param = getattr(
             getattr(self.build_ele, "SobresalienteTubosREA", None),
             "value",
-            REA_TUBE_DEFAULT_EXTRA_MM,
+            default_rea_extra,
         )
         try:
             REA_extra = float(rea_extra_param)
         except (TypeError, ValueError):
-            REA_extra = REA_TUBE_DEFAULT_EXTRA_MM
+            REA_extra = default_rea_extra
 
         if REA_extra < 0:
-            REA_extra = REA_TUBE_DEFAULT_EXTRA_MM
+            REA_extra = default_rea_extra
 
         tube_sheet_extension = THICKNESS_MM
         # Firts
@@ -11351,6 +11393,27 @@ class PremarcScriptObject(BaseScriptObject):
                 polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
             )
 
+        def create_rea_l_shape(
+            x_side, y_pos, z_joint, x_direction, z_direction, x_leg, z_leg
+        ):
+            x_outer = x_side + x_direction * x_leg
+            x_start = min(x_side, x_outer)
+            z_end = z_joint + z_direction * z_leg
+            z_start = min(z_joint, z_end)
+            l_elements = [
+                create_x_rea_cylinder(x_start, y_pos, z_joint, x_leg),
+                create_z_rea_cylinder(x_outer - x_direction * 6, y_pos, z_start - 6, z_leg),
+            ]
+            rotation_axis = AllplanGeo.Axis3D(
+                AllplanGeo.Point3D(x_side, y_pos, z_joint),
+                AllplanGeo.Vector3D(0, 1, 0),
+            )
+            rotation_angle = AllplanGeo.Angle.FromDeg(180)
+            return [
+                AllplanGeo.Rotate(element, rotation_axis, rotation_angle)
+                for element in l_elements
+            ]
+
         def create_rea_c_shape(x_inner, y_pos, z_bar, offset_z_pos, x_direction, z_leg_direction):
             """Para cambiar la geometría interna de la C"""
             offset_z_pos_horizontal_cylinder = 6
@@ -11442,6 +11505,94 @@ class PremarcScriptObject(BaseScriptObject):
             )
             return result
 
+        def create_horizontal_standard_l_reas(z_positions, open_direction):
+            tube_positions = horizontal_tube_positions(z_positions)
+            if len(tube_positions) < 2:
+                return []
+
+            special_type = selected_special_rea_type()
+            if special_type not in {
+                "REAs en L STD",
+                "REAs en L STD CORTA",
+                "REAs en L (Estandar)",
+            }:
+                return []
+
+            default_open_tube_x_leg, default_inner_tube_x_leg = (
+                self._default_rea_l_x_lengths_for_special_type(special_type)
+            )
+
+            def rea_l_x_length(param_name, default_value):
+                length_param = getattr(
+                    getattr(self.build_ele, param_name, None),
+                    "value",
+                    default_value,
+                )
+                try:
+                    length = float(length_param)
+                except (TypeError, ValueError):
+                    return default_value
+
+                if length <= 0:
+                    return default_value
+                return length
+
+            open_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoAbierto",
+                default_open_tube_x_leg,
+            )
+            inner_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoInterior",
+                default_inner_tube_x_leg,
+            )
+            z_leg = 300
+            l_offset_from_tube_end = -REA_extra
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            x_sides = (
+                (tube_x_start - l_offset_from_tube_end, 1),
+                (tube_x_end + l_offset_from_tube_end, -1),
+            )
+
+            if open_direction == "TOP":
+                open_tube = max(tube_positions, key=lambda item: item[0])
+                inner_tube = min(tube_positions, key=lambda item: item[0])
+                open_tube_z_direction = 1
+                inner_tube_z_direction = 1
+            else:
+                open_tube = min(tube_positions, key=lambda item: item[0])
+                inner_tube = max(tube_positions, key=lambda item: item[0])
+                open_tube_z_direction = -1
+                inner_tube_z_direction = -1
+
+            upper_tube_z = max(z_pos for z_pos, _ in tube_positions)
+
+            def tube_l_z_joint(z_pos):
+                if z_pos == upper_tube_z:
+                    return z_pos + REA_x_y - 34
+                return z_pos - REA_x_y - 6
+
+            result = []
+            for z_pos, y_pos, x_leg, z_direction in (
+                (*open_tube, open_tube_x_leg, open_tube_z_direction),
+                (*inner_tube, inner_tube_x_leg, inner_tube_z_direction),
+            ):
+                y_center = y_pos - REA_x_y / 2
+                z_joint = tube_l_z_joint(z_pos)
+                for x_side, x_direction in x_sides:
+                    result.extend(
+                        create_rea_l_shape(
+                            x_side,
+                            y_center,
+                            z_joint,
+                            x_direction,
+                            z_direction,
+                            x_leg,
+                            z_leg,
+                        )
+                    )
+            return result
+
         def create_horizontal_special_c_reas_for_groups(z_position_groups):
             result = []
             for z_positions in z_position_groups:
@@ -11501,6 +11652,11 @@ class PremarcScriptObject(BaseScriptObject):
             not include_rea_cylinders
             and selected_special_rea_type() == "REAs en C"
         )
+        use_standard_l_rea = (
+            not include_rea_cylinders
+            and selected_special_rea_type()
+            in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
+        )
 
         if direction_open == "RIGHT":
             # for elem in elems:
@@ -11536,6 +11692,8 @@ class PremarcScriptObject(BaseScriptObject):
                 cylinders_moved = create_horizontal_special_c_reas_for_groups(
                     z_position_groups
                 )
+            elif use_standard_l_rea:
+                cylinders_moved = create_horizontal_standard_l_reas(z_positions, "TOP")
             else:
                 cylinders_moved = []
         elif direction_open == "TOP_VARIANT":
@@ -11561,6 +11719,10 @@ class PremarcScriptObject(BaseScriptObject):
             elif use_special_c_rea:
                 cylinders_moved = create_horizontal_special_c_reas_for_groups(
                     z_position_groups
+                )
+            elif use_standard_l_rea:
+                cylinders_moved = create_horizontal_standard_l_reas(
+                    z_positions, "BOTTOM"
                 )
             else:
                 cylinders_moved = []
