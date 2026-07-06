@@ -380,6 +380,14 @@
             </Parameter>
 
             <Parameter>
+                <Name>SeparacionLibreEntreREAC</Name>
+                <Text>Separacion libre entre REAs C</Text>
+                <Value>40</Value>
+                <ValueType>Double</ValueType>
+                <Visible>(ComboBoxAbiertoCerrado == "OBERT PER DALT" or ComboBoxAbiertoCerrado == "OBERT PER BAIX") and ComboBoxREAEspecial == "REAs en C"</Visible>
+            </Parameter>
+
+            <Parameter>
                 <Name>LongitudREAEspecialLDinamica</Name>
                 <Text>Sobresaliente REA L</Text>
                 <Value>280</Value>

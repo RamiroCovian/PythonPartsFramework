@@ -232,6 +232,9 @@ VERTICAL_TUB = 1
 HORIZONTAL_TUB = 2
 REA_Z_ORIGIN = 50
 REA_Z_FINAL = 700
+REA_C_OPEN_FIRST_GROUP_DISTANCE_MM = 250
+REA_C_OPEN_DEFAULT_FREE_GAP_MM = 40
+REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM = 380
 LENGTH_REBAJES_MM = 19
 
 PREMARC_USE_COMANDES_OT = True
@@ -11279,12 +11282,12 @@ class PremarcScriptObject(BaseScriptObject):
             # Cuboids are created with a negative Y depth (-REA_x_y). For a
             # single tube, start Y must be center + half depth. For variant,
             # center the two adjacent tubes as one 2*REA_x_y package.
-            y_positions = (
-                (wall_center_y + REA_x_y, wall_center_y)
-                if variant
-                else (wall_center_y + REA_x_y / 2, wall_center_y + REA_x_y / 2)
-            )
-            return list(zip(z_positions, y_positions))
+            if variant:
+                y_positions = (wall_center_y + REA_x_y, wall_center_y)
+                return list(zip(z_positions, y_positions))
+
+            y_pos = wall_center_y + REA_x_y / 2
+            return [(z_pos, y_pos) for z_pos in z_positions]
 
         def create_horizontal_rea(z_positions, variant=False):
             rea_length = self.width + REA_extra * 2 + tube_sheet_extension * 2
@@ -11426,11 +11429,65 @@ class PremarcScriptObject(BaseScriptObject):
             )
             return result
 
+        def create_horizontal_special_c_reas_for_groups(z_position_groups):
+            result = []
+            for z_positions in z_position_groups:
+                result.extend(create_horizontal_special_c_reas(z_positions))
+            return result
+
+        def flatten_z_position_groups(z_position_groups):
+            return [
+                z_pos
+                for z_positions in z_position_groups
+                for z_pos in z_positions
+            ]
+
+        def rea_c_open_group_distances():
+            gap_source = getattr(
+                self.build_ele, "SeparacionLibreEntreREAC", None
+            ) or getattr(self.build_ele, "DistanciaEntreGruposREAC", None)
+            gap_param = getattr(
+                gap_source,
+                "value",
+                REA_C_OPEN_DEFAULT_FREE_GAP_MM,
+            )
+            try:
+                free_gap = float(gap_param)
+            except (TypeError, ValueError):
+                free_gap = REA_C_OPEN_DEFAULT_FREE_GAP_MM
+
+            if free_gap < 0:
+                free_gap = REA_C_OPEN_DEFAULT_FREE_GAP_MM
+
+            first_distance = float(REA_C_OPEN_FIRST_GROUP_DISTANCE_MM)
+            group_spacing = REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM + free_gap
+            return (first_distance, first_distance + group_spacing)
+
+        def rea_c_open_top_z_position_groups():
+            return [
+                (-distance, -(distance + REA_x_y))
+                for distance in rea_c_open_group_distances()
+            ]
+
+        def rea_c_open_bottom_z_position_groups():
+            return [
+                (
+                    -self.heigh + distance + REA_x_y,
+                    -self.heigh + distance + REA_x_y * 2,
+                )
+                for distance in rea_c_open_group_distances()
+            ]
+
         def selected_special_rea_type():
             return str(
                 getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
                 or ""
             )
+
+        use_special_c_rea = (
+            not include_rea_cylinders
+            and selected_special_rea_type() == "REAs en C"
+        )
 
         if direction_open == "RIGHT":
             # for elem in elems:
@@ -11456,11 +11513,16 @@ class PremarcScriptObject(BaseScriptObject):
                     cylinders_moved.append(elem_moved)
         elif direction_open == "TOP":
             z_positions = (-offset_rea, -(offset_rea + REA_x_y))
+            if use_special_c_rea:
+                z_position_groups = rea_c_open_top_z_position_groups()
+                z_positions = flatten_z_position_groups(z_position_groups)
             cuboids_moved = create_horizontal_rea(z_positions)
             if include_rea_cylinders:
                 cylinders_moved = create_horizontal_rea_cylinders(z_positions)
-            elif selected_special_rea_type() == "REAs en C":
-                cylinders_moved = create_horizontal_special_c_reas(z_positions)
+            elif use_special_c_rea:
+                cylinders_moved = create_horizontal_special_c_reas_for_groups(
+                    z_position_groups
+                )
             else:
                 cylinders_moved = []
         elif direction_open == "TOP_VARIANT":
@@ -11468,7 +11530,7 @@ class PremarcScriptObject(BaseScriptObject):
             cuboids_moved = create_horizontal_rea(z_positions, True)
             if include_rea_cylinders:
                 cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
-            elif selected_special_rea_type() == "REAs en C":
+            elif use_special_c_rea:
                 cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
             else:
                 cylinders_moved = []
@@ -11477,11 +11539,16 @@ class PremarcScriptObject(BaseScriptObject):
                 -self.heigh + offset_rea + REA_x_y,
                 -self.heigh + offset_rea + REA_x_y * 2,
             )
+            if use_special_c_rea:
+                z_position_groups = rea_c_open_bottom_z_position_groups()
+                z_positions = flatten_z_position_groups(z_position_groups)
             cuboids_moved = create_horizontal_rea(z_positions)
             if include_rea_cylinders:
                 cylinders_moved = create_horizontal_rea_cylinders(z_positions)
-            elif selected_special_rea_type() == "REAs en C":
-                cylinders_moved = create_horizontal_special_c_reas(z_positions)
+            elif use_special_c_rea:
+                cylinders_moved = create_horizontal_special_c_reas_for_groups(
+                    z_position_groups
+                )
             else:
                 cylinders_moved = []
         elif direction_open == "BOTTOM_VARIANT":
@@ -11492,7 +11559,7 @@ class PremarcScriptObject(BaseScriptObject):
             cuboids_moved = create_horizontal_rea(z_positions, True)
             if include_rea_cylinders:
                 cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
-            elif selected_special_rea_type() == "REAs en C":
+            elif use_special_c_rea:
                 cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
             else:
                 cylinders_moved = []
