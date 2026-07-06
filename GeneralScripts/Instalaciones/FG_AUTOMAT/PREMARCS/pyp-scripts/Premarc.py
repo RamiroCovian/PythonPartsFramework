@@ -2775,6 +2775,10 @@ class PremarcScriptObject(BaseScriptObject):
                 f"[Premarc] Generando opening final {index}/{len(session_items)} en "
                 f"({point.X:.1f}, {point.Y:.1f}, {point.Z:.1f})"
             )
+            print(
+                "[Premarc][SESSION] Estado aplicado para finalizacion -> "
+                f"{self._format_session_state_summary(state)}"
+            )
             if self.selected_wall:
                 self._create_wall_opening()
 
@@ -2791,6 +2795,22 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
         return AllplanGeo.Point3D(point.X, point.Y, point.Z)
+
+    def _format_session_state_summary(self, state: dict) -> str:
+        """Resumen de estado geométrico para depurar finalización multi-premarco."""
+        if not state:
+            return "<sin-estado>"
+        return (
+            f"abierto={state.get('ComboBoxAbiertoCerrado')}, "
+            f"pend={state.get('ComboBoxPendiente')}, "
+            f"passama={state.get('PassamaOptions')}, "
+            f"rebajes={state.get('RebajesOptions')}, "
+            f"persiana={state.get('ComboBoxPersianas')}, "
+            f"ampit={state.get('EnableAmpit')}/{state.get('ampit_material')}, "
+            f"imperm={state.get('EnableImpermeabilizacio')}/{state.get('imperm_type')}, "
+            f"show_xps={state.get('ShowXPS')}, "
+            f"z_unique={state.get('z_unique')}"
+        )
 
     def _normalize_pyp_display_name(self, name: Any) -> str:
         return str(name or "").strip().strip("'\"")
@@ -3687,7 +3707,18 @@ class PremarcScriptObject(BaseScriptObject):
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
             "retall_ampits": self.build_ele.retall_ampits.value,
+            "EnableAmpit": self.build_ele.EnableAmpit.value,
+            "ampit_material": self.build_ele.ampit_material.value,
+            "ampit_muntatge": self.build_ele.ampit_muntatge.value,
+            "ampit_parts": self.build_ele.ampit_parts.value,
+            "ampit_ref_1": self.build_ele.ampit_ref_1.value,
+            "is_puerta_entrada": self.build_ele.is_puerta_entrada.value,
             "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
+            "ComboBoxREAEspecial": self.build_ele.ComboBoxREAEspecial.value,
+            "SeparacionLibreEntreREAC": self.build_ele.SeparacionLibreEntreREAC.value,
+            "SobresalienteTubosREA": self.build_ele.SobresalienteTubosREA.value,
+            "LongitudREALXLadoAbierto": self.build_ele.LongitudREALXLadoAbierto.value,
+            "LongitudREALXLadoInterior": self.build_ele.LongitudREALXLadoInterior.value,
             "EnableRetallGanxo": self.build_ele.EnableRetallGanxo.value,
             "Z_RetallGanxo": self.build_ele.Z_RetallGanxo.value,
             "ComboBoxPendiente": self.build_ele.ComboBoxPendiente.value,
@@ -3703,8 +3734,18 @@ class PremarcScriptObject(BaseScriptObject):
             "ComboBoxEscuadras": self.build_ele.ComboBoxEscuadras.value,
             "ComboBoxTubos": self.build_ele.ComboBoxTubos.value,
             "TypeTubos": self.build_ele.TypeTubos.value,
+            "PositionTubos": self.build_ele.PositionTubos.value,
+            "OffsetTubos": self.build_ele.OffsetTubos.value,
             "CheckBoxRealSpace": self.build_ele.CheckBoxRealSpace.value,
             "CheckBoxInnerSpace": self.build_ele.CheckBoxInnerSpace.value,
+            "EnableImpermeabilizacio": self.build_ele.EnableImpermeabilizacio.value,
+            "imperm_type": self.build_ele.imperm_type.value,
+            "EnableImpermPliegue90": self.build_ele.EnableImpermPliegue90.value,
+            "imperm_muntatge": self.build_ele.imperm_muntatge.value,
+            "premarc_PE": self.build_ele.premarc_PE.value,
+            "ShowXPS": self.build_ele.ShowXPS.value,
+            "ComboBoxDEN": self.build_ele.ComboBoxDEN.value,
+            "z_unique": z_unique_as_int(self.build_ele.z_unique.value),
             "opening_guid": self.build_ele.opening_guid.value,
             "wall_guid": (
                 self.wall_select_result.element_guid
@@ -3793,10 +3834,73 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
+        self.build_ele.EnableAmpit.value = state.get(
+            "EnableAmpit", self.build_ele.EnableAmpit.value
+        )
+        self.build_ele.ampit_material.value = state.get(
+            "ampit_material", self.build_ele.ampit_material.value
+        )
+        self.build_ele.ampit_muntatge.value = state.get(
+            "ampit_muntatge", self.build_ele.ampit_muntatge.value
+        )
+        self.build_ele.ampit_parts.value = state.get(
+            "ampit_parts", self.build_ele.ampit_parts.value
+        )
+        self.build_ele.ampit_ref_1.value = state.get(
+            "ampit_ref_1", self.build_ele.ampit_ref_1.value
+        )
+        self.build_ele.is_puerta_entrada.value = state.get(
+            "is_puerta_entrada", self.build_ele.is_puerta_entrada.value
+        )
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
+        self.build_ele.ComboBoxREAEspecial.value = state.get(
+            "ComboBoxREAEspecial", self.build_ele.ComboBoxREAEspecial.value
+        )
+        self.build_ele.SeparacionLibreEntreREAC.value = state.get(
+            "SeparacionLibreEntreREAC", self.build_ele.SeparacionLibreEntreREAC.value
+        )
+        self.build_ele.SobresalienteTubosREA.value = state.get(
+            "SobresalienteTubosREA", self.build_ele.SobresalienteTubosREA.value
+        )
+        self.build_ele.LongitudREALXLadoAbierto.value = state.get(
+            "LongitudREALXLadoAbierto", self.build_ele.LongitudREALXLadoAbierto.value
+        )
+        self.build_ele.LongitudREALXLadoInterior.value = state.get(
+            "LongitudREALXLadoInterior", self.build_ele.LongitudREALXLadoInterior.value
+        )
+        self.build_ele.PositionTubos.value = state.get(
+            "PositionTubos", self.build_ele.PositionTubos.value
+        )
+        self.build_ele.OffsetTubos.value = state.get(
+            "OffsetTubos", self.build_ele.OffsetTubos.value
+        )
+        self.build_ele.EnableImpermeabilizacio.value = state.get(
+            "EnableImpermeabilizacio", self.build_ele.EnableImpermeabilizacio.value
+        )
+        self.build_ele.imperm_type.value = state.get(
+            "imperm_type", self.build_ele.imperm_type.value
+        )
+        self.build_ele.EnableImpermPliegue90.value = state.get(
+            "EnableImpermPliegue90", self.build_ele.EnableImpermPliegue90.value
+        )
+        self.build_ele.imperm_muntatge.value = state.get(
+            "imperm_muntatge", self.build_ele.imperm_muntatge.value
+        )
+        self.build_ele.premarc_PE.value = state.get(
+            "premarc_PE", self.build_ele.premarc_PE.value
+        )
+        self.build_ele.ShowXPS.value = state.get(
+            "ShowXPS", self.build_ele.ShowXPS.value
+        )
+        self.build_ele.ComboBoxDEN.value = state.get(
+            "ComboBoxDEN", self.build_ele.ComboBoxDEN.value
+        )
+        saved_z_unique = z_unique_as_int(state.get("z_unique", 0))
+        if saved_z_unique > 0:
+            self.build_ele.z_unique.value = saved_z_unique
 
         if self.build_ele.enable_manual_thickness.value:
             self.load_color_manual_thickness()

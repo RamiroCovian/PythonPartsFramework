@@ -374,7 +374,7 @@
                 <Name>ComboBoxREAEspecial</Name>
                 <Text>REA especial</Text>
                 <Value>REAs en L STD CORTA</Value>
-                <ValueList>REAs en C|REAs en L STD CORTA|REAs en L STD|REAs en L 340|REAs en L 450|REAs en L dinamica</ValueList>
+                <ValueList>REAs en C|REAs en L STD CORTA|REAs en L STD</ValueList>
                 <ValueType>StringComboBox</ValueType>
                 <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
@@ -410,15 +410,6 @@
                 <ValueType>Double</ValueType>
                 <Visible>(ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
-
-            <Parameter>
-                <Name>LongitudREAEspecialLDinamica</Name>
-                <Text>Sobresaliente REA L</Text>
-                <Value>280</Value>
-                <ValueType>Double</ValueType>
-                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado and ComboBoxREAEspecial == "REAs en L dinamica"</Visible>
-            </Parameter>
-
 
             <Parameter>
                 <Name>EnableRetallGanxo</Name>
