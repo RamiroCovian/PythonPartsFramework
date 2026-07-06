@@ -388,6 +388,14 @@
             </Parameter>
 
             <Parameter>
+                <Name>SobresalienteTubosREA</Name>
+                <Text>Sobresaliente tubos REA</Text>
+                <Value>200</Value>
+                <ValueType>Double</ValueType>
+                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+            </Parameter>
+
+            <Parameter>
                 <Name>LongitudREAEspecialLDinamica</Name>
                 <Text>Sobresaliente REA L</Text>
                 <Value>280</Value>

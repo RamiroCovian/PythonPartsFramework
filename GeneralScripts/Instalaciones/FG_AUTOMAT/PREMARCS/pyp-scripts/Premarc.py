@@ -235,6 +235,7 @@ REA_Z_FINAL = 700
 REA_C_OPEN_FIRST_GROUP_DISTANCE_MM = 250
 REA_C_OPEN_DEFAULT_FREE_GAP_MM = 40
 REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM = 380
+REA_TUBE_DEFAULT_EXTRA_MM = 200
 LENGTH_REBAJES_MM = 19
 
 PREMARC_USE_COMANDES_OT = True
@@ -11041,7 +11042,19 @@ class PremarcScriptObject(BaseScriptObject):
         cylinders = []
 
         REA_x_y = 40
-        REA_extra = 200
+        rea_extra_param = getattr(
+            getattr(self.build_ele, "SobresalienteTubosREA", None),
+            "value",
+            REA_TUBE_DEFAULT_EXTRA_MM,
+        )
+        try:
+            REA_extra = float(rea_extra_param)
+        except (TypeError, ValueError):
+            REA_extra = REA_TUBE_DEFAULT_EXTRA_MM
+
+        if REA_extra < 0:
+            REA_extra = REA_TUBE_DEFAULT_EXTRA_MM
+
         tube_sheet_extension = THICKNESS_MM
         # Firts
         pos_REA = AllplanGeo.AxisPlacement3D(
