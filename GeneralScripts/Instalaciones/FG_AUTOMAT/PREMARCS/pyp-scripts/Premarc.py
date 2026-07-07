@@ -56,8 +56,6 @@ from .solid_opening import SolidOpening
 import requests
 
 ZERO_MODEL_GUID = "00000000-0000-0000-0000-000000000000"
-SPACE_VOLUME_TRANSPARENCY = 100
-SPACE_VOLUME_SURFACE_NAME = "premarc_space_volume_transparent_100.surf"
 
 
 def resolve_attribute_id(document, *candidate_names: str) -> int:
@@ -214,9 +212,12 @@ FOLD_SPACING_MM = 3
 # TOP_FALCAS = False
 # BOTTOM_FALCAS = False
 HEIGHT_FALCA = 60
-MINUS_HEIGHT_FALCA = 19
+MINUS_HEIGHT_FALCA = 23
 THICKNESS_FALCA = 132
 MINUS_THICKNESS_FALCA = 25
+# Plano horizontal superior de la falca cuando el cajon es METALUNIC VIST.
+# Lamisol NO lleva este plano (trapecio recto). Tuneable en iteracion visual.
+FLAT_TOP_METALUNIC_MM = 23
 # HEIGHT_EDGE_FALCA = 107
 # LEFT_EDGE_FALCA = 19
 LENGTH_SIDE_HEXAGON = 40
@@ -6658,6 +6659,30 @@ class PremarcScriptObject(BaseScriptObject):
         except Exception:
             return 0.0
 
+    def _lamisol_falca_y_start_mm(self) -> float:
+        """Y origin for LAMISOL top falca.
+
+        The LAMISOL box occupies the wall-depth zone. The falca starts at the
+        back edge of that box and fills the remaining premarc depth.
+        """
+        return max(self._xps_wall_thickness_mm() - float(THICKNESS_MM), 0.0)
+
+    def _lamisol_falca_depth_mm(self) -> float:
+        """Depth/base of the LAMISOL falca in local -Y."""
+        return max(float(self.thickness) - self._lamisol_falca_y_start_mm(), 0.0)
+
+    def _top_falca_y_position_mm(self) -> float:
+        """Global Y position for the local origin of the top falca polygon."""
+        persiana = self.build_ele.ComboBoxPersianas.value
+        if persiana == "LAMISOL VIST":
+            return -self._lamisol_falca_y_start_mm()
+        if persiana == "METALUNIC VIST":
+            return -(
+                self._xps_wall_thickness_mm()
+                + float(self.build_ele.PersianaWidth.value)
+            )
+        return -(self.thickness - THICKNESS_MM - THICKNESS_FALCA)
+
     def _build_xps_premarc_detail(self) -> str:
         """Build the PMP_XPS_PREMARC_DETAIL attribute string for the current state."""
         try:
@@ -7323,22 +7348,9 @@ class PremarcScriptObject(BaseScriptObject):
 
         # TODO quitar
         if len(listaAbiertoCerrado) == 0:
-            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT + REA', 'OBERT PER DALT + REA VARIANT', 'OBERT PER BAIX', 'OBERT PER BAIX + REA', 'OBERT PER BAIX + REA VARIANT']
+            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA']
 
-        opciones_locales_anadidas = False
-        for option in (
-            "OBERT PER DALT",
-            "OBERT PER DALT + REA",
-            "OBERT PER DALT + REA VARIANT",
-            "OBERT PER BAIX",
-            "OBERT PER BAIX + REA",
-            "OBERT PER BAIX + REA VARIANT",
-        ):
-            if option not in listaAbiertoCerrado:
-                listaAbiertoCerrado.append(option)
-                opciones_locales_anadidas = True
-
-        if debe_actualizar or opciones_locales_anadidas:
+        if debe_actualizar:
             self.build_ele.valueListaAbiertoCerrado.value = listaAbiertoCerrado
 
     def crearListaPendiente(self):
@@ -7743,46 +7755,6 @@ class PremarcScriptObject(BaseScriptObject):
                 model_ele_list.append_geometry_3d(u_poly, props_u)
         return model_ele_list
 
-    def _space_volume_texture_definition(self):
-        texture_def = getattr(self, "_space_volume_texture_def", None)
-        if texture_def is not None:
-            return texture_def
-
-        try:
-            surface_def = AllplanBasisElements.SurfaceDefinition.Create()
-            surface_def.DiffuseColor = AllplanBasisElements.ARGB(255, 255, 255, 255)
-            surface_def.Transparency = SPACE_VOLUME_TRANSPARENCY
-
-            surface_path = AllplanBaseElements.DocumentResourceService.CreateSurface(
-                self.document,
-                AllplanSettings.AllplanPaths.GetCurPrjDesignPath(),
-                SPACE_VOLUME_SURFACE_NAME,
-                surface_def,
-                False,
-            )
-            if not surface_path:
-                return None
-
-            texture_def = AllplanBasisElements.TextureDefinition(surface_path)
-            self._space_volume_texture_def = texture_def
-            return texture_def
-        except Exception as exc:
-            print(f"[Premarc][SPACE_VOLUME] transparent surface unavailable: {exc}")
-            return None
-
-    def _append_space_volume(
-        self,
-        model_ele_list: ModelEleList,
-        polyhedron: AllplanGeo.Polyhedron3D,
-        props: AllplanBaseElements.CommonProperties,
-    ):
-        texture_def = self._space_volume_texture_definition()
-        if texture_def is None:
-            model_ele_list.append_geometry_3d(polyhedron, props)
-            return
-
-        model_ele_list.append_geometry_3d_with_texture(polyhedron, texture_def, props)
-
     def create_premarc(self):
         if getattr(self, "_in_placement_preview", False):
             return self._create_premarc_placement_preview_only()
@@ -7917,15 +7889,15 @@ class PremarcScriptObject(BaseScriptObject):
             SPACE_LAYER_REAL, self.document
         )
         props_space_real = AllplanBaseElements.CommonProperties()
+        props_space_real.Color = 6  # red. Change to same color as premarc
         props_space_real.Layer = layer_space_real_id
-        props_space_real.ColorByLayer = True
 
         layer_space_inner_id = AllplanBaseElements.LayerService.GetIDByShortName(
             SPACE_LAYER_INNER, self.document
         )
         props_space_inner = AllplanBaseElements.CommonProperties()
+        props_space_inner.Color = 6  # red. Change to same color as premarc
         props_space_inner.Layer = layer_space_inner_id
-        props_space_inner.ColorByLayer = True
 
         layer_retall_ganxo = AllplanBaseElements.LayerService.GetIDByShortName(
             RETALL_GANXO_LAYER, self.document
@@ -8175,9 +8147,7 @@ class PremarcScriptObject(BaseScriptObject):
         for elem in mosquitera:
             model_ele_list.append_geometry_3d(elem, props_mosquitera)
 
-        bottom_open = self.is_bottom_open_premarc()
-
-        if self.build_ele.EnableAmpit.value and not bottom_open:
+        if self.build_ele.EnableAmpit.value:
             ampit, ampit_2d, ampit_edge_fg, ampit_edge_add, ampit_edge_add_cuboid, ampit_spec = self.create_premarc_ampit()
 
             # Per-type layer + FORCED color. A FRESH CommonProperties() instance
@@ -8265,7 +8235,7 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in ampit_2d:
                 model_ele_list.append_geometry_2d(elem, props_ampit_typed)
 
-        if self.build_ele.EnableImpermeabilizacio.value and not bottom_open:
+        if self.build_ele.EnableImpermeabilizacio.value:
             layer_imperm_id = AllplanBaseElements.LayerService.GetIDByShortName(IMPERM_LAYER, self.document)
             props_imperm = AllplanBaseElements.CommonProperties()
             props_imperm.Layer = layer_imperm_id
@@ -8301,11 +8271,9 @@ class PremarcScriptObject(BaseScriptObject):
 
         poly_inside_space, poly_real_space = self.create_real_inside_space()
         if poly_inside_space:
-            self._append_space_volume(
-                model_ele_list, poly_inside_space, props_space_inner
-            )
+            model_ele_list.append_geometry_3d(poly_inside_space, props_space_inner)
         if poly_real_space:
-            self._append_space_volume(model_ele_list, poly_real_space, props_space_real)
+            model_ele_list.append_geometry_3d(poly_real_space, props_space_real)
 
         retall_representation = self.create_retall_representation()
         if retall_representation:
@@ -8339,13 +8307,12 @@ class PremarcScriptObject(BaseScriptObject):
         left_x = -xps_thickness - sheet_offset
         right_x = self.width + sheet_offset
         bottom_z = -xps_thickness - sheet_offset
-        vertical_z = 0.0 if self.is_bottom_open_premarc() else -sheet_offset
-        vertical_top_z = self.heigh if self.is_top_open_premarc() else self.heigh + sheet_offset
-        vertical_height = vertical_top_z - vertical_z
+        vertical_z = -sheet_offset
+        vertical_height = self.heigh + (sheet_offset * 2)
         xps_y = sheet_offset
 
         pos_bottom = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, xps_y, bottom_z))
-        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, xps_y, 0 + self.heigh))
+        pos_top = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(horizontal_x, xps_y, 0 + self.heigh + sheet_offset))
         pos_left = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(left_x, xps_y, vertical_z))
         pos_right = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(right_x, xps_y, vertical_z))
 
@@ -8369,18 +8336,6 @@ class PremarcScriptObject(BaseScriptObject):
                 elems.remove(cuboid_right)
             case "OBERT FEMELLA ESQUERRA":
                 elems.remove(cuboid_left)
-            case "OBERT PER DALT":
-                elems.remove(cuboid_top)
-            case "OBERT PER DALT + REA":
-                elems.remove(cuboid_top)
-            case "OBERT PER DALT + REA VARIANT":
-                elems.remove(cuboid_top)
-            case "OBERT PER BAIX":
-                elems.remove(cuboid_bottom)
-            case "OBERT PER BAIX + REA":
-                elems.remove(cuboid_bottom)
-            case "OBERT PER BAIX + REA VARIANT":
-                elems.remove(cuboid_bottom)
             case "OBERT FEMELLA DRETA + REA":
                 elems.remove(cuboid_right)
             case "OBERT FEMELLA ESQUERRA + REA":
@@ -9174,15 +9129,41 @@ class PremarcScriptObject(BaseScriptObject):
     def create_origin_falca_top(self)->AllplanGeo.Polygon3D:
         height_falca = HEIGHT_FALCA
         thickness_falca = THICKNESS_FALCA
-        if self.build_ele.ComboBoxPersianas.value == "METALUNIC VIST":
-            height_falca = self.build_ele.PersianaHeight.value
-            thickness_falca = abs(
-                self.thickness
-                - self.detected_wall_thickness
-                - self.build_ele.PersianaWidth.value
-                - THICKNESS_MM
-            )
+        persiana = self.build_ele.ComboBoxPersianas.value
         frame_falca = AllplanGeo.Polygon3D()
+
+        # ADAPTATIVO (falcas superiores + cajon LAMISOL/METALUNIC): la falca
+        # superior llena el espacio libre en -Y. LAMISOL toma como borde de
+        # cajon el grosor de pared; METALUNIC descuenta ademas PersianaWidth.
+        # El remate SUPERIOR difiere por tipo:
+        #   - METALUNIC VIST: plano horizontal de 23mm arriba y luego baja.
+        #   - LAMISOL VIST: trapecio recto (incline directo, sin plano superior).
+        if persiana in ("LAMISOL VIST", "METALUNIC VIST"):
+            height_falca = self.build_ele.PersianaHeight.value
+            if persiana == "LAMISOL VIST":
+                thickness_falca = self._lamisol_falca_depth_mm()
+            else:
+                thickness_falca = max(
+                    float(self.thickness)
+                    - self._xps_wall_thickness_mm()
+                    - float(self.build_ele.PersianaWidth.value)
+                    - float(THICKNESS_MM),
+                    0.0,
+                )
+            if persiana == "METALUNIC VIST":
+                frame_falca += AllplanGeo.Point3D(0, 0, 0)
+                frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
+                frame_falca += AllplanGeo.Point3D(0, -FLAT_TOP_METALUNIC_MM, height_falca)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, MINUS_HEIGHT_FALCA)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, 0)
+            else:  # LAMISOL VIST -> trapecio recto (sin plano superior)
+                frame_falca += AllplanGeo.Point3D(0, 0, 0)
+                frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, MINUS_HEIGHT_FALCA)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, 0)
+            return frame_falca
+
+        # Sin persiana / otros tipos: geometria original (no se toca).
         frame_falca += AllplanGeo.Point3D(0, 0, 0)
         frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
         frame_falca += AllplanGeo.Point3D(0, -MINUS_THICKNESS_FALCA, height_falca)
@@ -9661,8 +9642,6 @@ class PremarcScriptObject(BaseScriptObject):
         frame_x_max = float(self.width) + float(THICKNESS_MM)
         frame_z_top = float(THICKNESS_MM)
         frame_z_bottom = -float(self.heigh) - float(THICKNESS_MM)
-        side_frame_z_bottom = -float(self.heigh) if self.is_bottom_open_premarc() else frame_z_bottom
-        side_frame_z_top = 0.0 if self.is_top_open_premarc() else frame_z_top
 
         frame_bottom = AllplanGeo.Polygon3D()
         frame_bottom += AllplanGeo.Point3D(frame_x_min, -self.thickness, -self.heigh)
@@ -9712,21 +9691,21 @@ class PremarcScriptObject(BaseScriptObject):
         polyhedron_premarc_list.append(polyhedron_top)
 
         frame_left = AllplanGeo.Polygon3D()
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_bottom)
-        frame_left += AllplanGeo.Point3D(0, 0, side_frame_z_bottom)
-        frame_left += AllplanGeo.Point3D(0, 0, side_frame_z_top)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_top)
-        frame_left += AllplanGeo.Point3D(0, -self.thickness, side_frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, frame_z_bottom)
+        frame_left += AllplanGeo.Point3D(0, 0, frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_top)
+        frame_left += AllplanGeo.Point3D(0, -self.thickness, frame_z_bottom)
 
         error_code, polyhedron_left = self.extrude_frame(frame_left, "frame_left")
         polyhedron_premarc_list.append(polyhedron_left)
 
         frame_right = AllplanGeo.Polygon3D()
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_bottom)
-        frame_right += AllplanGeo.Point3D(self.width, 0, side_frame_z_bottom)
-        frame_right += AllplanGeo.Point3D(self.width, 0, side_frame_z_top)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_top)
-        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, side_frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_bottom)
+        frame_right += AllplanGeo.Point3D(self.width, 0, frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_top)
+        frame_right += AllplanGeo.Point3D(self.width, -self.thickness, frame_z_bottom)
 
         error_code, polyhedron_right = self.extrude_frame(frame_right, "frame_right")
         polyhedron_premarc_list.append(polyhedron_right)
@@ -10014,7 +9993,7 @@ class PremarcScriptObject(BaseScriptObject):
             falca = self.create_origin_falca_top()
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
-                -(self.thickness - THICKNESS_MM - THICKNESS_FALCA),
+                self._top_falca_y_position_mm(),
                 0,
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
@@ -10373,43 +10352,6 @@ class PremarcScriptObject(BaseScriptObject):
                             else:
                                 print("Error in intersection")
                                 pass
-
-            case (
-                "OBERT PER DALT"
-                | "OBERT PER DALT + REA"
-                | "OBERT PER DALT + REA VARIANT"
-            ):
-                print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
-                if polyhedron_top in polyhedron_premarc_list:
-                    try:
-                        polyhedron_premarc_list.remove(polyhedron_top)
-                    except ValueError:
-                        print("Error in remove polyhedron top")
-                if polyhedron_finish_top in polyhedron_premarc_list:
-                    try:
-                        polyhedron_premarc_list.remove(polyhedron_finish_top)
-                    except ValueError:
-                        print("Error in remove polyhedron finish top")
-
-                if self.build_ele.ComboBoxPendiente.value == "NO":
-                    poly_base_no_slope = AllplanGeo.Polyhedron3D(polyhedron_bottom)
-
-            case (
-                "OBERT PER BAIX"
-                | "OBERT PER BAIX + REA"
-                | "OBERT PER BAIX + REA VARIANT"
-            ):
-                print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
-                if polyhedron_bottom in polyhedron_premarc_list:
-                    try:
-                        polyhedron_premarc_list.remove(polyhedron_bottom)
-                    except ValueError:
-                        print("Error in remove polyhedron bottom")
-                if polyhedron_finish_bottom in polyhedron_premarc_list:
-                    try:
-                        polyhedron_premarc_list.remove(polyhedron_finish_bottom)
-                    except ValueError:
-                        print("Error in remove polyhedron finish bottom")
 
             case "OBERT FEMELLA DRETA":
                 print("Selected OBERT FEMELLA DRETA")  # Open premarc with right femella
@@ -10985,7 +10927,7 @@ class PremarcScriptObject(BaseScriptObject):
             case _:
                 print("Selected default")
 
-        if poly_base_no_slope is None and not self.is_bottom_open_premarc():
+        if poly_base_no_slope is None:
             if self.build_ele.ComboBoxPendiente.value == "SI":
                 if self.bottom_rebaje_enabled():
                     poly_base_no_slope = AllplanGeo.Polyhedron3D(
@@ -11521,20 +11463,6 @@ class PremarcScriptObject(BaseScriptObject):
         d = dict(list_rebajes)
         return (d.get("REB. BAIX") == 1 or d.get("REB. BAIXS") == 1) and d.get("NO") == 0
 
-    def is_bottom_open_premarc(self):
-        return self.build_ele.ComboBoxAbiertoCerrado.value in (
-            "OBERT PER BAIX",
-            "OBERT PER BAIX + REA",
-            "OBERT PER BAIX + REA VARIANT",
-        )
-
-    def is_top_open_premarc(self):
-        return self.build_ele.ComboBoxAbiertoCerrado.value in (
-            "OBERT PER DALT",
-            "OBERT PER DALT + REA",
-            "OBERT PER DALT + REA VARIANT",
-        )
-
     def get_direction_open_premarc(self):
         direction_open_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
         values_direction_right = [
@@ -11549,30 +11477,10 @@ class PremarcScriptObject(BaseScriptObject):
             "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA",
             "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA",
         ]
-        values_direction_top = [
-            "OBERT PER DALT + REA",
-        ]
-        values_direction_top_variant = [
-            "OBERT PER DALT + REA VARIANT",
-        ]
-        values_direction_bottom = [
-            "OBERT PER BAIX + REA",
-        ]
-        values_direction_bottom_variant = [
-            "OBERT PER BAIX + REA VARIANT",
-        ]
         if direction_open_premarc in values_direction_right:
             return "RIGHT"
         elif direction_open_premarc in values_direction_left:
             return "LEFT"
-        elif direction_open_premarc in values_direction_top:
-            return "TOP"
-        elif direction_open_premarc in values_direction_top_variant:
-            return "TOP_VARIANT"
-        elif direction_open_premarc in values_direction_bottom:
-            return "BOTTOM"
-        elif direction_open_premarc in values_direction_bottom_variant:
-            return "BOTTOM_VARIANT"
         else:
             return "NOTHING"
 
@@ -11896,39 +11804,7 @@ class PremarcScriptObject(BaseScriptObject):
         elems_moved = []
         cuboids_moved = []
         cylinders_moved = []
-        direction_open = self.get_direction_open_premarc()
-
-        def create_horizontal_rea(z_positions, variant=False):
-            rea_length = self.width + REA_extra * 2
-            rea_x = -REA_extra
-            try:
-                wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
-            except Exception:
-                wall_thickness = 0.0
-            if wall_thickness <= 0:
-                wall_thickness = float(self.detected_wall_thickness or 0.0)
-            wall_center_y = -wall_thickness / 2
-            # Cuboids are created with a negative Y depth (-REA_x_y). For a
-            # single tube, start Y must be center + half depth. For variant,
-            # center the two adjacent tubes as one 2*REA_x_y package.
-            y_positions = (
-                (wall_center_y + REA_x_y, wall_center_y)
-                if variant
-                else (wall_center_y + REA_x_y / 2, wall_center_y + REA_x_y / 2)
-            )
-            result = []
-            for z_pos, y_pos in zip(z_positions, y_positions):
-                pos_rea = AllplanGeo.AxisPlacement3D(
-                    AllplanGeo.Point3D(rea_x, y_pos, z_pos)
-                )
-                result.append(
-                    AllplanGeo.Polyhedron3D.CreateCuboid(
-                        pos_rea, rea_length, -REA_x_y, -REA_x_y
-                    )
-                )
-            return result
-
-        if direction_open == "RIGHT":
+        if self.get_direction_open_premarc() == "RIGHT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
             #     elems_moved.append(elem_moved)
@@ -11948,31 +11824,6 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cylinders:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_left)
                 cylinders_moved.append(elem_moved)
-        elif direction_open == "TOP":
-            cuboids_moved = create_horizontal_rea(
-                (-offset_rea, -(offset_rea + REA_x_y))
-            )
-            cylinders_moved = []
-        elif direction_open == "TOP_VARIANT":
-            cuboids_moved = create_horizontal_rea((-offset_rea, -offset_rea), True)
-            cylinders_moved = []
-        elif direction_open == "BOTTOM":
-            cuboids_moved = create_horizontal_rea(
-                (
-                    -self.heigh + offset_rea + REA_x_y,
-                    -self.heigh + offset_rea + REA_x_y * 2,
-                )
-            )
-            cylinders_moved = []
-        elif direction_open == "BOTTOM_VARIANT":
-            cuboids_moved = create_horizontal_rea(
-                (
-                    -self.heigh + offset_rea + REA_x_y,
-                    -self.heigh + offset_rea + REA_x_y,
-                ),
-                True,
-            )
-            cylinders_moved = []
         else:
             cuboids_moved = []
             cylinders_moved = []
@@ -12156,77 +12007,23 @@ class PremarcScriptObject(BaseScriptObject):
         # polyhedron_square_left_top, polyhedron_square_right_top, polyhedron_square_left_bottom, polyhedron_square_right_bottom = self.create_premarc_optionals_elements_test()
 
         ## Escuadras
-        square_positions = {
-            "left_top": polyhedron_square_left_top,
-            "right_top": polyhedron_square_right_top,
-            "left_bottom": polyhedron_square_left_bottom,
-            "right_bottom": polyhedron_square_right_bottom,
-        }
-
-        open_square_positions = set()
-        match self.build_ele.ComboBoxAbiertoCerrado.value:
-            case (
-                "OBERT PER DALT"
-                | "OBERT PER DALT + REA"
-                | "OBERT PER DALT + REA VARIANT"
-            ):
-                open_square_positions.update(("left_top", "right_top"))
-            case (
-                "OBERT PER BAIX"
-                | "OBERT PER BAIX + REA"
-                | "OBERT PER BAIX + REA VARIANT"
-            ):
-                open_square_positions.update(("left_bottom", "right_bottom"))
-            case (
-                "OBERT FEMELLA DRETA"
-                | "OBERT FEMELLA DRETA + REA"
-                | "OBERT NO FEMELLA DRETA"
-                | "OBERT NO FEMELLA DRETA + REA"
-                | "SUP. FEMELLA / INF NO FEMELLA DRET."
-                | "SUP. FEMELLA / INF NO FEMELLA DRET. + REA"
-                | "SUP. NO FEMELLA / INF. FEMELLA DRET."
-                | "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA"
-            ):
-                open_square_positions.update(("right_top", "right_bottom"))
-            case (
-                "OBERT FEMELLA ESQUERRA"
-                | "OBERT FEMELLA ESQUERRA + REA"
-                | "OBERT NO FEMELLA ESQUERRA"
-                | "OBERT NO FEMELLA ESQUERRA + REA"
-                | "SUP. FEMELLA / INF NO FEMELLA ESQ."
-                | "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA"
-                | "SUP. NO FEMELLA / INF. FEMELLA ESQ."
-                | "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA"
-            ):
-                open_square_positions.update(("left_top", "left_bottom"))
-
-        selected_square_positions = []
+        squares = []
+        original_squares = []
         match self.build_ele.ComboBoxEscuadras.value:
             case "NO":
                 print("Escuadra Selected NO")
             case "2":
-                if {"left_top", "right_top"}.issubset(open_square_positions):
-                    print("Escuadra Selected 2 de abajo por premarco abierto arriba")
-                    selected_square_positions.extend(("left_bottom", "right_bottom"))
-                else:
-                    print("Escuadra Selected 2 de arriba")
-                    selected_square_positions.extend(("left_top", "right_top"))
+                print("Escuadra Selected 2 de arriba")
+                original_squares.append(polyhedron_square_left_top)
+                original_squares.append(polyhedron_square_right_top)
             case "4":
-                print("Escuadra Selected 4 (filtradas por lados abiertos)")
-                selected_square_positions.extend(
-                    ("left_top", "right_top", "left_bottom", "right_bottom")
-                )
+                print("Escuadra Selected 4 (2 arriba y 2 abajo)")
+                original_squares.append(polyhedron_square_left_top)
+                original_squares.append(polyhedron_square_right_top)
+                original_squares.append(polyhedron_square_left_bottom)
+                original_squares.append(polyhedron_square_right_bottom)
             case _:
                 print("Escuadra Selected default")
-
-        selected_square_positions = [
-            position
-            for position in selected_square_positions
-            if position not in open_square_positions
-        ]
-        original_squares = [
-            square_positions[position] for position in selected_square_positions
-        ]
 
         # Move squares to the correct position
         # Rules:
@@ -12255,6 +12052,157 @@ class PremarcScriptObject(BaseScriptObject):
             squares_moved.append(elem_moved)
 
         squares = squares_moved
+
+        # Manage Open Premarc for squares
+        # Rule: remove squares related to open sides (right or left)
+        print("Manage Open Premarc in optionals elements (squares - Escuadras)")
+        match self.build_ele.ComboBoxAbiertoCerrado.value:
+            case "OBERT FEMELLA DRETA":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "OBERT FEMELLA ESQUERRA":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "OBERT FEMELLA DRETA + REA":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "OBERT FEMELLA ESQUERRA + REA":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "OBERT NO FEMELLA DRETA":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "OBERT NO FEMELLA ESQUERRA":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "OBERT NO FEMELLA DRETA + REA":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "OBERT NO FEMELLA ESQUERRA + REA":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. FEMELLA / INF NO FEMELLA DRET.":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. FEMELLA / INF NO FEMELLA ESQ.":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. FEMELLA / INF NO FEMELLA DRET. + REA":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. NO FEMELLA / INF. FEMELLA DRET.":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. NO FEMELLA / INF. FEMELLA ESQ.":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA":
+                for square in (
+                    polyhedron_square_right_top,
+                    polyhedron_square_right_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA":
+                for square in (
+                    polyhedron_square_left_top,
+                    polyhedron_square_left_bottom,
+                ):
+                    try:
+                        squares.remove(square)
+                    except ValueError:
+                        print(f"Error in remove polyhedron square: {square}")
+            case _:
+                print("Selected default")
 
         print(f"\n\n")
 
@@ -12441,15 +12389,21 @@ class PremarcScriptObject(BaseScriptObject):
             max_falcas = 0
 
         # Top Falcas
-        y_position_top_falcas = -(self.thickness - THICKNESS_MM - THICKNESS_FALCA)
-        if self.build_ele.ComboBoxPersianas.value == "METALUNIC VIST":
-            y_position_top_falcas = -(self.detected_wall_thickness + self.build_ele.PersianaWidth.value)
+        y_position_top_falcas = self._top_falca_y_position_mm()
+        # Con cajon LAMISOL/METALUNIC la falca superior se ubica respecto al
+        # cajon (adaptativa), no en la posicion fija.
+        # MONOBLOCK / FALS CALAIX (cajon OCULTO): subir la falca superior en Z
+        # para salvar (esquivar) el cajon, que queda dentro del muro. Se eleva
+        # la altura del cajon (PersianaHeight). Tuneable en iteracion visual.
+        z_position_top_falcas = 0
+        if self._get_persiana_kind() == "MONOBLOCK":
+            z_position_top_falcas = self.build_ele.PersianaHeight.value
         for i in range(max_falcas+1):
             falca = self.create_origin_falca_top()
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
                 y_position_top_falcas,
-                0
+                z_position_top_falcas,
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(

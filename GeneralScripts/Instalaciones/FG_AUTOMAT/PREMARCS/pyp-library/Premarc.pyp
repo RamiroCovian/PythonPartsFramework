@@ -10,8 +10,8 @@
     </Script>
 
     <Page>
-        <Name>ZoneProperties</Name>
-        <Text>Propiedades de la Zona</Text>
+        <Name>Premarc</Name>
+        <Text>Premarc</Text>
 
         <Parameter>
             <Name>z_unique</Name>
@@ -42,6 +42,7 @@
             <Text>Deshabilitar XPS superior</Text>
             <Value>False</Value>
             <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
         </Parameter>
 
         <Parameter>
@@ -49,6 +50,7 @@
             <Text>Deshabilitar XPS inferior</Text>
             <Value>False</Value>
             <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
         </Parameter>
 
         <Parameter>
@@ -56,6 +58,7 @@
             <Text>Deshabilitar XPS izquierda</Text>
             <Value>False</Value>
             <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
         </Parameter>
 
         <Parameter>
@@ -63,6 +66,7 @@
             <Text>Deshabilitar XPS derecha</Text>
             <Value>False</Value>
             <ValueType>CheckBox</ValueType>
+            <Visible>False</Visible>
         </Parameter>
 
         <Parameter>
@@ -157,6 +161,34 @@
         </Parameter>
 
         <Parameter>
+            <Name>ButtonWallSelection</Name>
+            <Text>Volver seleccionar muro</Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>Button</Name>
+                <Text>Reset</Text>
+                <EventId>1000</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>SelectionWall</Name>
+            <Text>Estado selección muro</Text>
+            <Value>No seleccionado</Value>
+            <ValueType>String</ValueType>
+            <Enable>False</Enable>
+        </Parameter>
+
+        <Parameter>
+            <Name>wall_id</Name>
+            <Text>Wall ID</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+        </Parameter>
+
+        <Parameter>
             <Name>medidas</Name>
             <Text>Medidas (mm)</Text>
             <Value>False</Value>
@@ -231,6 +263,24 @@
             </Parameter>
             <!-- End manual color -->
 
+            <!-- Cambiar color del fondo por defecto -->
+            <Parameter>
+                <Name>enable_default_color</Name>
+                <Text>Cambiar color del fondo por defecto</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>not(enable_manual_thickness)</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>color_default_thickness</Name>
+                <Text>Nuevo color fondo por defecto</Text>
+                <Value>-1</Value>
+                <ValueType>Color</ValueType>
+                <Visible>enable_default_color and not(enable_manual_thickness)</Visible>
+            </Parameter>
+            <!-- End default color -->
+
             <Parameter>
                 <Name>thickness_wall</Name>
                 <Text>Grosor pared</Text>
@@ -238,25 +288,6 @@
                 <ValueType>Double</ValueType>
             </Parameter>
 
-            <Parameter>
-                <Name>ButtonWallSelection</Name>
-                <Text>Volver seleccionar muro</Text>
-                <ValueType>Row</ValueType>
-
-                <Parameter>
-                    <Name>Button</Name>
-                    <Text>Reset</Text>
-                    <EventId>1000</EventId>
-                    <ValueType>Button</ValueType>
-                </Parameter>
-            </Parameter>
-
-            <Parameter>
-                <Name>SelectionWall</Name>
-                <Text>Estado selección muro</Text>
-                <Value>No seleccionado</Value>
-                <ValueType>String</ValueType>
-            </Parameter>
             <!-- persistent Model -->
             <Parameter>
                 <Name>opening_guid</Name>
@@ -285,7 +316,7 @@
             </Parameter>
 
             <Parameter>
-                <Name>SelectionWall</Name>
+                <Name>SelectionWallDisplay</Name>
                 <Text>Muro</Text>
                 <Value>No seleccionado</Value>
                 <ValueType>String</ValueType>
@@ -303,13 +334,6 @@
             <Parameter>
                 <Name>id_premarc</Name>
                 <Text>ID Premarc</Text>
-                <Value></Value>
-                <ValueType>String</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>wall_id</Name>
-                <Text>Wall ID</Text>
                 <Value></Value>
                 <ValueType>String</ValueType>
             </Parameter>
@@ -370,46 +394,6 @@
                 <ValueType>StringComboBox</ValueType>
             </Parameter>
 
-            <Parameter>
-                <Name>ComboBoxREAEspecial</Name>
-                <Text>REA especial</Text>
-                <Value>REAs en L STD CORTA</Value>
-                <ValueList>REAs en C|REAs en L STD CORTA|REAs en L STD</ValueList>
-                <ValueType>StringComboBox</ValueType>
-                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
-            </Parameter>
-
-            <Parameter>
-                <Name>SeparacionLibreEntreREAC</Name>
-                <Text>Separacion libre entre REAs C</Text>
-                <Value>40</Value>
-                <ValueType>Double</ValueType>
-                <Visible>(ComboBoxAbiertoCerrado == "OBERT PER DALT" or ComboBoxAbiertoCerrado == "OBERT PER BAIX") and ComboBoxREAEspecial == "REAs en C"</Visible>
-            </Parameter>
-
-            <Parameter>
-                <Name>SobresalienteTubosREA</Name>
-                <Text>Sobresaliente tubos REA</Text>
-                <Value>150</Value>
-                <ValueType>Double</ValueType>
-                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
-            </Parameter>
-
-            <Parameter>
-                <Name>LongitudREALXLadoAbierto</Name>
-                <Text>Largo X REA L lado abierto</Text>
-                <Value>390</Value>
-                <ValueType>Double</ValueType>
-                <Visible>(ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
-            </Parameter>
-
-            <Parameter>
-                <Name>LongitudREALXLadoInterior</Name>
-                <Text>Largo X REA L lado interior</Text>
-                <Value>340</Value>
-                <ValueType>Double</ValueType>
-                <Visible>(ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
-            </Parameter>
 
             <Parameter>
                 <Name>EnableRetallGanxo</Name>
@@ -817,12 +801,59 @@
             </Parameter>
 
         </Parameter>
+    </Page>
 
+    <Page>
+        <Name>XPS</Name>
+        <Text>XPS</Text>
+
+        <Parameter>
+            <Name>xps_type</Name>
+            <Text>Type</Text>
+            <Value>XPS</Value>
+            <ValueList>XPS|PIR</ValueList>
+            <ValueType>StringComboBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>XPSthicknessInd</Name>
+            <Text>XPS gruix manual</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableTopXPS</Name>
+            <Text>Deshabilitar XPS superior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableBottomXPS</Name>
+            <Text>Deshabilitar XPS inferior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableLeftXPS</Name>
+            <Text>Deshabilitar XPS izquierda</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableRightXPS</Name>
+            <Text>Deshabilitar XPS derecha</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
 
     </Page>
 
     <Page>
-        <Name>AmpitsProperties</Name>
+        <Name>Ampits</Name>
         <Text>Ampits</Text>
 
         <Parameter>
@@ -835,7 +866,7 @@
             <Parameter>
                 <Name>EnableAmpit</Name>
                 <Text>Mostrar Ampit</Text>
-                <Value>1</Value>
+                <Value>0</Value>
                 <ValueType>CheckBox</ValueType>
             </Parameter>
 
@@ -911,7 +942,7 @@
     </Page>
 
     <Page>
-        <Name>ImpermeabilizacionesProperties</Name>
+        <Name>Impermeabilizaciones</Name>
         <Text>Impermeabilizaciones</Text>
 
         <Parameter>
@@ -924,7 +955,7 @@
             <Parameter>
                 <Name>EnableImpermeabilizacio</Name>
                 <Text>Mostrar Impermeabilización</Text>
-                <Value>1</Value>
+                <Value>0</Value>
                 <ValueType>CheckBox</ValueType>
             </Parameter>
 
@@ -956,63 +987,7 @@
         </Parameter>
     </Page>
 
-    <Page>
-        <Name>XPS_zone</Name>
-        <Text>Propiedades XPS </Text>
-
-        <Parameter>
-            <Name>xps_type</Name>
-            <Text>Type</Text>
-            <Value>XPS</Value>
-            <ValueList>XPS|PIR</ValueList>
-            <ValueType>StringComboBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>XPSthicknessInd</Name>
-            <Text>XPS gruix manual</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>ShowXPS</Name>
-            <Text>Mostrar XPS completa</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>DisableTopXPS</Name>
-            <Text>Deshabilitar XPS superior</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>DisableBottomXPS</Name>
-            <Text>Deshabilitar XPS inferior</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>DisableLeftXPS</Name>
-            <Text>Deshabilitar XPS izquierda</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>DisableRightXPS</Name>
-            <Text>Deshabilitar XPS derecha</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-    </Page>
-
-    <Page>
+    <!-- <Page>
         <Name>__HiddenPage__</Name>
         <Text></Text>
         <Parameter>
@@ -1023,6 +998,6 @@
             <Persistent>Model</Persistent>
         </Parameter>
 
-    </Page>
+    </Page>  -->
 
 </Element>
