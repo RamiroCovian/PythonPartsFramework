@@ -173,7 +173,7 @@ U_OVERHANG_Y_MM = (
 U_SILL_CONTACT_Z_EPSILON_MM = 0
 # Lower z0 by this much (mm) to sit in the premarc "dip" below the opening plane; matches frame_bottom extrude step.
 U_PROFILE_Z_INTO_AMPIT_DIP_MM = 3.0
-U_ACCESSOR_COLOR_INT = 2  # Allplan yellow (same index as COLOR_THICKNESS_MAP for 160)
+U_ACCESSOR_COLOR_INT = 2  # Allplan yellow (color del accesorio U, independiente del fondo)
 # Y placement: sill top spans y in [-self.thickness, 0]; inner opening y=0 (window side); y=-thickness = outer/back lip.
 # The U profile is hard-anchored to y0 = -thickness - overhang in _u_channel_bottom (equivalent to legacy "pit_span_from_outer_lip" mode).
 U_Y_OFFSET_FROM_INNER_FACE_MM = 0.01
@@ -232,12 +232,6 @@ VERTICAL_TUB = 1
 HORIZONTAL_TUB = 2
 REA_Z_ORIGIN = 50
 REA_Z_FINAL = 700
-REA_C_OPEN_FIRST_GROUP_DISTANCE_MM = 250
-REA_C_OPEN_DEFAULT_FREE_GAP_MM = 40
-REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM = 380
-REA_TUBE_DEFAULT_EXTRA_MM = 200
-REA_TUBE_DEFAULT_EXTRA_C_MM = 165
-REA_TUBE_DEFAULT_EXTRA_L_STANDARD_MM = 150
 LENGTH_REBAJES_MM = 19
 
 PREMARC_USE_COMANDES_OT = True
@@ -259,9 +253,19 @@ API_URL_DEFAULT = "https://192.168.30.227:8311/ComandesOT/GetAllValuesForAllConf
 LOGIN_URL_DEFAULT = "https://192.168.30.227:8311/Usuari/Login"
 
 COLOR_THICKNESS_MAP = {
-    160: 2,  # amarillo
+    160: 8,  # naranja
     310: 6,  # rojo
     295: 15,  # morado
+}
+
+# Fondos adicionados localmente a la lista de la API. A diferencia de
+# COLOR_THICKNESS_MAP (defaults que la API REEMPLAZA cuando esta activa, por lo
+# que no aparecerian en el dropdown), estos se INYECTAN en la respuesta del
+# backend (ver get_values_for_config_API -> _inject_extra_thicknesses) para que
+# aparezcan en el dropdown de fondos este la API ON u OFF. Su color se resuelve
+# en get_color_by_thickness.
+PREMARC_API_EXTRA_THICKNESS_COLORS = {
+    200: 2,  # amarillo siempre
 }
 
 
@@ -448,12 +452,13 @@ PMP_PREMARC_LABELS = "PMP_PREMARC_LABELS"
 PMP_PREMARC_TIPO = "PMP_PREMARC_TIPO"
 PMP_PREM_FONDO = "PMP_PREM_FONDO"
 PMP_PARE = "PMP_PARE"
+PMP_FG_OBRA_FABRICA = "PMP_FG_OBRA_FABRICA"
 
 
 VAL_PMP_XPS_PREMARC_DETAIL_TEXT = "PIR"
-VAL_PMP_ID_PREMARC = "HM1102 (HC-4)"
-VAL_PMP_WALL_NAME = "HM1102"
-VAL_PMP_PARE = "HM1102"
+VAL_PMP_ID_PREMARC = ""
+VAL_PMP_WALL_NAME = ""
+VAL_PMP_PARE = ""
 VAL_PMP_TIPUS_PREMARC = "FONS 415 mm"
 VAL_PMP_PREMARC_LABELS = ""
 VAL_PMP_PREMARC_ELEMENT_LABELS_TUB_VERTICAL = "$<bold, color(6)>TUB VERTICAL$"
@@ -1024,6 +1029,11 @@ class PremarcScriptObject(BaseScriptObject):
         self._modification_ppg_guid_str = ""
         self._modification_ppg_adapter = None
         self._delete_current_premarc_requested = False
+        # [BUG-IMP] tracker del valor previo del combo de impermeabilizacion
+        # para detectar el PASO 4 (cambio de imp) dentro de execute(), que no
+        # pasa por on_control_event ni modify_element_property (StringComboBox
+        # sin EventId). Diagnostico bug duplicacion al cambiar imp tras re-seleccionar.
+        self._bug_imp_prev_imperm_type = None
 
         self.val_pmp_wall_id = self.build_ele.wall_id.value
 
@@ -1048,6 +1058,16 @@ class PremarcScriptObject(BaseScriptObject):
             "encaje_premacs.txt",
         )
 
+        # Overrides de color por defecto (por proyecto): thickness,color.
+        # Pisan COLOR_THICKNESS_MAP/extras en get_color_by_thickness, cambiando
+        # el color por defecto de ese fondo para todos los premarcos nuevos.
+        self.default_color_file = os.path.join(
+            base_path,
+            "Premarcs",
+            "default_color_overrides.txt",
+        )
+        self.default_color_overrides = self.load_default_color_overrides()
+
         self.wall_guid_str = ""
         raw_state = self.build_ele.SavedState.value
         if raw_state:
@@ -1056,6 +1076,15 @@ class PremarcScriptObject(BaseScriptObject):
                 self._loaded_saved_state = json.loads(raw_state)
             elif isinstance(raw_state, dict):
                 self._loaded_saved_state = raw_state
+
+        # FIX (reopen color manual): list_color debe existir ANTES del reingreso
+        # en modificacion, porque _apply_premarc_saved_state -> load_color_manual_thickness
+        # itera self.list_color. Antes solo se asignaba mas abajo (~1137), DESPUES
+        # del bloque is_modification_mode, asi que reabrir un premarco con fondo
+        # manual + color custom crasheaba con AttributeError: 'list_color'.
+        # Solo depende de self.color_file (ya seteado arriba). Se relee mas abajo
+        # en el flujo normal (idempotente: lee el mismo archivo).
+        self.list_color = self.load_color_thickness_list()
 
         if self.is_modification_mode:
             print(
@@ -1105,13 +1134,28 @@ class PremarcScriptObject(BaseScriptObject):
         self.values_for_config = self.get_values_for_config_API()
         self.list_color = self.load_color_thickness_list()
         if self.build_ele.enable_manual_thickness.value:
+            # FIX (premarcos viejos toman el color nuevo al reabrir - bug Arnau):
+            # en modificacion con SavedState, _apply_premarc_saved_state ya
+            # restauro EL color con el que ese premarco fue colocado (40).
+            # load_color_manual_thickness se llama aca para ajustar visibilidad,
+            # pero su RAMA 2 aplica el color APRENDIDO actual del fondo (mapeo
+            # global, ej 45) y pisa el guardado. El popup promete "solo premarcos
+            # futuros", asi que preservamos el color del premarco viejo alrededor
+            # de la llamada. Para un premarco NUEVO (sin state) se mantiene el
+            # auto-propuesto.
+            _state_applied = bool(
+                self.is_modification_mode and self._loaded_saved_state
+            )
+            _saved_color = self.build_ele.color_manual_thickness.value
             self.load_color_manual_thickness()
+            if _state_applied:
+                self.build_ele.color_manual_thickness.value = _saved_color
         else:
             self.load_color_thickness_api()
         self.color_premarc = (
             self.build_ele.color_manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
-            else COLOR_THICKNESS_MAP[self.thickness_premarc]
+            else self.get_color_by_thickness(int(self.thickness_premarc))
         )
 
         self.socket_width = 30
@@ -1252,6 +1296,9 @@ class PremarcScriptObject(BaseScriptObject):
         )
         self.pmp_wall_id_attr_id = resolve_attribute_id(
             self.document, "PMP_WALL_ID"
+        )
+        self.pmp_fg_obra_fabrica_id = resolve_attribute_id(
+            self.document, "PMP_FG_OBRA_FABRICA"
         )
         self.pmp_tipus_premarc_id = AllplanBaseElements.AttributeService.GetAttributeID(
             self.document, PMP_TIPUS_PREMARC
@@ -1481,6 +1528,7 @@ class PremarcScriptObject(BaseScriptObject):
             self.document, PMP_PREM_COLOR
         )
         self._debug_log_attribute_resolution()
+        self._log_imp_bug("PASO 1 - script abierto (init)")
         # self.pmp_prem_xps_type_id = AllplanBaseElements.AttributeService.GetAttributeID(self.document, PMP_PREM_XPS_TYPE)
 
     def login_to_api(self):
@@ -1597,6 +1645,27 @@ class PremarcScriptObject(BaseScriptObject):
             pass
 
         return None
+
+    def _read_wall_attribute(self, wall_element, attr_id: int) -> str:
+        """Lee el valor de un atributo del muro por su ID. Devuelve "" si no existe."""
+        if not wall_element or not attr_id or attr_id <= 0:
+            return ""
+        try:
+            attrs = wall_element.GetAttributes(
+                AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
+            )
+            for attr in attrs:
+                a_id = getattr(attr, "Id", None)
+                if a_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                    a_id = attr[0]
+                    a_val = attr[1]
+                else:
+                    a_val = getattr(attr, "Value", None)
+                if a_id == attr_id and a_val is not None:
+                    return str(a_val).strip()
+        except Exception:
+            pass
+        return ""
 
     def get_wall_internal_id(self, wall_element) -> str:
         """Return the Allplan Wal element internal id (e.g. '7034Wal000000334').
@@ -1960,6 +2029,50 @@ class PremarcScriptObject(BaseScriptObject):
     #         return self.build_ele.thickness.value  # el del combo, que sí está en la API
     #     return self.build_ele.thickness.value
 
+    def load_default_color_overrides(self) -> dict:
+        """Lee del archivo persistente del proyecto los overrides de color por
+        defecto (thickness -> color). Devuelve {} si no existe o falla."""
+        overrides = {}
+        if not os.path.exists(self.default_color_file):
+            return overrides
+        try:
+            with open(self.default_color_file, "r", encoding="utf-8") as file:
+                for line in file:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split(",")
+                    if len(parts) != 2:
+                        continue
+                    try:
+                        overrides[int(float(parts[0].strip()))] = int(
+                            float(parts[1].strip())
+                        )
+                    except ValueError:
+                        continue
+        except (OSError, IOError):
+            return {}
+        return overrides
+
+    def save_default_color_override(self, thickness: int, color: int) -> None:
+        """Persiste (y aplica en memoria) el override de color por defecto de un
+        fondo. Reescribe el archivo para no duplicar la misma key. El override
+        pisa COLOR_THICKNESS_MAP en get_color_by_thickness -> cambia el color
+        por defecto de ese fondo para todos los premarcos nuevos."""
+        overrides = dict(getattr(self, "default_color_overrides", {}) or {})
+        overrides[int(thickness)] = int(color)
+        self.default_color_overrides = overrides
+        try:
+            color_dir = os.path.dirname(self.default_color_file)
+            os.makedirs(color_dir, exist_ok=True)
+            with open(self.default_color_file, "w", encoding="utf-8") as file:
+                for th, col in sorted(overrides.items()):
+                    file.write(f"{th},{col}\n")
+        except (OSError, IOError) as exc:
+            print(
+                f"[Premarc] No se pudo guardar override de color por defecto: {exc}"
+            )
+
     def load_color_thickness_list(self) -> list[tuple[float, int]]:
         """return list of tuples (thickness, color)"""
         if not os.path.exists(self.color_file):
@@ -1993,6 +2106,23 @@ class PremarcScriptObject(BaseScriptObject):
         """
         load color for thickness and set visibility for color_manual_thickness
         """
+        # [BUG-COLOR] diagnostico: bug Arnau "al colocar se cambia el color
+        # manual elegido". Logueamos QUIEN llama y el color actual ANTES de
+        # tocarlo, para ver si esta funcion re-propone y pisa el color del
+        # usuario tras haberlo elegido. TEMPORAL.
+        try:
+            _caller = _sys._getframe(1).f_code.co_name
+        except Exception:
+            _caller = "?"
+        try:
+            _color_actual = self.build_ele.color_manual_thickness.value
+        except Exception:
+            _color_actual = "?"
+        print(
+            "[BUG-COLOR] load_color_manual_thickness ENTRA -> "
+            f"caller={_caller}, manual_thickness={self.build_ele.manual_thickness.value}, "
+            f"color_actual={_color_actual}, list_color={self.list_color}"
+        )
 
         # check if thickness is in colors default for premarcs api
         if self.build_ele.manual_thickness.value in COLOR_THICKNESS_MAP:
@@ -2005,9 +2135,22 @@ class PremarcScriptObject(BaseScriptObject):
         for thickness, color in self.list_color:
             if float(thickness) == self.build_ele.manual_thickness.value:
                 self.build_ele.color_manual_thickness.value = color
-                self.build_ele.color_manual_thickness_visible.value = False
+                # Mejora Arnau (un fondo = un color): el fondo ya tiene color
+                # aprendido -> se auto-aplica, pero el campo queda EDITABLE
+                # (antes se ocultaba con visible=False y bloqueaba cambiarlo al
+                # reabrir el script). Cambiarlo dispara el aviso de confirmacion
+                # en modify_element_property -> color_manual_thickness.
+                self.build_ele.color_manual_thickness_visible.value = True
                 return color
 
+        # [BUG-COLOR] llegar aca = el thickness NO esta en el map ni en list_color,
+        # asi que se va a PROPONER un color (4/7/5/random) PISANDO el que haya.
+        # Si esto aparece despues de que el usuario eligio su color, este es el bug.
+        print(
+            "[BUG-COLOR] PROPONIENDO color (pisa el actual) -> "
+            f"manual_thickness={self.build_ele.manual_thickness.value}, "
+            f"color_que_se_pisa={self.build_ele.color_manual_thickness.value}"
+        )
         self.build_ele.color_manual_thickness_visible.value = True
         # Manage first manual color
         if not self.list_color:
@@ -2031,39 +2174,60 @@ class PremarcScriptObject(BaseScriptObject):
         # self.build_ele.color_manual_thickness.visible = True
         return rnd
 
+    def _sync_pendiente_lock(self) -> None:
+        """Fuerza/bloquea el campo Pendiente segun los accesorios activos.
+        PRIORIDAD: el Accesorio perfil U (ShowAccessorUPerimeter) gana -> si esta
+        activo, Pendiente='NO' y deshabilitado. Si no, premarc_PE fuerza 'SI'
+        deshabilitado. Si ninguno, el campo queda habilitado."""
+        if self.build_ele.ShowAccessorUPerimeter.value:
+            self.build_ele.ComboBoxPendiente.value = "NO"
+            self.build_ele.EnablePendiente.value = False
+        elif self.build_ele.premarc_PE.value:
+            self.build_ele.ComboBoxPendiente.value = "SI"
+            self.build_ele.EnablePendiente.value = False
+        else:
+            self.build_ele.EnablePendiente.value = True
+
     def load_premarc_PE_checkbox(self):
         """load premarc PE checkbox"""
         if self.build_ele.premarc_PE.value:
             self.build_ele.ComboBoxEncajes.value = "PLEC INFERIOR"
             self.build_ele.EnableEncajes.value = False
-            self.build_ele.ComboBoxPendiente.value = "SI"
-            self.build_ele.EnablePendiente.value = False
             self.build_ele.ComboBoxPersianas.value = "NO"
             self.build_ele.EnablePersianas.value = False
         else:
             self.build_ele.EnableEncajes.value = True
-            self.build_ele.EnablePendiente.value = True
             self.build_ele.EnablePersianas.value = True
 
+        # Pendiente: el accesorio U tiene prioridad sobre premarc_PE.
+        self._sync_pendiente_lock()
         return
 
     def save_color_manual_thickness(self):
-        """save color for thickness"""
-        premarcs_saved = [float(thickness) for thickness, _ in self.list_color]
-        # Check if thickness is in list_color
-        # TODO cahnge to new requirement
-        if (self.build_ele.manual_thickness.value) in premarcs_saved:
-            return
-        # Not save if color is in colors default for premarcs api
+        """Persiste (UPSERT) el color manual de un fondo. Regla: un fondo = un
+        solo color. Saca cualquier entrada vieja del mismo fondo, agrega la
+        nueva, reescribe el archivo (modo 'w', sin duplicar) y actualiza
+        self.list_color en memoria. Antes era append puro con un guard que, si
+        el fondo ya estaba, no guardaba nada -> no podia actualizar el color
+        (mejora Arnau)."""
+        # No guardar si el color es de un fondo por defecto (lo maneja
+        # COLOR_THICKNESS_MAP en get_color_by_thickness).
         if self.build_ele.color_manual_thickness.value in COLOR_THICKNESS_MAP:
             return
 
+        fondo = self.thickness_premarc
+        color = self.build_ele.color_manual_thickness.value
+        # Upsert por fondo: descartar entradas viejas del mismo fondo.
+        self.list_color = [
+            (t, c) for (t, c) in self.list_color if float(t) != float(fondo)
+        ]
+        self.list_color.append((str(fondo), str(color)))
+
         color_dir = os.path.dirname(self.color_file)
         os.makedirs(color_dir, exist_ok=True)
-        with open(self.color_file, "a") as file:
-            file.write(
-                f"{self.thickness_premarc},{self.build_ele.color_manual_thickness.value}\n"
-            )
+        with open(self.color_file, "w", encoding="utf-8") as file:
+            for t, c in self.list_color:
+                file.write(f"{t},{c}\n")
         return
 
     def save_manual_encaje(self):
@@ -2229,9 +2393,12 @@ class PremarcScriptObject(BaseScriptObject):
                 except Exception as e:
                     print(f"[Premarc] _get_wall_rotation_deg fallo: {e}")
                     wall_angle = 0.0
-                self.rotation = wall_angle
-                self.build_ele.rotation.value = wall_angle
-                print(f"[Premarc] Rotation set to wall angle: {wall_angle} deg")
+                # wall_angle = orientacion absoluta del muro (referencia 0 del premarco).
+                # La paleta muestra offset RELATIVO al muro: 0 = alineado, +X = rotar X grados.
+                self.wall_angle = wall_angle
+                self.build_ele.rotation.value = 0.0
+                self.rotation = self.wall_angle
+                print(f"[Premarc] Wall angle: {wall_angle} deg, palette rotation reset to 0 (relative)")
 
                 try:
                     self._debug_wall_attrs(self.selected_wall)
@@ -2242,7 +2409,13 @@ class PremarcScriptObject(BaseScriptObject):
                     try:
                         mat_raw = self.get_wall_material_name(self.selected_wall)
                         self.wall_name = mat_raw
-                        self.build_ele.wall_id.value = mat_raw or ""
+                        pmp_pare_val = self._read_wall_attribute(
+                            self.selected_wall, getattr(self, "pmp_pare_id", 0)
+                        ) or (mat_raw or "")
+                        obra_fabrica_val = self._read_wall_attribute(
+                            self.selected_wall, getattr(self, "pmp_fg_obra_fabrica_id", 0)
+                        )
+                        self.build_ele.wall_id.value = f"{pmp_pare_val}{obra_fabrica_val}"
 
                     except Exception as e:
                         pass
@@ -2313,8 +2486,13 @@ class PremarcScriptObject(BaseScriptObject):
                     self.premarc_select_result.saved_state,
                     self.premarc_select_result.element_guid,
                 ):
-                    self._activate_selected_premarc_overlay(
-                        self.premarc_select_result.saved_state
+                    # Fallback: PPG no en session queue (ej. post close/reopen).
+                    # Hacer state restoration + cache adapter para que el
+                    # deselect pueda reemplazar el PPG sin duplicar geometria.
+                    self._register_external_premarc_for_edit(
+                        self.premarc_select_result.saved_state,
+                        self.premarc_select_result.element_guid,
+                        self.premarc_select_result.element,
                     )
         elif self.interactor_state == SELECTING_PENDING_PREMARC:
             self._clear_session_selection_preview_context()
@@ -2332,8 +2510,13 @@ class PremarcScriptObject(BaseScriptObject):
                         self.pending_premarc_select_result.saved_state,
                         self.pending_premarc_select_result.element_guid,
                     ):
-                        self._activate_selected_premarc_overlay(
-                            self.pending_premarc_select_result.saved_state
+                        # Mismo fallback que arriba: PPG externo, hay que
+                        # cachear el adapter para evitar duplicacion al
+                        # deseleccionar.
+                        self._register_external_premarc_for_edit(
+                            self.pending_premarc_select_result.saved_state,
+                            self.pending_premarc_select_result.element_guid,
+                            self.pending_premarc_select_result.element,
                         )
 
     def _start_placement_point_input(self):
@@ -2503,6 +2686,43 @@ class PremarcScriptObject(BaseScriptObject):
         except Exception:
             return "<sin-point>"
 
+    def _log_imp_bug(self, tag: str, extra: str = "") -> None:
+        """[BUG-IMP] Snapshot del estado critico para diagnosticar la
+        duplicacion del premarco al cambiar el imp tras re-seleccionar.
+        Filtrar el trace de Allplan por '[BUG-IMP]' para ver la timeline.
+        TEMPORAL: quitar cuando se cierre el bug."""
+        try:
+            adapter = getattr(self, "_modification_ppg_adapter", None)
+            if adapter is None:
+                adapter_state = "None"
+            else:
+                try:
+                    adapter_state = "Null" if adapter.IsNull() else "OK"
+                except Exception:
+                    adapter_state = "?"
+            try:
+                imp_type = self.build_ele.imperm_type.value
+            except Exception:
+                imp_type = "<?>"
+            try:
+                imp_on = self.build_ele.EnableImpermeabilizacio.value
+            except Exception:
+                imp_on = "<?>"
+            print(
+                f"[BUG-IMP] {tag} -> "
+                f"active_guid={self._active_session_source_guid or '<VACIO>'}, "
+                f"cached_guid={getattr(self, '_modification_ppg_guid_str', '') or '<VACIO>'}, "
+                f"cached_adapter={adapter_state}, "
+                f"is_modif_mode={getattr(self, 'is_modification_mode', '?')}, "
+                f"session_queue={len(self._session_created_premarcs)}, "
+                f"has_confirmed={getattr(self, '_has_confirmed_placement', '?')}, "
+                f"imp_on={imp_on}, imp_type={imp_type}, "
+                f"placement={self._format_point3d_for_log(self.placement_pnt)}"
+                + (f", {extra}" if extra else "")
+            )
+        except Exception as exc:
+            print(f"[BUG-IMP] {tag} -> error generando snapshot: {exc}")
+
     def _log_session_created_premarcs(
         self, reason: str, selected_guid: str = ""
     ) -> None:
@@ -2564,6 +2784,10 @@ class PremarcScriptObject(BaseScriptObject):
     def _create_current_premarc_ppg_without_opening(
         self, *, register_session_item: bool, reset_active_after_create: bool
     ) -> bool:
+        self._log_imp_bug(
+            "PASO 2/MATERIALIZA - entra a _create_current_premarc_ppg_without_opening",
+            extra=f"register_session_item={register_session_item}, reset_active_after_create={reset_active_after_create}",
+        )
         if self.placement_pnt == AllplanGeo.Point3D():
             print("[Premarc] No hay premarco posicionado para crear PPG sin opening")
             return True
@@ -2616,6 +2840,10 @@ class PremarcScriptObject(BaseScriptObject):
                 "state": dict(session_state),
                 "ppg_guid": created_ppg_guid,
                 "wall_guid": session_wall_guid,
+                # z_unique del PPG creado: necesario para que al re-seleccionar
+                # el resolver del adapter (que compara z_unique) no lo rechace
+                # y el deselect pueda borrar el PPG viejo (evita duplicacion).
+                "z_unique": z_unique_as_int(self.build_ele.z_unique.value),
             }
             replaced_existing = False
             if self._active_session_source_guid:
@@ -2709,6 +2937,7 @@ class PremarcScriptObject(BaseScriptObject):
         return bool(created_elements)
 
     def _finalize_session_created_premarcs(self) -> bool:
+        self._log_imp_bug("MATERIALIZA - entra a _finalize_session_created_premarcs")
         if not self._validate_before_final_creation():
             return False
 
@@ -2719,6 +2948,24 @@ class PremarcScriptObject(BaseScriptObject):
                 active_guid = str(active_session_item.get("ppg_guid", "") or "")
                 if active_guid:
                     active_session_item_to_replace = active_session_item
+                    # FIX duplicacion: si el premarco activo TAMBIEN sigue en la
+                    # cola (caso re-seleccionado via boton "Seleccionar", que no
+                    # lo saca de _session_created_premarcs), sacarlo de la cola
+                    # para no materializarlo dos veces (active_item + queue_item
+                    # con el mismo ppg_guid -> dos PPGs identicos = duplicado).
+                    before_dedup = len(self._session_created_premarcs)
+                    self._session_created_premarcs = [
+                        it
+                        for it in self._session_created_premarcs
+                        if str(it.get("ppg_guid", "") or "") != active_guid
+                    ]
+                    removed_dup = before_dedup - len(self._session_created_premarcs)
+                    if removed_dup:
+                        print(
+                            "[Premarc][SESSION] Dedupe finalize -> quitados "
+                            f"{removed_dup} item(s) de la cola con guid={active_guid} "
+                            "(ya esta como activo a reemplazar)"
+                        )
                     print(
                         "[Premarc][SESSION] Premarco activo finalizado como reemplazo -> "
                         f"source_guid={active_guid}, "
@@ -2775,10 +3022,6 @@ class PremarcScriptObject(BaseScriptObject):
                 f"[Premarc] Generando opening final {index}/{len(session_items)} en "
                 f"({point.X:.1f}, {point.Y:.1f}, {point.Z:.1f})"
             )
-            print(
-                "[Premarc][SESSION] Estado aplicado para finalizacion -> "
-                f"{self._format_session_state_summary(state)}"
-            )
             if self.selected_wall:
                 self._create_wall_opening()
 
@@ -2795,22 +3038,6 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
         return AllplanGeo.Point3D(point.X, point.Y, point.Z)
-
-    def _format_session_state_summary(self, state: dict) -> str:
-        """Resumen de estado geométrico para depurar finalización multi-premarco."""
-        if not state:
-            return "<sin-estado>"
-        return (
-            f"abierto={state.get('ComboBoxAbiertoCerrado')}, "
-            f"pend={state.get('ComboBoxPendiente')}, "
-            f"passama={state.get('PassamaOptions')}, "
-            f"rebajes={state.get('RebajesOptions')}, "
-            f"persiana={state.get('ComboBoxPersianas')}, "
-            f"ampit={state.get('EnableAmpit')}/{state.get('ampit_material')}, "
-            f"imperm={state.get('EnableImpermeabilizacio')}/{state.get('imperm_type')}, "
-            f"show_xps={state.get('ShowXPS')}, "
-            f"z_unique={state.get('z_unique')}"
-        )
 
     def _normalize_pyp_display_name(self, name: Any) -> str:
         return str(name or "").strip().strip("'\"")
@@ -3348,6 +3575,10 @@ class PremarcScriptObject(BaseScriptObject):
             selected_guid=ppg_guid_str,
         )
         self._active_session_source_guid = str(ppg_guid_str)
+        # Cachear el GUID del PPG para que el deselect
+        # (_replace_modified_premarc_direct -> _get_cached_modification_root_adapter)
+        # resuelva y BORRE el PPG viejo en vez de crear uno nuevo encima.
+        self._modification_ppg_guid_str = str(ppg_guid_str)
 
         self._apply_premarc_saved_state(dict(selected_item["state"]))
         self.placement_pnt = self._copy_point3d(selected_item["point"])
@@ -3355,6 +3586,11 @@ class PremarcScriptObject(BaseScriptObject):
         self._rebuild_placement_mat()
         self._has_confirmed_placement = True
         self._loaded_saved_state = dict(selected_item["state"])
+        # Restaurar z_unique del PPG seleccionado: el resolver del adapter
+        # rechaza el PPG si su z_unique no coincide con build_ele.z_unique.
+        _sel_z_unique = z_unique_as_int(selected_item.get("z_unique", 0))
+        if _sel_z_unique > 0:
+            self.build_ele.z_unique.value = _sel_z_unique
 
         wall_guid = str(
             selected_item.get("wall_guid", "")
@@ -3368,7 +3604,127 @@ class PremarcScriptObject(BaseScriptObject):
             "[Premarc] PPG de sesion cargado como premarco activo editable -> "
             f"restantes_en_contexto={len(self._session_created_premarcs)}"
         )
+        # Borrar el PPG original AHORA (al entrar a editar) para que durante la
+        # edicion solo se vea la preview en vivo, SIN copia atras. Se materializa
+        # de nuevo al deseleccionar (_replace_modified_premarc_direct).
+        self._delete_premarc_ppg_by_guid(ppg_guid_str)
+        try:
+            self._bug_imp_prev_imperm_type = self.build_ele.imperm_type.value
+        except Exception:
+            pass
+        self._log_imp_bug("PASO 3 - premarco de SESION re-seleccionado para editar")
         return self._activate_selected_premarc_overlay(selected_item["state"])
+
+    def _register_external_premarc_for_edit(
+        self, saved_state: dict, ppg_guid_str: str, element=None
+    ) -> bool:
+        """Para PPGs que NO estan en _session_created_premarcs (ej. cargados
+        post close/reopen). Hace state restoration completa + cachea el
+        adapter del PPG para que el deselect pueda usar
+        _replace_modified_premarc_direct y reemplazar el PPG viejo en vez
+        de crear uno nuevo encima (causando duplicacion)."""
+        if not saved_state or not ppg_guid_str:
+            return False
+
+        print(
+            "[Premarc][SELECT] Registrando PPG externo (no en session queue) -> "
+            f"guid={ppg_guid_str}"
+        )
+
+        # Restaurar estado completo desde el saved_state (placement, wall_angle,
+        # rotation, params, etc.). Esto setea self.placement_pnt y demas.
+        self._apply_premarc_saved_state(dict(saved_state))
+        self._sync_placement_point_parameter()
+        self._rebuild_placement_mat()
+        self._has_confirmed_placement = True
+        self._loaded_saved_state = dict(saved_state)
+        self._active_session_source_guid = str(ppg_guid_str)
+
+        # Restaurar referencia al muro host
+        wall_guid = str(saved_state.get("wall_guid", "") or "")
+        if wall_guid:
+            self._try_restore_wall_from_guid(wall_guid)
+
+        # CACHE del adapter: clave para que _replace_modified_premarc_direct
+        # pueda borrar el PPG viejo al deseleccionar (sino crea uno nuevo
+        # encima del viejo y termina con duplicacion de geometria).
+        if element is not None:
+            self._modification_ppg_adapter = element
+        self._modification_ppg_guid_str = str(ppg_guid_str)
+        print(f"[Premarc][SELECT] Adapter externo cacheado: {ppg_guid_str}")
+
+        # Borrar el PPG original al entrar a editar (preview-only, sin copia
+        # atras). Reemplaza el viejo workaround de modification_ele_list, que
+        # apuntaba al adapter y disparaba excepciones C++ al confirmar. La
+        # materializacion ocurre al deseleccionar (_replace_modified_premarc_direct).
+        self.is_modification_mode = False
+        try:
+            self.modification_ele_list = AllplanEleAdapter.BaseElementAdapterList()
+        except Exception:
+            self.modification_ele_list = None
+        self._delete_premarc_ppg_by_guid(ppg_guid_str)
+        try:
+            self._bug_imp_prev_imperm_type = self.build_ele.imperm_type.value
+        except Exception:
+            pass
+        self._log_imp_bug("PASO 3 - premarco EXTERNO re-seleccionado para editar")
+
+        return self._activate_selected_premarc_overlay(saved_state)
+
+    def _delete_premarc_ppg_by_guid(self, guid_str: str) -> bool:
+        """Borra (safe delete con cascada a hijos) el PPG Premarcs identificado
+        por guid_str. Se llama al SELECCIONAR para editar: saca el PPG original
+        del modelo asi durante la edicion solo se ve la preview en vivo, SIN
+        copia atras. La materializacion final ocurre al deseleccionar."""
+        guid_str = str(guid_str or "")
+        if not guid_str:
+            return False
+        try:
+            doc = self.coord_input.GetInputViewDocument()
+        except Exception:
+            doc = self.document
+        try:
+            adapter = AllplanEleAdapter.BaseElementAdapter.FromGUID(
+                AllplanEleAdapter.GUID.FromString(guid_str), doc
+            )
+        except Exception as exc:
+            print(
+                "[Premarc][SELECT] No se pudo resolver PPG por GUID para borrar "
+                f"al seleccionar: {exc}"
+            )
+            return False
+        if adapter is None or adapter.IsNull():
+            print(
+                "[Premarc][SELECT] PPG no resuelto por GUID para borrar al "
+                f"seleccionar: {guid_str}"
+            )
+            return False
+
+        ppg_adapter, _params = self._resolve_premarc_ppg_from_adapter(adapter)
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            ppg_adapter = adapter
+
+        try:
+            delete_list, delete_count = self._build_safe_premarc_delete_list(
+                ppg_adapter
+            )
+            if delete_count > 0:
+                AllplanBaseElements.DeleteElements(self.document, delete_list)
+                print(
+                    "[Premarc][SELECT] Original borrado al seleccionar "
+                    f"(safe delete): {delete_count} elementos"
+                )
+            else:
+                old_list = AllplanEleAdapter.BaseElementAdapterList()
+                old_list.append(ppg_adapter)
+                AllplanBaseElements.DeleteElements(self.document, old_list)
+                print("[Premarc][SELECT] Original borrado al seleccionar (solo root)")
+            return True
+        except Exception as exc:
+            print(
+                f"[Premarc][SELECT] No se pudo borrar el original al seleccionar: {exc}"
+            )
+            return False
 
     def _transform_model_element_list(
         self, elements_list: list, matrix: AllplanGeo.Matrix3D
@@ -3687,6 +4043,7 @@ class PremarcScriptObject(BaseScriptObject):
             "depth": self.thickness_premarc,
             "thickness_wall": self.build_ele.thickness_wall.value,
             "rotation": self.rotation,
+            "wall_angle": getattr(self, "wall_angle", 0.0),
             "encaje": encaje,
             "encaje_manual": self.build_ele.EnableManualEncaje.value,
             "encaje_altura": self.build_ele.EncajeAltura.value,
@@ -3707,18 +4064,16 @@ class PremarcScriptObject(BaseScriptObject):
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
             "retall_ampits": self.build_ele.retall_ampits.value,
-            "EnableAmpit": self.build_ele.EnableAmpit.value,
-            "ampit_material": self.build_ele.ampit_material.value,
-            "ampit_muntatge": self.build_ele.ampit_muntatge.value,
-            "ampit_parts": self.build_ele.ampit_parts.value,
-            "ampit_ref_1": self.build_ele.ampit_ref_1.value,
-            "is_puerta_entrada": self.build_ele.is_puerta_entrada.value,
+            # Impermeabilizacion: faltaba en el snapshot -> se perdia la config
+            # al reabrir (doble-click o seleccionar).
+            "EnableImpermeabilizacio": self.build_ele.EnableImpermeabilizacio.value,
+            "imperm_type": self.build_ele.imperm_type.value,
+            "EnableImpermPliegue90": self.build_ele.EnableImpermPliegue90.value,
+            "imperm_muntatge": self.build_ele.imperm_muntatge.value,
+            # DEN (XVENTANA/XBANDERA): faltaba -> la paleta no lo recuperaba al
+            # reabrir (doble-click), reseteando a default.
+            "ComboBoxDEN": self.build_ele.ComboBoxDEN.value,
             "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
-            "ComboBoxREAEspecial": self.build_ele.ComboBoxREAEspecial.value,
-            "SeparacionLibreEntreREAC": self.build_ele.SeparacionLibreEntreREAC.value,
-            "SobresalienteTubosREA": self.build_ele.SobresalienteTubosREA.value,
-            "LongitudREALXLadoAbierto": self.build_ele.LongitudREALXLadoAbierto.value,
-            "LongitudREALXLadoInterior": self.build_ele.LongitudREALXLadoInterior.value,
             "EnableRetallGanxo": self.build_ele.EnableRetallGanxo.value,
             "Z_RetallGanxo": self.build_ele.Z_RetallGanxo.value,
             "ComboBoxPendiente": self.build_ele.ComboBoxPendiente.value,
@@ -3734,18 +4089,8 @@ class PremarcScriptObject(BaseScriptObject):
             "ComboBoxEscuadras": self.build_ele.ComboBoxEscuadras.value,
             "ComboBoxTubos": self.build_ele.ComboBoxTubos.value,
             "TypeTubos": self.build_ele.TypeTubos.value,
-            "PositionTubos": self.build_ele.PositionTubos.value,
-            "OffsetTubos": self.build_ele.OffsetTubos.value,
             "CheckBoxRealSpace": self.build_ele.CheckBoxRealSpace.value,
             "CheckBoxInnerSpace": self.build_ele.CheckBoxInnerSpace.value,
-            "EnableImpermeabilizacio": self.build_ele.EnableImpermeabilizacio.value,
-            "imperm_type": self.build_ele.imperm_type.value,
-            "EnableImpermPliegue90": self.build_ele.EnableImpermPliegue90.value,
-            "imperm_muntatge": self.build_ele.imperm_muntatge.value,
-            "premarc_PE": self.build_ele.premarc_PE.value,
-            "ShowXPS": self.build_ele.ShowXPS.value,
-            "ComboBoxDEN": self.build_ele.ComboBoxDEN.value,
-            "z_unique": z_unique_as_int(self.build_ele.z_unique.value),
             "opening_guid": self.build_ele.opening_guid.value,
             "wall_guid": (
                 self.wall_select_result.element_guid
@@ -3771,8 +4116,10 @@ class PremarcScriptObject(BaseScriptObject):
 
         saved_pnt = AllplanGeo.Point3D(state["X"], state["Y"], state["Z"])
         self.placement_pnt = saved_pnt
+        self.wall_angle = state.get("wall_angle", 0.0)
         self.rotation = state["rotation"]
-        self.build_ele.rotation.value = self.rotation
+        # Paleta muestra rotation RELATIVA al muro (rotation absoluta - wall_angle).
+        self.build_ele.rotation.value = self.rotation - self.wall_angle
         self.heigh = state["height"]
         self.width = state["width"]
         self.build_ele.heigh.value = state["height"]
@@ -3807,6 +4154,27 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.Z_RetallGanxo.value = state["Z_RetallGanxo"]
         self.build_ele.ComboBoxPendiente.value = state["ComboBoxPendiente"]
         self.build_ele.ShowAccessorUPerimeter.value = state["ShowAccessorUPerimeter"]
+        # Impermeabilizacion (.get con defaults: premarcos viejos no la tienen
+        # en el SavedState).
+        self.build_ele.EnableImpermeabilizacio.value = state.get(
+            "EnableImpermeabilizacio", False
+        )
+        self.build_ele.imperm_type.value = state.get(
+            "imperm_type", self.build_ele.imperm_type.value
+        )
+        self.build_ele.EnableImpermPliegue90.value = state.get(
+            "EnableImpermPliegue90", False
+        )
+        self.build_ele.imperm_muntatge.value = state.get(
+            "imperm_muntatge", self.build_ele.imperm_muntatge.value
+        )
+        # DEN (XVENTANA/XBANDERA): recuperar el valor de la paleta al reabrir.
+        self.build_ele.ComboBoxDEN.value = state.get(
+            "ComboBoxDEN", self.build_ele.ComboBoxDEN.value
+        )
+        # Re-aplicar el lock de Pendiente segun accesorios (U tiene prioridad),
+        # para que al reabrir el campo quede deshabilitado si corresponde.
+        self._sync_pendiente_lock()
         self.build_ele.PassamaOptions.value = [
             int(x) for x in state.get("PassamaOptions", [])
         ]
@@ -3834,80 +4202,26 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
-        self.build_ele.EnableAmpit.value = state.get(
-            "EnableAmpit", self.build_ele.EnableAmpit.value
-        )
-        self.build_ele.ampit_material.value = state.get(
-            "ampit_material", self.build_ele.ampit_material.value
-        )
-        self.build_ele.ampit_muntatge.value = state.get(
-            "ampit_muntatge", self.build_ele.ampit_muntatge.value
-        )
-        self.build_ele.ampit_parts.value = state.get(
-            "ampit_parts", self.build_ele.ampit_parts.value
-        )
-        self.build_ele.ampit_ref_1.value = state.get(
-            "ampit_ref_1", self.build_ele.ampit_ref_1.value
-        )
-        self.build_ele.is_puerta_entrada.value = state.get(
-            "is_puerta_entrada", self.build_ele.is_puerta_entrada.value
-        )
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
-        self.build_ele.ComboBoxREAEspecial.value = state.get(
-            "ComboBoxREAEspecial", self.build_ele.ComboBoxREAEspecial.value
-        )
-        self.build_ele.SeparacionLibreEntreREAC.value = state.get(
-            "SeparacionLibreEntreREAC", self.build_ele.SeparacionLibreEntreREAC.value
-        )
-        self.build_ele.SobresalienteTubosREA.value = state.get(
-            "SobresalienteTubosREA", self.build_ele.SobresalienteTubosREA.value
-        )
-        self.build_ele.LongitudREALXLadoAbierto.value = state.get(
-            "LongitudREALXLadoAbierto", self.build_ele.LongitudREALXLadoAbierto.value
-        )
-        self.build_ele.LongitudREALXLadoInterior.value = state.get(
-            "LongitudREALXLadoInterior", self.build_ele.LongitudREALXLadoInterior.value
-        )
-        self.build_ele.PositionTubos.value = state.get(
-            "PositionTubos", self.build_ele.PositionTubos.value
-        )
-        self.build_ele.OffsetTubos.value = state.get(
-            "OffsetTubos", self.build_ele.OffsetTubos.value
-        )
-        self.build_ele.EnableImpermeabilizacio.value = state.get(
-            "EnableImpermeabilizacio", self.build_ele.EnableImpermeabilizacio.value
-        )
-        self.build_ele.imperm_type.value = state.get(
-            "imperm_type", self.build_ele.imperm_type.value
-        )
-        self.build_ele.EnableImpermPliegue90.value = state.get(
-            "EnableImpermPliegue90", self.build_ele.EnableImpermPliegue90.value
-        )
-        self.build_ele.imperm_muntatge.value = state.get(
-            "imperm_muntatge", self.build_ele.imperm_muntatge.value
-        )
-        self.build_ele.premarc_PE.value = state.get(
-            "premarc_PE", self.build_ele.premarc_PE.value
-        )
-        self.build_ele.ShowXPS.value = state.get(
-            "ShowXPS", self.build_ele.ShowXPS.value
-        )
-        self.build_ele.ComboBoxDEN.value = state.get(
-            "ComboBoxDEN", self.build_ele.ComboBoxDEN.value
-        )
-        saved_z_unique = z_unique_as_int(state.get("z_unique", 0))
-        if saved_z_unique > 0:
-            self.build_ele.z_unique.value = saved_z_unique
 
         if self.build_ele.enable_manual_thickness.value:
+            # FIX (color manual cambia al colocar): el saved_state YA trae el color
+            # elegido por el usuario (restaurado arriba). load_color_manual_thickness
+            # solo se usa aca para fijar la visibilidad del campo, pero cuando el
+            # fondo no esta en COLOR_THICKNESS_MAP ni en list_color RE-PROPONE un
+            # color random y pisa el guardado (bug Arnau). Preservamos el color del
+            # state alrededor de la llamada para que la visibilidad se ajuste pero
+            # el color elegido por el usuario gane.
+            _saved_color = self.build_ele.color_manual_thickness.value
             self.load_color_manual_thickness()
-            self.color_premarc = self.build_ele.color_manual_thickness.value
+            self.build_ele.color_manual_thickness.value = _saved_color
+            self.color_premarc = _saved_color
         else:
             thickness_key = int(self.thickness_premarc)
-            self.color_premarc = COLOR_THICKNESS_MAP[thickness_key]
+            self.color_premarc = self.get_color_by_thickness(thickness_key)
 
         self.update_params()
         self._rebuild_placement_mat()
@@ -4421,36 +4735,55 @@ class PremarcScriptObject(BaseScriptObject):
             self.script_object_interactor.start_input(self.coord_input)
             return True
         elif event_id == 1056:
-            print("[Premarc] Evento 1056 ignorado: selector de premarco deshabilitado temporalmente")
+            print(
+                "[Premarc][DESELECT] Click boton deseleccionar -> "
+                f"active_guid={self._active_session_source_guid or '<sin-guid>'}, "
+                f"placement={self._format_point3d_for_log(self.placement_pnt)}"
+            )
+            # Persistir cambios al 3D antes de limpiar: si el usuario modifico
+            # algo (toggles, params), aplicarlo al PPG materializado. Sin esto,
+            # los cambios se quedan en saved state pero no se ven hasta volver
+            # a seleccionar el premarco.
+            has_active_selection = (
+                bool(self._active_session_source_guid)
+                and self.placement_pnt != AllplanGeo.Point3D()
+                and self.selected_wall is not None
+            )
+            if has_active_selection:
+                try:
+                    replaced = self._replace_modified_premarc_direct()
+                    print(f"[Premarc][DESELECT] Cambios persistidos al 3D: {replaced}")
+                except Exception as exc:
+                    print(f"[Premarc][DESELECT] Error persistiendo cambios: {exc}")
+            # Limpia marcadores visuales de seleccion
+            self._clear_selected_premarc_overlay()
+            self._clear_session_selection_preview_context()
+            # Limpia estado de seleccion activa
+            self._active_session_source_guid = ""
+            self._loaded_saved_state = {}
+            # Limpia el GUID/adapter cacheado del PPG (ya se reemplazo arriba) para
+            # no arrastrar una referencia vieja al proximo premarco.
+            self._modification_ppg_guid_str = ""
+            self._modification_ppg_adapter = None
+            # Limpia el modify mode que activamos en _register_external_premarc_for_edit
+            # para evitar que execute() siga intentando replace en otros contextos.
+            self.is_modification_mode = False
+            try:
+                self.modification_ele_list = AllplanEleAdapter.BaseElementAdapterList()
+            except Exception:
+                self.modification_ele_list = None
+            # Resetea placement para que el proximo Seleccionar abra el picker
+            # (sin esto, Seleccionar shortcutea al preview activo y reselecciona el mismo)
+            self._has_confirmed_placement = False
+            self.placement_pnt = AllplanGeo.Point3D()
+            self._sync_placement_point_parameter()
+            # Cancela el interactor de seleccion si esta activo
+            if self.interactor_state == SELECTING_EXISTING_PREMARC:
+                self.script_object_interactor = None
+                self.interactor_state = STOPPED
             return True
         else:
             return False
-
-    def _default_rea_tube_extra_for_special_type(self, special_type: str = None) -> float:
-        special_type = str(
-            special_type
-            if special_type is not None
-            else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
-            or ""
-        )
-        if special_type == "REAs en C":
-            return REA_TUBE_DEFAULT_EXTRA_C_MM
-        if special_type in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}:
-            return REA_TUBE_DEFAULT_EXTRA_L_STANDARD_MM
-        return REA_TUBE_DEFAULT_EXTRA_MM
-
-    def _default_rea_l_x_lengths_for_special_type(self, special_type: str = None):
-        special_type = str(
-            special_type
-            if special_type is not None
-            else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
-            or ""
-        )
-        if special_type == "REAs en L STD":
-            return 500, 450
-        if special_type in {"REAs en L STD CORTA", "REAs en L (Estandar)"}:
-            return 390, 340
-        return 390, 340
 
     def modify_element_property(self, name: str, _value: Any) -> bool:
         """modify the element property
@@ -4479,19 +4812,6 @@ class PremarcScriptObject(BaseScriptObject):
             self.build_ele.id_premarc.value = str(_value).strip()
             return False
 
-        if name == "ComboBoxREAEspecial":
-            if hasattr(self.build_ele, "SobresalienteTubosREA"):
-                self.build_ele.SobresalienteTubosREA.value = (
-                    self._default_rea_tube_extra_for_special_type(_value)
-                )
-            if str(_value) in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}:
-                open_x_leg, inner_x_leg = self._default_rea_l_x_lengths_for_special_type(_value)
-                if hasattr(self.build_ele, "LongitudREALXLadoAbierto"):
-                    self.build_ele.LongitudREALXLadoAbierto.value = open_x_leg
-                if hasattr(self.build_ele, "LongitudREALXLadoInterior"):
-                    self.build_ele.LongitudREALXLadoInterior.value = inner_x_leg
-            return True
-
         if name == "afegit_ampits":
             self.afegit_ampits = self.build_ele.afegit_ampits.value
             # self.build_ele.INPUT_PMP_FG_AMPIT_AFEGIT.value = self.afegit_ampits
@@ -4514,6 +4834,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.retall_ampits_manual = True
             return False
 
+        if name == "thickness_wall":
+            self.detected_wall_thickness = self.build_ele.thickness_wall.value
+            self.build_ele.SavedWallThickness.value = self.detected_wall_thickness
+
         if name == "enable_manual_thickness":
             self.update_pallete_values()
             if _value == True:
@@ -4527,13 +4851,91 @@ class PremarcScriptObject(BaseScriptObject):
                 self.thickness = self.build_ele.thickness.value
             return True
 
-        if name == "color_manual_thickness":
-            # Check if color is used
+        if name == "enable_default_color":
+            if _value == True:
+                fondo = int(self.build_ele.thickness.value)
+                resp = PythonUtility.ShowMessageBox(
+                    f"Vas a cambiar el COLOR POR DEFECTO del fondo {fondo}.\n"
+                    "Esto afecta a TODOS los premarcos nuevos de ese fondo.\n"
+                    "¿Desea continuar?",
+                    PythonUtility.MB_OKCANCEL,
+                )
+                if resp == PythonUtility.IDCANCEL:
+                    self.build_ele.enable_default_color.value = False
+                    return True
+                # Pre-fill: mostrar el color actual del fondo para que se vea
+                # que se esta por cambiar.
+                self.build_ele.color_default_thickness.value = (
+                    self.get_color_by_thickness(fondo)
+                )
+            return True
 
-            # Check if color is used in colors default for premarcs api
-            list_colors = list(COLOR_THICKNESS_MAP.items()) + self.list_color
+        if name == "color_default_thickness":
+            # Cambiar el selector persiste el override GLOBAL (por proyecto) del
+            # color por defecto del fondo actual. Gateado por el check.
+            if self.build_ele.enable_default_color.value:
+                self.save_default_color_override(
+                    int(self.build_ele.thickness.value), int(_value)
+                )
+            return True
+
+        if name == "color_manual_thickness":
+            # [BUG-COLOR] el usuario cambio el color manual en la paleta.
+            print(
+                "[BUG-COLOR] modify color_manual_thickness -> "
+                f"valor_elegido={_value}, manual_thickness={self.build_ele.manual_thickness.value}"
+            )
+            fondo = self.build_ele.manual_thickness.value
+            nuevo = int(_value)
+
+            # 1) Mejora Arnau (un fondo = un color): si el MISMO fondo ya tiene
+            # un color aprendido en list_color, avisar antes de cambiarlo.
+            color_actual_fondo = None
+            for thickness, color in self.list_color:
+                if float(thickness) == float(fondo):
+                    color_actual_fondo = int(color)
+                    break
+
+            if color_actual_fondo is not None:
+                if color_actual_fondo == nuevo:
+                    return True  # mismo color, nada que cambiar
+                results = PythonUtility.ShowMessageBox(
+                    f"El fondo {fondo} ya tiene asignado el color {color_actual_fondo}.\n"
+                    f"¿Confirmás cambiarlo al color {nuevo}?\n"
+                    "El fondo quedará con este color para todos los premarcos futuros.\n",
+                    PythonUtility.MB_YESNO,
+                )
+                if results == PythonUtility.IDYES:
+                    # Upsert en memoria para mantener consistencia dentro de la
+                    # sesion. El archivo se reescribe al colocar el premarco
+                    # (save_color_manual_thickness).
+                    self.list_color = [
+                        (t, c)
+                        for (t, c) in self.list_color
+                        if float(t) != float(fondo)
+                    ]
+                    self.list_color.append((str(fondo), str(nuevo)))
+                    return True
+                else:
+                    # Revertir al color que el fondo ya tenia. return True para
+                    # que la paleta se REFRESQUE desde build_ele y muestre el
+                    # color viejo (con return False no repinta y el widget queda
+                    # mostrando el color rechazado, aunque el valor real ya es el
+                    # viejo). modify_element_property devuelve "palette update state".
+                    self.build_ele.color_manual_thickness.value = color_actual_fondo
+                    return True
+
+            # 2) Fondo sin color aprendido: chequear que el color no lo use OTRO
+            # fondo (defaults api + manuales), excluyendo el fondo actual.
+            list_colors = (
+                list(COLOR_THICKNESS_MAP.items())
+                + list(PREMARC_API_EXTRA_THICKNESS_COLORS.items())
+                + self.list_color
+            )
             for thickness, color in list_colors:
-                if int(_value) == int(color):
+                if float(thickness) == float(fondo):
+                    continue  # no compararse contra si mismo
+                if nuevo == int(color):
                     results = PythonUtility.ShowMessageBox(
                         f"El color {_value} ya está siendo usado para el fondo de {thickness}. \n ¿Desea seleccionar otro color?\n",
                         PythonUtility.MB_YESNO,
@@ -4546,7 +4948,8 @@ class PremarcScriptObject(BaseScriptObject):
             return True
 
         if name == "rotation":
-            self.rotation = float(_value)
+            # Paleta = offset relativo al muro. self.rotation = absoluto.
+            self.rotation = float(_value) + getattr(self, "wall_angle", 0.0)
             return True
 
         if name == "manual_thickness":
@@ -4564,6 +4967,12 @@ class PremarcScriptObject(BaseScriptObject):
 
         if name == "premarc_PE":
             self.load_premarc_PE_checkbox()
+            return True
+
+        if name == "ShowAccessorUPerimeter":
+            # Accesorio perfil U -> fuerza Pendiente a "NO" y deshabilita el campo
+            # (con prioridad sobre premarc_PE). Al desmarcarlo se re-evalua.
+            self._sync_pendiente_lock()
             return True
 
         # if self.interactor_state == RUNNING:
@@ -4676,6 +5085,22 @@ class PremarcScriptObject(BaseScriptObject):
             f"has_confirmed={'si' if self._has_confirmed_placement else 'no'}, "
             f"overlay_active={'si' if self._selected_premarc_overlay_active else 'no'}"
         )
+        # [BUG-IMP] PASO 4: el combo imperm_type es StringComboBox SIN EventId,
+        # asi que cambiarlo NO pasa por on_control_event/modify_element_property;
+        # solo re-renderiza llamando a execute(). Detectamos el cambio aca
+        # comparando contra el valor previo cacheado.
+        try:
+            _cur_imp = self.build_ele.imperm_type.value
+        except Exception:
+            _cur_imp = None
+        if self._bug_imp_prev_imperm_type is None:
+            self._bug_imp_prev_imperm_type = _cur_imp
+        elif _cur_imp != self._bug_imp_prev_imperm_type:
+            self._log_imp_bug(
+                "PASO 4 - CAMBIO DE IMP detectado en execute()",
+                extra=f"imp_prev={self._bug_imp_prev_imperm_type} -> imp_nuevo={_cur_imp}",
+            )
+            self._bug_imp_prev_imperm_type = _cur_imp
         # if self._should_create_opening:
         #     PythonUtility.ShowMessageBox(
         #         f"Creando opening en muro: {self.selected_wall}?",
@@ -5259,6 +5684,7 @@ class PremarcScriptObject(BaseScriptObject):
         modificacion. Borramos el PPG anterior y creamos el nuevo PPG como
         insercion limpia para cerrar la operacion sin reentrar al framework.
         """
+        self._log_imp_bug("MATERIALIZA - entra a _replace_modified_premarc_direct")
         if self.placement_pnt == AllplanGeo.Point3D():
             return False
         if not self.selected_wall:
@@ -5278,12 +5704,28 @@ class PremarcScriptObject(BaseScriptObject):
                     "[Premarc] PPG original no validado; creando PPG nuevo "
                     "sin borrar adapter anterior"
                 )
+                self._log_imp_bug(
+                    "MATERIALIZA - FALLBACK: crea SIN borrar viejo <-- DUPLICACION",
+                )
                 return self._create_current_premarc_direct(delete_existing_adapter=None)
 
+        self._log_imp_bug(
+            "MATERIALIZA - reemplazo OK: borra viejo y crea nuevo (sin duplicar)"
+        )
         return self._create_current_premarc_direct(delete_existing_adapter=old_adapter)
 
     def _create_current_premarc_direct(self, delete_existing_adapter=None) -> bool:
         """Create the current PPG as a clean insertion, optionally deleting an old root."""
+        _del_state = "None (NO borra viejo)"
+        if delete_existing_adapter is not None:
+            try:
+                _del_state = "Null (NO borra)" if delete_existing_adapter.IsNull() else "OK (borra viejo)"
+            except Exception:
+                _del_state = "?"
+        self._log_imp_bug(
+            "MATERIALIZA - _create_current_premarc_direct",
+            extra=f"delete_existing_adapter={_del_state}",
+        )
 
         z_unique = z_unique_as_int(self.build_ele.z_unique.value)
         if z_unique <= 0:
@@ -5313,12 +5755,27 @@ class PremarcScriptObject(BaseScriptObject):
 
         if delete_existing_adapter is not None and not delete_existing_adapter.IsNull():
             try:
-                old_list = AllplanEleAdapter.BaseElementAdapterList()
-                old_list.append(delete_existing_adapter)
-                AllplanBaseElements.DeleteElements(self.document, old_list)
-                print(
-                    "[Premarc] PythonPart anterior borrado antes del reemplazo directo"
+                # SAFE delete: enumera los hijos del PPG y los borra explicitamente.
+                # Borrar solo el adapter raiz no garantiza cascada a los hijos
+                # individuales (cada elemento del premarc es un PythonPart hijo,
+                # incluyendo la imp). Sin esto, la imp del PPG viejo queda
+                # huerfana en el modelo al hacer el reemplazo, causando duplicacion.
+                delete_list, delete_count = self._build_safe_premarc_delete_list(
+                    delete_existing_adapter
                 )
+                if delete_count > 0:
+                    AllplanBaseElements.DeleteElements(self.document, delete_list)
+                    print(
+                        f"[Premarc] PPG anterior borrado con safe delete: {delete_count} elementos"
+                    )
+                else:
+                    # Fallback: si no se pudieron enumerar hijos, borra solo el root.
+                    old_list = AllplanEleAdapter.BaseElementAdapterList()
+                    old_list.append(delete_existing_adapter)
+                    AllplanBaseElements.DeleteElements(self.document, old_list)
+                    print(
+                        "[Premarc] PPG anterior borrado solo root (sin hijos enumerables)"
+                    )
             except Exception as exc:
                 print(f"[Premarc] No se pudo borrar el PythonPart anterior: {exc}")
                 return False
@@ -5751,6 +6208,13 @@ class PremarcScriptObject(BaseScriptObject):
         Funciona bien para muros rectos de un solo tier.
         Fallback al valor thickness_wall del .pyp.
         """
+        fallback = self.build_ele.thickness_wall.value
+        print(f"[Premarc] Grosor muro (fallback .pyp): {fallback} mm")
+        return fallback
+
+
+        # TODO detectar correctamente muros con cualquier inclinación
+
         # --- Geometria 2D (metodo principal) ---
         try:
             geo_2d = wall_adapter.GetGroundViewArchitectureElementGeometry()
@@ -6707,7 +7171,7 @@ class PremarcScriptObject(BaseScriptObject):
     def get_values_for_config_API(self) -> dict:
         fallback = {"values": _premarc_fallback_config_values()}
         if not _premarc_comandes_ot_enabled():
-            return fallback
+            return self._inject_extra_thicknesses(fallback)
         try:
             url = f"{API_URL_AT1}"
 
@@ -6721,14 +7185,37 @@ class PremarcScriptObject(BaseScriptObject):
                 # print(data)
                 vals = data.get("values") if isinstance(data, dict) else None
                 if not vals:
-                    return fallback
-                return data
-            return fallback
+                    return self._inject_extra_thicknesses(fallback)
+                return self._inject_extra_thicknesses(data)
+            return self._inject_extra_thicknesses(fallback)
         except Exception as e:
             _warn_comandes_ot_once(
                 f"[Premarc] ComandesOT no disponible ({e}); usando grosores locales."
             )
-            return fallback
+            return self._inject_extra_thicknesses(fallback)
+
+    def _inject_extra_thicknesses(self, data: dict) -> dict:
+        """Adiciona a la lista de fondos los fondos extra locales
+        (PREMARC_API_EXTRA_THICKNESS_COLORS) que no esten ya presentes, para que
+        aparezcan en el dropdown de fondos este la API ON u OFF. El color de cada
+        uno se resuelve en get_color_by_thickness. NO toca COLOR_THICKNESS_MAP."""
+        if not PREMARC_API_EXTRA_THICKNESS_COLORS or not isinstance(data, dict):
+            return data
+        values = dict(data.get("values") or {})
+        present = set()
+        for v in values.values():
+            try:
+                present.add(int(float(str(v).strip())))
+            except (TypeError, ValueError):
+                continue
+        next_key = (max((int(k) for k in values), default=0) + 1) if values else 1
+        for thickness in sorted(PREMARC_API_EXTRA_THICKNESS_COLORS):
+            if thickness not in present:
+                values[str(next_key)] = str(thickness)
+                next_key += 1
+        merged = dict(data)
+        merged["values"] = values
+        return merged
 
     # Helper API
     # def get_description_by_position(self, data, position):
@@ -6832,24 +7319,24 @@ class PremarcScriptObject(BaseScriptObject):
 
         listaAbiertoCerrado = self.get_description_by_position(data, 1)
 
+        debe_actualizar = len(listaActual) == 0 or listaActual != listaAbiertoCerrado
+
         # TODO quitar
         if len(listaAbiertoCerrado) == 0:
-            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT VARIANT', 'OBERT PER DALT + REA', 'OBERT PER BAIX', 'OBERT PER BAIX VARIANT', 'OBERT PER BAIX + REA']
+            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT + REA', 'OBERT PER DALT + REA VARIANT', 'OBERT PER BAIX', 'OBERT PER BAIX + REA', 'OBERT PER BAIX + REA VARIANT']
 
         opciones_locales_anadidas = False
         for option in (
             "OBERT PER DALT",
-            "OBERT PER DALT VARIANT",
             "OBERT PER DALT + REA",
+            "OBERT PER DALT + REA VARIANT",
             "OBERT PER BAIX",
-            "OBERT PER BAIX VARIANT",
             "OBERT PER BAIX + REA",
+            "OBERT PER BAIX + REA VARIANT",
         ):
             if option not in listaAbiertoCerrado:
                 listaAbiertoCerrado.append(option)
                 opciones_locales_anadidas = True
-
-        debe_actualizar = len(listaActual) == 0 or listaActual != listaAbiertoCerrado
 
         if debe_actualizar or opciones_locales_anadidas:
             self.build_ele.valueListaAbiertoCerrado.value = listaAbiertoCerrado
@@ -7176,8 +7663,14 @@ class PremarcScriptObject(BaseScriptObject):
         return options_selected if options_selected else ""
 
     def get_color_by_thickness(self, thickness: int):
+        # Override de color por defecto (cambiado por el usuario) gana sobre todo
+        overrides = getattr(self, "default_color_overrides", None) or {}
+        if thickness in overrides:
+            return overrides[thickness]
         if thickness in COLOR_THICKNESS_MAP:
             return COLOR_THICKNESS_MAP[thickness]
+        if thickness in PREMARC_API_EXTRA_THICKNESS_COLORS:
+            return PREMARC_API_EXTRA_THICKNESS_COLORS[thickness]
         else:
             return 19  # gris negruc
 
@@ -7209,7 +7702,7 @@ class PremarcScriptObject(BaseScriptObject):
         self.color_premarc = (
             self.build_ele.color_manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
-            else COLOR_THICKNESS_MAP[self.thickness_premarc]
+            else self.get_color_by_thickness(int(self.thickness_premarc))
         )
         layer_frame_id = AllplanBaseElements.LayerService.GetIDByShortName(
             FRAME_LAYER, self.document
@@ -7306,7 +7799,7 @@ class PremarcScriptObject(BaseScriptObject):
         self.color_premarc = (
             self.build_ele.color_manual_thickness.value
             if self.build_ele.enable_manual_thickness.value
-            else COLOR_THICKNESS_MAP[self.thickness_premarc]
+            else self.get_color_by_thickness(int(self.thickness_premarc))
         )
         layer_frame_id = AllplanBaseElements.LayerService.GetIDByShortName(
             FRAME_LAYER, self.document
@@ -7833,8 +8326,16 @@ class PremarcScriptObject(BaseScriptObject):
         if xps_depth <= 0:
             return []
 
-        horizontal_x = -xps_thickness - sheet_offset
-        horizontal_width = self.width + ((xps_thickness + sheet_offset) * 2)
+        # Lado abierto -> XPS RASO: el XPS top/bottom normalmente vuela
+        # xps_thickness a cada lado (x: -xps_thickness .. width+xps_thickness)
+        # para envolver la esquina con el XPS vertical (cuboid_left/right). Si un
+        # lateral esta abierto, su XPS vertical se elimina (match de abajo) y ese
+        # voladizo del XPS horizontal queda colgando -> debe quedar RASO.
+        # Recortamos el voladizo SOLO del lado abierto. ESQ -> izq, DRET -> der.
+        _xps_abierto = self.build_ele.ComboBoxAbiertoCerrado.value
+
+        horizontal_x = 0 if "ESQ" in _xps_abierto else -xps_thickness - sheet_offset
+        horizontal_width = self.width + (-1)*horizontal_x + (0 if "DRET" in _xps_abierto else xps_thickness + sheet_offset)
         left_x = -xps_thickness - sheet_offset
         right_x = self.width + sheet_offset
         bottom_z = -xps_thickness - sheet_offset
@@ -7870,15 +8371,15 @@ class PremarcScriptObject(BaseScriptObject):
                 elems.remove(cuboid_left)
             case "OBERT PER DALT":
                 elems.remove(cuboid_top)
-            case "OBERT PER DALT VARIANT":
-                elems.remove(cuboid_top)
             case "OBERT PER DALT + REA":
+                elems.remove(cuboid_top)
+            case "OBERT PER DALT + REA VARIANT":
                 elems.remove(cuboid_top)
             case "OBERT PER BAIX":
                 elems.remove(cuboid_bottom)
-            case "OBERT PER BAIX VARIANT":
-                elems.remove(cuboid_bottom)
             case "OBERT PER BAIX + REA":
+                elems.remove(cuboid_bottom)
+            case "OBERT PER BAIX + REA VARIANT":
                 elems.remove(cuboid_bottom)
             case "OBERT FEMELLA DRETA + REA":
                 elems.remove(cuboid_right)
@@ -8447,13 +8948,9 @@ class PremarcScriptObject(BaseScriptObject):
                 AllplanGeo.Vector3D(0, -1 * SQUARE_THICKNESS, 0)
             )
         elif direction == "frame_tub":
-            extruded_solid.SetDirection(
-                AllplanGeo.Vector3D(0, 0, -1 * (self.heigh + THICKNESS_MM * 2))
-            )
+            extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 0, -1 * self.heigh))
         elif direction == "frame_tub_horizontal":
-            extruded_solid.SetDirection(
-                AllplanGeo.Vector3D(self.width + THICKNESS_MM * 2, 0, 0)
-            )
+            extruded_solid.SetDirection(AllplanGeo.Vector3D(self.width, 0, 0))
         elif direction == "socket_frame_front":
             extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 1 * THICKNESS_MM, 0))
         elif direction == "socket_frame_back":
@@ -8495,15 +8992,6 @@ class PremarcScriptObject(BaseScriptObject):
     def get_square_y_offset(self):
         return self.build_ele.thickness_wall.value / 2 - SQUARE_THICKNESS / 2
 
-    def _wall_thickness_for_tube_centering(self) -> float:
-        try:
-            wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
-        except Exception:
-            wall_thickness = 0.0
-        if wall_thickness <= 0:
-            wall_thickness = float(self.detected_wall_thickness or 0.0)
-        return wall_thickness
-
     # def create_vertical_tub(self)->AllplanGeo.Polyhedron3D:
     #     frame_tub_bottom = AllplanGeo.Polygon3D()
     #     frame_tub_bottom += AllplanGeo.Point3D(0, -(self.thickness/2-TUB_WIDTH_LENGTH/2), 0)
@@ -8526,23 +9014,22 @@ class PremarcScriptObject(BaseScriptObject):
 
     def create_vertical_tub(self) -> AllplanGeo.Polyhedron3D:
         # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self._wall_thickness_for_tube_centering() / 2
-        z_top = THICKNESS_MM
+        wall_center = self.build_ele.thickness_wall.value / 2
         frame_tub_bottom = AllplanGeo.Polygon3D()
         frame_tub_bottom += AllplanGeo.Point3D(
-            0, -(wall_center - TUB_WIDTH_LENGTH / 2), z_top
+            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            0, -(wall_center + TUB_WIDTH_LENGTH / 2), z_top
+            0, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            TUB_WIDTH_LENGTH, -(wall_center + TUB_WIDTH_LENGTH / 2), z_top
+            TUB_WIDTH_LENGTH, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            TUB_WIDTH_LENGTH, -(wall_center - TUB_WIDTH_LENGTH / 2), z_top
+            TUB_WIDTH_LENGTH, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            0, -(wall_center - TUB_WIDTH_LENGTH / 2), z_top
+            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
         )
         error_code, polyhedron_tub = self.extrude_frame(frame_tub_bottom, "frame_tub")
         return polyhedron_tub
@@ -8550,23 +9037,22 @@ class PremarcScriptObject(BaseScriptObject):
     def create_horizontal_tub(self) -> AllplanGeo.Polyhedron3D:
 
         # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self._wall_thickness_for_tube_centering() / 2
-        x_start = -THICKNESS_MM
+        wall_center = self.build_ele.thickness_wall.value / 2
         frame_tub_left = AllplanGeo.Polygon3D()
         frame_tub_left += AllplanGeo.Point3D(
-            x_start, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
+            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_left += AllplanGeo.Point3D(
-            x_start, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
+            0, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_left += AllplanGeo.Point3D(
-            x_start, -(wall_center + TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
+            0, -(wall_center + TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
         )
         frame_tub_left += AllplanGeo.Point3D(
-            x_start, -(wall_center - TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
+            0, -(wall_center - TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
         )
         frame_tub_left += AllplanGeo.Point3D(
-            x_start, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
+            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
         )
         error_code, polyhedron_tub = self.extrude_frame(
             frame_tub_left, "frame_tub_horizontal"
@@ -9245,29 +9731,47 @@ class PremarcScriptObject(BaseScriptObject):
         error_code, polyhedron_right = self.extrude_frame(frame_right, "frame_right")
         polyhedron_premarc_list.append(polyhedron_right)
 
+        # Lados abiertos: el remate (finish) no debe sobresalir lateralmente
+        # hacia el lado abierto -> debe quedar RASO con el borde del premarco.
+        # El finish_top/bottom normalmente vuela 23mm a cada lado
+        # (x: -23 .. width+23) para formar la esquina con el finish vertical.
+        # Cuando un lateral esta abierto, su finish vertical se elimina y ese
+        # voladizo queda colgando en el aire. Recortamos el voladizo SOLO del
+        # lado abierto. ESQ -> izquierdo abierto, DRET -> derecho abierto
+        # (cubre los 16 casos OBERT/SUP-INF del match ComboBoxAbiertoCerrado).
+        _abierto_val = self.build_ele.ComboBoxAbiertoCerrado.value
+        _left_open = "ESQ" in _abierto_val
+        _right_open = "DRET" in _abierto_val
+        finish_x_min = 0 if _left_open else -23
+        finish_x_max = self.width if _right_open else self.width + 23
+
         frame_finish_bottom = AllplanGeo.Polygon3D()
-        frame_finish_bottom += AllplanGeo.Point3D(-23, -self.thickness, -self.heigh)
         frame_finish_bottom += AllplanGeo.Point3D(
-            self.width + 23, -self.thickness, -self.heigh
+            finish_x_min, -self.thickness, -self.heigh
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            self.width + 23, -self.thickness, -self.heigh - 23
+            finish_x_max, -self.thickness, -self.heigh
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            -23, -self.thickness, -self.heigh - 23
+            finish_x_max, -self.thickness, -self.heigh - 23
         )
-        frame_finish_bottom += AllplanGeo.Point3D(-23, -self.thickness, -self.heigh)
+        frame_finish_bottom += AllplanGeo.Point3D(
+            finish_x_min, -self.thickness, -self.heigh - 23
+        )
+        frame_finish_bottom += AllplanGeo.Point3D(
+            finish_x_min, -self.thickness, -self.heigh
+        )
         error_code, polyhedron_finish_bottom = self.extrude_frame(
             frame_finish_bottom, "frame_finish_bottom"
         )
         polyhedron_premarc_list.append(polyhedron_finish_bottom)
 
         frame_finish_top = AllplanGeo.Polygon3D()
-        frame_finish_top += AllplanGeo.Point3D(-23, -self.thickness, 0)
-        frame_finish_top += AllplanGeo.Point3D(self.width + 23, -self.thickness, 0)
-        frame_finish_top += AllplanGeo.Point3D(self.width + 23, -self.thickness, 23)
-        frame_finish_top += AllplanGeo.Point3D(-23, -self.thickness, 23)
-        frame_finish_top += AllplanGeo.Point3D(-23, -self.thickness, 0)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 0)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 23)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 23)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
         error_code, polyhedron_finish_top = self.extrude_frame(frame_finish_top, "frame_finish_top")
 
         # Fix frame finish top for Monoblock persiana selected
@@ -9872,8 +10376,8 @@ class PremarcScriptObject(BaseScriptObject):
 
             case (
                 "OBERT PER DALT"
-                | "OBERT PER DALT VARIANT"
                 | "OBERT PER DALT + REA"
+                | "OBERT PER DALT + REA VARIANT"
             ):
                 print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
                 if polyhedron_top in polyhedron_premarc_list:
@@ -9892,8 +10396,8 @@ class PremarcScriptObject(BaseScriptObject):
 
             case (
                 "OBERT PER BAIX"
-                | "OBERT PER BAIX VARIANT"
                 | "OBERT PER BAIX + REA"
+                | "OBERT PER BAIX + REA VARIANT"
             ):
                 print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
                 if polyhedron_bottom in polyhedron_premarc_list:
@@ -11020,55 +11524,42 @@ class PremarcScriptObject(BaseScriptObject):
     def is_bottom_open_premarc(self):
         return self.build_ele.ComboBoxAbiertoCerrado.value in (
             "OBERT PER BAIX",
-            "OBERT PER BAIX VARIANT",
             "OBERT PER BAIX + REA",
+            "OBERT PER BAIX + REA VARIANT",
         )
 
     def is_top_open_premarc(self):
         return self.build_ele.ComboBoxAbiertoCerrado.value in (
             "OBERT PER DALT",
-            "OBERT PER DALT VARIANT",
             "OBERT PER DALT + REA",
+            "OBERT PER DALT + REA VARIANT",
         )
-
-    def _is_open_premarc_rea(self) -> bool:
-        return "+ REA" in str(self.build_ele.ComboBoxAbiertoCerrado.value or "")
 
     def get_direction_open_premarc(self):
         direction_open_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
         values_direction_right = [
-            "OBERT FEMELLA DRETA",
             "OBERT FEMELLA DRETA + REA",
-            "OBERT NO FEMELLA DRETA",
             "OBERT NO FEMELLA DRETA + REA",
-            "SUP. FEMELLA / INF NO FEMELLA DRET.",
             "SUP. FEMELLA / INF NO FEMELLA DRET. + REA",
-            "SUP. NO FEMELLA / INF. FEMELLA DRET.",
             "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA",
         ]
         values_direction_left = [
-            "OBERT FEMELLA ESQUERRA",
             "OBERT FEMELLA ESQUERRA + REA",
-            "OBERT NO FEMELLA ESQUERRA",
             "OBERT NO FEMELLA ESQUERRA + REA",
-            "SUP. FEMELLA / INF NO FEMELLA ESQ.",
             "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA",
-            "SUP. NO FEMELLA / INF. FEMELLA ESQ.",
             "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA",
         ]
         values_direction_top = [
-            "OBERT PER DALT",
             "OBERT PER DALT + REA",
         ]
         values_direction_top_variant = [
-            "OBERT PER DALT VARIANT",
+            "OBERT PER DALT + REA VARIANT",
         ]
         values_direction_bottom = [
-            "OBERT PER BAIX",
             "OBERT PER BAIX + REA",
         ]
         values_direction_bottom_variant = [
-            "OBERT PER BAIX VARIANT",
+            "OBERT PER BAIX + REA VARIANT",
         ]
         if direction_open_premarc in values_direction_right:
             return "RIGHT"
@@ -11187,43 +11678,19 @@ class PremarcScriptObject(BaseScriptObject):
         cylinders = []
 
         REA_x_y = 40
-        default_rea_extra = self._default_rea_tube_extra_for_special_type()
-        rea_extra_param = getattr(
-            getattr(self.build_ele, "SobresalienteTubosREA", None),
-            "value",
-            default_rea_extra,
-        )
-        try:
-            REA_extra = float(rea_extra_param)
-        except (TypeError, ValueError):
-            REA_extra = default_rea_extra
-
-        if REA_extra < 0:
-            REA_extra = default_rea_extra
-
-        tube_sheet_extension = THICKNESS_MM
+        REA_extra = 200
         # Firts
-        pos_REA = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, 0, REA_extra + tube_sheet_extension)
-        )
+        pos_REA = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, REA_extra))
         first_cuboid_REA = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_REA,
-            REA_x_y,
-            -REA_x_y,
-            -(self.heigh + REA_extra * 2 + tube_sheet_extension * 2),
+            pos_REA, REA_x_y, -REA_x_y, -(self.heigh + REA_extra * 2)
         )
         # elems.append(first_cuboid_REA)
         cuboids.append(first_cuboid_REA)
 
         # Second cuboid
-        pos_REA = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(REA_x_y, 0, REA_extra + tube_sheet_extension)
-        )
+        pos_REA = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(REA_x_y, 0, REA_extra))
         second_cuboid_REA = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_REA,
-            REA_x_y,
-            -REA_x_y,
-            -(self.heigh + REA_extra * 2 + tube_sheet_extension * 2),
+            pos_REA, REA_x_y, -REA_x_y, -(self.heigh + REA_extra * 2)
         )
         # elems.append(second_cuboid_REA)
         cuboids.append(second_cuboid_REA)
@@ -11421,38 +11888,36 @@ class PremarcScriptObject(BaseScriptObject):
 
         ### manage config UI
         offset_rea = 250
+        space_y = 60
+        translation_vector_rigth = AllplanGeo.Vector3D(
+            self.width - offset_rea - REA_x_y * 2, -space_y, 0
+        )
+        translation_vector_left = AllplanGeo.Vector3D(offset_rea, -space_y, 0)
         elems_moved = []
         cuboids_moved = []
         cylinders_moved = []
         direction_open = self.get_direction_open_premarc()
-        include_rea_cylinders = self._is_open_premarc_rea()
 
-        def get_wall_center_y():
-            return -self._wall_thickness_for_tube_centering() / 2
-
-        wall_center_y = get_wall_center_y()
-        side_tub_y = wall_center_y + REA_x_y / 2
-        translation_vector_rigth = AllplanGeo.Vector3D(
-            self.width - offset_rea - REA_x_y * 2, side_tub_y, 0
-        )
-        translation_vector_left = AllplanGeo.Vector3D(offset_rea, side_tub_y, 0)
-
-        def horizontal_tube_positions(z_positions, variant=False):
+        def create_horizontal_rea(z_positions, variant=False):
+            rea_length = self.width + REA_extra * 2
+            rea_x = -REA_extra
+            try:
+                wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
+            except Exception:
+                wall_thickness = 0.0
+            if wall_thickness <= 0:
+                wall_thickness = float(self.detected_wall_thickness or 0.0)
+            wall_center_y = -wall_thickness / 2
             # Cuboids are created with a negative Y depth (-REA_x_y). For a
             # single tube, start Y must be center + half depth. For variant,
             # center the two adjacent tubes as one 2*REA_x_y package.
-            if variant:
-                y_positions = (wall_center_y + REA_x_y, wall_center_y)
-                return list(zip(z_positions, y_positions))
-
-            y_pos = wall_center_y + REA_x_y / 2
-            return [(z_pos, y_pos) for z_pos in z_positions]
-
-        def create_horizontal_rea(z_positions, variant=False):
-            rea_length = self.width + REA_extra * 2 + tube_sheet_extension * 2
-            rea_x = -REA_extra - tube_sheet_extension
+            y_positions = (
+                (wall_center_y + REA_x_y, wall_center_y)
+                if variant
+                else (wall_center_y + REA_x_y / 2, wall_center_y + REA_x_y / 2)
+            )
             result = []
-            for z_pos, y_pos in horizontal_tube_positions(z_positions, variant):
+            for z_pos, y_pos in zip(z_positions, y_positions):
                 pos_rea = AllplanGeo.AxisPlacement3D(
                     AllplanGeo.Point3D(rea_x, y_pos, z_pos)
                 )
@@ -11463,305 +11928,6 @@ class PremarcScriptObject(BaseScriptObject):
                 )
             return result
 
-        rea_cylinder_radius = 6
-
-        def create_z_rea_cylinder(x_pos, y_pos, z_pos, length):
-            cylinder = AllplanGeo.Cylinder3D(
-                rea_cylinder_radius,
-                rea_cylinder_radius,
-                AllplanGeo.Point3D(0, 0, length),
-            )
-            error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
-                cylinder, 36
-            )
-            return AllplanGeo.Move(
-                polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
-            )
-
-        def create_x_rea_cylinder(x_pos, y_pos, z_pos, length):
-            cylinder = AllplanGeo.Cylinder3D(
-                rea_cylinder_radius,
-                rea_cylinder_radius,
-                AllplanGeo.Point3D(0, 0, length),
-            )
-            error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
-                cylinder, 36
-            )
-            rotation_axis = AllplanGeo.Axis3D(
-                AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 1, 0)
-            )
-            polyhedron_cylinder = AllplanGeo.Rotate(
-                polyhedron_cylinder, rotation_axis, AllplanGeo.Angle.FromDeg(90)
-            )
-            return AllplanGeo.Move(
-                polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
-            )
-
-        def create_rea_l_shape(
-            x_side, y_pos, z_joint, x_direction, z_direction, x_leg, z_leg
-        ):
-            x_outer = x_side + x_direction * x_leg
-            x_start = min(x_side, x_outer)
-            z_end = z_joint + z_direction * z_leg
-            z_start = min(z_joint, z_end)
-            l_elements = [
-                create_x_rea_cylinder(x_start, y_pos, z_joint, x_leg),
-                create_z_rea_cylinder(x_outer - x_direction * 6, y_pos, z_start - 6, z_leg),
-            ]
-            rotation_axis = AllplanGeo.Axis3D(
-                AllplanGeo.Point3D(x_side, y_pos, z_joint),
-                AllplanGeo.Vector3D(0, 1, 0),
-            )
-            rotation_angle = AllplanGeo.Angle.FromDeg(180)
-            return [
-                AllplanGeo.Rotate(element, rotation_axis, rotation_angle)
-                for element in l_elements
-            ]
-
-        def create_rea_c_shape(x_inner, y_pos, z_bar, offset_z_pos, x_direction, z_leg_direction):
-            """Para cambiar la geometría interna de la C"""
-            offset_z_pos_horizontal_cylinder = 6
-            offset_x_pos_vertical_cylinder = 6
-            offset_z_pos_vertical_cylinder = 12
-
-            c_leg_z = 150
-            c_span_x = 240
-            x_outer = x_inner + x_direction * c_span_x
-            x_start = min(x_inner, x_outer)
-            x_end = max(x_inner, x_outer)
-            z_leg_end = z_bar + z_leg_direction * c_leg_z
-            z_start = min(z_bar, z_leg_end)
-            return [
-                create_z_rea_cylinder(x_start + offset_x_pos_vertical_cylinder, y_pos, z_start + offset_z_pos_vertical_cylinder + offset_z_pos, c_leg_z),
-                create_z_rea_cylinder(x_end - offset_x_pos_vertical_cylinder, y_pos, z_start + offset_z_pos_vertical_cylinder + offset_z_pos, c_leg_z),
-                create_x_rea_cylinder(x_start, y_pos, z_bar + offset_z_pos_horizontal_cylinder, c_span_x),
-            ]
-
-        def create_horizontal_rea_cylinders(z_positions, variant=False):
-            tube_positions = horizontal_tube_positions(z_positions, variant)
-            if not tube_positions:
-                return []
-
-            rea_radius = 6
-            rea_length = 280
-            rea_offset_from_tube_end = 23
-            tube_x_start = -REA_extra - tube_sheet_extension
-            tube_x_end = self.width + REA_extra + tube_sheet_extension
-            x_positions = (
-                tube_x_start + rea_offset_from_tube_end,
-                tube_x_end - rea_offset_from_tube_end,
-            )
-
-            y_min = min(y_pos - REA_x_y for _, y_pos in tube_positions)
-            y_max = max(y_pos for _, y_pos in tube_positions)
-            z_min = min(z_pos - REA_x_y for z_pos, _ in tube_positions)
-            z_max = max(z_pos for z_pos, _ in tube_positions)
-            y_positions = (y_max + rea_radius, y_min - rea_radius)
-            z_center = (z_min + z_max) / 2
-            z_start = z_center - rea_length / 2
-
-            result = []
-            for x_pos in x_positions:
-                for y_pos in y_positions:
-                    result.append(
-                        create_z_rea_cylinder(x_pos, y_pos, z_start, rea_length)
-                    )
-            return result
-
-        def create_horizontal_special_c_reas(z_positions, variant=False):
-            """Para cambiar dónde aparece cada C"""
-            tube_positions = horizontal_tube_positions(z_positions, variant)
-            if not tube_positions:
-                return []
-
-            c_offset_from_tube_end = 75
-            horizontal_cylinder_diameter = 12
-            tube_x_start = -REA_extra - tube_sheet_extension
-            tube_x_end = self.width + REA_extra + tube_sheet_extension
-            left_x_inner = tube_x_start - c_offset_from_tube_end
-            right_x_inner = tube_x_end + c_offset_from_tube_end
-
-            upper_tube = max(tube_positions, key=lambda item: item[0])
-            lower_tube = min(tube_positions, key=lambda item: item[0])
-
-            upper_z_pos, upper_y_pos = upper_tube
-            lower_z_pos, lower_y_pos = lower_tube
-            upper_y_center = upper_y_pos - REA_x_y / 2
-            lower_y_center = lower_y_pos - REA_x_y / 2
-            z_min = min(z_pos - REA_x_y for z_pos, _ in tube_positions)
-            z_max = max(z_pos for z_pos, _ in tube_positions)
-            z_center = (z_min + z_max) / 2
-            upper_u_bar_z = z_center + REA_x_y
-            lower_n_bar_z = z_center - REA_x_y - horizontal_cylinder_diameter
-
-            result = []
-            result.extend(
-                create_rea_c_shape(left_x_inner, upper_y_center, upper_u_bar_z, -12, 1, 1)
-            )
-            result.extend(
-                create_rea_c_shape(left_x_inner, lower_y_center, lower_n_bar_z, 0, 1, -1)
-            )
-            result.extend(
-                create_rea_c_shape(right_x_inner, upper_y_center, upper_u_bar_z, -12, -1, 1)
-            )
-            result.extend(
-                create_rea_c_shape(right_x_inner, lower_y_center, lower_n_bar_z, 0, -1, -1)
-            )
-            return result
-
-        def create_horizontal_standard_l_reas(z_positions, open_direction):
-            tube_positions = horizontal_tube_positions(z_positions)
-            if len(tube_positions) < 2:
-                return []
-
-            special_type = selected_special_rea_type()
-            if special_type not in {
-                "REAs en L STD",
-                "REAs en L STD CORTA",
-                "REAs en L (Estandar)",
-            }:
-                return []
-
-            default_open_tube_x_leg, default_inner_tube_x_leg = (
-                self._default_rea_l_x_lengths_for_special_type(special_type)
-            )
-
-            def rea_l_x_length(param_name, default_value):
-                length_param = getattr(
-                    getattr(self.build_ele, param_name, None),
-                    "value",
-                    default_value,
-                )
-                try:
-                    length = float(length_param)
-                except (TypeError, ValueError):
-                    return default_value
-
-                if length <= 0:
-                    return default_value
-                return length
-
-            open_tube_x_leg = rea_l_x_length(
-                "LongitudREALXLadoAbierto",
-                default_open_tube_x_leg,
-            )
-            inner_tube_x_leg = rea_l_x_length(
-                "LongitudREALXLadoInterior",
-                default_inner_tube_x_leg,
-            )
-            z_leg = 300
-            l_offset_from_tube_end = -REA_extra
-            tube_x_start = -REA_extra - tube_sheet_extension
-            tube_x_end = self.width + REA_extra + tube_sheet_extension
-            x_sides = (
-                (tube_x_start - l_offset_from_tube_end, 1),
-                (tube_x_end + l_offset_from_tube_end, -1),
-            )
-
-            if open_direction == "TOP":
-                open_tube = max(tube_positions, key=lambda item: item[0])
-                inner_tube = min(tube_positions, key=lambda item: item[0])
-                open_tube_z_direction = 1
-                inner_tube_z_direction = 1
-            else:
-                open_tube = min(tube_positions, key=lambda item: item[0])
-                inner_tube = max(tube_positions, key=lambda item: item[0])
-                open_tube_z_direction = -1
-                inner_tube_z_direction = -1
-
-            upper_tube_z = max(z_pos for z_pos, _ in tube_positions)
-
-            def tube_l_z_joint(z_pos):
-                if z_pos == upper_tube_z:
-                    return z_pos + REA_x_y - 34
-                return z_pos - REA_x_y - 6
-
-            result = []
-            for z_pos, y_pos, x_leg, z_direction in (
-                (*open_tube, open_tube_x_leg, open_tube_z_direction),
-                (*inner_tube, inner_tube_x_leg, inner_tube_z_direction),
-            ):
-                y_center = y_pos - REA_x_y / 2
-                z_joint = tube_l_z_joint(z_pos)
-                for x_side, x_direction in x_sides:
-                    result.extend(
-                        create_rea_l_shape(
-                            x_side,
-                            y_center,
-                            z_joint,
-                            x_direction,
-                            z_direction,
-                            x_leg,
-                            z_leg,
-                        )
-                    )
-            return result
-
-        def create_horizontal_special_c_reas_for_groups(z_position_groups):
-            result = []
-            for z_positions in z_position_groups:
-                result.extend(create_horizontal_special_c_reas(z_positions))
-            return result
-
-        def flatten_z_position_groups(z_position_groups):
-            return [
-                z_pos
-                for z_positions in z_position_groups
-                for z_pos in z_positions
-            ]
-
-        def rea_c_open_group_distances():
-            gap_source = getattr(
-                self.build_ele, "SeparacionLibreEntreREAC", None
-            ) or getattr(self.build_ele, "DistanciaEntreGruposREAC", None)
-            gap_param = getattr(
-                gap_source,
-                "value",
-                REA_C_OPEN_DEFAULT_FREE_GAP_MM,
-            )
-            try:
-                free_gap = float(gap_param)
-            except (TypeError, ValueError):
-                free_gap = REA_C_OPEN_DEFAULT_FREE_GAP_MM
-
-            if free_gap < 0:
-                free_gap = REA_C_OPEN_DEFAULT_FREE_GAP_MM
-
-            first_distance = float(REA_C_OPEN_FIRST_GROUP_DISTANCE_MM)
-            group_spacing = REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM + free_gap
-            return (first_distance, first_distance + group_spacing)
-
-        def rea_c_open_top_z_position_groups():
-            return [
-                (-distance, -(distance + REA_x_y))
-                for distance in rea_c_open_group_distances()
-            ]
-
-        def rea_c_open_bottom_z_position_groups():
-            return [
-                (
-                    -self.heigh + distance + REA_x_y,
-                    -self.heigh + distance + REA_x_y * 2,
-                )
-                for distance in rea_c_open_group_distances()
-            ]
-
-        def selected_special_rea_type():
-            return str(
-                getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
-                or ""
-            )
-
-        use_special_c_rea = (
-            not include_rea_cylinders
-            and selected_special_rea_type() == "REAs en C"
-        )
-        use_standard_l_rea = (
-            not include_rea_cylinders
-            and selected_special_rea_type()
-            in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
-        )
-
         if direction_open == "RIGHT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
@@ -11769,10 +11935,9 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cuboids:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
                 cuboids_moved.append(elem_moved)
-            if include_rea_cylinders:
-                for elem in cylinders:
-                    elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
-                    cylinders_moved.append(elem_moved)
+            for elem in cylinders:
+                elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
+                cylinders_moved.append(elem_moved)
         elif self.get_direction_open_premarc() == "LEFT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_left)
@@ -11780,68 +11945,34 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cuboids:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_left)
                 cuboids_moved.append(elem_moved)
-            if include_rea_cylinders:
-                for elem in cylinders:
-                    elem_moved = AllplanGeo.Move(elem, translation_vector_left)
-                    cylinders_moved.append(elem_moved)
+            for elem in cylinders:
+                elem_moved = AllplanGeo.Move(elem, translation_vector_left)
+                cylinders_moved.append(elem_moved)
         elif direction_open == "TOP":
-            z_positions = (-offset_rea, -(offset_rea + REA_x_y))
-            if use_special_c_rea:
-                z_position_groups = rea_c_open_top_z_position_groups()
-                z_positions = flatten_z_position_groups(z_position_groups)
-            cuboids_moved = create_horizontal_rea(z_positions)
-            if include_rea_cylinders:
-                cylinders_moved = create_horizontal_rea_cylinders(z_positions)
-            elif use_special_c_rea:
-                cylinders_moved = create_horizontal_special_c_reas_for_groups(
-                    z_position_groups
-                )
-            elif use_standard_l_rea:
-                cylinders_moved = create_horizontal_standard_l_reas(z_positions, "TOP")
-            else:
-                cylinders_moved = []
+            cuboids_moved = create_horizontal_rea(
+                (-offset_rea, -(offset_rea + REA_x_y))
+            )
+            cylinders_moved = []
         elif direction_open == "TOP_VARIANT":
-            z_positions = (-offset_rea, -offset_rea)
-            cuboids_moved = create_horizontal_rea(z_positions, True)
-            if include_rea_cylinders:
-                cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
-            elif use_special_c_rea:
-                cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
-            else:
-                cylinders_moved = []
+            cuboids_moved = create_horizontal_rea((-offset_rea, -offset_rea), True)
+            cylinders_moved = []
         elif direction_open == "BOTTOM":
-            z_positions = (
-                -self.heigh + offset_rea + REA_x_y,
-                -self.heigh + offset_rea + REA_x_y * 2,
+            cuboids_moved = create_horizontal_rea(
+                (
+                    -self.heigh + offset_rea + REA_x_y,
+                    -self.heigh + offset_rea + REA_x_y * 2,
+                )
             )
-            if use_special_c_rea:
-                z_position_groups = rea_c_open_bottom_z_position_groups()
-                z_positions = flatten_z_position_groups(z_position_groups)
-            cuboids_moved = create_horizontal_rea(z_positions)
-            if include_rea_cylinders:
-                cylinders_moved = create_horizontal_rea_cylinders(z_positions)
-            elif use_special_c_rea:
-                cylinders_moved = create_horizontal_special_c_reas_for_groups(
-                    z_position_groups
-                )
-            elif use_standard_l_rea:
-                cylinders_moved = create_horizontal_standard_l_reas(
-                    z_positions, "BOTTOM"
-                )
-            else:
-                cylinders_moved = []
+            cylinders_moved = []
         elif direction_open == "BOTTOM_VARIANT":
-            z_positions = (
-                -self.heigh + offset_rea + REA_x_y,
-                -self.heigh + offset_rea + REA_x_y,
+            cuboids_moved = create_horizontal_rea(
+                (
+                    -self.heigh + offset_rea + REA_x_y,
+                    -self.heigh + offset_rea + REA_x_y,
+                ),
+                True,
             )
-            cuboids_moved = create_horizontal_rea(z_positions, True)
-            if include_rea_cylinders:
-                cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
-            elif use_special_c_rea:
-                cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
-            else:
-                cylinders_moved = []
+            cylinders_moved = []
         else:
             cuboids_moved = []
             cylinders_moved = []
@@ -11937,7 +12068,6 @@ class PremarcScriptObject(BaseScriptObject):
     ##### End Squares #######
 
     def create_premarc_optionals_elements(self):
-
         other_elements = []
         # Squares - Escuadras
 
@@ -12037,14 +12167,14 @@ class PremarcScriptObject(BaseScriptObject):
         match self.build_ele.ComboBoxAbiertoCerrado.value:
             case (
                 "OBERT PER DALT"
-                | "OBERT PER DALT VARIANT"
                 | "OBERT PER DALT + REA"
+                | "OBERT PER DALT + REA VARIANT"
             ):
                 open_square_positions.update(("left_top", "right_top"))
             case (
                 "OBERT PER BAIX"
-                | "OBERT PER BAIX VARIANT"
                 | "OBERT PER BAIX + REA"
+                | "OBERT PER BAIX + REA VARIANT"
             ):
                 open_square_positions.update(("left_bottom", "right_bottom"))
             case (
@@ -12103,14 +12233,20 @@ class PremarcScriptObject(BaseScriptObject):
         # - Si fondo premarco == grosor pared, en el centro
         # - Si fondo premarco > grosor pared, en el final de la pared
 
-        if self.thickness_premarc == self.build_ele.thickness_wall.value:
-            vector_move = AllplanGeo.Vector3D(0, -LENGTH_CENTER_FOR_WALL, 0)
-        elif self.thickness_premarc > self.build_ele.thickness_wall.value:
-            vector_move = AllplanGeo.Vector3D(
-                0, -(self.thickness_premarc - self.build_ele.thickness_wall.value), 0
-            )
-        else:
-            vector_move = AllplanGeo.Vector3D(0, 0, 0)
+        # Centrar las escuadras al grosor del HORMIGON (muro real detectado), no
+        # al fondo del premarco. El cuadrado (SQUARE_THICKNESS) se construye con
+        # su cara frontal en y=0 y se extruye hacia -Y; el muro tambien arranca
+        # en y=0 (front-aligned). Para centrarlo en el espesor del muro lo
+        # movemos -(grosor_muro - SQUARE_THICKNESS)/2. Reemplaza la regla vieja
+        # "al final de la pared" que dependia del fondo del premarco.
+        wall_concrete = (
+            self.detected_wall_thickness
+            if self.detected_wall_thickness
+            else self.build_ele.thickness_wall.value
+        )
+        vector_move = AllplanGeo.Vector3D(
+            0, -(wall_concrete - SQUARE_THICKNESS) / 2.0, 0
+        )
 
         squares_moved = []
         for square in original_squares:
@@ -13011,7 +13147,7 @@ class PremarcScriptObject(BaseScriptObject):
             return "con_bandeja_U"
         has_encaje = (
             self.build_ele.EnableManualEncaje.value
-            or self.build_ele.ComboBoxEncajes.value not in ("Encajes", "")
+            or self.build_ele.ComboBoxEncajes.value not in ("NO", "PLEC INFERIOR", "Encajes")
         )
         if has_encaje:
             return "sobre_encaje"
@@ -13178,10 +13314,12 @@ class PremarcScriptObject(BaseScriptObject):
         U_DEPTH = float(U_OVERHANG_Y_MM)        # 24
         U_RISE_HEIGHT = float(U_LEG_HEIGHT_MM)  # 30 — rise matches U height
 
-        # 1. Slab extending from the U outer face (Y_pre = -U_DEPTH) all the
-        # way to the interior wall face (Y_pre = thickness).
-        slab_y_start = -U_DEPTH
-        slab_y_span = U_DEPTH + self.thickness
+        # 1. Slab extendido desde JUSTO AFUERA de la pata exterior del U
+        # (Y_pre = -U_DEPTH - grosor) hasta la cara interior del muro
+        # (Y_pre = thickness). Pasa por debajo del U gracias al offset Z
+        # de _u_accessory_bottom_plane_z que usa +grosor_imp.
+        slab_y_start = -U_DEPTH - grosor
+        slab_y_span = U_DEPTH + grosor + self.thickness
         pos_top = AllplanGeo.AxisPlacement3D(
             AllplanGeo.Point3D(0, slab_y_start, 0)
         )
@@ -13189,10 +13327,12 @@ class PremarcScriptObject(BaseScriptObject):
             pos_top, self.width, slab_y_span, grosor
         )
 
-        # 2. Vertical RISE on the OUTER face of the U (Y_pre = -U_DEPTH).
-        # Starts at the top of the slab and rises upward.
+        # 2. Vertical RISE en la CARA EXTERIOR de la pata exterior del U
+        # (Y_pre = -U_DEPTH - grosor). El rise queda adyacente al EXTERIOR
+        # del U (NO encima del leg, lo cual causaba solapamiento). Sube
+        # U_LEG_HEIGHT para envolver toda la altura del U.
         pos_rise = AllplanGeo.AxisPlacement3D(
-            AllplanGeo.Point3D(0, -U_DEPTH, grosor)
+            AllplanGeo.Point3D(0, -U_DEPTH - grosor, grosor)
         )
         imperm_rise = AllplanGeo.Polyhedron3D.CreateCuboid(
             pos_rise, self.width, grosor, U_RISE_HEIGHT
@@ -13292,7 +13432,8 @@ class PremarcScriptObject(BaseScriptObject):
             else self.build_ele.thickness.value
         )
         self.xps_type = self.build_ele.xps_type.value
-        self.rotation = self.build_ele.rotation.value
+        # Paleta es relativa al muro: rotation absoluta = wall_angle + paleta.
+        self.rotation = self.build_ele.rotation.value + getattr(self, "wall_angle", 0.0)
         self.xps_thickness = self.build_ele.XPSthickness.value
         self.xps_thickness_ind = self.build_ele.XPSthicknessInd.value
 
