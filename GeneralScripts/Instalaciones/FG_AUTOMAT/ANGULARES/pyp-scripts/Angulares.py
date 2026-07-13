@@ -5,13 +5,10 @@ import hashlib
 import json
 import math
 import random
+import subprocess
 from typing import Any, Dict, List
 
-try:
-    import numpy as np
-except ImportError:
-    np = None
-
+import NemAll_Python_AllplanSettings as AllplanSettings
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
@@ -41,6 +38,63 @@ from HandleParameterData import HandleParameterData
 from HandleParameterType import HandleParameterType
 from HandleDirection import HandleDirection
 from BuildingElementAttributeList import BuildingElementAttributeList
+
+
+def install_packages(package):
+    prg_path = AllplanSettings.AllplanPaths.GetPrgPath() + "\\"
+    target_dir = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
+    print("target_dir ETC: ")
+    print(target_dir)
+    subprocess.check_call(
+        [
+            prg_path + "Python\\Python.exe",
+            "-m",
+            "pip",
+            "install",
+            "--target",
+            target_dir,
+            "--upgrade",
+            package,
+            "--no-cache-dir"
+        ]
+    )
+
+    target_dir = (
+        f"{AllplanSettings.AllplanPaths.GetUsrPath()}Local\\PythonParts-site-packages"
+    )
+    print("target_dir USR: ")
+    print(target_dir)
+    subprocess.check_call(
+        [
+            prg_path + "Python\\Python.exe",
+            "-m",
+            "pip",
+            "install",
+            "--target",
+            target_dir,
+            "--upgrade",
+            package,
+            "--no-cache-dir"
+        ]
+    )
+
+
+import sys as _sys
+
+_site_etc = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
+_site_usr = f"{AllplanSettings.AllplanPaths.GetUsrPath()}Local\\PythonParts-site-packages"
+for _p in (_site_etc, _site_usr):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
+
+try:
+    import numpy as np
+except ImportError:
+    install_packages("numpy")
+    print("instalando paquetes: numpy")
+    import numpy as np
+
 
 HOLE_DIAMETER = 18.0
 HOLE_RADIUS = HOLE_DIAMETER / 2.0
@@ -748,6 +802,23 @@ def get_article_code_from_angular_key(angular_key: str) -> str:
         "ANG250_L150": "FG01_001_006",
         "ANG_JUNTA_D": "FG01_002_001",
         "ANG_REMUNTA": "FG01_002_002",
+        "TENSOR": "FG01_003_001"
+    }
+
+    return article_mapping.get(angular_key, "")
+
+def get_article_den_from_angular_key(angular_key: str) -> str:
+    """Obtiene el codigo de articulo para DEN y pmp_CARTICULO."""
+    article_mapping = {
+        "ANG200_L460": "FG01_001_001",
+        "ANG200_L310": "FG01_001_002",
+        "ANG200_L150": "FG01_001_003",
+        "ANG250_L460": "FG01_001_004",
+        "ANG250_L310": "FG01_001_005",
+        "ANG250_L150": "FG01_001_006",
+        "ANG_JUNTA_D": "FG01_002_001",
+        "ANG_REMUNTA": "FG01_002_002",
+        "TENSOR": "BASETEN"
     }
 
     return article_mapping.get(angular_key, "")
@@ -4153,19 +4224,21 @@ class AngularLineScript(BaseScriptObject):
                     state.get("rot_y", state.get("RotacionEjeY", 0.0)) or 0.0
                 )
 
-            if hasattr(self.build_ele, "UsarValorZManual"):
-                self.build_ele.UsarValorZManual.value = bool(
-                    state.get("usar_z_manual", state.get("UsarValorZManual", False))
-                )
+            # if hasattr(self.build_ele, "UsarValorZManual"):
+            #     self.build_ele.UsarValorZManual.value = bool(
+            #         state.get("usar_z_manual", state.get("UsarValorZManual", False))
+            #     )
+            self.build_ele.UsarValorZManual.value = False
 
-            if hasattr(self.build_ele, "ValorZIndividual"):
-                valor_z = (
-                    state.get("valor_z_individual")
-                    if "valor_z_individual" in state
-                    else state.get("ValorZIndividual")
-                )
-                if valor_z is not None:
-                    self.build_ele.ValorZIndividual.value = float(valor_z)
+            # if hasattr(self.build_ele, "ValorZIndividual"):
+            #     valor_z = (
+            #         state.get("valor_z_individual")
+            #         if "valor_z_individual" in state
+            #         else state.get("ValorZIndividual")
+            #     )
+            #     if valor_z is not None:
+            #         self.build_ele.ValorZIndividual.value = float(valor_z)
+            self.build_ele.ValorZIndividual.value = 0.0
 
             if hasattr(self.build_ele, "SiLlevaNeopreno"):
                 lleva_val = (
@@ -9989,6 +10062,7 @@ class AngularLineScript(BaseScriptObject):
         )
         nom_value = get_nom_from_angular_key(angular_key) if angular_key else ""
         article_code = get_article_code_from_angular_key(angular_key) if angular_key else ""
+        article_den = get_article_den_from_angular_key(angular_key) if angular_key else ""
 
         lleva_neopreno = (
             bool(getattr(self.build_ele.SiLlevaNeopreno, "value", False))
@@ -10003,7 +10077,6 @@ class AngularLineScript(BaseScriptObject):
 
         for geom in geometries:
             elements.append_geometry_3d(geom, props)
-            # elem = AllplanBasisElements.ModelElement3D(props, geom)
 
             attr_list = BuildingElementAttributeList()
 
@@ -10022,8 +10095,8 @@ class AngularLineScript(BaseScriptObject):
             if attr_nom_id > 0 and nom_value:
                 attr_list.add_attribute(attr_nom_id, nom_value)
 
-            if attr_den_id > 0 and article_code:
-                attr_list.add_attribute(attr_den_id, article_code)
+            if attr_den_id > 0 and article_den:
+                attr_list.add_attribute(attr_den_id, article_den)
 
             if attr_pmp_carticulo_id > 0 and article_code:
                 attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
@@ -10036,13 +10109,10 @@ class AngularLineScript(BaseScriptObject):
 
             if attr_list.get_attribute_list():
                 elements.set_element_attributes(len(elements) - 1, attr_list.get_attribute_list())
-                # elem.SetAttributes(attr_list.get_attribute_list())
 
-            # elements.append(elem)
 
-        for geom in edges:
-            elements.append_geometry_3d(geom, props)
-            # elem = AllplanBasisElements.ModelElement3D(props, geom)
+        for line in edges:
+            elements.append_geometry_3d(line, props)
 
             attr_list = BuildingElementAttributeList()
 
@@ -10061,8 +10131,8 @@ class AngularLineScript(BaseScriptObject):
             if attr_nom_id > 0 and nom_value:
                 attr_list.add_attribute(attr_nom_id, nom_value)
 
-            if attr_den_id > 0 and article_code:
-                attr_list.add_attribute(attr_den_id, article_code)
+            if attr_den_id > 0 and article_den:
+                attr_list.add_attribute(attr_den_id, article_den)
 
             if attr_pmp_carticulo_id > 0 and article_code:
                 attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
@@ -10075,9 +10145,7 @@ class AngularLineScript(BaseScriptObject):
 
             if attr_list.get_attribute_list():
                 elements.set_element_attributes(len(elements) - 1, attr_list.get_attribute_list())
-                # elem.SetAttributes(attr_list.get_attribute_list())
 
-            # elements.append(elem)
 
         return elements
 
@@ -10168,8 +10236,12 @@ class AngularLineScript(BaseScriptObject):
                 article_code = (
                     get_article_code_from_angular_key(angular_key) if angular_key else ""
                 )
-                if attr_den_id > 0 and article_code:
-                    attr_list.add_attribute(attr_den_id, article_code)
+                article_den = (
+                    get_article_den_from_angular_key(angular_key) if angular_key else ""
+                )
+
+                if attr_den_id > 0 and article_den:
+                    attr_list.add_attribute(attr_den_id, article_den)
 
                 if attr_pmp_carticulo_id > 0 and article_code:
                     attr_list.add_attribute(attr_pmp_carticulo_id, article_code)

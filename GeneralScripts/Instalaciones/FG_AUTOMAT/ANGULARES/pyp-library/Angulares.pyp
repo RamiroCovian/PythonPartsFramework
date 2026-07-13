@@ -290,7 +290,7 @@
       <ValueType>CheckBox</ValueType>
       <Visible>True</Visible>
       <TextId>1047</TextId>
-      <Persistent>Model</Persistent>
+      <Persistent>No</Persistent>
     </Parameter>
 
     <Parameter>
@@ -301,7 +301,7 @@
       <Enable>True</Enable>
       <Visible>True</Visible>
       <TextId>1044</TextId>
-      <Persistent>Model</Persistent>
+      <Persistent>No</Persistent>
     </Parameter>
 
     <Parameter>
