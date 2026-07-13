@@ -65,6 +65,7 @@
             <ValueType>CheckBox</ValueType>
         </Parameter>
 
+        <!-- TODO: Eliminar este boton cuando el flujo continuo de colocacion de premarcos quede validado.
         <Parameter>
             <Name>NextPremarcPlacementRow</Name>
             <Text>Colocación</Text>
@@ -78,6 +79,7 @@
                 <ValueType>Button</ValueType>
             </Parameter>
         </Parameter>
+        -->
 
         <Parameter>
             <Name>RowSeleccionPremarc</Name>

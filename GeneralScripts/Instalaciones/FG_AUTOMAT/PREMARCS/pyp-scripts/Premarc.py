@@ -2428,6 +2428,8 @@ class PremarcScriptObject(BaseScriptObject):
                 self.interactor_state = STOPPED
 
         elif self.interactor_state == PLACING_POINT:
+            coord_input = getattr(self.script_object_interactor, "coord_input", None)
+            restart_placement_input = False
             if self.point_result.input_point != PointInteractorResult():
                 self.placement_pnt = self.point_result.input_point
                 self._sync_placement_point_parameter()
@@ -2455,7 +2457,7 @@ class PremarcScriptObject(BaseScriptObject):
                         "[Premarc] Punto confirmado en creacion -> "
                         "materializando premarco inmediatamente"
                     )
-                    self._create_current_premarc_ppg_without_opening(
+                    restart_placement_input = self._create_current_premarc_ppg_without_opening(
                         register_session_item=True,
                         reset_active_after_create=True,
                     )
@@ -2475,8 +2477,17 @@ class PremarcScriptObject(BaseScriptObject):
                     ):
                         self._reset_reposition_state()
 
-            self.script_object_interactor = None
-            self.interactor_state = STOPPED
+            if restart_placement_input and self.selected_wall:
+                self._start_placement_point_input()
+                if coord_input:
+                    self.script_object_interactor.start_input(coord_input)
+                print(
+                    "[Premarc][SESSION] Colocacion continua activa; "
+                    "indique el siguiente premarco"
+                )
+            else:
+                self.script_object_interactor = None
+                self.interactor_state = STOPPED
         elif self.interactor_state == SELECTING_EXISTING_PREMARC:
             self._clear_session_selection_preview_context()
             self.script_object_interactor = None
