@@ -244,7 +244,7 @@
         <Value>0</Value>
         <ValueType>Button</ValueType>
         <Enable>True</Enable>
-        <Visible>PermitirCambiarMuro == True</Visible>
+        <Visible>PermitirCambiarMuro == True or AngularSeleccionado == True</Visible>
         <TextId>1050</TextId>
         <Persistent>No</Persistent>
       </Parameter>

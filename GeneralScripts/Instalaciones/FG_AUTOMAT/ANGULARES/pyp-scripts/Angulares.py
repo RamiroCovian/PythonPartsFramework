@@ -3239,6 +3239,7 @@ SELECTING_FACE = 4
 SELECTING_POSITION = 5
 SELECTING_EXISTING_ANGULAR = 6
 SELECTING_ACTIVE_WALL = 7
+SELECTING_EDIT_WALL_ID = 8
 
 
 def check_allplan_version(_build_ele: BuildingElement, _version: float) -> bool:
@@ -3594,6 +3595,7 @@ class AngularLineScript(BaseScriptObject):
         self._pending_resume_position_after_deselect = False
         self._resume_after_deselect_inline = False
         self._native_delete_completed = False
+        self._wall_id_edit_override = None
 
         if hasattr(self.build_ele, "PermitirCambiarMuro"):
             self.build_ele.PermitirCambiarMuro.value = not getattr(
@@ -5868,6 +5870,19 @@ class AngularLineScript(BaseScriptObject):
                 print("[INPUT][INDIVIDUAL] Cambio de muro cancelado")
             self.state = SELECTING_POSITION
             self._resume_individual_position_input(coord_input)
+
+        elif self.state == SELECTING_EDIT_WALL_ID:
+            self.script_object_interactor = None
+            if self.wall_select_result.is_selected:
+                if self._apply_selected_wall_id_to_current_edit():
+                    print("[EDIT][WALL_ID] WALL_ID actualizado desde muro seleccionado")
+                else:
+                    print("[EDIT][WALL_ID] No se pudo actualizar WALL_ID")
+            else:
+                print("[EDIT][WALL_ID] Cambio de WALL_ID cancelado")
+            self._ensure_line_result_from_build_ele_for_modify()
+            self.state = STOPPED
+            self.preview_active = True
 
     def _process_wall_selection_free(self):
         """Procesa la selección del muro en modo libre (solo referencia)"""
@@ -8672,11 +8687,56 @@ class AngularLineScript(BaseScriptObject):
         print("[DELETE][ANGULAR] PPG reabierto eliminado; se cierra la edicion")
         return True
 
+    def _start_edit_wall_id_selection(self) -> bool:
+        """Boton Cambiar muro en EDIT: solo actualiza PMP_WALL_ID."""
+        if not getattr(self, "is_modification_mode", False):
+            return False
+
+        self.wall_select_result = WallSelectResult()
+        self.state = SELECTING_EDIT_WALL_ID
+        self.preview_active = False
+        self.script_object_interactor = WallSelectInteractor(
+            self.wall_select_result,
+            "Seleccione el nuevo muro para actualizar WALL_ID",
+        )
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+        print("[EDIT][WALL_ID] Modo seleccion de muro para WALL_ID activo")
+        return True
+
+    def _apply_selected_wall_id_to_current_edit(self) -> bool:
+        """Lee el IFC ID del muro seleccionado y lo guarda sin tocar geometria."""
+        selected_element = getattr(self.wall_select_result, "element", None)
+        if selected_element is None:
+            return False
+
+        wall_id = get_wall_ifc_id(selected_element)
+        if not wall_id:
+            print("[EDIT][WALL_ID] El muro seleccionado no tiene IFC ID detectable")
+            return False
+
+        clean_wall_id = str(wall_id).strip().replace("'", "")
+        if not clean_wall_id:
+            return False
+
+        if hasattr(self.build_ele, "pmp_pare") and hasattr(
+            self.build_ele.pmp_pare, "value"
+        ):
+            self.build_ele.pmp_pare.value = clean_wall_id
+            self._wall_id_edit_override = clean_wall_id
+        else:
+            print("[EDIT][WALL_ID] Falta parametro pmp_pare en build_ele")
+            return False
+
+        # Intencionalmente no actualiza MuroGUID, cara, normales ni puntos.
+        # El requerimiento es persistir solo el atributo PMP_WALL_ID.
+        return True
+
     def _start_active_wall_selection(self) -> bool:
         """Boton Cambiar muro: selecciona el muro para los proximos angulares."""
         if getattr(self, "is_modification_mode", False):
-            print("[INPUT][INDIVIDUAL] Cambio de muro no disponible en EDIT")
-            return False
+            return self._start_edit_wall_id_selection()
         if not self._is_individual_distribution():
             print("[INPUT][INDIVIDUAL] Cambio de muro solo disponible en Individual")
             return False
@@ -10966,6 +11026,10 @@ class AngularLineScript(BaseScriptObject):
 
         # Alinear distribución con el JSON persistido si la paleta quedó incoherente (no pisa cambio explícito de usuario).
         self._apply_saved_distribution_to_build_ele_in_modify(parsed_saved_state_edit)
+        wall_id_override = getattr(self, "_wall_id_edit_override", None)
+        if wall_id_override and hasattr(self.build_ele, "pmp_pare"):
+            self.build_ele.pmp_pare.value = wall_id_override
+            print(f"[EDIT][WALL_ID] Override aplicado tras SavedState: {wall_id_override}")
 
         # Persistencia EDIT: muro, cara, ejes y Z de la línea (param_list/SavedState antes minimal → build_ele incompleto).
         self._merge_wall_face_params_from_saved_dict(parsed_saved_state_edit)
