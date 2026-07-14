@@ -58,6 +58,9 @@ import requests
 ZERO_MODEL_GUID = "00000000-0000-0000-0000-000000000000"
 SPACE_VOLUME_TRANSPARENCY = 100
 SPACE_VOLUME_SURFACE_NAME = "premarc_space_volume_transparent_100.surf"
+DISABLED_PREMARC_VOLUME_COLOR = 6
+DISABLED_PREMARC_VOLUME_TRANSPARENCY = 75
+DISABLED_PREMARC_VOLUME_SURFACE_NAME = "premarc_disabled_volume_red_rgba_75.surf"
 
 
 def resolve_attribute_id(document, *candidate_names: str) -> int:
@@ -7766,6 +7769,15 @@ class PremarcScriptObject(BaseScriptObject):
         props_frame = AllplanBaseElements.CommonProperties()
         props_frame.Color = int(self.color_premarc)
         props_frame.Layer = layer_frame_id
+        if self._premarc_disabled():
+            props_disabled_volume = self._disabled_premarc_volume_common_props(
+                layer_frame_id
+            )
+            self._append_disabled_premarc_volume(
+                model_ele_list, props_disabled_volume
+            )
+            return model_ele_list
+
         props_frame_base_no_slope = AllplanBaseElements.CommonProperties()
         props_frame_base_no_slope.Color = 48
         props_frame_base_no_slope.Layer = layer_frame_id
@@ -7826,6 +7838,85 @@ class PremarcScriptObject(BaseScriptObject):
             print(f"[Premarc][SPACE_VOLUME] transparent surface unavailable: {exc}")
             return None
 
+    def _disabled_premarc_volume_texture_definition(self):
+        texture_def = getattr(self, "_disabled_premarc_volume_texture_def", None)
+        if texture_def is not None:
+            return texture_def
+
+        try:
+            surface_def = AllplanBasisElements.SurfaceDefinition.Create()
+            surface_def.DiffuseColor = AllplanBasisElements.ARGB(255, 0, 0, 255)
+            surface_def.Transparency = DISABLED_PREMARC_VOLUME_TRANSPARENCY
+
+            surface_path = AllplanBaseElements.DocumentResourceService.CreateSurface(
+                self.document,
+                AllplanSettings.AllplanPaths.GetCurPrjDesignPath(),
+                DISABLED_PREMARC_VOLUME_SURFACE_NAME,
+                surface_def,
+                False,
+            )
+            if not surface_path:
+                return None
+
+            texture_def = AllplanBasisElements.TextureDefinition(surface_path)
+            self._disabled_premarc_volume_texture_def = texture_def
+            return texture_def
+        except Exception as exc:
+            print(
+                "[Premarc][DISABLED_VOLUME] red translucent surface unavailable: "
+                f"{exc}"
+            )
+            return None
+
+    def _disabled_premarc_volume_common_props(
+        self, layer_id
+    ) -> AllplanBaseElements.CommonProperties:
+        props = AllplanBaseElements.CommonProperties()
+        props.Layer = layer_id
+        props.Color = DISABLED_PREMARC_VOLUME_COLOR
+        props.ColorByLayer = False
+        props.ForceColor = True
+        return props
+
+    def create_disabled_premarc_volume(self):
+        wall_thickness = float(
+            getattr(getattr(self.build_ele, "thickness_wall", None), "value", 0) or 0
+        )
+        if wall_thickness <= 0:
+            wall_thickness = float(getattr(self, "detected_wall_thickness", 0) or 0)
+
+        premarc_depth = float(getattr(self, "thickness", 0) or 0)
+        volume_depth = max(wall_thickness, premarc_depth)
+
+        if volume_depth <= 0 or float(self.width) <= 0 or float(self.heigh) <= 0:
+            return None
+
+        position = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(0, -volume_depth, -float(self.heigh))
+        )
+        return AllplanGeo.Polyhedron3D.CreateCuboid(
+            position,
+            float(self.width),
+            volume_depth,
+            float(self.heigh),
+        )
+
+    def _append_disabled_premarc_volume(
+        self,
+        model_ele_list: ModelEleList,
+        props: AllplanBaseElements.CommonProperties,
+    ) -> None:
+        polyhedron = self.create_disabled_premarc_volume()
+        if polyhedron is None:
+            return
+
+        texture_def = self._disabled_premarc_volume_texture_definition()
+        if texture_def is None:
+            model_ele_list.append_geometry_3d(polyhedron, props)
+            return
+
+        model_ele_list.append_geometry_3d_with_texture(polyhedron, texture_def, props)
+
     def _append_space_volume(
         self,
         model_ele_list: ModelEleList,
@@ -7864,6 +7955,13 @@ class PremarcScriptObject(BaseScriptObject):
         props_frame.Color = int(self.color_premarc)
         print(f"Color frame: {props_frame.Color}")
         props_frame.Layer = layer_frame_id
+        if self._premarc_disabled():
+            props_disabled_volume = self._disabled_premarc_volume_common_props(
+                layer_frame_id
+            )
+            self._append_disabled_premarc_volume(
+                model_ele_list, props_disabled_volume
+            )
 
         props_frame_base_no_slope = AllplanBaseElements.CommonProperties()
         props_frame_base_no_slope.Color = 48
