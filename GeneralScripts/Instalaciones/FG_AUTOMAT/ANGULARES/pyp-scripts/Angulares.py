@@ -5,13 +5,10 @@ import hashlib
 import json
 import math
 import random
+import subprocess
 from typing import Any, Dict, List
 
-try:
-    import numpy as np
-except ImportError:
-    np = None
-
+import NemAll_Python_AllplanSettings as AllplanSettings
 import NemAll_Python_Geometry as AllplanGeo
 import NemAll_Python_BaseElements as AllplanBaseElements
 import NemAll_Python_BasisElements as AllplanBasisElements
@@ -42,6 +39,63 @@ from HandleParameterType import HandleParameterType
 from HandleDirection import HandleDirection
 from BuildingElementAttributeList import BuildingElementAttributeList
 
+
+def install_packages(package):
+    prg_path = AllplanSettings.AllplanPaths.GetPrgPath() + "\\"
+    target_dir = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
+    print("target_dir ETC: ")
+    print(target_dir)
+    subprocess.check_call(
+        [
+            prg_path + "Python\\Python.exe",
+            "-m",
+            "pip",
+            "install",
+            "--target",
+            target_dir,
+            "--upgrade",
+            package,
+            "--no-cache-dir"
+        ]
+    )
+
+    target_dir = (
+        f"{AllplanSettings.AllplanPaths.GetUsrPath()}Local\\PythonParts-site-packages"
+    )
+    print("target_dir USR: ")
+    print(target_dir)
+    subprocess.check_call(
+        [
+            prg_path + "Python\\Python.exe",
+            "-m",
+            "pip",
+            "install",
+            "--target",
+            target_dir,
+            "--upgrade",
+            package,
+            "--no-cache-dir"
+        ]
+    )
+
+
+import sys as _sys
+
+_site_etc = f"{AllplanSettings.AllplanPaths.GetPythonPartsEtcPath()}PythonParts-site-packages"
+_site_usr = f"{AllplanSettings.AllplanPaths.GetUsrPath()}Local\\PythonParts-site-packages"
+for _p in (_site_etc, _site_usr):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
+
+try:
+    import numpy as np
+except ImportError:
+    install_packages("numpy")
+    print("instalando paquetes: numpy")
+    import numpy as np
+
+
 HOLE_DIAMETER = 18.0
 HOLE_RADIUS = HOLE_DIAMETER / 2.0
 
@@ -49,7 +103,7 @@ ANG_LAYER = "PMP_ANGULARS"
 
 DISTRIBUTION_GROUP = "grupal"
 DISTRIBUTION_INDIVIDUAL = "individual"
-ANGULARES_SCRIPT_VERSION = "2.3.15-sin-asociacion-automatica-muro"
+ANGULARES_SCRIPT_VERSION = "2.3.24-new-angulars-colors"
 # Sync nativo: usar insert_matrix del framework (prepare_script_data), no APIs de arbol PPG.
 ANGULAR_SYNC_POSITION_AFTER_NATIVE_MOVE = False
 ANGULAR_SYNC_ALLOW_UNSAFE_MODEL_READ = False
@@ -428,6 +482,19 @@ def _rows(top_y, bottom_y, top_positions, bottom_positions):
     return rows
 
 
+def get_round_hole_sets(definition: dict) -> list[dict]:
+    """Normaliza las perforaciones redondas definidas en una o varias caras."""
+    hole_sets = [
+        {
+            "plane": definition.get("hole_plane", "horizontal"),
+            "diameter": float(definition.get("hole_diameter", HOLE_DIAMETER)),
+            "rows": definition.get("hole_rows", []),
+        }
+    ]
+    hole_sets.extend(definition.get("additional_hole_sets", []))
+    return hole_sets
+
+
 def get_hole_coordinates(angular_key: str) -> dict:
     """Obtiene las coordenadas de todos los taladros para un tipo de angular.
 
@@ -452,20 +519,59 @@ def get_hole_coordinates(angular_key: str) -> dict:
     holes = []
     hole_index = 1
 
-    for row_idx, row in enumerate(definition["hole_rows"]):
-        hole_y = row["y"]
-        row_name = "superior" if row_idx == 0 else "inferior"
+    for hole_set in get_round_hole_sets(definition):
+        plane = hole_set.get("plane", "horizontal")
+        for row_idx, row in enumerate(hole_set.get("rows", [])):
+            hole_y = row["y"]
+            row_name = "superior" if row_idx == 0 else "inferior"
 
-        for hole_x in row["x_positions"]:
+            for hole_x in row["x_positions"]:
+                if plane == "vertical":
+                    local_coords = (hole_x, 0.0, hole_y)
+                else:
+                    local_coords = (hole_x, hole_y, 0.0)
+                holes.append(
+                    {
+                        "index": hole_index,
+                        "type": "round",
+                        "plane": plane,
+                        "local_coords": local_coords,
+                        "row": row_name,
+                        "x": hole_x,
+                        "y": local_coords[1],
+                        "z": local_coords[2],
+                        "diameter": float(hole_set["diameter"]),
+                        "description": (
+                            f"Taladro {hole_index} ({plane}, {row_name}): "
+                            f"coordenadas locales X={local_coords[0]}mm, "
+                            f"Y={local_coords[1]}mm, Z={local_coords[2]}mm"
+                        ),
+                    }
+                )
+                hole_index += 1
+
+    for slot_row in definition.get("slot_rows", []):
+        for slot_x in slot_row.get("x_positions", []):
+            if slot_row.get("plane") == "vertical":
+                local_coords = (slot_x, 0.0, float(slot_row["z_center"]))
+            else:
+                local_coords = (slot_x, float(slot_row["y_center"]), 0.0)
             holes.append(
                 {
                     "index": hole_index,
-                    "local_coords": (hole_x, hole_y, 0.0),
-                    "row": row_name,
-                    "x": hole_x,
-                    "y": hole_y,
-                    "z": 0.0,
-                    "description": f"Taladro {hole_index} ({row_name}): posición X={hole_x}mm, Y={hole_y}mm",
+                    "type": "slot",
+                    "local_coords": local_coords,
+                    "row": str(slot_row.get("plane", "")),
+                    "x": local_coords[0],
+                    "y": local_coords[1],
+                    "z": local_coords[2],
+                    "diameter": float(slot_row["diameter"]),
+                    "overall_length": float(slot_row["overall_length"]),
+                    "description": (
+                        f"Coliso {hole_index}: centro local X={local_coords[0]}mm, "
+                        f"Y={local_coords[1]}mm, longitud total="
+                        f"{slot_row['overall_length']}mm, ancho={slot_row['diameter']}mm"
+                    ),
                 }
             )
             hole_index += 1
@@ -569,6 +675,61 @@ ANGULAR_CATALOG = {
         ),
         "color": 8,
     },
+    "ANG_JUNTA_D": {
+        "label": "Angular de junta D. 200x200x20 (310) - 2 taladros + 2 colisos",
+        "length": 310.0,
+        "vertical": 200.0,
+        "horizontal": 200.0,
+        "thickness": 20.0,
+        # La cota encadenada 73 + 14 + 136 + 14 + 73 da centros X=80/230.
+        "hole_rows": _rows(
+            top_y=200.0 - 40.0,
+            bottom_y=0.0,
+            top_positions=[80.0, 230.0],
+            bottom_positions=[],
+        ),
+        "hole_diameter": 14.0,
+        "hole_plane": "horizontal",
+        "slot_rows": [
+            {
+                "plane": "vertical",
+                "direction": "z",
+                "x_positions": [80.0, 230.0],
+                "z_center": 140.0,
+                "overall_length": 40.0,
+                "diameter": 14.0,
+            }
+        ],
+        "color": 34,
+    },
+    "ANG_REMUNTA": {
+        "label": "Angular remunta 200x200x20 (310) - 4 taladros",
+        "length": 310.0,
+        "vertical": 200.0,
+        "horizontal": 200.0,
+        "thickness": 20.0,
+        "hole_rows": _rows(
+            top_y=200.0 - 40.0,
+            bottom_y=0.0,
+            top_positions=[50.0, 260.0],
+            bottom_positions=[],
+        ),
+        "hole_diameter": 14.0,
+        "hole_plane": "vertical",
+        "additional_hole_sets": [
+            {
+                "plane": "horizontal",
+                "diameter": 14.0,
+                "rows": _rows(
+                    top_y=200.0 - 40.0,
+                    bottom_y=0.0,
+                    top_positions=[50.0, 260.0],
+                    bottom_positions=[],
+                ),
+            }
+        ],
+        "color": 226,
+    },
     "TENSOR": {
         "label": "Tensor",
         "length": 200.0,
@@ -595,29 +756,15 @@ def get_num_forats_from_definition(definition: dict) -> int:
     if definition.get("is_tensor", False):
         return 4
 
-    length = definition.get("length", 0.0)
-
-    if abs(length - 460.0) < 1e-6:
-        return 5
-    elif abs(length - 310.0) < 1e-6:
-        return 4
-    elif abs(length - 150.0) < 1e-6:
-        return 2
-    else:
-        hole_rows = definition.get("hole_rows", [])
-        if hole_rows:
-            total_holes = 0
-            for row in hole_rows:
-                positions = row.get("positions", [])
-                total_holes += len(positions)
-            if total_holes == 5:
-                return 5
-            elif total_holes == 4:
-                return 4
-            elif total_holes == 2:
-                return 2
-
-        return 4
+    round_holes = sum(
+        len(row.get("x_positions", []))
+        for hole_set in get_round_hole_sets(definition)
+        for row in hole_set.get("rows", [])
+    )
+    slots = sum(
+        len(row.get("x_positions", [])) for row in definition.get("slot_rows", [])
+    )
+    return round_holes + slots
 
 
 def get_nom_from_angular_key(angular_key: str) -> str:
@@ -636,10 +783,45 @@ def get_nom_from_angular_key(angular_key: str) -> str:
         "ANG250_L460": "ANGULARS SUPORT 250 x 5 FORATS (460)",
         "ANG250_L310": "ANGULARS SUPORT 250 x 4 FORATS (310)",
         "ANG250_L150": "ANGULARS SUPORT 250x250x25 (150)",
+        "ANG_JUNTA_D": "ANGULAR DE JUNTA D. 200x200x20 (310)",
+        "ANG_REMUNTA": "ANGULAR REMUNTA 200x200x20 (310)",
         "TENSOR": "TENSORS 4 FORATS",
     }
 
     return nom_mapping.get(angular_key, "")
+
+
+def get_article_code_from_angular_key(angular_key: str) -> str:
+    """Obtiene el codigo de articulo para DEN y pmp_CARTICULO."""
+    article_mapping = {
+        "ANG200_L460": "FG01_001_001",
+        "ANG200_L310": "FG01_001_002",
+        "ANG200_L150": "FG01_001_003",
+        "ANG250_L460": "FG01_001_004",
+        "ANG250_L310": "FG01_001_005",
+        "ANG250_L150": "FG01_001_006",
+        "ANG_JUNTA_D": "FG01_002_001",
+        "ANG_REMUNTA": "FG01_002_002",
+        "TENSOR": "FG01_003_001"
+    }
+
+    return article_mapping.get(angular_key, "")
+
+def get_article_den_from_angular_key(angular_key: str) -> str:
+    """Obtiene el codigo de articulo para DEN y pmp_CARTICULO."""
+    article_mapping = {
+        "ANG200_L460": "FG01_001_001",
+        "ANG200_L310": "FG01_001_002",
+        "ANG200_L150": "FG01_001_003",
+        "ANG250_L460": "FG01_001_004",
+        "ANG250_L310": "FG01_001_005",
+        "ANG250_L150": "FG01_001_006",
+        "ANG_JUNTA_D": "FG01_002_001",
+        "ANG_REMUNTA": "FG01_002_002",
+        "TENSOR": "BASETEN"
+    }
+
+    return article_mapping.get(angular_key, "")
 
 
 def vector_from_points(
@@ -1149,6 +1331,36 @@ def get_wall_material_name(wall_element) -> str | None:
         doc = DocumentManager.get_instance().document
 
         attrs = wall_element.GetAttributes(AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable)
+        for attr_name in ("pmp_pare", "pmp_pare_name", "PMP_PARE"):
+            try:
+                attr_id_by_name = AllplanBaseElements.AttributeService.GetAttributeID(
+                    doc, attr_name
+                )
+            except Exception:
+                attr_id_by_name = 0
+            if not attr_id_by_name:
+                continue
+
+            for attr in attrs:
+                try:
+                    attr_id = getattr(attr, "Id", None)
+                    if (
+                        attr_id is None
+                        and isinstance(attr, (tuple, list))
+                        and len(attr) >= 2
+                    ):
+                        attr_id = attr[0]
+                        attr_value = attr[1]
+                    else:
+                        attr_value = getattr(attr, "Value", None)
+
+                    if attr_id == attr_id_by_name:
+                        attr_value_str = str(attr_value).strip() if attr_value else ""
+                        if attr_value_str and attr_value_str != "<undefiniert>":
+                            return attr_value_str
+                except Exception:
+                    continue
+
         material_value_from_508 = None
         for attr in attrs:
             try:
@@ -2053,19 +2265,110 @@ def create_single_angular(
         if fillet_err == AllplanGeo.eFilletErrorCode.eNO_ERROR:
             geometry = filleted_geometry
 
-    for row in definition["hole_rows"]:
-        hole_y = row["y"]
-        for hole_x in row["x_positions"]:
-            hole_origin = local_to_world(
-                angular_origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0
+    for hole_set in get_round_hole_sets(definition):
+        plane = hole_set.get("plane", "horizontal")
+        hole_radius = float(hole_set.get("diameter", HOLE_DIAMETER)) / 2.0
+        for row in hole_set.get("rows", []):
+            hole_y = row["y"]
+            for hole_x in row["x_positions"]:
+                if plane == "vertical":
+                    hole_origin = local_to_world(
+                        angular_origin, x_dir, y_dir, z_dir, hole_x, 0.0, hole_y
+                    )
+                    hole_axis = AllplanGeo.AxisPlacement3D(
+                        hole_origin, x_dir, y_dir
+                    )
+                else:
+                    hole_origin = local_to_world(
+                        angular_origin, x_dir, y_dir, z_dir, hole_x, hole_y, 0.0
+                    )
+                    hole_axis = AllplanGeo.AxisPlacement3D(
+                        hole_origin, x_dir, z_dir
+                    )
+                hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(
+                    hole_axis, hole_radius, thickness
+                )
+                err, geometry = AllplanGeo.MakeSubtraction(geometry, hole_cylinder)
+                if err != AllplanGeo.eGeometryErrorCode.eOK:
+                    continue
+
+    for slot_row in definition.get("slot_rows", []):
+        plane = slot_row.get("plane")
+        direction = slot_row.get("direction")
+        if (plane, direction) not in (("horizontal", "y"), ("vertical", "z")):
+            continue
+
+        diameter = float(slot_row.get("diameter", HOLE_DIAMETER))
+        overall_length = float(slot_row.get("overall_length", 0.0))
+        center_distance = overall_length - diameter
+        if diameter <= 0.0 or center_distance < 0.0:
+            continue
+
+        radius = diameter / 2.0
+        center = float(
+            slot_row.get("y_center" if plane == "horizontal" else "z_center", 0.0)
+        )
+        slot_start = center - center_distance / 2.0
+        slot_end = center + center_distance / 2.0
+
+        for slot_x in slot_row.get("x_positions", []):
+            if plane == "horizontal":
+                start_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, slot_start, 0.0
+                )
+                end_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, slot_end, 0.0
+                )
+                start_axis = AllplanGeo.AxisPlacement3D(start_origin, x_dir, z_dir)
+                end_axis = AllplanGeo.AxisPlacement3D(end_origin, x_dir, z_dir)
+                bridge_offset = (slot_x - radius, slot_start, 0.0)
+                bridge_dimensions = (diameter, center_distance, thickness)
+            else:
+                start_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, 0.0, slot_start
+                )
+                end_origin = local_to_world(
+                    angular_origin, x_dir, y_dir, z_dir, slot_x, 0.0, slot_end
+                )
+                start_axis = AllplanGeo.AxisPlacement3D(start_origin, x_dir, y_dir)
+                end_axis = AllplanGeo.AxisPlacement3D(end_origin, x_dir, y_dir)
+                bridge_offset = (slot_x - radius, 0.0, slot_start)
+                bridge_dimensions = (diameter, thickness, center_distance)
+
+            start_cylinder = AllplanGeo.BRep3D.CreateCylinder(
+                start_axis, radius, thickness
             )
-            hole_axis = AllplanGeo.AxisPlacement3D(hole_origin, x_dir, z_dir)
-            hole_cylinder = AllplanGeo.BRep3D.CreateCylinder(
-                hole_axis, HOLE_RADIUS, thickness
+            end_cylinder = AllplanGeo.BRep3D.CreateCylinder(
+                end_axis, radius, thickness
             )
-            err, geometry = AllplanGeo.MakeSubtraction(geometry, hole_cylinder)
-            if err != AllplanGeo.eGeometryErrorCode.eOK:
-                continue
+
+            bridge_axis = axis_with_offset(
+                angular_origin,
+                x_dir,
+                y_dir,
+                z_dir,
+                *bridge_offset,
+            )
+            bridge = AllplanGeo.BRep3D.CreateCuboid(bridge_axis, *bridge_dimensions)
+
+            union_err, slot_cutter = AllplanGeo.MakeUnion(start_cylinder, bridge)
+            if union_err == AllplanGeo.eGeometryErrorCode.eOK:
+                union_err, complete_cutter = AllplanGeo.MakeUnion(
+                    slot_cutter, end_cylinder
+                )
+                if union_err == AllplanGeo.eGeometryErrorCode.eOK:
+                    slot_cutter = complete_cutter
+                    err, cut_geometry = AllplanGeo.MakeSubtraction(
+                        geometry, slot_cutter
+                    )
+                    if err == AllplanGeo.eGeometryErrorCode.eOK:
+                        geometry = cut_geometry
+                        continue
+
+            for cutter in (start_cylinder, bridge, end_cylinder):
+                err, cut_geometry = AllplanGeo.MakeSubtraction(geometry, cutter)
+                if err == AllplanGeo.eGeometryErrorCode.eOK:
+                    geometry = cut_geometry
 
     return geometry
 
@@ -2966,6 +3269,7 @@ SELECTING_FACE = 4
 SELECTING_POSITION = 5
 SELECTING_EXISTING_ANGULAR = 6
 SELECTING_ACTIVE_WALL = 7
+SELECTING_EDIT_WALL_ID = 8
 
 
 def check_allplan_version(_build_ele: BuildingElement, _version: float) -> bool:
@@ -3321,6 +3625,7 @@ class AngularLineScript(BaseScriptObject):
         self._pending_resume_position_after_deselect = False
         self._resume_after_deselect_inline = False
         self._native_delete_completed = False
+        self._wall_relation_edit_override = {}
 
         if hasattr(self.build_ele, "PermitirCambiarMuro"):
             self.build_ele.PermitirCambiarMuro.value = not getattr(
@@ -3951,19 +4256,21 @@ class AngularLineScript(BaseScriptObject):
                     state.get("rot_y", state.get("RotacionEjeY", 0.0)) or 0.0
                 )
 
-            if hasattr(self.build_ele, "UsarValorZManual"):
-                self.build_ele.UsarValorZManual.value = bool(
-                    state.get("usar_z_manual", state.get("UsarValorZManual", False))
-                )
+            # if hasattr(self.build_ele, "UsarValorZManual"):
+            #     self.build_ele.UsarValorZManual.value = bool(
+            #         state.get("usar_z_manual", state.get("UsarValorZManual", False))
+            #     )
+            self.build_ele.UsarValorZManual.value = False
 
-            if hasattr(self.build_ele, "ValorZIndividual"):
-                valor_z = (
-                    state.get("valor_z_individual")
-                    if "valor_z_individual" in state
-                    else state.get("ValorZIndividual")
-                )
-                if valor_z is not None:
-                    self.build_ele.ValorZIndividual.value = float(valor_z)
+            # if hasattr(self.build_ele, "ValorZIndividual"):
+            #     valor_z = (
+            #         state.get("valor_z_individual")
+            #         if "valor_z_individual" in state
+            #         else state.get("ValorZIndividual")
+            #     )
+            #     if valor_z is not None:
+            #         self.build_ele.ValorZIndividual.value = float(valor_z)
+            self.build_ele.ValorZIndividual.value = 0.0
 
             if hasattr(self.build_ele, "SiLlevaNeopreno"):
                 lleva_val = (
@@ -5367,6 +5674,23 @@ class AngularLineScript(BaseScriptObject):
         if hasattr(self.build_ele, "angular_libre"):
             self.build_ele.angular_libre.value = bool(self.is_free_mode)
 
+        if (
+            self.is_modification_mode
+            and getattr(self, "state", None) == SELECTING_EDIT_WALL_ID
+        ):
+            if self.script_object_interactor is None:
+                self.wall_select_result = WallSelectResult()
+                self.script_object_interactor = WallSelectInteractor(
+                    self.wall_select_result,
+                    "Seleccione el nuevo muro del angular",
+                )
+            coord_input = self._get_active_coord_input()
+            if coord_input:
+                self.script_object_interactor.start_input(coord_input)
+            self.preview_active = False
+            print("[EDIT][WALL] start_input conserva seleccion de muro activa")
+            return
+
         if self.needs_auto_update:
             success = self._update_angular_position()
 
@@ -5593,6 +5917,19 @@ class AngularLineScript(BaseScriptObject):
                 print("[INPUT][INDIVIDUAL] Cambio de muro cancelado")
             self.state = SELECTING_POSITION
             self._resume_individual_position_input(coord_input)
+
+        elif self.state == SELECTING_EDIT_WALL_ID:
+            self.script_object_interactor = None
+            if self.wall_select_result.is_selected:
+                if self._apply_selected_wall_id_to_current_edit():
+                    print("[EDIT][WALL] Relacion de muro actualizada desde seleccion")
+                else:
+                    print("[EDIT][WALL] No se pudo actualizar la relacion de muro")
+            else:
+                print("[EDIT][WALL] Cambio de muro cancelado")
+            self._ensure_line_result_from_build_ele_for_modify()
+            self.state = STOPPED
+            self.preview_active = True
 
     def _process_wall_selection_free(self):
         """Procesa la selección del muro en modo libre (solo referencia)"""
@@ -6183,7 +6520,8 @@ class AngularLineScript(BaseScriptObject):
     ) -> AllplanGeo.Line3D:
         """Construye una línea interna de pieza desde el punto clicado."""
         self._last_individual_position_valid = False
-        if not self._resolve_individual_face_from_wall(position):
+        has_active_face = bool(self.face_polygon and self.face_normal and self.face_point)
+        if not has_active_face and not self._resolve_individual_face_from_wall(position):
             return AllplanGeo.Line3D()
         self._last_individual_position_valid = True
 
@@ -6285,6 +6623,12 @@ class AngularLineScript(BaseScriptObject):
             AllplanBaseElements.AttributeService.GetAttributeID(
                 self.document, "PMP_FG_ANG_NEOPRE"
             )
+        )
+        self.attr_den_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "DEN"
+        )
+        self.attr_pmp_carticulo_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_CARTICULO"
         )
         self._preview_attribute_ids_ready = True
 
@@ -8390,11 +8734,108 @@ class AngularLineScript(BaseScriptObject):
         print("[DELETE][ANGULAR] PPG reabierto eliminado; se cierra la edicion")
         return True
 
+    def _start_edit_wall_id_selection(self) -> bool:
+        """Boton Cambiar muro en EDIT: actualiza la relacion de muro sin mover."""
+        if not getattr(self, "is_modification_mode", False):
+            return False
+
+        self.wall_select_result = WallSelectResult()
+        self.state = SELECTING_EDIT_WALL_ID
+        self.preview_active = False
+        self.script_object_interactor = WallSelectInteractor(
+            self.wall_select_result,
+            "Seleccione el nuevo muro del angular",
+        )
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+        print("[EDIT][WALL] Modo seleccion de muro para relacion activa")
+        return True
+
+    def _apply_selected_wall_id_to_current_edit(self) -> bool:
+        """Actualiza GUID/atributos de muro sin tocar puntos ni neopreno."""
+        selected_element = getattr(self.wall_select_result, "element", None)
+        if selected_element is None:
+            return False
+
+        wall_id = get_wall_ifc_id(selected_element)
+        if not wall_id:
+            print("[EDIT][WALL_ID] El muro seleccionado no tiene IFC ID detectable")
+            return False
+
+        clean_wall_id = str(wall_id).strip().replace("'", "")
+        if not clean_wall_id:
+            return False
+
+        wall_guid = str(selected_element.GetModelElementUUID())
+        wall_name = get_wall_material_name(selected_element) or "MURO_NO_DEFINIDO"
+        clean_wall_name = str(wall_name).strip().replace("'", "")
+
+        self.detected_wall = selected_element
+        self.detected_wall_guid = wall_guid
+
+        if hasattr(self.build_ele, "MuroGUID") and hasattr(
+            self.build_ele.MuroGUID, "value"
+        ):
+            self.build_ele.MuroGUID.value = wall_guid
+        else:
+            print("[EDIT][WALL] Falta parametro MuroGUID en build_ele")
+            return False
+
+        if hasattr(self.build_ele, "pmp_pare") and hasattr(
+            self.build_ele.pmp_pare, "value"
+        ):
+            self.build_ele.pmp_pare.value = clean_wall_id
+        else:
+            print("[EDIT][WALL_ID] Falta parametro pmp_pare en build_ele")
+            return False
+
+        if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+            self.build_ele.pmp_pare_name, "value"
+        ):
+            self.build_ele.pmp_pare_name.value = clean_wall_name
+
+        self._wall_relation_edit_override = {
+            "MuroGUID": wall_guid,
+            "pmp_pare": clean_wall_id,
+            "pmp_pare_name": clean_wall_name,
+        }
+
+        # Intencionalmente no actualiza PuntoInicial/PuntoFinal ni neopreno.
+        # Cara/ejes solo deben recalcularse si el requerimiento pasa a reanclar geometria.
+        print(
+            "[EDIT][WALL] Relacion actualizada: "
+            f"MuroGUID={wall_guid}, PMP_WALL_ID={clean_wall_id}, pmp_pare_name={clean_wall_name}"
+        )
+        return True
+
+    def _apply_wall_relation_edit_override(self) -> None:
+        """Reaplica la relacion de muro elegida en EDIT tras restaurar SavedState."""
+        override = getattr(self, "_wall_relation_edit_override", None) or {}
+        if not override:
+            return
+
+        muro_guid = str(override.get("MuroGUID", "") or "").strip()
+        wall_id = str(override.get("pmp_pare", "") or "").strip()
+        wall_name = str(override.get("pmp_pare_name", "") or "").strip()
+
+        if muro_guid and hasattr(self.build_ele, "MuroGUID"):
+            self.build_ele.MuroGUID.value = muro_guid
+            self.detected_wall_guid = muro_guid
+        if wall_id and hasattr(self.build_ele, "pmp_pare"):
+            self.build_ele.pmp_pare.value = wall_id
+        if hasattr(self.build_ele, "pmp_pare_name"):
+            self.build_ele.pmp_pare_name.value = wall_name
+
+        print(
+            "[EDIT][WALL] Override aplicado tras SavedState: "
+            f"MuroGUID={muro_guid}, PMP_WALL_ID={wall_id}, pmp_pare_name={wall_name}"
+        )
+
     def _start_active_wall_selection(self) -> bool:
         """Boton Cambiar muro: selecciona el muro para los proximos angulares."""
         if getattr(self, "is_modification_mode", False):
-            print("[INPUT][INDIVIDUAL] Cambio de muro no disponible en EDIT")
-            return False
+            return self._start_edit_wall_id_selection()
         if not self._is_individual_distribution():
             print("[INPUT][INDIVIDUAL] Cambio de muro solo disponible en Individual")
             return False
@@ -9519,6 +9960,15 @@ class AngularLineScript(BaseScriptObject):
 
         self.build_ele.TipoDistribucion.value = distribution_value
         print(f"[DISTRIBUTION] Cambio de pestana detectado: {distribution_value}")
+        if (
+            getattr(self, "is_modification_mode", False)
+            and getattr(self, "state", None) == SELECTING_EDIT_WALL_ID
+        ):
+            print(
+                "[DISTRIBUTION] EDIT: pestana sincronizada; "
+                "se conserva seleccion de muro activa"
+            )
+            return
 
         if distribution_value == "Individual":
             self.is_free_mode = False
@@ -9731,7 +10181,7 @@ class AngularLineScript(BaseScriptObject):
         definition: dict,
         pmp_pare: str = None,
         pmp_pare_name: str = None,
-    ) -> List[AllplanBasisElements.ModelElement3D]:
+    ) -> ModelEleList:
         """Crea ModelElement3D individuales con los angulares aplicando layer, color y PMP_PARE.
 
         En CREATE y EDIT se reaplican atributos usando el valor persistido en build_ele.
@@ -9744,7 +10194,7 @@ class AngularLineScript(BaseScriptObject):
         Returns:
             List[ModelElement3D]: Lista de elementos 3D creados
         """
-        elements = []
+        elements = ModelEleList()
 
         layer_id = AllplanBaseElements.LayerService.GetIDByShortName(
             ANG_LAYER, self.document
@@ -9768,6 +10218,8 @@ class AngularLineScript(BaseScriptObject):
         attr_nom_id = getattr(self, "attr_pmp_fg_ang_nom_id", 0)
         attr_neopre_id = getattr(self, "attr_pmp_fg_angular_neopre_id", 0)
         attr_grosor_neopre_id = getattr(self, "attr_pmp_fg_ang_neopre_id", 0)
+        attr_den_id = getattr(self, "attr_den_id", 0)
+        attr_pmp_carticulo_id = getattr(self, "attr_pmp_carticulo_id", 0)
 
         # Atributos PMP_FG_*: recalcular y setear al final (salida, no entrada). Valores desde build_ele.
         num_forats = get_num_forats_from_definition(definition)
@@ -9777,6 +10229,8 @@ class AngularLineScript(BaseScriptObject):
             else None
         )
         nom_value = get_nom_from_angular_key(angular_key) if angular_key else ""
+        article_code = get_article_code_from_angular_key(angular_key) if angular_key else ""
+        article_den = get_article_den_from_angular_key(angular_key) if angular_key else ""
 
         lleva_neopreno = (
             bool(getattr(self.build_ele.SiLlevaNeopreno, "value", False))
@@ -9789,8 +10243,8 @@ class AngularLineScript(BaseScriptObject):
         if lleva_neopreno:
             grosor_length_value = get_neoprene_length_meters(definition)
 
-        for line in geometries:
-            elem = AllplanBasisElements.ModelElement3D(props, line)
+        for geom in geometries:
+            elements.append_geometry_3d(geom, props)
 
             attr_list = BuildingElementAttributeList()
 
@@ -9809,6 +10263,12 @@ class AngularLineScript(BaseScriptObject):
             if attr_nom_id > 0 and nom_value:
                 attr_list.add_attribute(attr_nom_id, nom_value)
 
+            if attr_den_id > 0 and article_den:
+                attr_list.add_attribute(attr_den_id, article_den)
+
+            if attr_pmp_carticulo_id > 0 and article_code:
+                attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
+
             if attr_neopre_id > 0:
                 attr_list.add_attribute(attr_neopre_id, neopre_value)
 
@@ -9816,12 +10276,11 @@ class AngularLineScript(BaseScriptObject):
                 attr_list.add_attribute(attr_grosor_neopre_id, grosor_length_value)
 
             if attr_list.get_attribute_list():
-                elem.SetAttributes(attr_list.get_attribute_list())
+                elements.set_element_attributes(len(elements) - 1, attr_list.get_attribute_list())
 
-            elements.append(elem)
 
         for line in edges:
-            elem = AllplanBasisElements.ModelElement3D(props, line)
+            elements.append_geometry_3d(line, props)
 
             attr_list = BuildingElementAttributeList()
 
@@ -9840,36 +10299,11 @@ class AngularLineScript(BaseScriptObject):
             if attr_nom_id > 0 and nom_value:
                 attr_list.add_attribute(attr_nom_id, nom_value)
 
-            if attr_neopre_id > 0:
-                attr_list.add_attribute(attr_neopre_id, neopre_value)
+            if attr_den_id > 0 and article_den:
+                attr_list.add_attribute(attr_den_id, article_den)
 
-            if attr_grosor_neopre_id > 0:
-                attr_list.add_attribute(attr_grosor_neopre_id, grosor_length_value)
-
-            if attr_list.get_attribute_list():
-                elem.SetAttributes(attr_list.get_attribute_list())
-
-            elements.append(elem)
-
-        for line in edges:
-            elem = AllplanBasisElements.ModelElement3D(props, line)
-
-            attr_list = BuildingElementAttributeList()
-
-            if attr_id > 0 and pmp_pare_name:
-                attr_list.add_attribute(attr_id, pmp_pare_name.replace("'", ""))
-
-            if attr_wall_id > 0 and pmp_pare:
-                attr_list.add_attribute(attr_wall_id, pmp_pare.replace("'", ""))
-
-            if attr_detall_id > 0:
-                attr_list.add_attribute(attr_detall_id, "")
-
-            if attr_forats_id > 0:
-                attr_list.add_attribute(attr_forats_id, num_forats)
-
-            if attr_nom_id > 0 and nom_value:
-                attr_list.add_attribute(attr_nom_id, nom_value)
+            if attr_pmp_carticulo_id > 0 and article_code:
+                attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
 
             if attr_neopre_id > 0:
                 attr_list.add_attribute(attr_neopre_id, neopre_value)
@@ -9878,15 +10312,14 @@ class AngularLineScript(BaseScriptObject):
                 attr_list.add_attribute(attr_grosor_neopre_id, grosor_length_value)
 
             if attr_list.get_attribute_list():
-                elem.SetAttributes(attr_list.get_attribute_list())
+                elements.set_element_attributes(len(elements) - 1, attr_list.get_attribute_list())
 
-            elements.append(elem)
 
         return elements
 
     def create_individual_pythonparts_from_elements(
         self,
-        elements_list: List[AllplanBasisElements.ModelElement3D],
+        elements_list: ModelEleList,
         start_point: AllplanGeo.Point3D = None,
         end_point: AllplanGeo.Point3D = None,
         angular_key: str = None,
@@ -9942,6 +10375,8 @@ class AngularLineScript(BaseScriptObject):
                 attr_nom_id = getattr(self, "attr_pmp_fg_ang_nom_id", 0)
                 attr_neopre_id = getattr(self, "attr_pmp_fg_angular_neopre_id", 0)
                 attr_largo_neopre_id = getattr(self, "attr_pmp_fg_ang_neopre_id", 0)
+                attr_den_id = getattr(self, "attr_den_id", 0)
+                attr_pmp_carticulo_id = getattr(self, "attr_pmp_carticulo_id", 0)
 
                 #  Usar pmp_pare pasado como parámetro (NO leer desde build_ele)
                 wall_pare = pmp_pare.replace("'", "") if pmp_pare else ""
@@ -9965,6 +10400,19 @@ class AngularLineScript(BaseScriptObject):
                     nom_value = get_nom_from_angular_key(angular_key)
                     if nom_value:
                         attr_list.add_attribute(attr_nom_id, nom_value)
+
+                article_code = (
+                    get_article_code_from_angular_key(angular_key) if angular_key else ""
+                )
+                article_den = (
+                    get_article_den_from_angular_key(angular_key) if angular_key else ""
+                )
+
+                if attr_den_id > 0 and article_den:
+                    attr_list.add_attribute(attr_den_id, article_den)
+
+                if attr_pmp_carticulo_id > 0 and article_code:
+                    attr_list.add_attribute(attr_pmp_carticulo_id, article_code)
 
                 if attr_neopre_id > 0:
                     lleva_neopreno = False
@@ -10390,6 +10838,12 @@ class AngularLineScript(BaseScriptObject):
                 self.document, "PMP_FG_ANG_NEOPRE"
             )
         )
+        self.attr_den_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "DEN"
+        )
+        self.attr_pmp_carticulo_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_CARTICULO"
+        )
 
         #  create_angulars() - SIEMPRE aplica PMP_PARE
         self.elements = self.create_angulars(
@@ -10680,9 +11134,9 @@ class AngularLineScript(BaseScriptObject):
 
         # Alinear distribución con el JSON persistido si la paleta quedó incoherente (no pisa cambio explícito de usuario).
         self._apply_saved_distribution_to_build_ele_in_modify(parsed_saved_state_edit)
-
         # Persistencia EDIT: muro, cara, ejes y Z de la línea (param_list/SavedState antes minimal → build_ele incompleto).
         self._merge_wall_face_params_from_saved_dict(parsed_saved_state_edit)
+        self._apply_wall_relation_edit_override()
         self._restore_line_z_from_saved_state_if_needed(parsed_saved_state_edit)
         start_point = (
             getattr(self.build_ele.PuntoInicial, "value", start_point)
@@ -11045,6 +11499,12 @@ class AngularLineScript(BaseScriptObject):
             AllplanBaseElements.AttributeService.GetAttributeID(
                 self.document, "PMP_FG_ANG_NEOPRE"
             )
+        )
+        self.attr_den_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "DEN"
+        )
+        self.attr_pmp_carticulo_id = AllplanBaseElements.AttributeService.GetAttributeID(
+            self.document, "pmp_CARTICULO"
         )
 
         #  create_angulars() - Pasa is_modify=True (aunque ya no importa, se aplica PMP_PARE igual)

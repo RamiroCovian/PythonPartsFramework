@@ -137,6 +137,54 @@
         <TextId>2008</TextId>
       </Parameter>
 
+      <Parameter>
+        <Name>TituloAngularJuntaD</Name>
+        <Text>Angular de junta D.</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2011</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Junta_D</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_JUNTA_D</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1024</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador5</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2009</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloAngularRemunta</Name>
+        <Text>Angular remunta</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2012</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Remunta</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_REMUNTA</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1201</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador6</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2013</TextId>
+      </Parameter>
+
     </Parameter>
 
     <Parameter>
@@ -196,7 +244,7 @@
         <Value>0</Value>
         <ValueType>Button</ValueType>
         <Enable>True</Enable>
-        <Visible>PermitirCambiarMuro == True</Visible>
+        <Visible>PermitirCambiarMuro == True or AngularSeleccionado == True</Visible>
         <TextId>1050</TextId>
         <Persistent>No</Persistent>
       </Parameter>
@@ -242,7 +290,7 @@
       <ValueType>CheckBox</ValueType>
       <Visible>True</Visible>
       <TextId>1047</TextId>
-      <Persistent>Model</Persistent>
+      <Persistent>No</Persistent>
     </Parameter>
 
     <Parameter>
@@ -253,7 +301,7 @@
       <Enable>True</Enable>
       <Visible>True</Visible>
       <TextId>1044</TextId>
-      <Persistent>Model</Persistent>
+      <Persistent>No</Persistent>
     </Parameter>
 
     <Parameter>
@@ -458,6 +506,54 @@
         <Text>─────────────────────</Text>
         <ValueType>Separator</ValueType>
         <TextId>2108</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloAngularJuntaD_Grupal</Name>
+        <Text>Angular de junta D.</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2111</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Junta_D_Grupal</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_JUNTA_D</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1124</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador5_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2109</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TituloAngularRemunta_Grupal</Name>
+        <Text>Angular remunta</Text>
+        <ValueType>Text</ValueType>
+        <Enable>False</Enable>
+        <TextId>2112</TextId>
+      </Parameter>
+
+      <Parameter>
+        <Name>TipoAngular_Remunta_Grupal</Name>
+        <Text>200x200x20 (310)</Text>
+        <Value>ANG_REMUNTA</Value>
+        <ValueType>RadioButton</ValueType>
+        <TextId>1202</TextId>
+        <Persistent>No</Persistent>
+      </Parameter>
+
+      <Parameter>
+        <Name>Separador6_Grupal</Name>
+        <Text>─────────────────────</Text>
+        <ValueType>Separator</ValueType>
+        <TextId>2113</TextId>
       </Parameter>
 
     </Parameter>
