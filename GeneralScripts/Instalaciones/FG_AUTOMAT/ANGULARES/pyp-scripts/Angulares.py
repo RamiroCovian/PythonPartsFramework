@@ -288,7 +288,7 @@ def _build_angular_selection_auxiliary_elements(
 
 
 # Parámetros del .pyp que deben viajar en SavedState y en param_list del grupo para que EDIT
-# no pierda muro/cara/ejes (si no, la geometría se recalcula con contexto incompleto).
+# no pierda muro/cara/ejes (si no, la geometrí­a se recalcula con contexto incompleto).
 PPG_WALL_FACE_PARAM_KEYS: tuple[str, ...] = (
     "MuroGUID",
     "CaraNormalX",
@@ -1270,144 +1270,87 @@ def calculate_position_from_uv(
 
 
 def get_wall_ifc_id(wall_element) -> str | None:
-    """Obtiene el nombre del muro desde el atributo Material (id 508) o buscando en todos los atributos.
-
-    El nombre está separado por $, por ejemplo "AP$PV_!0" → nombre = "AP"
-    (la parte antes del primer $).
-
-    Args:
-        wall_element: Elemento del muro
-
-    Returns:
-        Nombre del muro (parte antes del $) o None si no se encuentra
-    """
+    """Obtiene el identificador del muro desde el atributo 683."""
     if not wall_element:
         return None
 
     try:
-        from DocumentManager import DocumentManager
-
-        doc = DocumentManager.get_instance().document
-
         attrs = wall_element.GetAttributes(
             AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
         )
-        material_value_from_508 = None
-        for attr in attrs:
-            try:
-                attr_id = getattr(attr, "Id", None)
-                if (
-                    attr_id is None
-                    and isinstance(attr, (tuple, list))
-                    and len(attr) >= 2
-                ):
-                    attr_id = attr[0]
-                    attr_value = attr[1]
-                else:
-                    attr_value = getattr(attr, "Value", None)
-
-                if attr_id == 683:
-                    material_value_from_508 = (
-                        str(attr_value).strip() if attr_value else ""
-                    )
-                    return material_value_from_508
-            except Exception:
-                continue
-
     except Exception:
-        pass
+        return None
+
+    for attr in attrs:
+        try:
+            attr_id = getattr(attr, "Id", None)
+            if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                attr_id = attr[0]
+                attr_value = attr[1]
+            else:
+                attr_value = getattr(attr, "Value", None)
+
+            if attr_id == 683:
+                wall_ifc_id = str(attr_value).strip() if attr_value else ""
+                if wall_ifc_id and wall_ifc_id != "<undefiniert>":
+                    return wall_ifc_id
+        except Exception:
+            continue
 
     return None
+
 
 def get_wall_material_name(wall_element) -> str | None:
-    """Obtiene el nombre del muro desde el atributo Material (id 508) o buscando en todos los atributos.
-    """
-
+    """Obtiene el nombre del muro desde Material (atributo 508), parseando antes de '$'."""
     if not wall_element:
-        return ''
+        return None
 
     try:
-        from DocumentManager import DocumentManager
-        doc = DocumentManager.get_instance().document
-
-        attrs = wall_element.GetAttributes(AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable)
-        for attr_name in ("pmp_pare", "pmp_pare_name", "PMP_PARE"):
-            try:
-                attr_id_by_name = AllplanBaseElements.AttributeService.GetAttributeID(
-                    doc, attr_name
-                )
-            except Exception:
-                attr_id_by_name = 0
-            if not attr_id_by_name:
-                continue
-
-            for attr in attrs:
-                try:
-                    attr_id = getattr(attr, "Id", None)
-                    if (
-                        attr_id is None
-                        and isinstance(attr, (tuple, list))
-                        and len(attr) >= 2
-                    ):
-                        attr_id = attr[0]
-                        attr_value = attr[1]
-                    else:
-                        attr_value = getattr(attr, "Value", None)
-
-                    if attr_id == attr_id_by_name:
-                        attr_value_str = str(attr_value).strip() if attr_value else ""
-                        if attr_value_str and attr_value_str != "<undefiniert>":
-                            return attr_value_str
-                except Exception:
-                    continue
-
-        material_value_from_508 = None
-        for attr in attrs:
-            try:
-                attr_id = getattr(attr, "Id", None)
-                if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
-                    attr_id = attr[0]
-                    attr_value = attr[1]
-                else:
-                    attr_value = getattr(attr, "Value", None)
-
-                if attr_id == 508:
-                    material_value_from_508 = str(attr_value).strip() if attr_value else ""
-
-                    if material_value_from_508 and material_value_from_508 != "<undefiniert>":
-                        if "$" in material_value_from_508:
-                            wall_name = material_value_from_508.split("$")[0].strip()
-                            return wall_name if wall_name else None
-                        else:
-                            return material_value_from_508
-            except Exception:
-                continue
-
-        for attr in attrs:
-            try:
-                attr_id = getattr(attr, "Id", None)
-                if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
-                    attr_id = attr[0]
-                    attr_value = attr[1]
-                else:
-                    attr_value = getattr(attr, "Value", None)
-
-                if attr_value:
-                    attr_value_str = str(attr_value).strip()
-                    if "$" in attr_value_str and attr_value_str != "<undefiniert>":
-                        try:
-                            wall_name = attr_value_str.split("$")[0].strip()
-                            if wall_name:
-                                return wall_name
-                        except Exception:
-                            pass
-            except Exception:
-                continue
-
+        attrs = wall_element.GetAttributes(
+            AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
+        )
     except Exception:
-        pass
+        return None
+
+    for attr in attrs:
+        try:
+            attr_id = getattr(attr, "Id", None)
+            if attr_id is None and isinstance(attr, (tuple, list)) and len(attr) >= 2:
+                attr_id = attr[0]
+                attr_value = attr[1]
+            else:
+                attr_value = getattr(attr, "Value", None)
+
+            if attr_id == 508:
+                material_value = str(attr_value).strip() if attr_value else ""
+                if not material_value or material_value == "<undefiniert>":
+                    return None
+                if "$" in material_value:
+                    wall_name = material_value.split("$", 1)[0].strip()
+                    return wall_name or None
+                return material_value
+        except Exception:
+            continue
 
     return None
+
+
+def get_wall_pmp_values(
+    wall_element, default_value: str = "MURO_NO_DEFINIDO"
+) -> tuple[str, str]:
+    """Resuelve los valores PMP que el angular necesita del muro.
+
+    Contrato de entrada del muro:
+    - atributo 683 para PMP_WALL_ID;
+    - atributo 508 Material para pmp_pare_name, parseado antes de '$'.
+    """
+    wall_id = get_wall_ifc_id(wall_element)
+    wall_name = get_wall_material_name(wall_element)
+
+    clean_wall_id = str(wall_id or "").strip().replace("'", "")
+    clean_wall_name = str(wall_name or "").strip().replace("'", "")
+
+    return clean_wall_id or default_value, clean_wall_name or default_value
 
 
 def get_all_walls_from_document(document) -> list:
@@ -8758,18 +8701,16 @@ class AngularLineScript(BaseScriptObject):
         if selected_element is None:
             return False
 
-        wall_id = get_wall_ifc_id(selected_element)
-        if not wall_id:
+        raw_wall_id = get_wall_ifc_id(selected_element)
+        if not raw_wall_id:
             print("[EDIT][WALL_ID] El muro seleccionado no tiene IFC ID detectable")
             return False
 
-        clean_wall_id = str(wall_id).strip().replace("'", "")
+        clean_wall_id, clean_wall_name = get_wall_pmp_values(selected_element)
         if not clean_wall_id:
             return False
 
         wall_guid = str(selected_element.GetModelElementUUID())
-        wall_name = get_wall_material_name(selected_element) or "MURO_NO_DEFINIDO"
-        clean_wall_name = str(wall_name).strip().replace("'", "")
 
         self.detected_wall = selected_element
         self.detected_wall_guid = wall_guid
@@ -10698,27 +10639,16 @@ class AngularLineScript(BaseScriptObject):
             separation = 10.0
 
         #  Detectar muro → calcular PMP_PARE → guardar en build_ele
-        wall_pare = None
-        wall_name = None
+        wall_pare = "MURO_NO_DEFINIDO"
+        wall_name = "MURO_NO_DEFINIDO"
         wall = self._get_wall_element() if hasattr(self, "_get_wall_element") else None
         if wall:
             try:
-                wall_id = get_wall_ifc_id(wall)
-                wall_str = get_wall_material_name(wall)
-                if wall_id:
-                    wall_pare = wall_id
-                    print(f"[CREATE] PMP_WALL_ID calculado desde muro: {wall_pare}")
-                if wall_str:
-                    wall_name = wall_str
-                    print(f"[CREATE] PMP_PARE calculado desde muro: {wall_name}")
+                wall_pare, wall_name = get_wall_pmp_values(wall)
+                print(f"[CREATE] PMP_WALL_ID calculado desde muro: {wall_pare}")
+                print(f"[CREATE] PMP_PARE calculado desde muro: {wall_name}")
             except Exception as e:
                 print(f"[CREATE]  Error obteniendo material del muro: {e}")
-
-        if not wall_pare:
-            wall_pare = "MURO_NO_DEFINIDO"
-
-        if not wall_name:
-            wall_name = "MURO_NO_DEFINIDO"
 
         #  Guardar pmp_pare en build_ele (ahora existe en .pyp con Persistent>MODEL_AND_FAVORITE)
         if hasattr(self.build_ele, "pmp_pare") and hasattr(
@@ -11107,7 +11037,7 @@ class AngularLineScript(BaseScriptObject):
             reason = "defaults del .pyp" if points_are_pyp_defaults else "puntos ausentes"
             print(
                 f"[EDIT] Puntos desde SavedState ({reason}): "
-                f"{start_point} â†’ {end_point}"
+                f"{start_point} → {end_point}"
             )
         elif start_point is None or end_point is None:
             state = parsed_saved_state_edit
