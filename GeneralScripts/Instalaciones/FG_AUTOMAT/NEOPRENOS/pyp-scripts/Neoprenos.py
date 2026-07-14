@@ -45,6 +45,7 @@ SELECTING_SOLID = 1
 SELECTING_WALL = 2
 SELECTING_LINE = 3
 SELECTING_EXISTING_NEOPRENO = 4
+SELECTING_EDIT_WALL_ID = 5
 
 NEOPRENOS_SCRIPT_VERSION = "1.1.1-sin-asociacion-automatica-host"
 NEOPRENO_EVENT_SELECT_EXISTING = 1050
@@ -216,7 +217,7 @@ def get_wall_ifc_id(wall_element) -> str | None:
 
 
 def get_wall_material_name(wall_element) -> str | None:
-    """Obtiene el nombre del muro desde el atributo Material (id 508) o buscando en todos los atributos."""
+    """Obtiene el nombre del muro desde Material (508), usando la parte previa a '$'."""
 
     if not wall_element:
         return ""
@@ -229,7 +230,6 @@ def get_wall_material_name(wall_element) -> str | None:
         attrs = wall_element.GetAttributes(
             AllplanBaseElements.eAttibuteReadState.ReadAllAndComputable
         )
-        material_value_from_508 = None
         for attr in attrs:
             try:
                 attr_id = getattr(attr, "Id", None)
@@ -244,44 +244,10 @@ def get_wall_material_name(wall_element) -> str | None:
                     attr_value = getattr(attr, "Value", None)
 
                 if attr_id == 508:
-                    material_value_from_508 = (
-                        str(attr_value).strip() if attr_value else ""
-                    )
-
-                    if (
-                        material_value_from_508
-                        and material_value_from_508 != "<undefiniert>"
-                    ):
-                        if "$" in material_value_from_508:
-                            wall_name = material_value_from_508.split("$")[0].strip()
-                            return wall_name if wall_name else None
-                        else:
-                            return material_value_from_508
-            except Exception:
-                continue
-
-        for attr in attrs:
-            try:
-                attr_id = getattr(attr, "Id", None)
-                if (
-                    attr_id is None
-                    and isinstance(attr, (tuple, list))
-                    and len(attr) >= 2
-                ):
-                    attr_id = attr[0]
-                    attr_value = attr[1]
-                else:
-                    attr_value = getattr(attr, "Value", None)
-
-                if attr_value:
-                    attr_value_str = str(attr_value).strip()
-                    if "$" in attr_value_str and attr_value_str != "<undefiniert>":
-                        try:
-                            wall_name = attr_value_str.split("$")[0].strip()
-                            if wall_name:
-                                return wall_name
-                        except Exception:
-                            pass
+                    material_value = str(attr_value).strip() if attr_value else ""
+                    if material_value and material_value != "<undefiniert>":
+                        wall_name = material_value.split("$", 1)[0].strip()
+                        return wall_name if wall_name else None
             except Exception:
                 continue
 
@@ -289,6 +255,19 @@ def get_wall_material_name(wall_element) -> str | None:
         pass
 
     return None
+
+
+def get_wall_pmp_values(wall_element) -> tuple[str, str]:
+    """Devuelve (PMP_WALL_ID, pmp_pare_name) desde el host seleccionado.
+
+    Contrato comun con Angulares:
+    - PMP_WALL_ID sale del atributo 683.
+    - pmp_pare_name sale del Material 508, tomando la parte anterior a '$'.
+    - No lee pmp_pare, pmp_pare_name ni PMP_PARE desde el muro.
+    """
+    wall_id = normalize_pmp_pare_value(get_wall_ifc_id(wall_element) or "")
+    wall_name = normalize_pmp_pare_value(get_wall_material_name(wall_element) or "")
+    return wall_id, wall_name
 
 
 neo_log(f"module loaded: {__file__}")
@@ -2288,6 +2267,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._pending_preview_clear_after_delete = False
         self._resume_line_after_delete = False
         self._external_neopreno_deleted = False
+        self._wall_relation_edit_override = {}
 
         self._set_allow_wall_change_palette_flag()
 
@@ -2342,14 +2322,11 @@ class NeoprenosScriptObject(BaseScriptObject):
         self._update_parameter_visibility()
 
     def _set_allow_wall_change_palette_flag(self) -> None:
-        """Muestra el boton solo durante una ejecucion nueva, no al reentrar en EDIT."""
+        """Muestra el boton en creacion y en EDIT para actualizar la relacion PMP/muro."""
         if not hasattr(self.build_ele, "PermitirCambiarMuro"):
             return
-        allow = not bool(getattr(self, "is_modification_mode", False))
-        if getattr(self, "_restored_from_saved_state", False):
-            allow = False
         try:
-            self.build_ele.PermitirCambiarMuro.value = allow
+            self.build_ele.PermitirCambiarMuro.value = True
         except Exception:
             pass
 
@@ -2382,13 +2359,8 @@ class NeoprenosScriptObject(BaseScriptObject):
         """Siempre activo: tomar linea completa del muro (sin control en paleta)."""
         return True
 
-    def _resolve_host_pmp_pare(self) -> str:
-        """Obtiene pmp_pare desde IFC ID (683) del elemento host seleccionado."""
-        if getattr(self, "wall_ifc_id", None):
-            cached = normalize_pmp_pare_value(self.wall_ifc_id)
-            if cached:
-                return cached
-
+    def _iter_host_candidates_for_pmp(self) -> list:
+        """Candidatos de host para resolver PMP sin leer atributos PMP del host."""
         host_candidates: list = []
         if getattr(self, "ref_face_element", None):
             host_candidates.append(self.ref_face_element)
@@ -2407,10 +2379,20 @@ class NeoprenosScriptObject(BaseScriptObject):
             and self.face_select_result.element
         ):
             host_candidates.append(self.face_select_result.element)
+        return host_candidates
+
+    def _resolve_host_pmp_values(self) -> tuple[str, str]:
+        """Obtiene PMP_WALL_ID y nombre/material desde el mismo host."""
+        cached_id = normalize_pmp_pare_value(getattr(self, "wall_ifc_id", "") or "")
+        cached_name = normalize_pmp_pare_value(
+            getattr(self, "wall_material_name", "") or ""
+        )
+        if cached_id and cached_name:
+            return cached_id, cached_name
 
         seen_guids: set[str] = set()
         had_host = False
-        for element in host_candidates:
+        for element in self._iter_host_candidates_for_pmp():
             if not element or (hasattr(element, "IsNull") and element.IsNull()):
                 continue
             had_host = True
@@ -2421,59 +2403,28 @@ class NeoprenosScriptObject(BaseScriptObject):
                 seen_guids.add(element_guid)
             except Exception:
                 pass
-            ifc_id = get_element_ifc_id(element, try_parent=True)
-            if ifc_id:
-                self.wall_ifc_id = normalize_pmp_pare_value(ifc_id)
-                return self.wall_ifc_id
+
+            wall_id, wall_name = get_wall_pmp_values(element)
+            if wall_id:
+                self.wall_ifc_id = wall_id
+            if wall_name:
+                self.wall_material_name = wall_name
+            if wall_id or wall_name:
+                return wall_id or cached_id, wall_name or cached_name
 
         if had_host:
             self._warn_unidentifiable_parent_element()
-        return ""
+        return cached_id, cached_name
+
+    def _resolve_host_pmp_pare(self) -> str:
+        """Obtiene PMP_WALL_ID desde atributo 683 del elemento host seleccionado."""
+        wall_id, _wall_name = self._resolve_host_pmp_values()
+        return wall_id
 
     def _resolve_host_pmp_pare_name(self) -> str:
-        """Obtiene un nombre/material legible del elemento host seleccionado."""
-        if getattr(self, "wall_material_name", None):
-            cached = normalize_pmp_pare_value(self.wall_material_name)
-            if cached:
-                return cached
-
-        host_candidates: list = []
-        if getattr(self, "ref_face_element", None):
-            host_candidates.append(self.ref_face_element)
-        if getattr(self, "detected_wall", None):
-            host_candidates.append(self.detected_wall)
-        solid_info = getattr(self, "solid_info", None)
-        if isinstance(solid_info, dict) and solid_info.get("element"):
-            host_candidates.append(solid_info["element"])
-        if (
-            getattr(self, "wall_select_result", None)
-            and self.wall_select_result.element
-        ):
-            host_candidates.append(self.wall_select_result.element)
-        if (
-            getattr(self, "face_select_result", None)
-            and self.face_select_result.element
-        ):
-            host_candidates.append(self.face_select_result.element)
-
-        seen_guids: set[str] = set()
-        for element in host_candidates:
-            if not element or (hasattr(element, "IsNull") and element.IsNull()):
-                continue
-            try:
-                element_guid = str(element.GetModelElementUUID())
-                if element_guid in seen_guids:
-                    continue
-                seen_guids.add(element_guid)
-            except Exception:
-                pass
-
-            wall_name = get_wall_material_name(element)
-            if wall_name:
-                self.wall_material_name = normalize_pmp_pare_value(wall_name)
-                return self.wall_material_name
-
-        return ""
+        """Obtiene pmp_pare_name desde Material (508) del elemento host seleccionado."""
+        _wall_id, wall_name = self._resolve_host_pmp_values()
+        return wall_name
 
     def _warn_unidentifiable_parent_element(self) -> None:
         """Aviso al usuario: el elemento padre no tiene IFC ID identificable."""
@@ -3422,6 +3373,22 @@ class NeoprenosScriptObject(BaseScriptObject):
             f"saved_state={bool(getattr(getattr(self.build_ele, 'SavedState', None), 'value', ''))}"
         )
 
+        if (
+            getattr(self, "interactor_state", None) == SELECTING_EDIT_WALL_ID
+            and getattr(self, "wall_select_result", None)
+            and not self.wall_select_result.is_selected
+        ):
+            self.script_object_interactor = WallSelectInteractor(
+                self.wall_select_result,
+                "Seleccione el nuevo muro del neopreno",
+                script_object=self,
+            )
+            coord_input = self._get_active_coord_input()
+            if coord_input:
+                self.script_object_interactor.start_input(coord_input)
+            neo_log("start_input: conserva seleccion de muro en EDIT activa")
+            return
+
         if self.is_editing_existing:
             self.is_free_mode = self._get_free_mode()
             self._update_parameter_visibility()
@@ -3584,6 +3551,18 @@ class NeoprenosScriptObject(BaseScriptObject):
             else:
                 self._resume_neopreno_line_input(self._get_active_coord_input())
 
+        elif self.interactor_state == SELECTING_EDIT_WALL_ID:
+            if self.wall_select_result.is_selected:
+                if self._apply_selected_wall_id_to_current_edit():
+                    neo_log("start_next_input: relacion de muro actualizada en EDIT")
+                else:
+                    neo_log("start_next_input: no se pudo actualizar relacion de muro")
+            else:
+                neo_log("start_next_input: cambio de muro en EDIT cancelado")
+            self._ensure_line_result_from_build_ele_for_modify()
+            self.interactor_state = STOPPED
+            self.script_object_interactor = None
+
     def _process_wall_selection(self):
         element_guid_str = self.wall_select_result.element_guid
         selected_element = self.wall_select_result.element
@@ -3598,8 +3577,14 @@ class NeoprenosScriptObject(BaseScriptObject):
         self.ref_face_element = selected_element
         self.ref_face_polygon = self.face_polygon
 
-        self.wall_ifc_id = get_element_ifc_id(selected_element, try_parent=True)
-        neo_log(f"_process_wall_selection: ifc_id={self.wall_ifc_id or '(vacío)'}")
+        self.wall_ifc_id, self.wall_material_name = get_wall_pmp_values(
+            selected_element
+        )
+        neo_log(
+            "_process_wall_selection: "
+            f"ifc_id={self.wall_ifc_id or '(vacio)'} "
+            f"material={self.wall_material_name or '(vacio)'}"
+        )
         if not self.wall_ifc_id:
             self._warn_unidentifiable_parent_element()
 
@@ -3671,9 +3656,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         if self.parent_element and not self.parent_element.IsNull():
             host_element = self.parent_element
 
-        self.wall_ifc_id = get_element_ifc_id(selected_element, try_parent=True)
-        if not self.wall_ifc_id and self.parent_element:
-            self.wall_ifc_id = get_element_ifc_id(self.parent_element, try_parent=False)
+        self.wall_ifc_id, self.wall_material_name = get_wall_pmp_values(host_element)
 
         if host_element and not host_element.IsNull():
             self.detected_wall = host_element
@@ -4261,8 +4244,9 @@ class NeoprenosScriptObject(BaseScriptObject):
         else:
             z_unique = random.random() * 3600
 
-        wall_pare = normalize_pmp_pare_value(self._resolve_host_pmp_pare())
-        wall_name = normalize_pmp_pare_value(self._resolve_host_pmp_pare_name())
+        wall_pare, wall_name = self._resolve_host_pmp_values()
+        wall_pare = normalize_pmp_pare_value(wall_pare)
+        wall_name = normalize_pmp_pare_value(wall_name)
 
         if not self.is_editing_existing:
             if hasattr(self.build_ele, "pmp_pare") and hasattr(
@@ -5370,8 +5354,7 @@ class NeoprenosScriptObject(BaseScriptObject):
         if getattr(self, "is_modification_mode", False) or getattr(
             self, "_restored_from_saved_state", False
         ):
-            print("[INPUT][NEOPRENO] Cambio de muro no disponible en EDIT")
-            return False
+            return self._start_edit_wall_id_selection()
 
         if getattr(self, "_inline_selected_neopreno_active", False):
             self._clear_inline_selection_visual()
@@ -5395,6 +5378,102 @@ class NeoprenosScriptObject(BaseScriptObject):
             self.script_object_interactor.start_input(coord_input)
         neo_log("_start_active_wall_selection: esperando nuevo muro activo")
         return True
+
+    def _start_edit_wall_id_selection(self) -> bool:
+        """Boton Cambiar muro en EDIT: actualiza la relacion de muro sin mover."""
+        self.wall_select_result = WallSelectResult()
+        self.interactor_state = SELECTING_EDIT_WALL_ID
+        self.script_object_interactor = WallSelectInteractor(
+            self.wall_select_result,
+            "Seleccione el nuevo muro del neopreno",
+            script_object=self,
+        )
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+        neo_log("_start_edit_wall_id_selection: esperando nuevo muro para relacion")
+        return True
+
+    def _apply_selected_wall_id_to_current_edit(self) -> bool:
+        """Actualiza GUID/PMP del host sin tocar puntos, cara ni orientacion."""
+        selected_element = getattr(self.wall_select_result, "element", None)
+        if selected_element is None:
+            return False
+
+        wall_id, wall_name = get_wall_pmp_values(selected_element)
+        if not wall_id:
+            print("[EDIT][NEOPRENO][WALL] El muro seleccionado no tiene atributo 683")
+            return False
+
+        clean_wall_id = normalize_pmp_pare_value(wall_id)
+        clean_wall_name = normalize_pmp_pare_value(wall_name or "SIN_PARE")
+        if not clean_wall_id:
+            return False
+
+        wall_guid = str(selected_element.GetModelElementUUID())
+        self.detected_wall = selected_element
+        self.detected_wall_guid = wall_guid
+        self.wall_ifc_id = clean_wall_id
+        self.wall_material_name = clean_wall_name
+
+        if hasattr(self.build_ele, "MuroGUID") and hasattr(
+            self.build_ele.MuroGUID, "value"
+        ):
+            self.build_ele.MuroGUID.value = wall_guid
+        else:
+            print("[EDIT][NEOPRENO][WALL] Falta parametro MuroGUID en build_ele")
+            return False
+
+        if hasattr(self.build_ele, "pmp_pare") and hasattr(
+            self.build_ele.pmp_pare, "value"
+        ):
+            self.build_ele.pmp_pare.value = clean_wall_id
+        else:
+            print("[EDIT][NEOPRENO][WALL] Falta parametro pmp_pare en build_ele")
+            return False
+
+        if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
+            self.build_ele.pmp_pare_name, "value"
+        ):
+            self.build_ele.pmp_pare_name.value = clean_wall_name
+
+        self._wall_relation_edit_override = {
+            "MuroGUID": wall_guid,
+            "pmp_pare": clean_wall_id,
+            "pmp_pare_name": clean_wall_name,
+        }
+
+        neo_log(
+            "_apply_selected_wall_id_to_current_edit: "
+            f"MuroGUID={wall_guid} PMP_WALL_ID={clean_wall_id} "
+            f"pmp_pare_name={clean_wall_name}"
+        )
+        return True
+
+    def _apply_wall_relation_edit_override(self) -> None:
+        """Reaplica la relacion elegida en EDIT tras restaurar SavedState."""
+        override = getattr(self, "_wall_relation_edit_override", None) or {}
+        if not override:
+            return
+
+        muro_guid = normalize_pmp_pare_value(override.get("MuroGUID", "") or "")
+        wall_id = normalize_pmp_pare_value(override.get("pmp_pare", "") or "")
+        wall_name = normalize_pmp_pare_value(override.get("pmp_pare_name", "") or "")
+
+        if muro_guid and hasattr(self.build_ele, "MuroGUID"):
+            self.build_ele.MuroGUID.value = muro_guid
+            self.detected_wall_guid = muro_guid
+        if wall_id and hasattr(self.build_ele, "pmp_pare"):
+            self.build_ele.pmp_pare.value = wall_id
+            self.wall_ifc_id = wall_id
+        if hasattr(self.build_ele, "pmp_pare_name"):
+            self.build_ele.pmp_pare_name.value = wall_name
+            self.wall_material_name = wall_name
+
+        neo_log(
+            "_apply_wall_relation_edit_override: "
+            f"MuroGUID={muro_guid} PMP_WALL_ID={wall_id} pmp_pare_name={wall_name}"
+        )
 
     def _enter_inline_neopreno_edit_mode(self, result: NeoprenoSelectResult) -> bool:
         if not result or not result.is_selected or result.element is None:
@@ -5780,11 +5859,12 @@ class NeoprenosScriptObject(BaseScriptObject):
         return True
 
     def _execute_modify(self) -> CreateElementResult:
-        """Lógica completa de EDICIÓN: lee TODO desde build_ele, NUNCA escribe parámetros persistentes."""
+        """Logica de EDICION: conserva geometria y solo sobreescribe PMP si hay cambio de muro."""
         if not self._is_inline_neopreno_edit_session():
             self._apply_face_context_from_build_ele_only()
             self._ensure_line_result_from_build_ele_for_modify()
             self._try_sync_drag_offset_for_modify()
+        self._apply_wall_relation_edit_override()
 
         start_point = None
         end_point = None
@@ -5826,6 +5906,14 @@ class NeoprenosScriptObject(BaseScriptObject):
             wall_name = normalize_pmp_pare_value(
                 (state.get("pmp_pare_name") or "").strip()
             )
+            override = getattr(self, "_wall_relation_edit_override", None) or {}
+            if override:
+                wall_pare = normalize_pmp_pare_value(
+                    override.get("pmp_pare", wall_pare) or wall_pare
+                )
+                wall_name = normalize_pmp_pare_value(
+                    override.get("pmp_pare_name", wall_name) or wall_name
+                )
             if wall_pare == "SIN_IFC":
                 wall_pare = ""
             if wall_name == "SIN_PARE":
@@ -5871,7 +5959,10 @@ class NeoprenosScriptObject(BaseScriptObject):
             if wall_pare == "SIN_IFC":
                 wall_pare = ""
             if not wall_pare:
-                wall_pare = normalize_pmp_pare_value(self._resolve_host_pmp_pare())
+                wall_pare, resolved_wall_name = self._resolve_host_pmp_values()
+                wall_pare = normalize_pmp_pare_value(wall_pare)
+                if not wall_name:
+                    wall_name = normalize_pmp_pare_value(resolved_wall_name)
             if hasattr(self.build_ele, "pmp_pare_name") and hasattr(
                 self.build_ele.pmp_pare_name, "value"
             ):
@@ -5883,7 +5974,8 @@ class NeoprenosScriptObject(BaseScriptObject):
             if wall_name == "SIN_PARE":
                 wall_name = ""
             if not wall_name:
-                wall_name = normalize_pmp_pare_value(self._resolve_host_pmp_pare_name())
+                _resolved_wall_id, wall_name = self._resolve_host_pmp_values()
+                wall_name = normalize_pmp_pare_value(wall_name)
             if hasattr(self.build_ele, "Ancho"):
                 ancho = get_neopreno_width(self.build_ele)
             if hasattr(self.build_ele, "GrosorSeleccionado"):
