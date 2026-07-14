@@ -188,6 +188,13 @@
         <Text>Propiedades de la Zona</Text>
 
         <Parameter>
+            <Name>ShowPremarc</Name>
+            <Text>Mostrar Premarco</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
             <Name>DisableTopXPS</Name>
             <Text>Deshabilitar XPS superior</Text>
             <Value>False</Value>

@@ -4098,6 +4098,7 @@ class PremarcScriptObject(BaseScriptObject):
             "encaje_manual": self.build_ele.EnableManualEncaje.value,
             "encaje_altura": self.build_ele.EncajeAltura.value,
             "encaje_base": self.build_ele.EncajeBase.value,
+            "ShowPremarc": self.build_ele.ShowPremarc.value,
             "disable_top_xps": self.build_ele.DisableTopXPS.value,
             "disable_bottom_xps": self.build_ele.DisableBottomXPS.value,
             "disable_left_xps": self.build_ele.DisableLeftXPS.value,
@@ -4197,6 +4198,10 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.DisableBottomXPS.value = state["disable_bottom_xps"]
         self.build_ele.DisableLeftXPS.value = state["disable_left_xps"]
         self.build_ele.DisableRightXPS.value = state["disable_right_xps"]
+        self.build_ele.ShowPremarc.value = state.get(
+            "ShowPremarc",
+            not state.get("DisablePremarc", not self.build_ele.ShowPremarc.value),
+        )
         self.build_ele.XPSthicknessInd.value = state["xps_thickness_index"]
         self.build_ele.XPSthickness.value = state["xps_thickness"]
         self.build_ele.ComboBoxAbiertoCerrado.value = state["ComboBoxAbiertoCerrado"]
@@ -9659,6 +9664,9 @@ class PremarcScriptObject(BaseScriptObject):
         """
         Single U profile on the **bottom** edge of the premarco. Layer and attributes set in create_premarc.
         """
+        if self._premarc_disabled():
+            return None
+
         show_u = getattr(self.build_ele, "ShowAccessorUPerimeter", None)
         if show_u is None or not show_u.value:
             return None
@@ -9697,10 +9705,17 @@ class PremarcScriptObject(BaseScriptObject):
             solid = AllplanGeo.Move(solid, AllplanGeo.Vector3D(sx, sy, sz))
         return solid
 
+    def _premarc_disabled(self) -> bool:
+        show_premarc = getattr(self.build_ele, "ShowPremarc", None)
+        return not bool(show_premarc is not None and show_premarc.value)
+
     def create_premarc_frame(self):
 
         self._cached_bottom_sill_top_z = None
         self._u_sill_finish_poly = None
+
+        if self._premarc_disabled():
+            return [], None, []
 
         # polyhedron_premarc_list = AllplanGeo.Polyhedron3DList() # Premarc elements
         polyhedron_premarc_list = []
@@ -11660,6 +11675,9 @@ class PremarcScriptObject(BaseScriptObject):
             return None
 
     def create_box_shutter(self):  # Cajon de persiana
+        if self._premarc_disabled():
+            return []
+
         # Box shutters
         wall_thickness_xps = self._xps_wall_thickness_mm()
         BOX_SHUTTER_HEIGHT = self.build_ele.PersianaHeight.value
@@ -11724,6 +11742,9 @@ class PremarcScriptObject(BaseScriptObject):
         return box_shutter_list
 
     def create_premarc_REA(self):
+        if self._premarc_disabled():
+            return [], []
+
         elems = []
         cuboids = []
         cylinders = []
@@ -12119,6 +12140,9 @@ class PremarcScriptObject(BaseScriptObject):
     ##### End Squares #######
 
     def create_premarc_optionals_elements(self):
+        if self._premarc_disabled():
+            return [], [], [], [], [], None
+
         other_elements = []
         # Squares - Escuadras
 
@@ -12841,6 +12865,9 @@ class PremarcScriptObject(BaseScriptObject):
         return final_result, elems_2d
 
     def create_premarc_mosquitera(self):
+        if self._premarc_disabled():
+            return []
+
         pos_bottom_frame = AllplanGeo.AxisPlacement3D(
             AllplanGeo.Point3D(0, 63, self.socket_height)
         )
@@ -13445,6 +13472,9 @@ class PremarcScriptObject(BaseScriptObject):
         return poly_inside_space, poly_real_space
 
     def create_retall_representation(self):
+        if self._premarc_disabled():
+            return None
+
         Z_position = (
             0
             if self.build_ele.Z_RetallGanxo.value < self.heigh
