@@ -10,8 +10,8 @@
     </Script>
 
     <Page>
-        <Name>ZoneProperties</Name>
-        <Text>Propiedades de la Zona</Text>
+        <Name>Cavidad</Name>
+        <Text>Cavidad</Text>
 
         <Parameter>
             <Name>z_unique</Name>
@@ -37,49 +37,6 @@
             <Visible>False</Visible>
         </Parameter>
 
-        <Parameter>
-            <Name>DisableTopXPS</Name>
-            <Text>Deshabilitar XPS superior</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>DisableBottomXPS</Name>
-            <Text>Deshabilitar XPS inferior</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>DisableLeftXPS</Name>
-            <Text>Deshabilitar XPS izquierda</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <Parameter>
-            <Name>DisableRightXPS</Name>
-            <Text>Deshabilitar XPS derecha</Text>
-            <Value>False</Value>
-            <ValueType>CheckBox</ValueType>
-        </Parameter>
-
-        <!-- TODO: Eliminar este boton cuando el flujo continuo de colocacion de premarcos quede validado.
-        <Parameter>
-            <Name>NextPremarcPlacementRow</Name>
-            <Text>Colocación</Text>
-            <ValueType>Row</ValueType>
-            <Visible>ShowSessionControls</Visible>
-
-            <Parameter>
-                <Name>NextPremarcPlacement</Name>
-                <Text>Posicionar otro premarco</Text>
-                <EventId>1001</EventId>
-                <ValueType>Button</ValueType>
-            </Parameter>
-        </Parameter>
-        -->
 
         <Parameter>
             <Name>RowSeleccionPremarc</Name>
@@ -156,6 +113,106 @@
                 <Enable>True</Enable>
                 <Persistent>No</Persistent>
             </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>ButtonWallSelection</Name>
+            <Text>Volver seleccionar muro</Text>
+            <ValueType>Row</ValueType>
+
+            <Parameter>
+                <Name>Button</Name>
+                <Text>Reset</Text>
+                <EventId>1000</EventId>
+                <ValueType>Button</ValueType>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
+            <Name>SelectionWall</Name>
+            <Text>Muro</Text>
+            <Value>No seleccionado</Value>
+            <ValueType>String</ValueType>
+            <Enable>False</Enable>
+        </Parameter>
+
+        <Parameter>
+            <Name>opening_guid</Name>
+            <Text>opening_guid</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>niche_guid</Name>
+            <Text>opening_guid</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+            <Visible>False</Visible>
+            <Persistent>Model</Persistent>
+        </Parameter>
+
+        <Parameter>
+            <Name>rotation</Name>
+            <Text>Rotacion</Text>
+            <Value>0.0</Value>
+            <ValueType>Double</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>id_premarc</Name>
+            <Text>ID Premarc</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>wall_id</Name>
+            <Text>Wall ID</Text>
+            <Value></Value>
+            <ValueType>String</ValueType>
+        </Parameter>
+        <Parameter>
+            <Name>ComboBoxDEN</Name>
+            <Text>DEN cavidad</Text>
+            <Value>XBANDERA</Value>
+            <ValueList>XVENTANA|XBANDERA</ValueList>
+            <ValueType>StringComboBox</ValueType>
+        </Parameter>
+    </Page>
+
+    <Page>
+        <Name>ZoneProperties</Name>
+        <Text>Propiedades de la Zona</Text>
+
+        <Parameter>
+            <Name>DisableTopXPS</Name>
+            <Text>Deshabilitar XPS superior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableBottomXPS</Name>
+            <Text>Deshabilitar XPS inferior</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableLeftXPS</Name>
+            <Text>Deshabilitar XPS izquierda</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
+        </Parameter>
+
+        <Parameter>
+            <Name>DisableRightXPS</Name>
+            <Text>Deshabilitar XPS derecha</Text>
+            <Value>False</Value>
+            <ValueType>CheckBox</ValueType>
         </Parameter>
 
         <Parameter>
@@ -241,79 +298,11 @@
             </Parameter>
 
             <Parameter>
-                <Name>ButtonWallSelection</Name>
-                <Text>Volver seleccionar muro</Text>
-                <ValueType>Row</ValueType>
-
-                <Parameter>
-                    <Name>Button</Name>
-                    <Text>Reset</Text>
-                    <EventId>1000</EventId>
-                    <ValueType>Button</ValueType>
-                </Parameter>
-            </Parameter>
-
-            <Parameter>
-                <Name>SelectionWall</Name>
-                <Text>Estado selección muro</Text>
-                <Value>No seleccionado</Value>
-                <ValueType>String</ValueType>
-            </Parameter>
-            <!-- persistent Model -->
-            <Parameter>
-                <Name>opening_guid</Name>
-                <Text>opening_guid</Text>
-                <Value></Value>
-                <ValueType>String</ValueType>
-                <Visible>False</Visible>
-                <Persistent>Model</Persistent>
-            </Parameter>
-
-            <Parameter>
-                <Name>niche_guid</Name>
-                <Text>opening_guid</Text>
-                <Value></Value>
-                <ValueType>String</ValueType>
-                <Visible>False</Visible>
-                <Persistent>Model</Persistent>
-            </Parameter>
-
-            <Parameter>
                 <Name>valueListaGrosor</Name>
                 <Text>Lista dinámica Grosor</Text>
                 <Value>[]</Value>
                 <ValueType>String</ValueType>
                 <Visible>False</Visible>
-            </Parameter>
-
-            <Parameter>
-                <Name>SelectionWall</Name>
-                <Text>Muro</Text>
-                <Value>No seleccionado</Value>
-                <ValueType>String</ValueType>
-                <Enable>False</Enable>
-            </Parameter>
-
-            <Parameter>
-                <Name>rotation</Name>
-                <Text>Rotación</Text>
-                <Value>0.0</Value>
-                <ValueType>Double</ValueType>
-            </Parameter>
-
-
-            <Parameter>
-                <Name>id_premarc</Name>
-                <Text>ID Premarc</Text>
-                <Value></Value>
-                <ValueType>String</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>wall_id</Name>
-                <Text>Wall ID</Text>
-                <Value></Value>
-                <ValueType>String</ValueType>
             </Parameter>
         </Parameter>
 
@@ -343,8 +332,7 @@
                 <Text>Perfil U: cara del llindar rosa (back = vora finestra/azul; front = vora
                     contrària)</Text>
                 <Value>pit_span_from_outer_lip</Value>
-                <ValueList>
-                    pit_span_from_outer_lip|pit_into_opening|pit_inward|pit_outer_face|half_embed</ValueList>
+                <ValueList>pit_span_from_outer_lip|pit_into_opening|pit_inward|pit_outer_face|half_embed</ValueList>
                 <ValueType>StringComboBox</ValueType>
                 <Visible>False</Visible>
             </Parameter>
@@ -460,23 +448,6 @@
                 <Visible>False</Visible>
             </Parameter>
 
-            <!-- <Parameter>
-                <Name>ImportPendent</Name>
-                <Text>Import file</Text>
-                <Value>0</Value>
-                <ValueType>RadioButtonGroup</ValueType>
-
-                <Parameter>
-                    <Name>ImportPendentSelection</Name>
-                    <Text>Import</Text>
-                    <Value>[_]</Value>
-                    <ValueType>namedtuple(DisplayText,RadioButton)</ValueType>
-                    <NamedTuple>
-                        <TypeName>ImportPendentSelection</TypeName>
-                        <FieldNames>RowText,FileSelection</FieldNames>
-                    </NamedTuple>
-                </Parameter>
-            </Parameter> -->
         </Parameter>
 
         <Parameter>
@@ -808,14 +779,6 @@
                 <Text>PMP_PREMARC_LABELS</Text>
                 <Value></Value>
                 <ValueType>String</ValueType>
-            </Parameter>
-
-            <Parameter>
-                <Name>ComboBoxDEN</Name>
-                <Text>DEN</Text>
-                <Value>XBANDERA</Value>
-                <ValueList>XVENTANA|XBANDERA</ValueList>
-                <ValueType>StringComboBox</ValueType>
             </Parameter>
 
         </Parameter>
