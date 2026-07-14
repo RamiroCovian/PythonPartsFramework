@@ -1901,6 +1901,45 @@ class PremarcScriptObject(BaseScriptObject):
         self._add_shared_generated_element_attributes(attribute_list)
         return attribute_list
 
+    def _build_window_opening_attribute_list(self) -> BuildingElementAttributeList:
+        """Atributos propios del WindowOpening creado en el muro."""
+        attribute_list = BuildingElementAttributeList()
+        den_value = str(getattr(self.build_ele.ComboBoxDEN, "value", "") or "").strip()
+
+        if getattr(self, "den_id", 0) <= 0:
+            print("[Premarc] DEN no resuelto para WindowOpening: attr_id<=0")
+            return attribute_list
+
+        if not den_value:
+            print("[Premarc] DEN vacio: no se anade al WindowOpening")
+            return attribute_list
+
+        attribute_list.add_attribute(self.den_id, den_value)
+        return attribute_list
+
+    def _apply_window_opening_attributes(
+        self, opening_adapter: AllplanEleAdapter.BaseElementAdapter
+    ) -> None:
+        """Aplica atributos al WindowTier despues de crearlo con la API."""
+        if opening_adapter is None or opening_adapter.IsNull():
+            print("[Premarc] WindowOpening sin adapter valido: atributos omitidos")
+            return
+
+        attribute_list = self._build_window_opening_attribute_list()
+        if not attribute_list.get_attribute_list():
+            return
+
+        opening_list = AllplanEleAdapter.BaseElementAdapterList()
+        opening_list.append(opening_adapter)
+        AllplanBaseElements.ElementsAttributeService.ChangeAttributes(
+            attribute_list.get_attributes_list_as_tuples(),
+            opening_list,
+        )
+        print(
+            "[Premarc] Atributos aplicados al WindowOpening -> "
+            f"DEN={getattr(self.build_ele.ComboBoxDEN, 'value', '')}"
+        )
+
     def _get_build_ele_value(self, *candidate_names: str, default="") -> str:
         """Lee el primer parametro existente en build_ele y devuelve su valor como texto."""
         for name in candidate_names:
@@ -6089,6 +6128,7 @@ class PremarcScriptObject(BaseScriptObject):
             print(f"[Premarc] Opening GUID: {opening_guid_str}")
             if width is None:
                 # window opening premarc
+                self._apply_window_opening_attributes(opening_adapter)
                 self.build_ele.opening_guid.value = opening_guid_str
             else:
                 # niche opening persiana
