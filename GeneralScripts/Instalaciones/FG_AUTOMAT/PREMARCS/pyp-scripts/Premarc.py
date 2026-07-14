@@ -198,6 +198,7 @@ SELECTING_WALL = 1
 PLACING_POINT = 2
 SELECTING_EXISTING_PREMARC = 3
 SELECTING_PENDING_PREMARC = 4
+SELECTING_WALL_ID_ONLY = 5
 PREMARC_SELECTION_AUX_COLOR = 3
 PREMARC_SELECTION_AUX_PEN = 15
 PREMARC_SELECTION_AUX_CROSS_HALF_MM = 300.0
@@ -655,6 +656,10 @@ def parse_saved_state_value(raw_value: Any) -> dict:
     return {}
 
 
+def _python_literal_saved_state(state: dict) -> str:
+    return repr(state or {})
+
+
 def _make_premarc_selection_aux_properties(
     color: int = PREMARC_SELECTION_AUX_COLOR,
     pen: int = PREMARC_SELECTION_AUX_PEN,
@@ -1021,6 +1026,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.premarc_select_result = PremarcSelectResult()
         self.pending_premarc_select_result = PendingPremarcSelectResult()
         self.selected_wall = None  # guardará el BaseElementAdapter
+        self._wall_id_override_value = ""
+        self._pmp_pare_override_value = ""
         self.detected_wall_thickness = 0
         self._opening_baseline_width = None
         self._opening_baseline_height = None
@@ -1751,14 +1758,40 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _get_current_pmp_pare_value(self) -> str:
         """Valor legible de pmp_pare: nombre/material del muro host."""
+        pmp_pare_override = str(
+            getattr(self, "_pmp_pare_override_value", "") or ""
+        ).strip()
+        if pmp_pare_override:
+            return pmp_pare_override
+
         if self.selected_wall:
             wall_name = self.get_wall_material_name(self.selected_wall) or ""
             if wall_name:
                 return str(wall_name).strip()
         return str(getattr(self.build_ele.wall_id, "value", "") or "").strip()
 
+    def _get_wall_pmp_pare_value(self, wall_adapter) -> str:
+        """Lee el material/nombre para PMP_PARE desde el muro seleccionado."""
+        if wall_adapter is None or wall_adapter.IsNull():
+            return ""
+
+        wall_pare = self._read_wall_attribute(
+            wall_adapter, getattr(self, "pmp_pare_id", 0)
+        )
+        if wall_pare:
+            return str(wall_pare).strip()
+
+        wall_name = self.get_wall_material_name(wall_adapter) or ""
+        return str(wall_name).strip()
+
     def _get_current_wall_ifc_id_value(self) -> str:
         """Valor técnico de PMP_WALL_ID: IFC ID del muro host."""
+        wall_id_override = str(
+            getattr(self, "_wall_id_override_value", "") or ""
+        ).strip()
+        if wall_id_override:
+            return wall_id_override
+
         if self.selected_wall:
             return self.get_wall_ifc_id(self.selected_wall)
         return ""
@@ -2530,6 +2563,16 @@ class PremarcScriptObject(BaseScriptObject):
             else:
                 self.script_object_interactor = None
                 self.interactor_state = STOPPED
+        elif self.interactor_state == SELECTING_WALL_ID_ONLY:
+            if self.wall_select_result.is_selected:
+                self._update_wall_relation_from_selected_wall_only(
+                    self.wall_select_result.element,
+                    self.wall_select_result.element_guid,
+                )
+            else:
+                print("[Premarc][WALL_ID] Cambio de muro cancelado")
+            self.script_object_interactor = None
+            self.interactor_state = STOPPED
         elif self.interactor_state == SELECTING_EXISTING_PREMARC:
             self._clear_session_selection_preview_context()
             self.script_object_interactor = None
@@ -3817,6 +3860,148 @@ class PremarcScriptObject(BaseScriptObject):
         print(f"[Premarc] Muro restaurado/seleccionado: {guid_str}")
         return True
 
+    def _build_wall_relation_attribute_list(
+        self, wall_ifc_id: str, pmp_pare: str
+    ) -> BuildingElementAttributeList:
+        attribute_list = BuildingElementAttributeList()
+        if self.pmp_pare_id > 0 and pmp_pare:
+            attribute_list.add_attribute(self.pmp_pare_id, pmp_pare)
+        if getattr(self, "pmp_wall_id_attr_id", 0) > 0 and wall_ifc_id:
+            attribute_list.add_attribute(self.pmp_wall_id_attr_id, wall_ifc_id)
+        return attribute_list
+
+    def _get_current_premarc_attribute_targets(self):
+        ppg_adapter = self._get_modification_root_adapter()
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            ppg_adapter = self._get_cached_modification_adapter_object()
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            ppg_adapter = self._get_document_manager_modification_root_adapter()
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            ppg_adapter = self._get_cached_modification_root_adapter()
+
+        target_list = AllplanEleAdapter.BaseElementAdapterList()
+        if ppg_adapter is None or ppg_adapter.IsNull():
+            return target_list, 0
+
+        child_list = None
+        try:
+            child_list = (
+                AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElementsFromTree(
+                    ppg_adapter
+                )
+            )
+        except Exception as exc:
+            print(f"[Premarc][WALL_ID] No se pudo leer arbol hijo del PPG: {exc}")
+
+        if child_list is None:
+            try:
+                child_list = (
+                    AllplanEleAdapter.BaseElementAdapterChildElementsService.GetChildModelElements(
+                        ppg_adapter, True
+                    )
+                )
+            except Exception as exc:
+                print(f"[Premarc][WALL_ID] No se pudo leer hijos del PPG: {exc}")
+                child_list = None
+
+        if child_list is None:
+            return target_list, 0
+
+        seen_guids = set()
+        wall_guid = str(self.wall_guid_str or "")
+        opening_guid = str(
+            getattr(getattr(self.build_ele, "opening_guid", None), "value", "") or ""
+        )
+
+        for child_adapter in child_list:
+            if child_adapter is None or child_adapter.IsNull():
+                continue
+            name, type_guid, model_guid = self._get_adapter_debug_values(child_adapter)
+            guid_str = str(model_guid or "")
+            if self._is_invalid_modification_adapter(name, guid_str):
+                continue
+            if wall_guid and guid_str == wall_guid:
+                continue
+            if opening_guid and guid_str == opening_guid:
+                continue
+            dedupe_key = guid_str or f"{name}|{type_guid}|{len(seen_guids)}"
+            if dedupe_key in seen_guids:
+                continue
+            seen_guids.add(dedupe_key)
+            target_list.append(child_adapter)
+
+        return target_list, len(seen_guids)
+
+    def _apply_wall_relation_attributes_to_current_ppg(
+        self, wall_ifc_id: str, pmp_pare: str
+    ) -> bool:
+        attribute_list = self._build_wall_relation_attribute_list(wall_ifc_id, pmp_pare)
+        if not attribute_list.get_attribute_list():
+            print("[Premarc][WALL_ID] Sin atributos validos para aplicar")
+            return False
+
+        target_list, target_count = self._get_current_premarc_attribute_targets()
+        if target_count <= 0:
+            print("[Premarc][WALL_ID] PPG sin hijos actualizables")
+            return False
+
+        try:
+            AllplanBaseElements.ElementsAttributeService.ChangeAttributes(
+                attribute_list.get_attributes_list_as_tuples(),
+                target_list,
+            )
+            print(
+                "[Premarc][WALL_ID] Atributos actualizados -> "
+                f"targets={target_count}, PMP_WALL_ID={wall_ifc_id}, PMP_PARE={pmp_pare}"
+            )
+            return True
+        except Exception as exc:
+            print(f"[Premarc][WALL_ID] Error actualizando atributos: {exc}")
+            return False
+
+    def _update_wall_relation_from_selected_wall_only(
+        self, wall_adapter, wall_guid_str: str = ""
+    ) -> bool:
+        if wall_adapter is None or wall_adapter.IsNull():
+            print("[Premarc][WALL_ID] Seleccion cancelada: muro no valido")
+            return False
+
+        wall_ifc_id = self.get_wall_ifc_id(wall_adapter)
+        if not wall_ifc_id:
+            print(
+                "[Premarc][WALL_ID] Muro seleccionado sin IFC ID "
+                f"(attr {IFC_ID_ATTRIBUTE_ID}); no se modifica PMP_WALL_ID"
+            )
+            return False
+
+        pmp_pare = self._get_wall_pmp_pare_value(wall_adapter)
+        prev_wall_id = self._get_current_wall_ifc_id_value()
+        prev_pmp_pare = self._get_current_pmp_pare_value()
+
+        self._wall_id_override_value = wall_ifc_id
+        self._pmp_pare_override_value = pmp_pare
+        self.build_ele.wall_id.value = pmp_pare
+
+        if hasattr(self.build_ele, "SavedState") and self.placement_pnt != AllplanGeo.Point3D():
+            try:
+                self.build_ele.SavedState.value = _python_literal_saved_state(
+                    self._build_premarc_saved_state_dict(self.placement_pnt)
+                )
+            except Exception as exc:
+                print(f"[Premarc][WALL_ID] No se pudo refrescar SavedState: {exc}")
+
+        applied = self._apply_wall_relation_attributes_to_current_ppg(
+            wall_ifc_id, pmp_pare
+        )
+        print(
+            "[Premarc][WALL_ID] Cambio de muro aplicado solo a atributos -> "
+            f"wall_guid={wall_guid_str or str(wall_adapter.GetModelElementUUID())}, "
+            f"PMP_WALL_ID {prev_wall_id or '<vacio>'} -> {wall_ifc_id}, "
+            f"PMP_PARE {prev_pmp_pare or '<vacio>'} -> {pmp_pare or '<vacio>'}, "
+            f"applied={applied}"
+        )
+        return True
+
     def _try_restore_wall_from_guid(self, wall_guid_str: str) -> bool:
         if not wall_guid_str:
             print("[Premarc] Restore muro -> wall_guid vacio")
@@ -4114,6 +4299,8 @@ class PremarcScriptObject(BaseScriptObject):
             "color_manual_thickness": self.build_ele.color_manual_thickness.value,
             "xps_type": self.build_ele.xps_type.value,
             "wall_id": self.build_ele.wall_id.value,
+            "pmp_wall_id": self._get_current_wall_ifc_id_value(),
+            "pmp_pare": self._get_current_pmp_pare_value(),
             "fondo_ampits": self.build_ele.fondo_ampits.value,
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
@@ -4263,6 +4450,8 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
+        self._wall_id_override_value = str(state.get("pmp_wall_id", "") or "").strip()
+        self._pmp_pare_override_value = str(state.get("pmp_pare", "") or "").strip()
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
 
         if self.build_ele.enable_manual_thickness.value:
@@ -4656,6 +4845,36 @@ class PremarcScriptObject(BaseScriptObject):
 
         return preview_elements
 
+    def _get_active_coord_input(self):
+        coord_input = getattr(self, "coord_input", None)
+        if coord_input:
+            return coord_input
+        interactor = getattr(self, "script_object_interactor", None)
+        return getattr(interactor, "coord_input", None)
+
+    def _start_wall_relation_selection(self) -> bool:
+        if not self.is_modification_mode:
+            print("[Premarc][WALL_ID] Cambiar muro ignorado fuera de modificacion")
+            return True
+
+        print(
+            "[Premarc][WALL_ID] Click boton cambiar muro -> "
+            f"PMP_WALL_ID={self._get_current_wall_ifc_id_value() or '<vacio>'}, "
+            f"PMP_PARE={self._get_current_pmp_pare_value() or '<vacio>'}"
+        )
+        self.wall_select_result = WallSelectResult()
+        self.interactor_state = SELECTING_WALL_ID_ONLY
+        self.script_object_interactor = WallSelectInteractor(
+            self.wall_select_result,
+            "Seleccione el nuevo muro padre para actualizar atributos",
+        )
+        coord_input = self._get_active_coord_input()
+        if coord_input:
+            self.script_object_interactor.start_input(coord_input)
+        else:
+            print("[Premarc][WALL_ID] No hay CoordinateInput activo")
+        return True
+
     def on_control_event(self, event_id: int):
         # Reiniciar vector_length para recalcular con los nuevos puntos
         if event_id == 1000:
@@ -4840,6 +5059,8 @@ class PremarcScriptObject(BaseScriptObject):
                 self.script_object_interactor = None
                 self.interactor_state = STOPPED
             return True
+        elif event_id == 1050:
+            return self._start_wall_relation_selection()
         else:
             return False
 
@@ -4853,6 +5074,9 @@ class PremarcScriptObject(BaseScriptObject):
         Returns:
             update palette state
         """
+
+        if name == "CambiarMuroPremarc":
+            return self._start_wall_relation_selection()
 
         if name == "INPUT_PMP_PREMARC_LABELS":
             value = str(_value).strip()
@@ -6857,7 +7081,7 @@ class PremarcScriptObject(BaseScriptObject):
         if not individual_pythonparts:
             raise Exception("No se pudieron crear PythonParts individuales")
 
-        saved_state_json = json.dumps(
+        saved_state_json = _python_literal_saved_state(
             self._build_premarc_saved_state_dict(self.placement_pnt)
         )
         self.build_ele.SavedState.value = saved_state_json
@@ -8112,9 +8336,12 @@ class PremarcScriptObject(BaseScriptObject):
         # xps_attribute_list.add_attribute(self.sizes_attribute_id, medidas_str)
         xps_attribute_list.add_attribute(self.pmp_xps_premarc_detail_text_id, xps_material_value)
         xps_attribute_list.add_attribute(self.pmp_id_premarc_id, self.val_pmp_id_premarc)
-        if self.selected_wall:
-            xps_attribute_list.add_attribute(self.pmp_pare_id, self.get_wall_material_name(self.selected_wall))
-        xps_attribute_list.add_attribute(self.pmp_wall_id_attr_id, self.build_ele.wall_id.value)
+        pmp_pare_value = self._get_current_pmp_pare_value()
+        pmp_wall_id_value = self._get_current_wall_ifc_id_value()
+        if pmp_pare_value:
+            xps_attribute_list.add_attribute(self.pmp_pare_id, pmp_pare_value)
+        if pmp_wall_id_value:
+            xps_attribute_list.add_attribute(self.pmp_wall_id_attr_id, pmp_wall_id_value)
 
         init_i = len(model_ele_list) - len(xps)
         for i in range(init_i, len(model_ele_list)):
@@ -8136,9 +8363,10 @@ class PremarcScriptObject(BaseScriptObject):
         frame_attribute_list.add_attribute(self.pmp_id_premarc_id, self.val_pmp_id_premarc)
         frame_attribute_list.add_attribute(self.pmp_prem_muro_id, self.build_ele.thickness_wall.value)
         frame_attribute_list.add_attribute(self.pmp_prem_color_id, self.color_id_to_rgb_or_hex()[0])
-        if self.selected_wall:
-            frame_attribute_list.add_attribute(self.pmp_pare_id, self.get_wall_material_name(self.selected_wall))
-        frame_attribute_list.add_attribute(self.pmp_wall_id_attr_id, self.build_ele.wall_id.value)
+        if pmp_pare_value:
+            frame_attribute_list.add_attribute(self.pmp_pare_id, pmp_pare_value)
+        if pmp_wall_id_value:
+            frame_attribute_list.add_attribute(self.pmp_wall_id_attr_id, pmp_wall_id_value)
         frame_attribute_list.add_attribute(self.pmp_premarc_type_id, self._premarc_labels_without_extras())
         frame_attribute_list.add_attribute(self.pmp_prem_fondo_id, self.thickness)
         frame_attribute_list.add_attribute(self.pmp_xps_premarc_detail_text_id, self.build_ele.xps_type.value)
@@ -8389,18 +8617,22 @@ class PremarcScriptObject(BaseScriptObject):
 
             eix_fg_attribute_list = BuildingElementAttributeList()
             eix_fg_attribute_list.add_attribute(self.pmp_id_premarc_id, self.val_pmp_id_premarc)
-            if self.selected_wall:
-                eix_fg_attribute_list.add_attribute(self.pmp_pare_id, self.get_wall_material_name(self.selected_wall))
-            eix_fg_attribute_list.add_attribute(self.pmp_wall_id_attr_id, self.build_ele.wall_id.value)
+            pmp_pare_value = self._get_current_pmp_pare_value()
+            pmp_wall_id_value = self._get_current_wall_ifc_id_value()
+            if pmp_pare_value:
+                eix_fg_attribute_list.add_attribute(self.pmp_pare_id, pmp_pare_value)
+            if pmp_wall_id_value:
+                eix_fg_attribute_list.add_attribute(self.pmp_wall_id_attr_id, pmp_wall_id_value)
 
             eix_add_attribute_list = BuildingElementAttributeList()
             eix_add_attribute_list.add_attribute(self.pmp_id_premarc_id, self.val_pmp_id_premarc)
-            if self.selected_wall:
-                eix_add_attribute_list.add_attribute(self.pmp_pare_id, self.get_wall_material_name(self.selected_wall))
-            eix_add_attribute_list.add_attribute(self.pmp_wall_id_attr_id, self.build_ele.wall_id.value)
+            if pmp_pare_value:
+                eix_add_attribute_list.add_attribute(self.pmp_pare_id, pmp_pare_value)
+            if pmp_wall_id_value:
+                eix_add_attribute_list.add_attribute(self.pmp_wall_id_attr_id, pmp_wall_id_value)
             eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_parts_id, self.build_ele.ampit_parts.value)
             eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_1_id, self.build_ele.ampit_ref_1.value)
-            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_2_id, self.get_wall_material_name(self.selected_wall))
+            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_2_id, pmp_pare_value)
 
             if len(ampit_edge_fg) > 0:
                 model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)

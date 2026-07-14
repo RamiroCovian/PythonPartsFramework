@@ -116,6 +116,25 @@
         </Parameter>
 
         <Parameter>
+            <Name>RowCambiarMuroPremarc</Name>
+            <Text>Muro padre</Text>
+            <ValueType>Row</ValueType>
+            <Visible>ShowModificationControls</Visible>
+
+            <Parameter>
+                <Name>CambiarMuroPremarc</Name>
+                <Text>Cambiar muro</Text>
+                <EventId>1050</EventId>
+                <Value>0</Value>
+                <ValueType>Button</ValueType>
+                <Enable>True</Enable>
+                <Visible>ShowModificationControls</Visible>
+                <TextId>1050</TextId>
+                <Persistent>No</Persistent>
+            </Parameter>
+        </Parameter>
+
+        <Parameter>
             <Name>ButtonWallSelection</Name>
             <Text>Volver seleccionar muro</Text>
             <ValueType>Row</ValueType>
