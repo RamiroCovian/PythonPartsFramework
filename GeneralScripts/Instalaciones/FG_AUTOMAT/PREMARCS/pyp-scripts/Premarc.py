@@ -159,17 +159,18 @@ LAYER_AMPIT_EIX_AFEGIT = "PMP_AMPITS_EIX_ADD"
 MOSQUITERA_LAYER = "PMP_MOSQUITERA"
 ACCESSORIS_PREMARCS = "ACCESSORIS_PREMARCS"
 ACCESSORIS_PREMARCS_LAYER = "ACCESSORIS_PREMARCS"
-# Bottom U-channel accessory (catalog 115×30×3 sheet metal). Profile runs along X (sill length); U opens toward +Z.
-# Physical dimensions: 115 mm opening (Y), 30 mm legs (Z), 3 mm wall. One leg hangs 24 mm past sill outer face (Y).
+# Bottom U-channel accessory. Profile runs along X (sill length); U opens toward +Z.
+# Physical defaults: 115 mm exterior length (Y), 30 mm legs (Z), 1.5 mm fixed sheet metal.
+# One leg hangs 24 mm past sill outer face (Y) by default; length and overhang are user inputs.
 # Optional Y shift after anchor (mm); 0 = none.
 U_SILL_EDGE_HANG_SHIFT_Y_MM = 0.0
 # Whole U translated after geometry (mm); rigid move, not stretch.
 U_PROFILE_SHIFT_X_MM = 0.0
 U_PROFILE_SHIFT_Z_MM = 0.0
-U_PROTRUSION_MM = 115  # catalog "115" = total depth in Y
+U_PROTRUSION_MM = 115  # default total exterior length in Y
 U_OUTER_WIDTH_MM = 115  # same meaning as U_PROTRUSION_MM (readable alias)
 U_LEG_HEIGHT_MM = 30  # physical leg height from catalog (115×30×3)
-U_WALL_THICKNESS_MM = 3
+U_WALL_THICKNESS_MM = 1.5
 U_OVERHANG_Y_MM = (
     24.0  # one leg of the U hangs 24 mm past the sill outer face (Y direction)
 )
@@ -4348,6 +4349,8 @@ class PremarcScriptObject(BaseScriptObject):
                 else ""
             ),
             "ShowAccessorUPerimeter": self.build_ele.ShowAccessorUPerimeter.value,
+            "UChannelOuterLength": self._u_channel_outer_length_mm(),
+            "UChannelOverhang": self._u_channel_overhang_mm(),
         }
 
     def _apply_premarc_saved_state(self, state: dict) -> None:
@@ -4399,6 +4402,14 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.Z_RetallGanxo.value = state["Z_RetallGanxo"]
         self.build_ele.ComboBoxPendiente.value = state["ComboBoxPendiente"]
         self.build_ele.ShowAccessorUPerimeter.value = state["ShowAccessorUPerimeter"]
+        if hasattr(self.build_ele, "UChannelOuterLength"):
+            self.build_ele.UChannelOuterLength.value = state.get(
+                "UChannelOuterLength", U_PROTRUSION_MM
+            )
+        if hasattr(self.build_ele, "UChannelOverhang"):
+            self.build_ele.UChannelOverhang.value = state.get(
+                "UChannelOverhang", U_OVERHANG_Y_MM
+            )
         # Impermeabilizacion (.get con defaults: premarcos viejos no la tienen
         # en el SavedState).
         self.build_ele.EnableImpermeabilizacio.value = state.get(
@@ -8032,7 +8043,9 @@ class PremarcScriptObject(BaseScriptObject):
                 props_u = AllplanBaseElements.CommonProperties()
                 props_u.Layer = acc_layer_id
                 props_u.Color = U_ACCESSOR_COLOR_INT
-                model_ele_list.append_geometry_3d(u_poly, props_u)
+                self._append_geometry_or_list_to_model_list(
+                    model_ele_list, props_u, u_poly
+                )
         return model_ele_list
 
     def _space_volume_texture_definition(self):
@@ -8409,11 +8422,15 @@ class PremarcScriptObject(BaseScriptObject):
                 props_accessor = AllplanBaseElements.CommonProperties()
                 props_accessor.Layer = acc_layer_id
                 props_accessor.Color = U_ACCESSOR_COLOR_INT
-                model_ele_list.append_geometry_3d(u_poly, props_accessor)
-                empty_attr = BuildingElementAttributeList()
-                model_ele_list.set_element_attributes(
-                    len(model_ele_list) - 1, empty_attr.get_attribute_list()
+                first_accessor_index = len(model_ele_list)
+                self._append_geometry_or_list_to_model_list(
+                    model_ele_list, props_accessor, u_poly
                 )
+                empty_attr = BuildingElementAttributeList()
+                for idx in range(first_accessor_index, len(model_ele_list)):
+                    model_ele_list.set_element_attributes(
+                        idx, empty_attr.get_attribute_list()
+                    )
             else:
                 print(
                     f"[Premarc] Capa '{ACCESSORIS_PREMARCS_LAYER}' no disponible; accesorio U omitido"
@@ -9806,8 +9823,43 @@ class PremarcScriptObject(BaseScriptObject):
             else:
                 model_ele_list.append_geometry_3d(item, props_frame)
 
+    def _append_geometry_or_list_to_model_list(
+        self, model_ele_list, props, geometry
+    ) -> None:
+        """Append one polyhedron or a nested list of polyhedrons."""
+        if geometry is None:
+            return
+        if isinstance(geometry, (list, tuple)):
+            for item in geometry:
+                self._append_geometry_or_list_to_model_list(
+                    model_ele_list, props, item
+                )
+            return
+        model_ele_list.append_geometry_3d(geometry, props)
+
     def _u_channel_cuboid(self, p_min: AllplanGeo.Point3D, p_max: AllplanGeo.Point3D):
         return AllplanGeo.Polyhedron3D.CreateCuboid(p_min, p_max)
+
+    def _u_channel_outer_length_mm(self) -> float:
+        """User-facing exterior tray length in local Y, with legacy fallback."""
+        param = getattr(self.build_ele, "UChannelOuterLength", None)
+        value = getattr(param, "value", U_PROTRUSION_MM)
+        try:
+            length = float(value)
+        except (TypeError, ValueError):
+            length = float(U_PROTRUSION_MM)
+        min_length = float(U_WALL_THICKNESS_MM) * 2.0 + 1.0
+        return max(length, min_length)
+
+    def _u_channel_overhang_mm(self) -> float:
+        """User-facing exterior overhang in local Y, with legacy fallback."""
+        param = getattr(self.build_ele, "UChannelOverhang", None)
+        value = getattr(param, "value", U_OVERHANG_Y_MM)
+        try:
+            overhang = float(value)
+        except (TypeError, ValueError):
+            overhang = float(U_OVERHANG_Y_MM)
+        return max(overhang, 0.0)
 
     def _hollow_u_channel(
         self,
@@ -9942,17 +9994,17 @@ class PremarcScriptObject(BaseScriptObject):
         eps = float(U_SILL_CONTACT_Z_EPSILON_MM)
         return z_top + eps + adj + self._grosor_imp_mm()
 
-    def _u_channel_bottom(self) -> AllplanGeo.Polyhedron3D:
+    def _u_channel_bottom(self):
         """
-        Sheet-metal U (115×30×3 catalog). Long axis = X. U opens toward +Z.
-        One leg hangs U_OVERHANG_Y_MM (24 mm) past the sill outer face (Y direction).
+        Sheet-metal U. Long axis = X. U opens toward +Z.
+        The exterior length and the overhang are user inputs in the local Y direction.
         """
-        t = U_WALL_THICKNESS_MM  # 3
-        p = U_PROTRUSION_MM  # 115 (Y span)
+        t = float(U_WALL_THICKNESS_MM)  # fixed sheet thickness: 1.5 mm
+        p = self._u_channel_outer_length_mm()
         legz = float(U_LEG_HEIGHT_MM)  # 30 (Z height from catalog)
         z0 = self._u_accessory_bottom_plane_z()
 
-        overhang = float(U_OVERHANG_Y_MM)
+        overhang = self._u_channel_overhang_mm()
         x_min = float(-THICKNESS_MM)
         x_max = float(self.width) + float(THICKNESS_MM)
 
@@ -9980,7 +10032,10 @@ class PremarcScriptObject(BaseScriptObject):
         lst.append(leg_out)
         lst.append(base)
         ok, uni = AllplanGeo.MakeUnion(lst)
-        solid = uni if ok else base
+        if not ok or uni is None:
+            return [leg_in, base, leg_out]
+
+        solid = uni
 
         if legz > 2 * t and y_out > y_in + 0.01:
             solid = self._hollow_u_channel(
@@ -10013,12 +10068,15 @@ class PremarcScriptObject(BaseScriptObject):
         manual_th_v = manual_th.value if manual_th is not None else "N/A"
         y0_dbg = (
             -float(self.thickness)
-            - float(U_OVERHANG_Y_MM)
+            - self._u_channel_overhang_mm()
             + float(U_SILL_EDGE_HANG_SHIFT_Y_MM)
         )
+        u_length = self._u_channel_outer_length_mm()
+        u_overhang = self._u_channel_overhang_mm()
         print(
             f"[Premarc] U z0={z0:.2f}, z_top_used={z_top:.2f}, "
-            f"y0={y0_dbg:.1f}, overhang_Y={U_OVERHANG_Y_MM}, "
+            f"y0={y0_dbg:.1f}, length_Y={u_length:.1f}, overhang_Y={u_overhang:.1f}, "
+            f"sheet_thickness={U_WALL_THICKNESS_MM}, "
             f"pink_maxZ={zp}, cache={cached}, "
             f"heigh={float(self.heigh):.1f}, "
             f"thickness={float(self.thickness):.1f}, tp={float(self.thickness_premarc):.1f}, "
@@ -10032,7 +10090,11 @@ class PremarcScriptObject(BaseScriptObject):
         sy = float(U_PROFILE_EXTRA_Y_SHIFT_MM)
         sz = float(U_PROFILE_SHIFT_Z_MM)
         if sx != 0.0 or sy != 0.0 or sz != 0.0:
-            solid = AllplanGeo.Move(solid, AllplanGeo.Vector3D(sx, sy, sz))
+            move_vec = AllplanGeo.Vector3D(sx, sy, sz)
+            if isinstance(solid, (list, tuple)):
+                solid = [AllplanGeo.Move(item, move_vec) for item in solid]
+            else:
+                solid = AllplanGeo.Move(solid, move_vec)
         return solid
 
     def _premarc_disabled(self) -> bool:
@@ -13715,19 +13777,23 @@ class PremarcScriptObject(BaseScriptObject):
         pliegue_90 — "los 90º se hacen arriba". The vertical leg on the
         outer face of the U rises UP from the slab top (not down).
 
-        U profile geometry (constants from the top of the file):
-          - U_OVERHANG_Y_MM = 24 (how far the U hangs past the wall exterior)
-          - U_LEG_HEIGHT_MM = 30 (Z height of the U — used as rise length)
+        U profile geometry:
+          - exterior length is user input (total Y span of the sheet-metal U)
+          - overhang is user input (how far the U hangs past the wall exterior)
+          - U_LEG_HEIGHT_MM = 30 (Z height of the U, used as rise length)
         """
-        U_DEPTH = float(U_OVERHANG_Y_MM)        # 24
+        U_LENGTH = self._u_channel_outer_length_mm()
+        U_DEPTH = self._u_channel_overhang_mm()
         U_RISE_HEIGHT = float(U_LEG_HEIGHT_MM)  # 30 — rise matches U height
 
         # 1. Slab extendido desde JUSTO AFUERA de la pata exterior del U
-        # (Y_pre = -U_DEPTH - grosor) hasta la cara interior del muro
-        # (Y_pre = thickness). Pasa por debajo del U gracias al offset Z
-        # de _u_accessory_bottom_plane_z que usa +grosor_imp.
+        # (Y_pre = -U_DEPTH - grosor) hasta la cara interior del muro o hasta
+        # el borde interior real de la U si el largo exterior la supera.
+        # Pasa por debajo del U gracias al offset Z de
+        # _u_accessory_bottom_plane_z que usa +grosor_imp.
         slab_y_start = -U_DEPTH - grosor
-        slab_y_span = U_DEPTH + grosor + self.thickness
+        slab_y_end = max(float(self.thickness), U_LENGTH - U_DEPTH)
+        slab_y_span = slab_y_end - slab_y_start
         pos_top = AllplanGeo.AxisPlacement3D(
             AllplanGeo.Point3D(0, slab_y_start, 0)
         )

@@ -354,6 +354,24 @@
             </Parameter>
 
             <Parameter>
+                <Name>UChannelOuterLength</Name>
+                <Text>Perfil U - largo exterior</Text>
+                <Value>115</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>4</MinValue>
+                <Visible>ShowAccessorUPerimeter</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>UChannelOverhang</Name>
+                <Text>Perfil U - sobresaliente</Text>
+                <Value>24</Value>
+                <ValueType>Double</ValueType>
+                <MinValue>0</MinValue>
+                <Visible>ShowAccessorUPerimeter</Visible>
+            </Parameter>
+
+            <Parameter>
                 <Name>ComboBoxUChannelYAnchor</Name>
                 <Text>Perfil U: cara del llindar rosa (back = vora finestra/azul; front = vora
                     contrària)</Text>
