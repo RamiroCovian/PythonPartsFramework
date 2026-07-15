@@ -13353,6 +13353,43 @@ class PremarcScriptObject(BaseScriptObject):
             fondo = 0.0
         return fondo
 
+    def _ampit_bottom_slope_axis_angle(self):
+        if self.build_ele.ComboBoxPendiente.value != "SI":
+            return None, None
+
+        slope_rise_mm = 10.0
+        if self.bottom_rebaje_enabled():
+            hipotenusa = max(
+                float(self.thickness_premarc) - float(LENGTH_REBAJES_MM),
+                abs(slope_rise_mm),
+            )
+            ratio = max(-1.0, min(1.0, slope_rise_mm / hipotenusa))
+            angle_deg = math.degrees(math.asin(ratio))
+
+            center_x = float(self.width) / 2 if self.width else 0.0
+            axis_point = AllplanGeo.Point3D(
+                center_x, -float(LENGTH_REBAJES_MM), -self.heigh
+            )
+        else:
+            angle_deg = math.degrees(
+                math.atan2(slope_rise_mm, float(self.thickness_premarc))
+            )
+            axis_point = AllplanGeo.Point3D(0, 0, -self.heigh)
+
+        axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
+        return axis, AllplanGeo.Angle.FromDeg(-angle_deg)
+
+    def _apply_ampit_bottom_slope(self, element):
+        axis, angle = self._ampit_bottom_slope_axis_angle()
+        if axis is None:
+            return element
+        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
+            return AllplanGeo.Line3D(
+                AllplanGeo.Rotate(element.StartPoint, axis, angle),
+                AllplanGeo.Rotate(element.EndPoint, axis, angle),
+            )
+        return AllplanGeo.Rotate(element, axis, angle)
+
     def create_premarc_ampit(self):
         material = self.build_ele.ampit_material.value or "CERAMIC"
         spec = AMPIT_TYPE_SPECS.get(material, AMPIT_TYPE_SPECS["CERAMIC"])
@@ -13496,6 +13533,19 @@ class PremarcScriptObject(BaseScriptObject):
 
         self.retall_ampits_manual = False
         self.afegit_ampits_manual = False
+
+        final_result_3d = [
+            self._apply_ampit_bottom_slope(elem) for elem in final_result_3d
+        ]
+        edge_fg_list = [
+            self._apply_ampit_bottom_slope(elem) for elem in edge_fg_list
+        ]
+        edge_add_list = [
+            self._apply_ampit_bottom_slope(elem) for elem in edge_add_list
+        ]
+        edge_add_cuboid_list = [
+            self._apply_ampit_bottom_slope(elem) for elem in edge_add_cuboid_list
+        ]
 
         return final_result_3d, final_result_2d, edge_fg_list, edge_add_list, edge_add_cuboid_list, spec
 
