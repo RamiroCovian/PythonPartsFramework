@@ -10340,7 +10340,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         ### Encajes
         self.socket_width = 32  # compensa extrude, la medida es 35 medido de afuera.
-        self.socket_height = 27  # compensa extrude, la medida es 30 medido de afuera.
+        self.socket_height = 30
 
         polyedron_sockets = self.create_socket(self.socket_width, self.socket_height)
         error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
@@ -12781,9 +12781,7 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_width = (
                     35 - 3
                 )  # 32 compensa extrude, la medida es 35 medido de afuera.
-                self.socket_height = (
-                    30 - 3
-                )  # 27  compensa extrude, la medida es 30 medido de afuera.
+                self.socket_height = 30
 
                 polyedron_sockets = self.create_socket(
                     self.socket_width, self.socket_height
@@ -12799,9 +12797,7 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_width = (
                     70 - 3
                 )  # 68 compensa extrude, la medida es 70 medido de afuera.
-                self.socket_height = (
-                    30 - 3
-                )  # 27  compensa extrude, la medida es 30 medido de afuera.
+                self.socket_height = 30
 
                 polyedron_sockets = self.create_socket(
                     self.socket_width, self.socket_height
@@ -12826,15 +12822,16 @@ class PremarcScriptObject(BaseScriptObject):
             socket_width = (
                 self.build_ele.EncajeBase.value - 3
             )  # compensa extrude, la medida es medida de afuera.
-            socket_height = (
-                self.build_ele.EncajeAltura.value - 3
-            )  # compensa extrude, la medida es medido de afuera.
+            socket_height = self.build_ele.EncajeAltura.value
 
             polyedron_sockets = self.create_socket(socket_width, socket_height)
             error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                 polyedron_sockets
             )
-            self.prem_encaje = f"{socket_width} * {socket_height}"
+            self.prem_encaje = (
+                f"{self.build_ele.EncajeBase.value} * "
+                f"{self.build_ele.EncajeAltura.value}"
+            )
             self.prem_encaje_base = self.build_ele.EncajeBase.value
             self.prem_encaje_altura = self.build_ele.EncajeAltura.value
         else:
@@ -13285,9 +13282,9 @@ class PremarcScriptObject(BaseScriptObject):
         # the real escalon height must use this helper instead.
         combo = self.build_ele.ComboBoxEncajes.value
         if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
-            return max(0.0, float(self.build_ele.EncajeAltura.value or 0) - 3.0)
+            return max(0.0, float(self.build_ele.EncajeAltura.value or 0))
         if combo in ("35*30", "70*30"):
-            return 27.0
+            return 30.0
         return 0.0
 
     def _ampit_z_base_local_mm(self) -> float:
