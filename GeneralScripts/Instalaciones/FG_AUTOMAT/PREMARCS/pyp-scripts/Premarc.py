@@ -10531,33 +10531,12 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Premarc with pendents in bottom
 
-        # Copy and extrude top frame
-        # Need expand because after rotate and move, the frame don't close premarc
-        transformation_matrix = AllplanGeo.Matrix3D()
-        transformation_matrix.SetScaling(1, 1.001, 1)
-
-        polyhedron_top_expanded = AllplanGeo.Transform(
-            polyhedron_top, transformation_matrix
+        rotation_axis, rotation_angle = self._bottom_slope_axis_angle(False)
+        polyhedron_bottom_grade = AllplanGeo.Rotate(
+            polyhedron_bottom, rotation_axis, rotation_angle
         )
-
-        rotation_axis = AllplanGeo.Axis3D(
-            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(1, 0, 0)
-        )
-        # Calculate rotation angle based on thickness
-        CO = 10
-        CA = self.thickness_premarc
-
-        angulo_radianes = math.atan2(CO, CA)
-        angulo_grados = math.degrees(angulo_radianes)
-
-        rotation_angle = AllplanGeo.Angle.FromDeg(-angulo_grados)
-
-        rotated_frame_premarc = AllplanGeo.Rotate(
-            polyhedron_top_expanded, rotation_axis, rotation_angle
-        )
-        translation_vector = AllplanGeo.Vector3D(0, -0.1, -(self.heigh + THICKNESS_MM))
-        polyhedron_bottom_grade = AllplanGeo.Move(
-            rotated_frame_premarc, translation_vector
+        polyhedron_bottom_grade = self._apply_bottom_z_180_rotation(
+            polyhedron_bottom_grade
         )
         # polyhedron_bottom_grade = None
 
@@ -10716,27 +10695,23 @@ class PremarcScriptObject(BaseScriptObject):
 
         scale_factor_x = (self.width + THICKNESS_MM * 2) / self.width
         center_x = (self.width * scale_factor_x) / 2 - THICKNESS_MM
-        axis_point = AllplanGeo.Point3D(
-            center_x, -float(LENGTH_REBAJES_MM), -self.heigh
+        rotation_axis, rotation_angle = self._bottom_slope_axis_angle(
+            True, center_x
         )
-        rotation_axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
-        # With REB. BAIX the effective sloped length is the hypotenuse after
-        # removing the rebaje depth, so use asin(opposite / hypotenuse).
-        CO = 10.0
-        hipotenusa = max(float(self.thickness_premarc) - float(LENGTH_REBAJES_MM), abs(CO))
-        angulo_radianes = math.asin(CO / hipotenusa)
-        angulo_grados = math.degrees(angulo_radianes)
+        angulo_grados = self._bottom_slope_angle_deg(True)
         if show_rebajes_debug:
             print(
                 "[Premarc][REB. BAIX][PENDIENTE] "
-                f"CO={CO:.3f}, hipotenusa={hipotenusa:.3f}, "
-                f"axis_y={-float(LENGTH_REBAJES_MM):.3f}, "
+                "CO=7.000, "
+                f"axis_y={self._bottom_slope_pivot_y_mm():.3f}, "
                 f"angulo_grados={angulo_grados:.6f}"
             )
-        rotation_angle = AllplanGeo.Angle.FromDeg(-angulo_grados)
 
         polyhedron_bottom_grade = AllplanGeo.Rotate(
             polyhedron_bottom, rotation_axis, rotation_angle
+        )
+        polyhedron_bottom_grade = self._apply_bottom_z_180_rotation(
+            polyhedron_bottom_grade
         )
         error_code, polyhedron_bottom_grade_with_rebaje = AllplanGeo.MakeSubtraction(
             polyhedron_bottom_grade, substract_rebajes_bottom
@@ -11666,9 +11641,12 @@ class PremarcScriptObject(BaseScriptObject):
         # Union premarc
         # TODO refactor to use method create_union_premarc
         polyhedron_premarc_union = self.create_union_premarc(polyhedron_premarc_list)
+        union_ok = polyhedron_premarc_union is not None
         if polyhedron_premarc_union is None:
-            print("Error in make union premarc")
-            # polyhedron_premarc_union = polyhedron_premarc_list
+            print(
+                "[Premarc] Error in make union premarc; "
+                "se devuelven piezas de marco separadas para evitar None"
+            )
 
         ### Build substract rebajes ###
         # Manage rebajes
@@ -11681,6 +11659,11 @@ class PremarcScriptObject(BaseScriptObject):
 
         for name, option in list_rebajes:
             if option == 1:
+                if not union_ok and name != "NO":
+                    print(
+                        f"[Premarc] Rebaje {name} omitido: union premarc fallida"
+                    )
+                    continue
                 match name:
                     case "NO":
                         print("Rebaje Selected NO. Nothing to do")
@@ -11758,7 +11741,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Fix corners
         # top left corner
-        if self.get_enabled_rebajes_options(
+        if union_ok and self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
             if show_rebajes_debug:
@@ -11774,7 +11757,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect top left corner")
                 pass
         # top right corner
-        if self.get_enabled_rebajes_options(
+        if union_ok and self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
             if show_rebajes_debug:
@@ -11790,7 +11773,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect top right corner")
                 pass
         # bottom left corner
-        if self.get_enabled_rebajes_options(
+        if union_ok and self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
             if show_rebajes_debug:
@@ -11806,7 +11789,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect bottom left corner")
                 pass
         # bottom right corner
-        if self.get_enabled_rebajes_options(
+        if union_ok and self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
             if show_rebajes_debug:
@@ -11823,8 +11806,11 @@ class PremarcScriptObject(BaseScriptObject):
                 pass
 
         elems = []
-        elems.append(polyhedron_premarc_union)
-        elems.extend(polyhedron_other_elements_list)
+        if union_ok:
+            elems.append(polyhedron_premarc_union)
+        else:
+            elems.extend(elem for elem in polyhedron_premarc_list if elem is not None)
+        elems.extend(elem for elem in polyhedron_other_elements_list if elem is not None)
 
         # elems = [
             # polyhedron_premarc_union,
@@ -12857,9 +12843,6 @@ class PremarcScriptObject(BaseScriptObject):
         # error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
 
         pendent_selected = self.build_ele.ComboBoxPendiente.value
-        FIX_HEIGHT_SOCKET = 7.5  # Defaul to 295 mm thickness
-        if self.thickness_premarc == 160:
-            FIX_HEIGHT_SOCKET = 5.60
         match pendent_selected:
             # case "NO":
             #     print("Pendent Selected NO")
@@ -12870,7 +12853,9 @@ class PremarcScriptObject(BaseScriptObject):
                     count_socket = 0
                     print(f"Count socket: {count_socket}")
 
-                    translation_vector = AllplanGeo.Vector3D(0, 0, FIX_HEIGHT_SOCKET)
+                    translation_vector = AllplanGeo.Vector3D(
+                        0, 0, self._socket_pendiente_z_lift_mm()
+                    )
                     polyhedron_socket = AllplanGeo.Move(
                         polyhedron_socket, translation_vector
                     )
@@ -13297,6 +13282,27 @@ class PremarcScriptObject(BaseScriptObject):
             return 27.0
         return 0.0
 
+    def _ampit_z_base_local_mm(self) -> float:
+        socket_height = self._effective_socket_height_mm()
+        imperm_thickness = self._grosor_imp_mm()
+        if socket_height > 0:
+            return self._ampit_socket_z_lift_mm() + imperm_thickness
+        return imperm_thickness
+
+    def _ampit_socket_z_lift_mm(self) -> float:
+        if self._effective_socket_height_mm() <= 0:
+            return 0.0
+        return 16.0
+
+    def _socket_pendiente_z_lift_mm(self) -> float:
+        if self.build_ele.ComboBoxPendiente.value != "SI":
+            return 0.0
+        if self._effective_socket_height_mm() <= 0:
+            return 0.0
+        if self.thickness_premarc == 160:
+            return 5.60
+        return 7.5
+
     def _ampit_y_inner_local_mm(self) -> float:
         # Local Y position of the ampit slab INNER face (toward encaje).
         #
@@ -13353,42 +13359,81 @@ class PremarcScriptObject(BaseScriptObject):
             fondo = 0.0
         return fondo
 
-    def _ampit_bottom_slope_axis_angle(self):
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return None, None
+    def _bottom_slope_pivot_y_mm(self) -> float:
+        # Final premarc-local coordinates after the bottom frame has been
+        # placed: Y=0 is the front/interior face and Y=-thickness is the
+        # back/fondo del muro. After the 180 deg Z flip, this back edge maps
+        # to the visible Z=0 side. Keeping the hinge on the real edge prevents
+        # the sloped bottom from dropping below the reference blue strip.
+        return -float(self.thickness_premarc)
 
+    def _bottom_slope_angle_deg(self, with_bottom_rebaje: bool = False) -> float:
+        # Architectural target at the high end is 10 mm total: 7 mm slope
+        # rise + the 3 mm physical bottom thickness.
         slope_rise_mm = 10.0
-        if self.bottom_rebaje_enabled():
-            hipotenusa = max(
+        if with_bottom_rebaje:
+            effective_depth = max(
                 float(self.thickness_premarc) - float(LENGTH_REBAJES_MM),
                 abs(slope_rise_mm),
             )
-            ratio = max(-1.0, min(1.0, slope_rise_mm / hipotenusa))
-            angle_deg = math.degrees(math.asin(ratio))
+            ratio = max(-1.0, min(1.0, slope_rise_mm / effective_depth))
+            return math.degrees(math.asin(ratio))
 
-            center_x = float(self.width) / 2 if self.width else 0.0
-            axis_point = AllplanGeo.Point3D(
-                center_x, -float(LENGTH_REBAJES_MM), -self.heigh
-            )
-        else:
-            angle_deg = math.degrees(
-                math.atan2(slope_rise_mm, float(self.thickness_premarc))
-            )
+        effective_depth = max(
+            float(self.thickness_premarc),
+            abs(slope_rise_mm),
+        )
+        return math.degrees(math.atan2(slope_rise_mm, effective_depth))
+
+    def _bottom_slope_axis_angle(
+        self, with_bottom_rebaje: bool = False, center_x=None
+    ):
+        angle_deg = self._bottom_slope_angle_deg(with_bottom_rebaje)
+        if center_x is None:
             axis_point = AllplanGeo.Point3D(0, 0, -self.heigh)
+        else:
+            axis_point = AllplanGeo.Point3D(center_x, 0, -self.heigh)
 
+        axis_point.Y = self._bottom_slope_pivot_y_mm()
         axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
-        return axis, AllplanGeo.Angle.FromDeg(-angle_deg)
+        return axis, AllplanGeo.Angle.FromDeg(angle_deg)
 
-    def _apply_ampit_bottom_slope(self, element):
-        axis, angle = self._ampit_bottom_slope_axis_angle()
-        if axis is None:
-            return element
+    def _bottom_z_180_axis_angle(self):
+        axis_point = AllplanGeo.Point3D(
+            float(self.width) / 2.0 if self.width else 0.0,
+            -float(self.thickness_premarc) / 2.0,
+            -float(self.heigh),
+        )
+        axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(0, 0, 1))
+        return axis, AllplanGeo.Angle.FromDeg(180.0)
+
+    def _apply_bottom_z_180_rotation(self, element):
+        axis, angle = self._bottom_z_180_axis_angle()
         if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
             return AllplanGeo.Line3D(
                 AllplanGeo.Rotate(element.StartPoint, axis, angle),
                 AllplanGeo.Rotate(element.EndPoint, axis, angle),
             )
         return AllplanGeo.Rotate(element, axis, angle)
+
+    def _ampit_bottom_slope_axis_angle(self):
+        if self.build_ele.ComboBoxPendiente.value != "SI":
+            return None, None
+
+        return self._bottom_slope_axis_angle(self.bottom_rebaje_enabled())
+
+    def _apply_ampit_bottom_slope(self, element):
+        axis, angle = self._ampit_bottom_slope_axis_angle()
+        if axis is None:
+            return element
+        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
+            element = AllplanGeo.Line3D(
+                AllplanGeo.Rotate(element.StartPoint, axis, angle),
+                AllplanGeo.Rotate(element.EndPoint, axis, angle),
+            )
+        else:
+            element = AllplanGeo.Rotate(element, axis, angle)
+        return self._apply_bottom_z_180_rotation(element)
 
     def create_premarc_ampit(self):
         material = self.build_ele.ampit_material.value or "CERAMIC"
@@ -13402,11 +13447,10 @@ class PremarcScriptObject(BaseScriptObject):
             print("[Premarc] PAVIMENTO ampit no compatible con REB. BAIX (no sobresale): ampit omitido.")
             return [], [], [], [], [], spec
 
-        # Z base of the ampit slab. The bottom sheet thickness now extends
-        # outward below the opening, so the clear opening bottom remains z=0
-        # in premarc-local coordinates. Lift by grosor_imp only when
-        # impermeabilizacion is active.
-        z_base_ampit = self._grosor_imp_mm()
+        # Z base of the ampit slab. With real encaje, the ampit starts at the
+        # encaje top level; PLEC INFERIOR is excluded by the socket helpers.
+        # If impermeabilizacion is active, the slab sits above it.
+        z_base_ampit = self._ampit_z_base_local_mm()
 
         # Encaje-aware slab inner Y (2 mm margin from the encaje back face,
         # or from the 63 mm front assembly when sin encaje / narrow encaje).
@@ -13582,10 +13626,9 @@ class PremarcScriptObject(BaseScriptObject):
         tope          = spec["tope"]
         remate        = spec["remate"]
 
-        # Z base lifted by grosor_imp when impermeabilizacion is enabled
-        # (the ampit slab sits on top of the imp). With the bottom sheet
-        # thickness outside the opening, the base is z=0 when imp is off.
-        z_base_ampit = self._grosor_imp_mm()
+        # Z base lifted to the encaje top level when a real encaje exists.
+        # If impermeabilizacion is active, the slab sits above it.
+        z_base_ampit = self._ampit_z_base_local_mm()
 
         y_slab_in  = float(y_inner_local)
         # Slab outer comes from the single source-of-truth helper so the
