@@ -10202,22 +10202,26 @@ class PremarcScriptObject(BaseScriptObject):
         _right_open = "DRET" in _abierto_val
         finish_x_min = 0 if _left_open else -23
         finish_x_max = self.width if _right_open else self.width + 23
+        finish_profile_mm = 23.0
+        finish_bottom_z_offset = 0.20
+        finish_bottom_z_top = -self.heigh - finish_bottom_z_offset
+        finish_bottom_z_bottom = -self.heigh - finish_profile_mm - finish_bottom_z_offset
 
         frame_finish_bottom = AllplanGeo.Polygon3D()
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, -self.heigh
+            finish_x_min, -self.thickness, finish_bottom_z_top
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_max, -self.thickness, -self.heigh
+            finish_x_max, -self.thickness, finish_bottom_z_top
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_max, -self.thickness, -self.heigh - 23
+            finish_x_max, -self.thickness, finish_bottom_z_bottom
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, -self.heigh - 23
+            finish_x_min, -self.thickness, finish_bottom_z_bottom
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, -self.heigh
+            finish_x_min, -self.thickness, finish_bottom_z_top
         )
         error_code, polyhedron_finish_bottom = self.extrude_frame(
             frame_finish_bottom, "frame_finish_bottom"
@@ -10227,8 +10231,8 @@ class PremarcScriptObject(BaseScriptObject):
         frame_finish_top = AllplanGeo.Polygon3D()
         frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
         frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 0)
-        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 23)
-        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 23)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, finish_profile_mm)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, finish_profile_mm)
         frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
         error_code, polyhedron_finish_top = self.extrude_frame(frame_finish_top, "frame_finish_top")
 
@@ -10243,11 +10247,11 @@ class PremarcScriptObject(BaseScriptObject):
         offset_left_z = self.build_ele.PersianaHeight.value if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT" else 0
 
         frame_finish_left = AllplanGeo.Polygon3D()
-        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh) #1
+        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, finish_bottom_z_top) #1
         frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, offset_left_z) #2
         frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, offset_left_z) #3
-        frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, -self.heigh) #4
-        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh) #5-1
+        frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, finish_bottom_z_top) #4
+        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, finish_bottom_z_top) #5-1
         error_code, polyhedron_finish_left = self.extrude_frame(frame_finish_left, "frame_finish_left")
         polyhedron_premarc_list.append(polyhedron_finish_left)
 
@@ -10255,11 +10259,11 @@ class PremarcScriptObject(BaseScriptObject):
         offset_right_z = self.build_ele.PersianaHeight.value if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT" else 0
 
         frame_finish_right = AllplanGeo.Polygon3D()
-        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh) #1
-        frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, -self.heigh) #2
+        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, finish_bottom_z_top) #1
+        frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, finish_bottom_z_top) #2
         frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, offset_right_z) #3
         frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, offset_right_z) #4
-        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh) #5-1
+        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, finish_bottom_z_top) #5-1
         error_code, polyhedron_finish_right = self.extrude_frame(frame_finish_right, "frame_finish_right")
         polyhedron_premarc_list.append(polyhedron_finish_right)
 
@@ -10535,7 +10539,7 @@ class PremarcScriptObject(BaseScriptObject):
         polyhedron_bottom_grade = AllplanGeo.Rotate(
             polyhedron_bottom, rotation_axis, rotation_angle
         )
-        polyhedron_bottom_grade = self._apply_bottom_z_180_rotation(
+        polyhedron_bottom_grade = self._apply_bottom_slope_bottom_position(
             polyhedron_bottom_grade
         )
         # polyhedron_bottom_grade = None
@@ -10707,22 +10711,26 @@ class PremarcScriptObject(BaseScriptObject):
                 f"angulo_grados={angulo_grados:.6f}"
             )
 
-        polyhedron_bottom_grade = AllplanGeo.Rotate(
+        polyhedron_bottom_grade_raw = AllplanGeo.Rotate(
             polyhedron_bottom, rotation_axis, rotation_angle
         )
-        polyhedron_bottom_grade = self._apply_bottom_z_180_rotation(
-            polyhedron_bottom_grade
-        )
         error_code, polyhedron_bottom_grade_with_rebaje = AllplanGeo.MakeSubtraction(
-            polyhedron_bottom_grade, substract_rebajes_bottom
+            polyhedron_bottom_grade_raw, substract_rebajes_bottom
+        )
+        polyhedron_bottom_grade = self._apply_bottom_slope_bottom_position(
+            polyhedron_bottom_grade_raw
         )
         if error_code != AllplanGeo.eGeometryErrorCode.eOK:
             print(
                 "[Premarc][REB. BAIX][PENDIENTE] "
                 f"MakeSubtraction tras rotacion fallo: {error_code}; "
-                "se usa fondo rotado sin rebaje"
+                "se usa fondo inclinado sin rebaje"
             )
             polyhedron_bottom_grade_with_rebaje = polyhedron_bottom_grade
+        else:
+            polyhedron_bottom_grade_with_rebaje = self._apply_bottom_slope_bottom_position(
+                polyhedron_bottom_grade_with_rebaje
+            )
 
         # Solids fix corners
 
@@ -13362,17 +13370,15 @@ class PremarcScriptObject(BaseScriptObject):
     def _bottom_slope_pivot_y_mm(self) -> float:
         # Final premarc-local coordinates after the bottom frame has been
         # placed: Y=0 is the front/interior face and Y=-thickness is the
-        # back/fondo del muro. After the 180 deg Z flip, this back edge maps
-        # to the visible Z=0 side. Keeping the hinge on the real edge prevents
-        # the sloped bottom from dropping below the reference blue strip.
+        # back/fondo del muro. Keeping the hinge on the real edge prevents
+        # the sloped bottom from drifting away from the reference blue strip.
         return -float(self.thickness_premarc)
 
     def _bottom_slope_angle_deg(self, with_bottom_rebaje: bool = False) -> float:
-        # Architectural target: Allplan's section currently reads 0.70 mm
-        # above the geometric edge target after the Z flip/solid rotation.
-        # Use 9.35 mm internally so the measured high-end edge lands at
-        # the required 10.00 mm above the fixed Z=0 edge.
-        target_edge_rise_mm = 9.35
+        # Negative value = inverted slope direction around the local X axis.
+        # The magnitude stays 9.35 mm so the previous 10 mm architectural
+        # target is preserved, but the high edge swaps sides.
+        target_edge_rise_mm = -9.35
         if with_bottom_rebaje:
             effective_depth = float(self.thickness_premarc) - float(LENGTH_REBAJES_MM)
         else:
@@ -13384,6 +13390,46 @@ class PremarcScriptObject(BaseScriptObject):
 
         ratio = max(-1.0, min(1.0, target_edge_rise_mm / effective_depth))
         return math.degrees(math.asin(ratio))
+
+    def _bottom_slope_z_lift_mm(self) -> float:
+        if self.build_ele.ComboBoxPendiente.value != "SI":
+            return 0.0
+        return 10.0
+
+    def _bottom_slope_bottom_offset_vector(self):
+        if self.build_ele.ComboBoxPendiente.value != "SI":
+            return AllplanGeo.Vector3D(0, 0, 0)
+        return AllplanGeo.Vector3D(0, 0.17, self._bottom_slope_z_lift_mm() - 0.01)
+
+    def _apply_bottom_slope_bottom_position(self, element):
+        vector = self._bottom_slope_bottom_offset_vector()
+        if (
+            abs(vector.X) <= 0.001
+            and abs(vector.Y) <= 0.001
+            and abs(vector.Z) <= 0.001
+        ):
+            return element
+        return AllplanGeo.Move(element, vector)
+
+    def _apply_bottom_slope_z_lift(self, element):
+        z_lift = self._bottom_slope_z_lift_mm()
+        if abs(z_lift) <= 0.001:
+            return element
+        vector = AllplanGeo.Vector3D(0, 0, z_lift)
+        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
+            return AllplanGeo.Line3D(
+                AllplanGeo.Point3D(
+                    element.StartPoint.X,
+                    element.StartPoint.Y,
+                    element.StartPoint.Z + z_lift,
+                ),
+                AllplanGeo.Point3D(
+                    element.EndPoint.X,
+                    element.EndPoint.Y,
+                    element.EndPoint.Z + z_lift,
+                ),
+            )
+        return AllplanGeo.Move(element, vector)
 
     def _bottom_slope_axis_angle(
         self, with_bottom_rebaje: bool = False, center_x=None
@@ -13398,24 +13444,6 @@ class PremarcScriptObject(BaseScriptObject):
         axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
         return axis, AllplanGeo.Angle.FromDeg(angle_deg)
 
-    def _bottom_z_180_axis_angle(self):
-        axis_point = AllplanGeo.Point3D(
-            float(self.width) / 2.0 if self.width else 0.0,
-            -float(self.thickness_premarc) / 2.0,
-            -float(self.heigh),
-        )
-        axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(0, 0, 1))
-        return axis, AllplanGeo.Angle.FromDeg(180.0)
-
-    def _apply_bottom_z_180_rotation(self, element):
-        axis, angle = self._bottom_z_180_axis_angle()
-        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
-            return AllplanGeo.Line3D(
-                AllplanGeo.Rotate(element.StartPoint, axis, angle),
-                AllplanGeo.Rotate(element.EndPoint, axis, angle),
-            )
-        return AllplanGeo.Rotate(element, axis, angle)
-
     def _ampit_bottom_slope_axis_angle(self):
         if self.build_ele.ComboBoxPendiente.value != "SI":
             return None, None
@@ -13427,13 +13455,13 @@ class PremarcScriptObject(BaseScriptObject):
         if axis is None:
             return element
         if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
-            element = AllplanGeo.Line3D(
-                AllplanGeo.Rotate(element.StartPoint, axis, angle),
-                AllplanGeo.Rotate(element.EndPoint, axis, angle),
+            return self._apply_bottom_slope_z_lift(
+                AllplanGeo.Line3D(
+                    AllplanGeo.Rotate(element.StartPoint, axis, angle),
+                    AllplanGeo.Rotate(element.EndPoint, axis, angle),
+                )
             )
-        else:
-            element = AllplanGeo.Rotate(element, axis, angle)
-        return self._apply_bottom_z_180_rotation(element)
+        return self._apply_bottom_slope_z_lift(AllplanGeo.Rotate(element, axis, angle))
 
     def create_premarc_ampit(self):
         material = self.build_ele.ampit_material.value or "CERAMIC"
