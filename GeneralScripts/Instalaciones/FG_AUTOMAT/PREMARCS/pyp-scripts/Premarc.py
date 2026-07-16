@@ -10702,7 +10702,7 @@ class PremarcScriptObject(BaseScriptObject):
         if show_rebajes_debug:
             print(
                 "[Premarc][REB. BAIX][PENDIENTE] "
-                "CO=7.000, "
+                "target_total_z=10.000, "
                 f"axis_y={self._bottom_slope_pivot_y_mm():.3f}, "
                 f"angulo_grados={angulo_grados:.6f}"
             )
@@ -13368,22 +13368,22 @@ class PremarcScriptObject(BaseScriptObject):
         return -float(self.thickness_premarc)
 
     def _bottom_slope_angle_deg(self, with_bottom_rebaje: bool = False) -> float:
-        # Architectural target at the high end is 10 mm total: 7 mm slope
-        # rise + the 3 mm physical bottom thickness.
-        slope_rise_mm = 10.0
+        # Architectural target: Allplan's section currently reads 0.70 mm
+        # above the geometric edge target after the Z flip/solid rotation.
+        # Use 9.35 mm internally so the measured high-end edge lands at
+        # the required 10.00 mm above the fixed Z=0 edge.
+        target_edge_rise_mm = 9.35
         if with_bottom_rebaje:
-            effective_depth = max(
-                float(self.thickness_premarc) - float(LENGTH_REBAJES_MM),
-                abs(slope_rise_mm),
-            )
-            ratio = max(-1.0, min(1.0, slope_rise_mm / effective_depth))
-            return math.degrees(math.asin(ratio))
+            effective_depth = float(self.thickness_premarc) - float(LENGTH_REBAJES_MM)
+        else:
+            effective_depth = float(self.thickness_premarc)
 
-        effective_depth = max(
-            float(self.thickness_premarc),
-            abs(slope_rise_mm),
-        )
-        return math.degrees(math.atan2(slope_rise_mm, effective_depth))
+        effective_depth = max(effective_depth, abs(target_edge_rise_mm))
+        if effective_depth <= 0:
+            return 0.0
+
+        ratio = max(-1.0, min(1.0, target_edge_rise_mm / effective_depth))
+        return math.degrees(math.asin(ratio))
 
     def _bottom_slope_axis_angle(
         self, with_bottom_rebaje: bool = False, center_x=None
