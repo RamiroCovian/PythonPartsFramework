@@ -371,12 +371,20 @@
             </Parameter>
 
             <Parameter>
+                <Name>EnableREAEspecial</Name>
+                <Text>Habilitar REAs especiales</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+            </Parameter>
+
+            <Parameter>
                 <Name>ComboBoxREAEspecial</Name>
                 <Text>REA especial</Text>
                 <Value>REAs en L STD CORTA</Value>
                 <ValueList>REAs en C|REAs en L STD CORTA|REAs en L STD</ValueList>
                 <ValueType>StringComboBox</ValueType>
-                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+                <Visible>EnableREAEspecial and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
 
             <Parameter>
@@ -384,7 +392,7 @@
                 <Text>Separacion libre entre REAs C</Text>
                 <Value>40</Value>
                 <ValueType>Double</ValueType>
-                <Visible>(ComboBoxAbiertoCerrado == "OBERT PER DALT" or ComboBoxAbiertoCerrado == "OBERT PER BAIX") and ComboBoxREAEspecial == "REAs en C"</Visible>
+                <Visible>EnableREAEspecial and (ComboBoxAbiertoCerrado == "OBERT PER DALT" or ComboBoxAbiertoCerrado == "OBERT PER BAIX") and ComboBoxREAEspecial == "REAs en C"</Visible>
             </Parameter>
 
             <Parameter>
@@ -392,7 +400,7 @@
                 <Text>Sobresaliente tubos REA</Text>
                 <Value>150</Value>
                 <ValueType>Double</ValueType>
-                <Visible>ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+                <Visible>EnableREAEspecial and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
 
             <Parameter>
@@ -400,7 +408,7 @@
                 <Text>Largo X REA L lado abierto</Text>
                 <Value>390</Value>
                 <ValueType>Double</ValueType>
-                <Visible>(ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+                <Visible>EnableREAEspecial and (ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
 
             <Parameter>
@@ -408,7 +416,7 @@
                 <Text>Largo X REA L lado interior</Text>
                 <Value>340</Value>
                 <ValueType>Double</ValueType>
-                <Visible>(ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+                <Visible>EnableREAEspecial and (ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
             </Parameter>
 
             <Parameter>

@@ -3714,6 +3714,7 @@ class PremarcScriptObject(BaseScriptObject):
             "ampit_ref_1": self.build_ele.ampit_ref_1.value,
             "is_puerta_entrada": self.build_ele.is_puerta_entrada.value,
             "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
+            "EnableREAEspecial": self.build_ele.EnableREAEspecial.value,
             "ComboBoxREAEspecial": self.build_ele.ComboBoxREAEspecial.value,
             "SeparacionLibreEntreREAC": self.build_ele.SeparacionLibreEntreREAC.value,
             "SobresalienteTubosREA": self.build_ele.SobresalienteTubosREA.value,
@@ -3856,6 +3857,9 @@ class PremarcScriptObject(BaseScriptObject):
             "pmp_pare", state.get("wall_id", "")
         )
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
+        self.build_ele.EnableREAEspecial.value = state.get(
+            "EnableREAEspecial", self.build_ele.EnableREAEspecial.value
+        )
         self.build_ele.ComboBoxREAEspecial.value = state.get(
             "ComboBoxREAEspecial", self.build_ele.ComboBoxREAEspecial.value
         )
@@ -7361,10 +7365,13 @@ class PremarcScriptObject(BaseScriptObject):
         )
         props_cuboids_rea = AllplanBaseElements.CommonProperties()
         props_cylinders_rea = AllplanBaseElements.CommonProperties()
+        props_special_rea = AllplanBaseElements.CommonProperties()
         props_cuboids_rea.Color = 4  # verde
         props_cuboids_rea.Layer = layer_tubs_rea_id
         props_cylinders_rea.Color = 8  # naranja
         props_cylinders_rea.Layer = layer_tubs_rea_id
+        props_special_rea.Color = 15  # morado
+        props_special_rea.Layer = layer_tubs_rea_id
 
         layer_falcas_id = AllplanBaseElements.LayerService.GetIDByShortName(
             FALCAS_LAYER, self.document
@@ -7602,11 +7609,13 @@ class PremarcScriptObject(BaseScriptObject):
                 i, horitzontal_tubes_attribute_list.get_attribute_list()
             )
 
-        cuboids_rea, cylinders_rea = self.create_premarc_REA()
+        cuboids_rea, cylinders_rea, special_rea = self.create_premarc_REA()
         for elem in cuboids_rea:
             model_ele_list.append_geometry_3d(elem, props_cuboids_rea)
         for elem in cylinders_rea:
             model_ele_list.append_geometry_3d(elem, props_cylinders_rea)
+        for elem in special_rea:
+            model_ele_list.append_geometry_3d(elem, props_special_rea)
 
         rea_attribute_list = BuildingElementAttributeList()
         rea_attribute_list.add_attribute(
@@ -7614,7 +7623,12 @@ class PremarcScriptObject(BaseScriptObject):
         )
         self._add_shared_generated_element_attributes(rea_attribute_list)
 
-        init_i = len(model_ele_list) - len(cuboids_rea) - len(cylinders_rea)
+        init_i = (
+            len(model_ele_list)
+            - len(cuboids_rea)
+            - len(cylinders_rea)
+            - len(special_rea)
+        )
         for i in range(init_i, len(model_ele_list)):
             model_ele_list.set_element_attributes(
                 i, rea_attribute_list.get_attribute_list()
@@ -11426,6 +11440,12 @@ class PremarcScriptObject(BaseScriptObject):
         cylinders_moved = []
         direction_open = self.get_direction_open_premarc()
         include_rea_cylinders = self._is_open_premarc_rea()
+        enable_special_rea = bool(
+            getattr(getattr(self.build_ele, "EnableREAEspecial", None), "value", False)
+        )
+
+        if not include_rea_cylinders and not enable_special_rea:
+            return [], [], []
 
         def get_wall_center_y():
             return -self._wall_thickness_for_tube_centering() / 2
@@ -11846,7 +11866,10 @@ class PremarcScriptObject(BaseScriptObject):
             cuboids_moved = []
             cylinders_moved = []
 
-        return cuboids_moved, cylinders_moved
+        if include_rea_cylinders:
+            return cuboids_moved, cylinders_moved, []
+
+        return cuboids_moved, [], cylinders_moved
 
     ##### Squares #######
 
