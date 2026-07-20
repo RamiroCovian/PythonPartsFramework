@@ -3863,6 +3863,7 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.ComboBoxREAEspecial.value = state.get(
             "ComboBoxREAEspecial", self.build_ele.ComboBoxREAEspecial.value
         )
+        self._normalize_special_rea_type_for_direction()
         self.build_ele.SeparacionLibreEntreREAC.value = state.get(
             "SeparacionLibreEntreREAC", self.build_ele.SeparacionLibreEntreREAC.value
         )
@@ -4482,6 +4483,24 @@ class PremarcScriptObject(BaseScriptObject):
         if name == "INPUT_PMP_ID_PREMARC":
             self.build_ele.id_premarc.value = str(_value).strip()
             return False
+
+        if name == "ComboBoxAbiertoCerrado":
+            self.build_ele.ComboBoxAbiertoCerrado.value = _value
+            self._normalize_special_rea_type_for_direction()
+            if hasattr(self.build_ele, "SobresalienteTubosREA"):
+                self.build_ele.SobresalienteTubosREA.value = (
+                    self._default_rea_tube_extra_for_special_type()
+                )
+            return True
+
+        if name == "EnableREAEspecial":
+            self.build_ele.EnableREAEspecial.value = _value
+            self._normalize_special_rea_type_for_direction()
+            if hasattr(self.build_ele, "SobresalienteTubosREA"):
+                self.build_ele.SobresalienteTubosREA.value = (
+                    self._default_rea_tube_extra_for_special_type()
+                )
+            return True
 
         if name == "ComboBoxREAEspecial":
             if hasattr(self.build_ele, "SobresalienteTubosREA"):
@@ -11099,6 +11118,34 @@ class PremarcScriptObject(BaseScriptObject):
         else:
             return "NOTHING"
 
+    def _allowed_special_rea_types_for_direction(self, direction_open: str = None) -> set[str]:
+        direction_open = direction_open or self.get_direction_open_premarc()
+        if direction_open in {"TOP", "TOP_VARIANT", "BOTTOM", "BOTTOM_VARIANT"}:
+            return {"REAs en C"}
+        if direction_open in {"RIGHT", "LEFT"}:
+            return {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
+        return set()
+
+    def _default_special_rea_type_for_direction(self, direction_open: str = None) -> str:
+        direction_open = direction_open or self.get_direction_open_premarc()
+        if direction_open in {"TOP", "TOP_VARIANT", "BOTTOM", "BOTTOM_VARIANT"}:
+            return "REAs en C"
+        if direction_open in {"RIGHT", "LEFT"}:
+            return "REAs en L STD CORTA"
+        return ""
+
+    def _normalize_special_rea_type_for_direction(self) -> None:
+        if not hasattr(self.build_ele, "ComboBoxREAEspecial"):
+            return
+
+        direction_open = self.get_direction_open_premarc()
+        allowed_types = self._allowed_special_rea_types_for_direction(direction_open)
+        current_type = str(self.build_ele.ComboBoxREAEspecial.value or "")
+        if allowed_types and current_type not in allowed_types:
+            self.build_ele.ComboBoxREAEspecial.value = (
+                self._default_special_rea_type_for_direction(direction_open)
+            )
+
     def get_direction_retall_ganxo(self):
         direction_retall_ganxo = self.build_ele.ComboBoxAbiertoCerrado.value
 
@@ -11446,6 +11493,8 @@ class PremarcScriptObject(BaseScriptObject):
 
         if not include_rea_cylinders and not enable_special_rea:
             return [], [], []
+        if enable_special_rea and not include_rea_cylinders:
+            self._normalize_special_rea_type_for_direction()
 
         def get_wall_center_y():
             return -self._wall_thickness_for_tube_centering() / 2
@@ -11703,17 +11752,29 @@ class PremarcScriptObject(BaseScriptObject):
             ):
                 y_center = y_pos - REA_x_y / 2
                 z_joint = tube_l_z_joint(z_pos)
+                rotation_angle_deg = -90 if z_pos == upper_tube_z else 90
                 for x_side, x_direction in x_sides:
+                    l_elements = create_rea_l_shape(
+                        x_side,
+                        y_center,
+                        z_joint,
+                        x_direction,
+                        z_direction,
+                        x_leg,
+                        z_leg,
+                    )
+                    y_rotation_axis = AllplanGeo.Axis3D(
+                        AllplanGeo.Point3D(x_side, y_center, z_joint),
+                        AllplanGeo.Vector3D(0, 1, 0),
+                    )
+                    y_rotation_angle = AllplanGeo.Angle.FromDeg(rotation_angle_deg)
                     result.extend(
-                        create_rea_l_shape(
-                            x_side,
-                            y_center,
-                            z_joint,
-                            x_direction,
-                            z_direction,
-                            x_leg,
-                            z_leg,
+                        AllplanGeo.Rotate(
+                            element,
+                            y_rotation_axis,
+                            y_rotation_angle,
                         )
+                        for element in l_elements
                     )
             return result
 
@@ -11772,14 +11833,189 @@ class PremarcScriptObject(BaseScriptObject):
                 or ""
             )
 
+        def is_l_special_type():
+            return selected_special_rea_type() in {
+                "REAs en L STD CORTA",
+                "REAs en L STD",
+                "REAs en L (Estandar)",
+            }
+
+        def rea_l_x_length(param_name, default_value):
+            length_param = getattr(
+                getattr(self.build_ele, param_name, None),
+                "value",
+                default_value,
+            )
+            try:
+                length = float(length_param)
+            except (TypeError, ValueError):
+                return default_value
+
+            if length <= 0:
+                return default_value
+            return length
+
+        def create_side_standard_l_reas(open_direction):
+            if not is_l_special_type():
+                return []
+
+            default_open_tube_x_leg, default_inner_tube_x_leg = (
+                self._default_rea_l_x_lengths_for_special_type(
+                    selected_special_rea_type()
+                )
+            )
+            open_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoAbierto",
+                default_open_tube_x_leg,
+            )
+            inner_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoInterior",
+                default_inner_tube_x_leg,
+            )
+
+            z_leg = 300
+            l_pair_spacing = 86
+            top_z_joint = REA_extra + tube_sheet_extension - 150
+            bottom_z_joint = -self.heigh - REA_extra - tube_sheet_extension + 150
+            y_center = wall_center_y
+
+            if open_direction == "RIGHT":
+                x_direction = -1
+                x_base = self.width - offset_rea
+                x_joints = (
+                    (x_base + 6, open_tube_x_leg),
+                    (x_base - l_pair_spacing, inner_tube_x_leg),
+                )
+            else:
+                x_direction = 1
+                x_base = offset_rea
+                x_joints = (
+                    (x_base - 6, open_tube_x_leg),
+                    (x_base + l_pair_spacing, inner_tube_x_leg),
+                )
+
+            result = []
+            for x_side, x_leg in x_joints:
+                top_l_elements = create_rea_l_shape(
+                    x_side,
+                    y_center,
+                    top_z_joint,
+                    x_direction,
+                    1,
+                    x_leg,
+                    z_leg,
+                )
+                top_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, top_z_joint),
+                    AllplanGeo.Vector3D(0, 1, 0),
+                )
+                top_z_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, top_z_joint),
+                    AllplanGeo.Vector3D(0, 0, 1),
+                )
+                top_x_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, top_z_joint),
+                    AllplanGeo.Vector3D(1, 0, 0),
+                )
+                top_rotation_angle = AllplanGeo.Angle.FromDeg(-90)
+                top_rotated_elements = [
+                    AllplanGeo.Rotate(
+                        element,
+                        top_rotation_axis,
+                        top_rotation_angle,
+                    )
+                    for element in top_l_elements
+                ]
+                if open_direction == "RIGHT":
+                    top_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            top_z_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in top_rotated_elements
+                    ]
+                elif open_direction == "LEFT":
+                    top_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            top_x_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in top_rotated_elements
+                    ]
+                result.extend(
+                    top_rotated_elements
+                )
+
+                bottom_l_elements = create_rea_l_shape(
+                    x_side,
+                    y_center,
+                    bottom_z_joint,
+                    x_direction,
+                    -1,
+                    x_leg,
+                    z_leg,
+                )
+                bottom_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, bottom_z_joint),
+                    AllplanGeo.Vector3D(0, 1, 0),
+                )
+                bottom_z_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, bottom_z_joint),
+                    AllplanGeo.Vector3D(0, 0, 1),
+                )
+                bottom_x_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, bottom_z_joint),
+                    AllplanGeo.Vector3D(1, 0, 0),
+                )
+                bottom_rotation_angle = AllplanGeo.Angle.FromDeg(90)
+                bottom_rotated_elements = [
+                    AllplanGeo.Rotate(
+                        element,
+                        bottom_rotation_axis,
+                        bottom_rotation_angle,
+                    )
+                    for element in bottom_l_elements
+                ]
+                if open_direction == "RIGHT":
+                    bottom_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            bottom_z_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in bottom_rotated_elements
+                    ]
+                elif open_direction == "LEFT":
+                    bottom_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            bottom_x_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in bottom_rotated_elements
+                    ]
+                result.extend(
+                    bottom_rotated_elements
+                )
+            return result
+
+        allowed_special_rea_types = self._allowed_special_rea_types_for_direction(
+            direction_open
+        )
         use_special_c_rea = (
             not include_rea_cylinders
             and selected_special_rea_type() == "REAs en C"
+            and "REAs en C" in allowed_special_rea_types
         )
         use_standard_l_rea = (
             not include_rea_cylinders
-            and selected_special_rea_type()
-            in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
+            and is_l_special_type()
+            and bool(
+                allowed_special_rea_types
+                & {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
+            )
         )
 
         if direction_open == "RIGHT":
@@ -11793,6 +12029,8 @@ class PremarcScriptObject(BaseScriptObject):
                 for elem in cylinders:
                     elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
                     cylinders_moved.append(elem_moved)
+            elif use_standard_l_rea:
+                cylinders_moved = create_side_standard_l_reas("RIGHT")
         elif self.get_direction_open_premarc() == "LEFT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_left)
@@ -11804,6 +12042,8 @@ class PremarcScriptObject(BaseScriptObject):
                 for elem in cylinders:
                     elem_moved = AllplanGeo.Move(elem, translation_vector_left)
                     cylinders_moved.append(elem_moved)
+            elif use_standard_l_rea:
+                cylinders_moved = create_side_standard_l_reas("LEFT")
         elif direction_open == "TOP":
             z_positions = (-offset_rea, -(offset_rea + REA_x_y))
             if use_special_c_rea:
