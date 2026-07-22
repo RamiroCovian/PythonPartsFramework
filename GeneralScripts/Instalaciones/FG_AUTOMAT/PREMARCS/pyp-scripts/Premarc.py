@@ -546,6 +546,7 @@ AMPIT_TYPE_SPECS = {
     "XAPA":           {"grosor": 2,  "grosor_tope": 2,  "tope": 40, "sobresaliente": 12, "baseline_protrusion": 0,  "remate": 6, "color": 3,  "layer": AMPIT_LAYER},
     "PAVIMENTO":      {"grosor": 11, "grosor_tope": 0,  "tope": 0,  "sobresaliente": 0,  "baseline_protrusion": 0,  "remate": 0, "color": 19, "layer": AMPIT_LAYER},
 }
+AMPIT_SOCKET_TOP_CLEARANCE_MM = 1.0
 
 # IMP IMPERMEABILIZACIONES — 3 tipos. grosor en mm (Z), color de la paleta
 # del proyecto Allplan (6=rojo, 4=verde, 3=cyan/turquesa según paleta enviada
@@ -11496,7 +11497,7 @@ class PremarcScriptObject(BaseScriptObject):
             #     case "35*30":
             #         print("Falca Selected 35*30")
             #         socket_width = 35-3 # 32 compensa extrude, la medida es 35 medido de afuera.
-            #         socket_height = 30-3 # 27  compensa extrude, la medida es 30 medido de afuera.
+            #         socket_height = 30 # altura real medida de afuera.
 
             #         polyedron_sockets = self.create_socket(socket_width, socket_height)
             #         error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
@@ -11504,7 +11505,7 @@ class PremarcScriptObject(BaseScriptObject):
             #     case "70*30":
             #         print("Falca Selected 70*30")
             #         socket_width = 70-3 # 68 compensa extrude, la medida es 70 medido de afuera.
-            #         socket_height = 30-3 # 27  compensa extrude, la medida es 30 medido de afuera.
+            #         socket_height = 30 # altura real medida de afuera.
 
             #         polyedron_sockets = self.create_socket(socket_width, socket_height)
             #         error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
@@ -13266,8 +13267,8 @@ class PremarcScriptObject(BaseScriptObject):
         # priority unless PLEC INFERIOR is selected. The -3 compensates for
         # the extrude that fattens the polygon, so the OUTER measurement
         # matches the palette value.
-        combo = self.build_ele.ComboBoxEncajes.value
-        if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
+        combo = str(self.build_ele.ComboBoxEncajes.value).replace(" ", "")
+        if self.build_ele.EnableManualEncaje.value and combo != "PLECINFERIOR":
             return max(0.0, float(self.build_ele.EncajeBase.value or 0) - 3.0)
         if combo == "35*30":
             return 32.0
@@ -13280,24 +13281,31 @@ class PremarcScriptObject(BaseScriptObject):
         # the manual-encaje branch at ~L6139 reads EncajeAltura into LOCAL
         # vars and never writes self.socket_height — so callers that need
         # the real escalon height must use this helper instead.
-        combo = self.build_ele.ComboBoxEncajes.value
-        if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
+        combo = str(self.build_ele.ComboBoxEncajes.value).replace(" ", "")
+        if self.build_ele.EnableManualEncaje.value and combo != "PLECINFERIOR":
             return max(0.0, float(self.build_ele.EncajeAltura.value or 0))
         if combo in ("35*30", "70*30"):
             return 30.0
         return 0.0
 
-    def _ampit_z_base_local_mm(self) -> float:
+    def _ampit_z_base_local_mm(self, ampit_grosor_mm: float = 11.0) -> float:
         socket_height = self._effective_socket_height_mm()
         imperm_thickness = self._grosor_imp_mm()
         if socket_height > 0:
-            return self._ampit_socket_z_lift_mm() + imperm_thickness
+            target_top_z = max(
+                0.0, socket_height - float(AMPIT_SOCKET_TOP_CLEARANCE_MM)
+            )
+            return max(0.0, target_top_z - float(ampit_grosor_mm)) + imperm_thickness
         return imperm_thickness
 
     def _ampit_socket_z_lift_mm(self) -> float:
         if self._effective_socket_height_mm() <= 0:
             return 0.0
-        return 16.0
+        return max(
+            0.0,
+            self._effective_socket_height_mm()
+            - float(AMPIT_SOCKET_TOP_CLEARANCE_MM),
+        )
 
     def _socket_pendiente_z_lift_mm(self) -> float:
         if self.build_ele.ComboBoxPendiente.value != "SI":
@@ -13475,7 +13483,7 @@ class PremarcScriptObject(BaseScriptObject):
         # Z base of the ampit slab. With real encaje, the ampit starts at the
         # encaje top level; PLEC INFERIOR is excluded by the socket helpers.
         # If impermeabilizacion is active, the slab sits above it.
-        z_base_ampit = self._ampit_z_base_local_mm()
+        z_base_ampit = self._ampit_z_base_local_mm(float(spec["grosor"]))
 
         # Encaje-aware slab inner Y (2 mm margin from the encaje back face,
         # or from the 63 mm front assembly when sin encaje / narrow encaje).
@@ -13653,7 +13661,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Z base lifted to the encaje top level when a real encaje exists.
         # If impermeabilizacion is active, the slab sits above it.
-        z_base_ampit = self._ampit_z_base_local_mm()
+        z_base_ampit = self._ampit_z_base_local_mm(float(grosor))
 
         y_slab_in  = float(y_inner_local)
         # Slab outer comes from the single source-of-truth helper so the
