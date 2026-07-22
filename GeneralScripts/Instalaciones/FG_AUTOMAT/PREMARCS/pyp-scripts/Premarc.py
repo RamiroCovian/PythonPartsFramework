@@ -11746,6 +11746,17 @@ class PremarcScriptObject(BaseScriptObject):
             )
             return result
 
+        def create_horizontal_variant_special_c_reas(z_positions, open_direction):
+            result = []
+            for index, element in enumerate(
+                create_horizontal_special_c_reas(z_positions, True)
+            ):
+                is_lower_c = 3 <= index % 6 <= 5
+                z_fix = REA_x_y / 2 if is_lower_c else -REA_x_y / 2
+                position_fix = AllplanGeo.Vector3D(0, -REA_x_y / 2, z_fix)
+                result.append(AllplanGeo.Move(element, position_fix))
+            return result
+
         def create_horizontal_standard_l_reas(z_positions, open_direction):
             tube_positions = horizontal_tube_positions(z_positions)
             if len(tube_positions) < 2:
@@ -12193,7 +12204,9 @@ class PremarcScriptObject(BaseScriptObject):
             cuboids_moved = create_horizontal_rea(z_positions, True)
             if enable_special_rea:
                 if use_special_c_rea:
-                    special_rea_moved = create_horizontal_special_c_reas(z_positions, True)
+                    special_rea_moved = create_horizontal_variant_special_c_reas(
+                        z_positions, "TOP"
+                    )
                 elif use_standard_l_rea:
                     special_rea_moved = create_horizontal_variant_standard_l_reas(
                         z_positions, "TOP"
@@ -12229,7 +12242,9 @@ class PremarcScriptObject(BaseScriptObject):
             cuboids_moved = create_horizontal_rea(z_positions, True)
             if enable_special_rea:
                 if use_special_c_rea:
-                    special_rea_moved = create_horizontal_special_c_reas(z_positions, True)
+                    special_rea_moved = create_horizontal_variant_special_c_reas(
+                        z_positions, "BOTTOM"
+                    )
                 elif use_standard_l_rea:
                     special_rea_moved = create_horizontal_variant_standard_l_reas(
                         z_positions, "BOTTOM"
