@@ -215,6 +215,7 @@ HEIGHT_FALCA = 60
 MINUS_HEIGHT_FALCA = 23
 THICKNESS_FALCA = 132
 MINUS_THICKNESS_FALCA = 25
+BOTTOM_FALCA_NO_PERSIANA_POSITION_Z_OFFSET_MM = 3.0
 # Clearance for LAMISOL top falca against shutter box/premarc frame in local Y.
 LAMISOL_FALCA_DEPTH_CLEARANCE_MM = 6.0
 LAMISOL_FALCA_POSITION_Y_OFFSET_MM = -3.0
@@ -6705,6 +6706,13 @@ class PremarcScriptObject(BaseScriptObject):
             return self.build_ele.PersianaHeight.value
         return 0.0
 
+    def _bottom_falca_z_position_mm(self) -> float:
+        """Global Z position for the local origin of the bottom falca polygon."""
+        z_position = -(self.heigh + THICKNESS_MM)
+        if self.build_ele.ComboBoxPersianas.value == "NO":
+            z_position += BOTTOM_FALCA_NO_PERSIANA_POSITION_Z_OFFSET_MM
+        return z_position
+
     def _build_xps_premarc_detail(self) -> str:
         """Build the PMP_XPS_PREMARC_DETAIL attribute string for the current state."""
         try:
@@ -10032,7 +10040,7 @@ class PremarcScriptObject(BaseScriptObject):
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
                 -(self.thickness - THICKNESS_MM - THICKNESS_FALCA),
-                -(self.heigh + THICKNESS_MM),
+                self._bottom_falca_z_position_mm(),
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
@@ -12437,7 +12445,7 @@ class PremarcScriptObject(BaseScriptObject):
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
                 -(self.thickness - THICKNESS_MM - THICKNESS_FALCA),
-                -(self.heigh + THICKNESS_MM),
+                self._bottom_falca_z_position_mm(),
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
