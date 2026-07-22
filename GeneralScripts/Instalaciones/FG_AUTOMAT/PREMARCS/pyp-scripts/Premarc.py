@@ -11488,6 +11488,7 @@ class PremarcScriptObject(BaseScriptObject):
         direction_open = self.get_direction_open_premarc()
         include_rea_cylinders = self._is_open_premarc_rea()
         include_base_rea = direction_open != "NOTHING"
+        include_variant_rea_cylinders = direction_open in {"TOP_VARIANT", "BOTTOM_VARIANT"}
         enable_special_rea = bool(
             getattr(getattr(self.build_ele, "EnableREAEspecial", None), "value", False)
         )
@@ -11635,6 +11636,40 @@ class PremarcScriptObject(BaseScriptObject):
                 for y_pos in y_positions:
                     result.append(
                         create_z_rea_cylinder(x_pos, y_pos, z_start, rea_length)
+                    )
+            return result
+
+        def create_horizontal_variant_rea_cylinders(z_positions):
+            tube_positions = horizontal_tube_positions(z_positions, True)
+            if not tube_positions:
+                return []
+
+            rea_length = 280
+            rea_offset_from_tube_end = 23
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            x_positions = (
+                tube_x_start + rea_offset_from_tube_end - rea_length / 2,
+                tube_x_end - rea_offset_from_tube_end + rea_length / 2,
+            )
+
+            result = []
+            for z_pos, y_pos in tube_positions:
+                y_center = y_pos - REA_x_y / 2
+                z_center = z_pos - REA_x_y / 2
+                z_start = z_center - rea_length / 2
+                for x_pos in x_positions:
+                    cylinder = create_z_rea_cylinder(
+                        x_pos, y_center, z_start, rea_length
+                    )
+                    rotation_axis = AllplanGeo.Axis3D(
+                        AllplanGeo.Point3D(x_pos, y_center, z_center),
+                        AllplanGeo.Vector3D(0, 1, 0),
+                    )
+                    result.append(
+                        AllplanGeo.Rotate(
+                            cylinder, rotation_axis, AllplanGeo.Angle.FromDeg(90)
+                        )
                     )
             return result
 
@@ -12066,12 +12101,7 @@ class PremarcScriptObject(BaseScriptObject):
         elif direction_open == "TOP_VARIANT":
             z_positions = (-offset_rea, -offset_rea)
             cuboids_moved = create_horizontal_rea(z_positions, True)
-            if include_rea_cylinders:
-                cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
-            elif use_special_c_rea:
-                cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
-            else:
-                cylinders_moved = []
+            cylinders_moved = create_horizontal_variant_rea_cylinders(z_positions)
         elif direction_open == "BOTTOM":
             z_positions = (
                 -self.heigh + offset_rea + REA_x_y,
@@ -12099,17 +12129,12 @@ class PremarcScriptObject(BaseScriptObject):
                 -self.heigh + offset_rea + REA_x_y,
             )
             cuboids_moved = create_horizontal_rea(z_positions, True)
-            if include_rea_cylinders:
-                cylinders_moved = create_horizontal_rea_cylinders(z_positions, True)
-            elif use_special_c_rea:
-                cylinders_moved = create_horizontal_special_c_reas(z_positions, True)
-            else:
-                cylinders_moved = []
+            cylinders_moved = create_horizontal_variant_rea_cylinders(z_positions)
         else:
             cuboids_moved = []
             cylinders_moved = []
 
-        if include_rea_cylinders:
+        if include_rea_cylinders or include_variant_rea_cylinders:
             return cuboids_moved, cylinders_moved, []
 
         return cuboids_moved, [], cylinders_moved
