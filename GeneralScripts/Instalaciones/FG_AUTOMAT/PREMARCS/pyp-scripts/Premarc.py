@@ -11487,11 +11487,12 @@ class PremarcScriptObject(BaseScriptObject):
         cylinders_moved = []
         direction_open = self.get_direction_open_premarc()
         include_rea_cylinders = self._is_open_premarc_rea()
+        include_base_rea = direction_open != "NOTHING"
         enable_special_rea = bool(
             getattr(getattr(self.build_ele, "EnableREAEspecial", None), "value", False)
         )
 
-        if not include_rea_cylinders and not enable_special_rea:
+        if not include_rea_cylinders and not enable_special_rea and not include_base_rea:
             return [], [], []
         if enable_special_rea and not include_rea_cylinders:
             self._normalize_special_rea_type_for_direction()
@@ -12005,12 +12006,14 @@ class PremarcScriptObject(BaseScriptObject):
             direction_open
         )
         use_special_c_rea = (
-            not include_rea_cylinders
+            enable_special_rea
+            and not include_rea_cylinders
             and selected_special_rea_type() == "REAs en C"
             and "REAs en C" in allowed_special_rea_types
         )
         use_standard_l_rea = (
-            not include_rea_cylinders
+            enable_special_rea
+            and not include_rea_cylinders
             and is_l_special_type()
             and bool(
                 allowed_special_rea_types
