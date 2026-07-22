@@ -4459,6 +4459,14 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _default_rea_l_x_lengths_for_current_context(self, special_type: str = None):
         if self.get_direction_open_premarc() in {"TOP_VARIANT", "BOTTOM_VARIANT"}:
+            special_type = str(
+                special_type
+                if special_type is not None
+                else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+                or ""
+            )
+            if special_type == "REAs en L STD":
+                return 500, 500
             return 340, 340
 
         return self._default_rea_l_x_lengths_for_special_type(special_type)
