@@ -215,6 +215,11 @@ HEIGHT_FALCA = 60
 MINUS_HEIGHT_FALCA = 23
 THICKNESS_FALCA = 132
 MINUS_THICKNESS_FALCA = 25
+# Clearance for LAMISOL top falca against shutter box/premarc frame in local Y.
+LAMISOL_FALCA_DEPTH_CLEARANCE_MM = 6.0
+LAMISOL_FALCA_POSITION_Y_OFFSET_MM = -3.0
+LAMISOL_FALCA_POSITION_Z_OFFSET_MM = 3.0
+LAMISOL_MINUS_HEIGHT_FALCA_MM = 20.0
 # Plano horizontal superior de la falca cuando el cajon es METALUNIC VIST.
 # Lamisol NO lleva este plano (trapecio recto). Tuneable en iteracion visual.
 FLAT_TOP_METALUNIC_MM = 23
@@ -6669,19 +6674,36 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _lamisol_falca_depth_mm(self) -> float:
         """Depth/base of the LAMISOL falca in local -Y."""
-        return max(float(self.thickness) - self._lamisol_falca_y_start_mm(), 0.0)
+        return max(
+            float(self.thickness)
+            - self._lamisol_falca_y_start_mm()
+            - LAMISOL_FALCA_DEPTH_CLEARANCE_MM,
+            0.0,
+        )
 
     def _top_falca_y_position_mm(self) -> float:
         """Global Y position for the local origin of the top falca polygon."""
         persiana = self.build_ele.ComboBoxPersianas.value
         if persiana == "LAMISOL VIST":
-            return -self._lamisol_falca_y_start_mm()
+            return (
+                -self._lamisol_falca_y_start_mm()
+                + LAMISOL_FALCA_POSITION_Y_OFFSET_MM
+            )
         if persiana == "METALUNIC VIST":
             return -(
                 self._xps_wall_thickness_mm()
                 + float(self.build_ele.PersianaWidth.value)
             )
         return -(self.thickness - THICKNESS_MM - THICKNESS_FALCA)
+
+    def _top_falca_z_position_mm(self) -> float:
+        """Global Z position for the local origin of the top falca polygon."""
+        persiana = self.build_ele.ComboBoxPersianas.value
+        if persiana == "LAMISOL VIST":
+            return LAMISOL_FALCA_POSITION_Z_OFFSET_MM
+        if self._get_persiana_kind() == "MONOBLOCK":
+            return self.build_ele.PersianaHeight.value
+        return 0.0
 
     def _build_xps_premarc_detail(self) -> str:
         """Build the PMP_XPS_PREMARC_DETAIL attribute string for the current state."""
@@ -9159,7 +9181,7 @@ class PremarcScriptObject(BaseScriptObject):
             else:  # LAMISOL VIST -> trapecio recto (sin plano superior)
                 frame_falca += AllplanGeo.Point3D(0, 0, 0)
                 frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
-                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, MINUS_HEIGHT_FALCA)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, LAMISOL_MINUS_HEIGHT_FALCA_MM)
                 frame_falca += AllplanGeo.Point3D(0, -thickness_falca, 0)
             return frame_falca
 
@@ -9994,7 +10016,7 @@ class PremarcScriptObject(BaseScriptObject):
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
                 self._top_falca_y_position_mm(),
-                0,
+                self._top_falca_z_position_mm(),
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
@@ -12395,9 +12417,7 @@ class PremarcScriptObject(BaseScriptObject):
         # MONOBLOCK / FALS CALAIX (cajon OCULTO): subir la falca superior en Z
         # para salvar (esquivar) el cajon, que queda dentro del muro. Se eleva
         # la altura del cajon (PersianaHeight). Tuneable en iteracion visual.
-        z_position_top_falcas = 0
-        if self._get_persiana_kind() == "MONOBLOCK":
-            z_position_top_falcas = self.build_ele.PersianaHeight.value
+        z_position_top_falcas = self._top_falca_z_position_mm()
         for i in range(max_falcas+1):
             falca = self.create_origin_falca_top()
             translation_vector = AllplanGeo.Vector3D(
