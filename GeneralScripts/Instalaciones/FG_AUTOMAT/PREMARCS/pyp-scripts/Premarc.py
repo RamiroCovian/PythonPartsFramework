@@ -461,9 +461,9 @@ PMP_FG_OBRA_FABRICA = "PMP_FG_OBRA_FABRICA"
 
 
 VAL_PMP_XPS_PREMARC_DETAIL_TEXT = "PIR"
-VAL_PMP_ID_PREMARC = ""
-VAL_PMP_WALL_NAME = ""
-VAL_PMP_PARE = ""
+VAL_PMP_ID_PREMARC = "HM1102 (HC-4)"
+VAL_PMP_WALL_NAME = "HM1102"
+VAL_PMP_PARE = "HM1102"
 VAL_PMP_TIPUS_PREMARC = "FONS 415 mm"
 VAL_PMP_PREMARC_LABELS = ""
 VAL_PMP_PREMARC_ELEMENT_LABELS_TUB_VERTICAL = "$<bold, color(6)>TUB VERTICAL$"
@@ -1030,6 +1030,7 @@ class PremarcScriptObject(BaseScriptObject):
         self.selected_wall = None  # guardará el BaseElementAdapter
         self._wall_id_override_value = ""
         self._pmp_pare_override_value = ""
+        self._last_auto_ampit_ref_1_value = ""
         self.detected_wall_thickness = 0
         self._opening_baseline_width = None
         self._opening_baseline_height = None
@@ -1176,6 +1177,7 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.id_premarc.value = VAL_PMP_ID_PREMARC
         # self.build_ele.wall_id.value                                = VAL_PMP_WALL_NAME
         self.build_ele.wall_id.value = VAL_PMP_PARE
+        self._sync_ampit_reference_fields()
 
         self.build_ele.INPUT_PMP_ID_PREMARC.value = VAL_PMP_ID_PREMARC
 
@@ -1807,6 +1809,51 @@ class PremarcScriptObject(BaseScriptObject):
             return input_value
         return str(getattr(self.build_ele.id_premarc, "value", "") or "").strip()
 
+    def _parse_ampit_ref_1_from_premarc_id(self, premarc_id: str) -> str:
+        """Extrae el ID entre parentesis para PMP_FG_AMPIT_REF_1."""
+        text = str(premarc_id or "").strip()
+        if not text:
+            return ""
+
+        open_idx = text.rfind("(")
+        close_idx = text.find(")", open_idx + 1) if open_idx >= 0 else -1
+        if open_idx < 0 or close_idx <= open_idx + 1:
+            print(
+                "[Premarc][AMPIT_REF_1] No se pudo parsear PremarcoID "
+                f"'{text}'. Se conserva el valor manual o queda vacio."
+            )
+            return ""
+
+        return text[open_idx + 1 : close_idx].strip()
+
+    def _sync_ampit_reference_fields(self, overwrite_ref_1: bool = False) -> None:
+        """Sincroniza los campos de paleta derivados sin pisar REF_1 manual."""
+        if hasattr(self.build_ele, "ampit_ref_2"):
+            self.build_ele.ampit_ref_2.value = self._get_current_pmp_pare_value()
+
+        if not hasattr(self.build_ele, "ampit_ref_1"):
+            return
+
+        current_ref_1 = str(
+            getattr(self.build_ele.ampit_ref_1, "value", "") or ""
+        ).strip()
+        if current_ref_1 and not overwrite_ref_1:
+            return
+
+        parsed_ref_1 = self._parse_ampit_ref_1_from_premarc_id(
+            self._get_current_premarc_id_value()
+        )
+        if parsed_ref_1:
+            self.build_ele.ampit_ref_1.value = parsed_ref_1
+            self._last_auto_ampit_ref_1_value = parsed_ref_1
+        elif overwrite_ref_1:
+            last_auto_ref_1 = str(
+                getattr(self, "_last_auto_ampit_ref_1_value", "") or ""
+            ).strip()
+            if not current_ref_1 or current_ref_1 == last_auto_ref_1:
+                self.build_ele.ampit_ref_1.value = ""
+                self._last_auto_ampit_ref_1_value = ""
+
     def _add_shared_generated_element_attributes(
         self, attribute_list: BuildingElementAttributeList
     ) -> None:
@@ -1995,10 +2042,31 @@ class PremarcScriptObject(BaseScriptObject):
     def _get_ampit_parts_value(self) -> str:
         """ID de fusteria definido por el usuario para el ampit."""
         return self._get_build_ele_value(
+            "ampit_parts",
             "INPUT_PMP_FG_AMPIT_PARTS",
-            "INPUT_PMP_FG_FUS_CODI",
-            default=VAL_PMP_FG_AMPIT_PARTS,
+            default="",
         )
+
+    def _get_ampit_ref_1_value(self) -> str:
+        """REF_1 editable: manual si existe; automatico desde PremarcoID si parsea."""
+        manual_value = self._get_build_ele_value(
+            "ampit_ref_1",
+            "INPUT_PMP_FG_AMPIT_REF_1",
+            default="",
+        )
+        if manual_value:
+            return manual_value
+
+        return self._parse_ampit_ref_1_from_premarc_id(
+            self._get_current_premarc_id_value()
+        )
+
+    def _get_ampit_ref_2_value(self) -> str:
+        """REF_2 no editable: valor legible del muro host."""
+        value = self._get_current_pmp_pare_value()
+        if hasattr(self.build_ele, "ampit_ref_2"):
+            self.build_ele.ampit_ref_2.value = value
+        return value
 
     def _get_ampit_muntatge_value(self) -> str:
         """
@@ -2066,10 +2134,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
+            self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
+            self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
         )
         return attribute_list
 
@@ -2087,10 +2155,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
+            self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
+            self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
         )
         return attribute_list
 
@@ -2493,6 +2561,7 @@ class PremarcScriptObject(BaseScriptObject):
                             self.selected_wall, getattr(self, "pmp_fg_obra_fabrica_id", 0)
                         )
                         self.build_ele.wall_id.value = f"{pmp_pare_val}{obra_fabrica_val}"
+                        self._sync_ampit_reference_fields()
 
                     except Exception as e:
                         pass
@@ -3983,6 +4052,7 @@ class PremarcScriptObject(BaseScriptObject):
         self._wall_id_override_value = wall_ifc_id
         self._pmp_pare_override_value = pmp_pare
         self.build_ele.wall_id.value = pmp_pare
+        self._sync_ampit_reference_fields()
 
         if hasattr(self.build_ele, "SavedState") and self.placement_pnt != AllplanGeo.Point3D():
             try:
@@ -4307,6 +4377,9 @@ class PremarcScriptObject(BaseScriptObject):
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
             "retall_ampits": self.build_ele.retall_ampits.value,
+            "ampit_parts": self._get_ampit_parts_value(),
+            "ampit_ref_1": self._get_ampit_ref_1_value(),
+            "ampit_ref_2": self._get_ampit_ref_2_value(),
             # Impermeabilizacion: faltaba en el snapshot -> se perdia la config
             # al reabrir (doble-click o seleccionar).
             "EnableImpermeabilizacio": self.build_ele.EnableImpermeabilizacio.value,
@@ -4459,11 +4532,20 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
+        if hasattr(self.build_ele, "ampit_parts"):
+            self.build_ele.ampit_parts.value = state.get(
+                "ampit_parts", self._get_ampit_parts_value()
+            )
+        if hasattr(self.build_ele, "ampit_ref_1"):
+            self.build_ele.ampit_ref_1.value = state.get(
+                "ampit_ref_1", self._get_ampit_ref_1_value()
+            )
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
         self._wall_id_override_value = str(state.get("pmp_wall_id", "") or "").strip()
         self._pmp_pare_override_value = str(state.get("pmp_pare", "") or "").strip()
+        self._sync_ampit_reference_fields()
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
 
         if self.build_ele.enable_manual_thickness.value:
@@ -5100,11 +5182,13 @@ class PremarcScriptObject(BaseScriptObject):
 
         if name == "id_premarc":
             self.build_ele.INPUT_PMP_ID_PREMARC.value = str(_value).strip()
-            return False
+            self._sync_ampit_reference_fields(overwrite_ref_1=True)
+            return True
 
         if name == "INPUT_PMP_ID_PREMARC":
             self.build_ele.id_premarc.value = str(_value).strip()
-            return False
+            self._sync_ampit_reference_fields(overwrite_ref_1=True)
+            return True
 
         if name == "afegit_ampits":
             self.afegit_ampits = self.build_ele.afegit_ampits.value
@@ -8648,9 +8732,15 @@ class PremarcScriptObject(BaseScriptObject):
                 eix_add_attribute_list.add_attribute(self.pmp_pare_id, pmp_pare_value)
             if pmp_wall_id_value:
                 eix_add_attribute_list.add_attribute(self.pmp_wall_id_attr_id, pmp_wall_id_value)
-            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_parts_id, self.build_ele.ampit_parts.value)
-            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_1_id, self.build_ele.ampit_ref_1.value)
-            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_2_id, pmp_pare_value)
+            eix_add_attribute_list.add_attribute(
+                self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
+            )
+            eix_add_attribute_list.add_attribute(
+                self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
+            )
+            eix_add_attribute_list.add_attribute(
+                self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
+            )
 
             if len(ampit_edge_fg) > 0:
                 model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
