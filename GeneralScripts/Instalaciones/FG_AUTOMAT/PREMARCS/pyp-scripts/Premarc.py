@@ -547,6 +547,7 @@ AMPIT_TYPE_SPECS = {
     "PAVIMENTO":      {"grosor": 11, "grosor_tope": 0,  "tope": 0,  "sobresaliente": 0,  "baseline_protrusion": 0,  "remate": 0, "color": 19, "layer": AMPIT_LAYER},
 }
 AMPIT_SOCKET_TOP_CLEARANCE_MM = 1.0
+AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM = 30.0
 
 # IMP IMPERMEABILIZACIONES — 3 tipos. grosor en mm (Z), color de la paleta
 # del proyecto Allplan (6=rojo, 4=verde, 3=cyan/turquesa según paleta enviada
@@ -13400,6 +13401,12 @@ class PremarcScriptObject(BaseScriptObject):
             return 30.0
         return 0.0
 
+    def _ampit_is_puerta_entrada(self) -> bool:
+        return bool(
+            getattr(self.build_ele.is_puerta_entrada, "value", False)
+            or getattr(self.build_ele.premarc_PE, "value", False)
+        )
+
     def _ampit_z_base_local_mm(self, ampit_grosor_mm: float = 11.0) -> float:
         socket_height = self._effective_socket_height_mm()
         imperm_thickness = self._grosor_imp_mm()
@@ -13408,6 +13415,8 @@ class PremarcScriptObject(BaseScriptObject):
                 0.0, socket_height - float(AMPIT_SOCKET_TOP_CLEARANCE_MM)
             )
             return max(0.0, target_top_z - float(ampit_grosor_mm)) + imperm_thickness
+        if self._ampit_is_puerta_entrada():
+            return AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM
         return imperm_thickness
 
     def _ampit_socket_z_lift_mm(self) -> float:
