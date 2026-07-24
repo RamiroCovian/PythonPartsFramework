@@ -140,7 +140,7 @@ except ImportError:
     print("instalando paquetes: formulas")
     import urllib3 as urllib3
 
-XPS_LAYER = "XPS_PREMARCS"
+XPS_LAYER = "PMP_XPS_PREMARCS"
 FRAME_LAYER = "PREMARCS"
 WINDOW_LAYER = "PMP_FUSTERIES"
 AMPIT_LAYER = "PMP_AMPITS"
@@ -219,9 +219,18 @@ FOLD_SPACING_MM = 3
 # TOP_FALCAS = False
 # BOTTOM_FALCAS = False
 HEIGHT_FALCA = 60
-MINUS_HEIGHT_FALCA = 19
+MINUS_HEIGHT_FALCA = 23
 THICKNESS_FALCA = 132
 MINUS_THICKNESS_FALCA = 25
+BOTTOM_FALCA_NO_PERSIANA_POSITION_Z_OFFSET_MM = 3.0
+# Clearance for LAMISOL top falca against shutter box/premarc frame in local Y.
+LAMISOL_FALCA_DEPTH_CLEARANCE_MM = 6.0
+LAMISOL_FALCA_POSITION_Y_OFFSET_MM = -3.0
+LAMISOL_FALCA_POSITION_Z_OFFSET_MM = 3.0
+LAMISOL_MINUS_HEIGHT_FALCA_MM = 20.0
+# Plano horizontal superior de la falca cuando el cajon es METALUNIC VIST.
+# Lamisol NO lleva este plano (trapecio recto). Tuneable en iteracion visual.
+FLAT_TOP_METALUNIC_MM = 23
 # HEIGHT_EDGE_FALCA = 107
 # LEFT_EDGE_FALCA = 19
 LENGTH_SIDE_HEXAGON = 40
@@ -237,6 +246,12 @@ VERTICAL_TUB = 1
 HORIZONTAL_TUB = 2
 REA_Z_ORIGIN = 50
 REA_Z_FINAL = 700
+REA_C_OPEN_FIRST_GROUP_DISTANCE_MM = 250
+REA_C_OPEN_DEFAULT_FREE_GAP_MM = 40
+REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM = 380
+REA_TUBE_DEFAULT_EXTRA_MM = 200
+REA_TUBE_DEFAULT_EXTRA_C_MM = 165
+REA_TUBE_DEFAULT_EXTRA_L_STANDARD_MM = 150
 LENGTH_REBAJES_MM = 19
 
 PREMARC_USE_COMANDES_OT = True
@@ -461,9 +476,9 @@ PMP_FG_OBRA_FABRICA = "PMP_FG_OBRA_FABRICA"
 
 
 VAL_PMP_XPS_PREMARC_DETAIL_TEXT = "PIR"
-VAL_PMP_ID_PREMARC = "HM1102 (HC-4)"
-VAL_PMP_WALL_NAME = "HM1102"
-VAL_PMP_PARE = "HM1102"
+VAL_PMP_ID_PREMARC = ""
+VAL_PMP_WALL_NAME = ""
+VAL_PMP_PARE = ""
 VAL_PMP_TIPUS_PREMARC = "FONS 415 mm"
 VAL_PMP_PREMARC_LABELS = ""
 VAL_PMP_PREMARC_ELEMENT_LABELS_TUB_VERTICAL = "$<bold, color(6)>TUB VERTICAL$"
@@ -546,8 +561,6 @@ AMPIT_TYPE_SPECS = {
     "XAPA":           {"grosor": 2,  "grosor_tope": 2,  "tope": 40, "sobresaliente": 12, "baseline_protrusion": 0,  "remate": 6, "color": 3,  "layer": AMPIT_LAYER},
     "PAVIMENTO":      {"grosor": 11, "grosor_tope": 0,  "tope": 0,  "sobresaliente": 0,  "baseline_protrusion": 0,  "remate": 0, "color": 19, "layer": AMPIT_LAYER},
 }
-AMPIT_SOCKET_TOP_CLEARANCE_MM = 1.0
-AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM = 30.0
 
 # IMP IMPERMEABILIZACIONES — 3 tipos. grosor en mm (Z), color de la paleta
 # del proyecto Allplan (6=rojo, 4=verde, 3=cyan/turquesa según paleta enviada
@@ -1031,7 +1044,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.selected_wall = None  # guardará el BaseElementAdapter
         self._wall_id_override_value = ""
         self._pmp_pare_override_value = ""
-        self._last_auto_ampit_ref_1_value = ""
         self.detected_wall_thickness = 0
         self._opening_baseline_width = None
         self._opening_baseline_height = None
@@ -1178,7 +1190,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.id_premarc.value = VAL_PMP_ID_PREMARC
         # self.build_ele.wall_id.value                                = VAL_PMP_WALL_NAME
         self.build_ele.wall_id.value = VAL_PMP_PARE
-        self._sync_ampit_reference_fields()
 
         self.build_ele.INPUT_PMP_ID_PREMARC.value = VAL_PMP_ID_PREMARC
 
@@ -1810,51 +1821,6 @@ class PremarcScriptObject(BaseScriptObject):
             return input_value
         return str(getattr(self.build_ele.id_premarc, "value", "") or "").strip()
 
-    def _parse_ampit_ref_1_from_premarc_id(self, premarc_id: str) -> str:
-        """Extrae el ID entre parentesis para PMP_FG_AMPIT_REF_1."""
-        text = str(premarc_id or "").strip()
-        if not text:
-            return ""
-
-        open_idx = text.rfind("(")
-        close_idx = text.find(")", open_idx + 1) if open_idx >= 0 else -1
-        if open_idx < 0 or close_idx <= open_idx + 1:
-            print(
-                "[Premarc][AMPIT_REF_1] No se pudo parsear PremarcoID "
-                f"'{text}'. Se conserva el valor manual o queda vacio."
-            )
-            return ""
-
-        return text[open_idx + 1 : close_idx].strip()
-
-    def _sync_ampit_reference_fields(self, overwrite_ref_1: bool = False) -> None:
-        """Sincroniza los campos de paleta derivados sin pisar REF_1 manual."""
-        if hasattr(self.build_ele, "ampit_ref_2"):
-            self.build_ele.ampit_ref_2.value = self._get_current_pmp_pare_value()
-
-        if not hasattr(self.build_ele, "ampit_ref_1"):
-            return
-
-        current_ref_1 = str(
-            getattr(self.build_ele.ampit_ref_1, "value", "") or ""
-        ).strip()
-        if current_ref_1 and not overwrite_ref_1:
-            return
-
-        parsed_ref_1 = self._parse_ampit_ref_1_from_premarc_id(
-            self._get_current_premarc_id_value()
-        )
-        if parsed_ref_1:
-            self.build_ele.ampit_ref_1.value = parsed_ref_1
-            self._last_auto_ampit_ref_1_value = parsed_ref_1
-        elif overwrite_ref_1:
-            last_auto_ref_1 = str(
-                getattr(self, "_last_auto_ampit_ref_1_value", "") or ""
-            ).strip()
-            if not current_ref_1 or current_ref_1 == last_auto_ref_1:
-                self.build_ele.ampit_ref_1.value = ""
-                self._last_auto_ampit_ref_1_value = ""
-
     def _add_shared_generated_element_attributes(
         self, attribute_list: BuildingElementAttributeList
     ) -> None:
@@ -2043,31 +2009,10 @@ class PremarcScriptObject(BaseScriptObject):
     def _get_ampit_parts_value(self) -> str:
         """ID de fusteria definido por el usuario para el ampit."""
         return self._get_build_ele_value(
-            "ampit_parts",
             "INPUT_PMP_FG_AMPIT_PARTS",
-            default="",
+            "INPUT_PMP_FG_FUS_CODI",
+            default=VAL_PMP_FG_AMPIT_PARTS,
         )
-
-    def _get_ampit_ref_1_value(self) -> str:
-        """REF_1 editable: manual si existe; automatico desde PremarcoID si parsea."""
-        manual_value = self._get_build_ele_value(
-            "ampit_ref_1",
-            "INPUT_PMP_FG_AMPIT_REF_1",
-            default="",
-        )
-        if manual_value:
-            return manual_value
-
-        return self._parse_ampit_ref_1_from_premarc_id(
-            self._get_current_premarc_id_value()
-        )
-
-    def _get_ampit_ref_2_value(self) -> str:
-        """REF_2 no editable: valor legible del muro host."""
-        value = self._get_current_pmp_pare_value()
-        if hasattr(self.build_ele, "ampit_ref_2"):
-            self.build_ele.ampit_ref_2.value = value
-        return value
 
     def _get_ampit_muntatge_value(self) -> str:
         """
@@ -2135,10 +2080,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
+            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
+            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
         )
         return attribute_list
 
@@ -2156,10 +2101,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
+            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
+            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
         )
         return attribute_list
 
@@ -2562,7 +2507,6 @@ class PremarcScriptObject(BaseScriptObject):
                             self.selected_wall, getattr(self, "pmp_fg_obra_fabrica_id", 0)
                         )
                         self.build_ele.wall_id.value = f"{pmp_pare_val}{obra_fabrica_val}"
-                        self._sync_ampit_reference_fields()
 
                     except Exception as e:
                         pass
@@ -3190,6 +3134,10 @@ class PremarcScriptObject(BaseScriptObject):
                 f"[Premarc] Generando opening final {index}/{len(session_items)} en "
                 f"({point.X:.1f}, {point.Y:.1f}, {point.Z:.1f})"
             )
+            print(
+                "[Premarc][SESSION] Estado aplicado para finalizacion -> "
+                f"{self._format_session_state_summary(state)}"
+            )
             if self.selected_wall:
                 self._create_wall_opening()
 
@@ -3206,6 +3154,22 @@ class PremarcScriptObject(BaseScriptObject):
 
     def _copy_point3d(self, point: AllplanGeo.Point3D) -> AllplanGeo.Point3D:
         return AllplanGeo.Point3D(point.X, point.Y, point.Z)
+
+    def _format_session_state_summary(self, state: dict) -> str:
+        """Resumen de estado geométrico para depurar finalización multi-premarco."""
+        if not state:
+            return "<sin-estado>"
+        return (
+            f"abierto={state.get('ComboBoxAbiertoCerrado')}, "
+            f"pend={state.get('ComboBoxPendiente')}, "
+            f"passama={state.get('PassamaOptions')}, "
+            f"rebajes={state.get('RebajesOptions')}, "
+            f"persiana={state.get('ComboBoxPersianas')}, "
+            f"ampit={state.get('EnableAmpit')}/{state.get('ampit_material')}, "
+            f"imperm={state.get('EnableImpermeabilizacio')}/{state.get('imperm_type')}, "
+            f"show_xps={state.get('EnableXPS')}, "
+            f"z_unique={state.get('z_unique')}"
+        )
 
     def _normalize_pyp_display_name(self, name: Any) -> str:
         return str(name or "").strip().strip("'\"")
@@ -4053,7 +4017,6 @@ class PremarcScriptObject(BaseScriptObject):
         self._wall_id_override_value = wall_ifc_id
         self._pmp_pare_override_value = pmp_pare
         self.build_ele.wall_id.value = pmp_pare
-        self._sync_ampit_reference_fields()
 
         if hasattr(self.build_ele, "SavedState") and self.placement_pnt != AllplanGeo.Point3D():
             try:
@@ -4378,9 +4341,6 @@ class PremarcScriptObject(BaseScriptObject):
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
             "retall_ampits": self.build_ele.retall_ampits.value,
-            "ampit_parts": self._get_ampit_parts_value(),
-            "ampit_ref_1": self._get_ampit_ref_1_value(),
-            "ampit_ref_2": self._get_ampit_ref_2_value(),
             # Impermeabilizacion: faltaba en el snapshot -> se perdia la config
             # al reabrir (doble-click o seleccionar).
             "EnableImpermeabilizacio": self.build_ele.EnableImpermeabilizacio.value,
@@ -4391,6 +4351,12 @@ class PremarcScriptObject(BaseScriptObject):
             # reabrir (doble-click), reseteando a default.
             "ComboBoxDEN": self.build_ele.ComboBoxDEN.value,
             "ComboBoxAbiertoCerrado": self.build_ele.ComboBoxAbiertoCerrado.value,
+            "EnableREAEspecial": self.build_ele.EnableREAEspecial.value,
+            "ComboBoxREAEspecial": self.build_ele.ComboBoxREAEspecial.value,
+            "SeparacionLibreEntreREAC": self.build_ele.SeparacionLibreEntreREAC.value,
+            "SobresalienteTubosREA": self.build_ele.SobresalienteTubosREA.value,
+            "LongitudREALXLadoAbierto": self.build_ele.LongitudREALXLadoAbierto.value,
+            "LongitudREALXLadoInterior": self.build_ele.LongitudREALXLadoInterior.value,
             "EnableRetallGanxo": self.build_ele.EnableRetallGanxo.value,
             "Z_RetallGanxo": self.build_ele.Z_RetallGanxo.value,
             "ComboBoxPendiente": self.build_ele.ComboBoxPendiente.value,
@@ -4406,6 +4372,8 @@ class PremarcScriptObject(BaseScriptObject):
             "ComboBoxEscuadras": self.build_ele.ComboBoxEscuadras.value,
             "ComboBoxTubos": self.build_ele.ComboBoxTubos.value,
             "TypeTubos": self.build_ele.TypeTubos.value,
+            "PositionTubos": self.build_ele.PositionTubos.value,
+            "OffsetTubos": self.build_ele.OffsetTubos.value,
             "CheckBoxRealSpace": self.build_ele.CheckBoxRealSpace.value,
             "CheckBoxInnerSpace": self.build_ele.CheckBoxInnerSpace.value,
             "opening_guid": self.build_ele.opening_guid.value,
@@ -4533,21 +4501,61 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
-        if hasattr(self.build_ele, "ampit_parts"):
-            self.build_ele.ampit_parts.value = state.get(
-                "ampit_parts", self._get_ampit_parts_value()
-            )
-        if hasattr(self.build_ele, "ampit_ref_1"):
-            self.build_ele.ampit_ref_1.value = state.get(
-                "ampit_ref_1", self._get_ampit_ref_1_value()
-            )
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
         self._wall_id_override_value = str(state.get("pmp_wall_id", "") or "").strip()
         self._pmp_pare_override_value = str(state.get("pmp_pare", "") or "").strip()
-        self._sync_ampit_reference_fields()
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
+        self.build_ele.EnableREAEspecial.value = state.get(
+            "EnableREAEspecial", self.build_ele.EnableREAEspecial.value
+        )
+        self.build_ele.ComboBoxREAEspecial.value = state.get(
+            "ComboBoxREAEspecial", self.build_ele.ComboBoxREAEspecial.value
+        )
+        self._normalize_special_rea_type_for_direction()
+        self.build_ele.SeparacionLibreEntreREAC.value = state.get(
+            "SeparacionLibreEntreREAC", self.build_ele.SeparacionLibreEntreREAC.value
+        )
+        self.build_ele.SobresalienteTubosREA.value = state.get(
+            "SobresalienteTubosREA", self.build_ele.SobresalienteTubosREA.value
+        )
+        self.build_ele.LongitudREALXLadoAbierto.value = state.get(
+            "LongitudREALXLadoAbierto", self.build_ele.LongitudREALXLadoAbierto.value
+        )
+        self.build_ele.LongitudREALXLadoInterior.value = state.get(
+            "LongitudREALXLadoInterior", self.build_ele.LongitudREALXLadoInterior.value
+        )
+        self.build_ele.PositionTubos.value = state.get(
+            "PositionTubos", self.build_ele.PositionTubos.value
+        )
+        self.build_ele.OffsetTubos.value = state.get(
+            "OffsetTubos", self.build_ele.OffsetTubos.value
+        )
+        self.build_ele.EnableImpermeabilizacio.value = state.get(
+            "EnableImpermeabilizacio", self.build_ele.EnableImpermeabilizacio.value
+        )
+        self.build_ele.imperm_type.value = state.get(
+            "imperm_type", self.build_ele.imperm_type.value
+        )
+        self.build_ele.EnableImpermPliegue90.value = state.get(
+            "EnableImpermPliegue90", self.build_ele.EnableImpermPliegue90.value
+        )
+        self.build_ele.imperm_muntatge.value = state.get(
+            "imperm_muntatge", self.build_ele.imperm_muntatge.value
+        )
+        self.build_ele.premarc_PE.value = state.get(
+            "premarc_PE", self.build_ele.premarc_PE.value
+        )
+        self.build_ele.EnableXPS.value = state.get(
+            "EnableXPS", self.build_ele.EnableXPS.value
+        )
+        self.build_ele.ComboBoxDEN.value = state.get(
+            "ComboBoxDEN", self.build_ele.ComboBoxDEN.value
+        )
+        saved_z_unique = z_unique_as_int(state.get("z_unique", 0))
+        if saved_z_unique > 0:
+            self.build_ele.z_unique.value = saved_z_unique
 
         if self.build_ele.enable_manual_thickness.value:
             # FIX (color manual cambia al colocar): el saved_state YA trae el color
@@ -5159,6 +5167,64 @@ class PremarcScriptObject(BaseScriptObject):
         else:
             return False
 
+    def _default_rea_tube_extra_for_special_type(self, special_type: str = None) -> float:
+        special_type = str(
+            special_type
+            if special_type is not None
+            else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+            or ""
+        )
+        if special_type == "REAs en C":
+            return REA_TUBE_DEFAULT_EXTRA_C_MM
+        if special_type in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}:
+            return REA_TUBE_DEFAULT_EXTRA_L_STANDARD_MM
+        return REA_TUBE_DEFAULT_EXTRA_MM
+
+    def _default_rea_l_x_lengths_for_special_type(self, special_type: str = None):
+        special_type = str(
+            special_type
+            if special_type is not None
+            else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+            or ""
+        )
+        if special_type == "REAs en L STD":
+            return 500, 450
+        if special_type in {"REAs en L STD CORTA", "REAs en L (Estandar)"}:
+            return 390, 340
+        return 390, 340
+
+    def _default_rea_l_x_lengths_for_current_context(self, special_type: str = None):
+        if self.get_direction_open_premarc() in {"TOP_VARIANT", "BOTTOM_VARIANT"}:
+            special_type = str(
+                special_type
+                if special_type is not None
+                else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+                or ""
+            )
+            if special_type == "REAs en L STD":
+                return 500, 500
+            return 340, 340
+
+        return self._default_rea_l_x_lengths_for_special_type(special_type)
+
+    def _set_default_rea_l_lengths_for_current_context(self, special_type: str = None) -> None:
+        special_type = str(
+            special_type
+            if special_type is not None
+            else getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+            or ""
+        )
+        if special_type not in {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}:
+            return
+
+        open_x_leg, inner_x_leg = self._default_rea_l_x_lengths_for_current_context(
+            special_type
+        )
+        if hasattr(self.build_ele, "LongitudREALXLadoAbierto"):
+            self.build_ele.LongitudREALXLadoAbierto.value = open_x_leg
+        if hasattr(self.build_ele, "LongitudREALXLadoInterior"):
+            self.build_ele.LongitudREALXLadoInterior.value = inner_x_leg
+
     def modify_element_property(self, name: str, _value: Any) -> bool:
         """modify the element property
 
@@ -5183,12 +5249,38 @@ class PremarcScriptObject(BaseScriptObject):
 
         if name == "id_premarc":
             self.build_ele.INPUT_PMP_ID_PREMARC.value = str(_value).strip()
-            self._sync_ampit_reference_fields(overwrite_ref_1=True)
-            return True
+            return False
 
         if name == "INPUT_PMP_ID_PREMARC":
             self.build_ele.id_premarc.value = str(_value).strip()
-            self._sync_ampit_reference_fields(overwrite_ref_1=True)
+            return False
+
+        if name == "ComboBoxAbiertoCerrado":
+            self.build_ele.ComboBoxAbiertoCerrado.value = _value
+            self._normalize_special_rea_type_for_direction()
+            if hasattr(self.build_ele, "SobresalienteTubosREA"):
+                self.build_ele.SobresalienteTubosREA.value = (
+                    self._default_rea_tube_extra_for_special_type()
+                )
+            self._set_default_rea_l_lengths_for_current_context()
+            return True
+
+        if name == "EnableREAEspecial":
+            self.build_ele.EnableREAEspecial.value = _value
+            self._normalize_special_rea_type_for_direction()
+            if hasattr(self.build_ele, "SobresalienteTubosREA"):
+                self.build_ele.SobresalienteTubosREA.value = (
+                    self._default_rea_tube_extra_for_special_type()
+                )
+            self._set_default_rea_l_lengths_for_current_context()
+            return True
+
+        if name == "ComboBoxREAEspecial":
+            if hasattr(self.build_ele, "SobresalienteTubosREA"):
+                self.build_ele.SobresalienteTubosREA.value = (
+                    self._default_rea_tube_extra_for_special_type(_value)
+                )
+            self._set_default_rea_l_lengths_for_current_context(_value)
             return True
 
         if name == "afegit_ampits":
@@ -7038,6 +7130,54 @@ class PremarcScriptObject(BaseScriptObject):
         except Exception:
             return 0.0
 
+    def _lamisol_falca_y_start_mm(self) -> float:
+        """Y origin for LAMISOL top falca.
+
+        The LAMISOL box occupies the wall-depth zone. The falca starts at the
+        back edge of that box and fills the remaining premarc depth.
+        """
+        return max(self._xps_wall_thickness_mm() - float(THICKNESS_MM), 0.0)
+
+    def _lamisol_falca_depth_mm(self) -> float:
+        """Depth/base of the LAMISOL falca in local -Y."""
+        return max(
+            float(self.thickness)
+            - self._lamisol_falca_y_start_mm()
+            - LAMISOL_FALCA_DEPTH_CLEARANCE_MM,
+            0.0,
+        )
+
+    def _top_falca_y_position_mm(self) -> float:
+        """Global Y position for the local origin of the top falca polygon."""
+        persiana = self.build_ele.ComboBoxPersianas.value
+        if persiana == "LAMISOL VIST":
+            return (
+                -self._lamisol_falca_y_start_mm()
+                + LAMISOL_FALCA_POSITION_Y_OFFSET_MM
+            )
+        if persiana == "METALUNIC VIST":
+            return -(
+                self._xps_wall_thickness_mm()
+                + float(self.build_ele.PersianaWidth.value)
+            )
+        return -(self.thickness - THICKNESS_MM - THICKNESS_FALCA)
+
+    def _top_falca_z_position_mm(self) -> float:
+        """Global Z position for the local origin of the top falca polygon."""
+        persiana = self.build_ele.ComboBoxPersianas.value
+        if persiana == "LAMISOL VIST":
+            return LAMISOL_FALCA_POSITION_Z_OFFSET_MM
+        if self._get_persiana_kind() == "MONOBLOCK":
+            return self.build_ele.PersianaHeight.value
+        return 0.0
+
+    def _bottom_falca_z_position_mm(self) -> float:
+        """Global Z position for the local origin of the bottom falca polygon."""
+        z_position = -(self.heigh + THICKNESS_MM)
+        if self.build_ele.ComboBoxPersianas.value == "NO":
+            z_position += BOTTOM_FALCA_NO_PERSIANA_POSITION_Z_OFFSET_MM
+        return z_position
+
     def _build_xps_premarc_detail(self) -> str:
         """Build the PMP_XPS_PREMARC_DETAIL attribute string for the current state."""
         try:
@@ -7703,20 +7843,22 @@ class PremarcScriptObject(BaseScriptObject):
 
         # TODO quitar
         if len(listaAbiertoCerrado) == 0:
-            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT + REA', 'OBERT PER DALT + REA VARIANT', 'OBERT PER BAIX', 'OBERT PER BAIX + REA', 'OBERT PER BAIX + REA VARIANT']
+            listaAbiertoCerrado = ['TANCAT', 'OBERT FEMELLA DRETA', 'OBERT FEMELLA ESQUERRA', 'OBERT FEMELLA DRETA + REA', 'OBERT FEMELLA ESQUERRA + REA', 'OBERT NO FEMELLA DRETA', 'OBERT NO FEMELLA ESQUERRA', 'OBERT NO FEMELLA DRETA + REA', 'OBERT NO FEMELLA ESQUERRA + REA', 'SUP. FEMELLA / INF NO FEMELLA DRET.', 'SUP. FEMELLA / INF NO FEMELLA ESQ.', 'SUP. FEMELLA / INF NO FEMELLA DRET. + REA', 'SUP. FEMELLA / INF NO FEMELLA ESQ. + REA', 'SUP. NO FEMELLA / INF. FEMELLA DRET.', 'SUP. NO FEMELLA / INF. FEMELLA ESQ.', 'SUP. NO FEMELLA / INF. FEMELLA DRET. + REA', 'SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA', 'OBERT PER DALT', 'OBERT PER DALT VARIANT', 'OBERT PER DALT + REA', 'OBERT PER BAIX', 'OBERT PER BAIX VARIANT', 'OBERT PER BAIX + REA']
 
         opciones_locales_anadidas = False
         for option in (
             "OBERT PER DALT",
+            "OBERT PER DALT VARIANT",
             "OBERT PER DALT + REA",
-            "OBERT PER DALT + REA VARIANT",
             "OBERT PER BAIX",
+            "OBERT PER BAIX VARIANT",
             "OBERT PER BAIX + REA",
-            "OBERT PER BAIX + REA VARIANT",
         ):
             if option not in listaAbiertoCerrado:
                 listaAbiertoCerrado.append(option)
                 opciones_locales_anadidas = True
+
+        debe_actualizar = len(listaActual) == 0 or listaActual != listaAbiertoCerrado
 
         if debe_actualizar or opciones_locales_anadidas:
             self.build_ele.valueListaAbiertoCerrado.value = listaAbiertoCerrado
@@ -8331,10 +8473,13 @@ class PremarcScriptObject(BaseScriptObject):
         )
         props_cuboids_rea = AllplanBaseElements.CommonProperties()
         props_cylinders_rea = AllplanBaseElements.CommonProperties()
+        props_special_rea = AllplanBaseElements.CommonProperties()
         props_cuboids_rea.Color = 4  # verde
         props_cuboids_rea.Layer = layer_tubs_rea_id
         props_cylinders_rea.Color = 8  # naranja
         props_cylinders_rea.Layer = layer_tubs_rea_id
+        props_special_rea.Color = 15  # morado
+        props_special_rea.Layer = layer_tubs_rea_id
 
         layer_falcas_id = AllplanBaseElements.LayerService.GetIDByShortName(
             FALCAS_LAYER, self.document
@@ -8580,11 +8725,13 @@ class PremarcScriptObject(BaseScriptObject):
                 i, horitzontal_tubes_attribute_list.get_attribute_list()
             )
 
-        cuboids_rea, cylinders_rea = self.create_premarc_REA()
+        cuboids_rea, cylinders_rea, special_rea = self.create_premarc_REA()
         for elem in cuboids_rea:
             model_ele_list.append_geometry_3d(elem, props_cuboids_rea)
         for elem in cylinders_rea:
             model_ele_list.append_geometry_3d(elem, props_cylinders_rea)
+        for elem in special_rea:
+            model_ele_list.append_geometry_3d(elem, props_special_rea)
 
         rea_attribute_list = BuildingElementAttributeList()
         rea_attribute_list.add_attribute(
@@ -8592,7 +8739,12 @@ class PremarcScriptObject(BaseScriptObject):
         )
         self._add_shared_generated_element_attributes(rea_attribute_list)
 
-        init_i = len(model_ele_list) - len(cuboids_rea) - len(cylinders_rea)
+        init_i = (
+            len(model_ele_list)
+            - len(cuboids_rea)
+            - len(cylinders_rea)
+            - len(special_rea)
+        )
         for i in range(init_i, len(model_ele_list)):
             model_ele_list.set_element_attributes(
                 i, rea_attribute_list.get_attribute_list()
@@ -8733,15 +8885,9 @@ class PremarcScriptObject(BaseScriptObject):
                 eix_add_attribute_list.add_attribute(self.pmp_pare_id, pmp_pare_value)
             if pmp_wall_id_value:
                 eix_add_attribute_list.add_attribute(self.pmp_wall_id_attr_id, pmp_wall_id_value)
-            eix_add_attribute_list.add_attribute(
-                self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
-            )
-            eix_add_attribute_list.add_attribute(
-                self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
-            )
-            eix_add_attribute_list.add_attribute(
-                self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
-            )
+            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_parts_id, self.build_ele.ampit_parts.value)
+            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_1_id, self.build_ele.ampit_ref_1.value)
+            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_2_id, pmp_pare_value)
 
             if len(ampit_edge_fg) > 0:
                 model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
@@ -8809,6 +8955,9 @@ class PremarcScriptObject(BaseScriptObject):
         return model_ele_list
 
     def create_xps_premarc(self):
+        if not self.build_ele.EnableXPS.value:
+            return []
+
         wall_thickness_xps = self._xps_wall_thickness_mm()
 
         if self.thickness <= wall_thickness_xps:
@@ -8866,15 +9015,15 @@ class PremarcScriptObject(BaseScriptObject):
                 elems.remove(cuboid_left)
             case "OBERT PER DALT":
                 elems.remove(cuboid_top)
-            case "OBERT PER DALT + REA":
+            case "OBERT PER DALT VARIANT":
                 elems.remove(cuboid_top)
-            case "OBERT PER DALT + REA VARIANT":
+            case "OBERT PER DALT + REA":
                 elems.remove(cuboid_top)
             case "OBERT PER BAIX":
                 elems.remove(cuboid_bottom)
-            case "OBERT PER BAIX + REA":
+            case "OBERT PER BAIX VARIANT":
                 elems.remove(cuboid_bottom)
-            case "OBERT PER BAIX + REA VARIANT":
+            case "OBERT PER BAIX + REA":
                 elems.remove(cuboid_bottom)
             case "OBERT FEMELLA DRETA + REA":
                 elems.remove(cuboid_right)
@@ -9443,9 +9592,13 @@ class PremarcScriptObject(BaseScriptObject):
                 AllplanGeo.Vector3D(0, -1 * SQUARE_THICKNESS, 0)
             )
         elif direction == "frame_tub":
-            extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 0, -1 * self.heigh))
+            extruded_solid.SetDirection(
+                AllplanGeo.Vector3D(0, 0, -1 * (self.heigh + THICKNESS_MM * 2))
+            )
         elif direction == "frame_tub_horizontal":
-            extruded_solid.SetDirection(AllplanGeo.Vector3D(self.width, 0, 0))
+            extruded_solid.SetDirection(
+                AllplanGeo.Vector3D(self.width + THICKNESS_MM * 2, 0, 0)
+            )
         elif direction == "socket_frame_front":
             extruded_solid.SetDirection(AllplanGeo.Vector3D(0, 1 * THICKNESS_MM, 0))
         elif direction == "socket_frame_back":
@@ -9487,6 +9640,15 @@ class PremarcScriptObject(BaseScriptObject):
     def get_square_y_offset(self):
         return self.build_ele.thickness_wall.value / 2 - SQUARE_THICKNESS / 2
 
+    def _wall_thickness_for_tube_centering(self) -> float:
+        try:
+            wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
+        except Exception:
+            wall_thickness = 0.0
+        if wall_thickness <= 0:
+            wall_thickness = float(self.detected_wall_thickness or 0.0)
+        return wall_thickness
+
     # def create_vertical_tub(self)->AllplanGeo.Polyhedron3D:
     #     frame_tub_bottom = AllplanGeo.Polygon3D()
     #     frame_tub_bottom += AllplanGeo.Point3D(0, -(self.thickness/2-TUB_WIDTH_LENGTH/2), 0)
@@ -9509,22 +9671,23 @@ class PremarcScriptObject(BaseScriptObject):
 
     def create_vertical_tub(self) -> AllplanGeo.Polyhedron3D:
         # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self.build_ele.thickness_wall.value / 2
+        wall_center = self._wall_thickness_for_tube_centering() / 2
+        z_top = THICKNESS_MM
         frame_tub_bottom = AllplanGeo.Polygon3D()
         frame_tub_bottom += AllplanGeo.Point3D(
-            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
+            0, -(wall_center - TUB_WIDTH_LENGTH / 2), z_top
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            0, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
+            0, -(wall_center + TUB_WIDTH_LENGTH / 2), z_top
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            TUB_WIDTH_LENGTH, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
+            TUB_WIDTH_LENGTH, -(wall_center + TUB_WIDTH_LENGTH / 2), z_top
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            TUB_WIDTH_LENGTH, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
+            TUB_WIDTH_LENGTH, -(wall_center - TUB_WIDTH_LENGTH / 2), z_top
         )
         frame_tub_bottom += AllplanGeo.Point3D(
-            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
+            0, -(wall_center - TUB_WIDTH_LENGTH / 2), z_top
         )
         error_code, polyhedron_tub = self.extrude_frame(frame_tub_bottom, "frame_tub")
         return polyhedron_tub
@@ -9532,22 +9695,23 @@ class PremarcScriptObject(BaseScriptObject):
     def create_horizontal_tub(self) -> AllplanGeo.Polyhedron3D:
 
         # wall_center = self.build_ele.thickness_wall.value / 2 if self.build_ele.enable_manual_thickness.value else self._get_wall_thickness(self.selected_wall) / 2
-        wall_center = self.build_ele.thickness_wall.value / 2
+        wall_center = self._wall_thickness_for_tube_centering() / 2
+        x_start = -THICKNESS_MM
         frame_tub_left = AllplanGeo.Polygon3D()
         frame_tub_left += AllplanGeo.Point3D(
-            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
+            x_start, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_left += AllplanGeo.Point3D(
-            0, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
+            x_start, -(wall_center + TUB_WIDTH_LENGTH / 2), 0
         )
         frame_tub_left += AllplanGeo.Point3D(
-            0, -(wall_center + TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
+            x_start, -(wall_center + TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
         )
         frame_tub_left += AllplanGeo.Point3D(
-            0, -(wall_center - TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
+            x_start, -(wall_center - TUB_WIDTH_LENGTH / 2), -TUB_WIDTH_LENGTH
         )
         frame_tub_left += AllplanGeo.Point3D(
-            0, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
+            x_start, -(wall_center - TUB_WIDTH_LENGTH / 2), 0
         )
         error_code, polyhedron_tub = self.extrude_frame(
             frame_tub_left, "frame_tub_horizontal"
@@ -9600,78 +9764,44 @@ class PremarcScriptObject(BaseScriptObject):
                 polyhedron_tubs.append(polyhedron_tub_moved)
             return polyhedron_tubs
 
-    def _bottom_slope_z_at_y_mm(self, y_local: float) -> float:
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return -float(self.heigh)
-
-        angle_rad = math.radians(
-            self._bottom_slope_angle_deg(self.bottom_rebaje_enabled())
-        )
-        pivot_y = self._bottom_slope_pivot_y_mm()
-        pivot_z = -float(self.heigh)
-        bottom_offset = self._bottom_slope_bottom_offset_vector()
-        cos_angle = math.cos(angle_rad)
-        if abs(cos_angle) <= 0.001:
-            return pivot_z + bottom_offset.Z
-
-        y_from_axis = (float(y_local) - bottom_offset.Y - pivot_y) / cos_angle
-        z_after_rotation = pivot_z + math.sin(angle_rad) * y_from_axis
-        return z_after_rotation + bottom_offset.Z
-
-    def _socket_variable_side_height_mm(self, socket_outer_width, socket_height):
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return float(socket_height)
-
-        effective_depth = self._bottom_slope_effective_depth_mm(
-            self.bottom_rebaje_enabled()
-        )
-        if effective_depth <= 0.0:
-            return float(socket_height)
-
-        slope_ratio = abs(self._bottom_slope_z_lift_mm()) / max(
-            effective_depth, abs(self._bottom_slope_z_lift_mm())
-        )
-        return float(socket_height) + float(socket_outer_width) * slope_ratio
-
-    def create_socket(self, socket_width, socket_height, socket_outer_width=None):
+    def create_socket(self, socket_width, socket_height):
         polyhedron_sockets = AllplanGeo.Polyhedron3DList()
-        if socket_outer_width is None:
-            socket_outer_width = float(socket_width) + float(THICKNESS_MM)
-
-        y_front = -float(self.thickness)
-        y_back = -(float(self.thickness) - float(socket_width))
-        z_front_bottom = self._bottom_slope_z_at_y_mm(y_front)
-        z_top = z_front_bottom + float(socket_height)
-        variable_side_height = self._socket_variable_side_height_mm(
-            socket_outer_width, socket_height
-        )
-        z_back_bottom = z_top - variable_side_height
 
         socket_frame_front = AllplanGeo.Polygon3D()
         socket_frame_front += AllplanGeo.Point3D(
-            0, y_front, z_front_bottom
+            0, -self.thickness, -self.heigh
         )  # bottom left point
         socket_frame_front += AllplanGeo.Point3D(
-            self.width, y_front, z_front_bottom
+            self.width, -self.thickness, -self.heigh
         )
         socket_frame_front += AllplanGeo.Point3D(
-            self.width, y_front, z_top
+            self.width, -self.thickness, -(self.heigh - socket_height)
         )
         socket_frame_front += AllplanGeo.Point3D(
-            0, y_front, z_top
+            0, -self.thickness, -(self.heigh - socket_height)
         )
-        socket_frame_front += AllplanGeo.Point3D(0, y_front, z_front_bottom)
+        socket_frame_front += AllplanGeo.Point3D(0, -self.thickness, -self.heigh)
         error_code, polyhedron_socket_front = self.extrude_frame(
             socket_frame_front, "socket_frame_front"
         )
         polyhedron_sockets.append(polyhedron_socket_front)
 
         socket_frame_top = AllplanGeo.Polygon3D()
-        socket_frame_top += AllplanGeo.Point3D(0, y_front, z_top)
-        socket_frame_top += AllplanGeo.Point3D(0, y_back, z_top)
-        socket_frame_top += AllplanGeo.Point3D(self.width, y_back, z_top)
-        socket_frame_top += AllplanGeo.Point3D(self.width, y_front, z_top)
-        socket_frame_top += AllplanGeo.Point3D(0, y_front, z_top)
+        socket_frame_top += AllplanGeo.Point3D(
+            0, -self.thickness, -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            0, -(self.thickness - socket_width), -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            self.width, -(self.thickness - socket_width), -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            self.width, -self.thickness, -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            0, -self.thickness, -(self.heigh - socket_height)
+        )
         error_code, polyhedron_socket_top = self.extrude_frame(
             socket_frame_top, "socket_frame_top"
         )
@@ -9679,19 +9809,19 @@ class PremarcScriptObject(BaseScriptObject):
 
         socket_frame_back = AllplanGeo.Polygon3D()
         socket_frame_back += AllplanGeo.Point3D(
-            0, y_back, z_back_bottom
+            0, -(self.thickness - socket_width), -self.heigh
         )  # bottom left point
         socket_frame_back += AllplanGeo.Point3D(
-            self.width, y_back, z_back_bottom
+            self.width, -(self.thickness - socket_width), -self.heigh
         )
         socket_frame_back += AllplanGeo.Point3D(
-            self.width, y_back, z_top
+            self.width, -(self.thickness - socket_width), -(self.heigh - socket_height)
         )
         socket_frame_back += AllplanGeo.Point3D(
-            0, y_back, z_top
+            0, -(self.thickness - socket_width), -(self.heigh - socket_height)
         )
         socket_frame_back += AllplanGeo.Point3D(
-            0, y_back, z_back_bottom
+            0, -(self.thickness - socket_width), -self.heigh
         )
         error_code, polyhedron_socket_back = self.extrude_frame(
             socket_frame_back, "socket_frame_front"
@@ -9703,15 +9833,41 @@ class PremarcScriptObject(BaseScriptObject):
     def create_origin_falca_top(self)->AllplanGeo.Polygon3D:
         height_falca = HEIGHT_FALCA
         thickness_falca = THICKNESS_FALCA
-        if self.build_ele.ComboBoxPersianas.value == "METALUNIC VIST":
-            height_falca = self.build_ele.PersianaHeight.value
-            thickness_falca = abs(
-                self.thickness
-                - self.detected_wall_thickness
-                - self.build_ele.PersianaWidth.value
-                - THICKNESS_MM
-            )
+        persiana = self.build_ele.ComboBoxPersianas.value
         frame_falca = AllplanGeo.Polygon3D()
+
+        # ADAPTATIVO (falcas superiores + cajon LAMISOL/METALUNIC): la falca
+        # superior llena el espacio libre en -Y. LAMISOL toma como borde de
+        # cajon el grosor de pared; METALUNIC descuenta ademas PersianaWidth.
+        # El remate SUPERIOR difiere por tipo:
+        #   - METALUNIC VIST: plano horizontal de 23mm arriba y luego baja.
+        #   - LAMISOL VIST: trapecio recto (incline directo, sin plano superior).
+        if persiana in ("LAMISOL VIST", "METALUNIC VIST"):
+            height_falca = self.build_ele.PersianaHeight.value
+            if persiana == "LAMISOL VIST":
+                thickness_falca = self._lamisol_falca_depth_mm()
+            else:
+                thickness_falca = max(
+                    float(self.thickness)
+                    - self._xps_wall_thickness_mm()
+                    - float(self.build_ele.PersianaWidth.value)
+                    - float(THICKNESS_MM),
+                    0.0,
+                )
+            if persiana == "METALUNIC VIST":
+                frame_falca += AllplanGeo.Point3D(0, 0, 0)
+                frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
+                frame_falca += AllplanGeo.Point3D(0, -FLAT_TOP_METALUNIC_MM, height_falca)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, MINUS_HEIGHT_FALCA)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, 0)
+            else:  # LAMISOL VIST -> trapecio recto (sin plano superior)
+                frame_falca += AllplanGeo.Point3D(0, 0, 0)
+                frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, LAMISOL_MINUS_HEIGHT_FALCA_MM)
+                frame_falca += AllplanGeo.Point3D(0, -thickness_falca, 0)
+            return frame_falca
+
+        # Sin persiana / otros tipos: geometria original (no se toca).
         frame_falca += AllplanGeo.Point3D(0, 0, 0)
         frame_falca += AllplanGeo.Point3D(0, 0, height_falca)
         frame_falca += AllplanGeo.Point3D(0, -MINUS_THICKNESS_FALCA, height_falca)
@@ -10328,26 +10484,22 @@ class PremarcScriptObject(BaseScriptObject):
         _right_open = "DRET" in _abierto_val
         finish_x_min = 0 if _left_open else -23
         finish_x_max = self.width if _right_open else self.width + 23
-        finish_profile_mm = 23.0
-        finish_bottom_z_offset = 0.20
-        finish_bottom_z_top = -self.heigh - finish_bottom_z_offset
-        finish_bottom_z_bottom = -self.heigh - finish_profile_mm - finish_bottom_z_offset
 
         frame_finish_bottom = AllplanGeo.Polygon3D()
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, finish_bottom_z_top
+            finish_x_min, -self.thickness, -self.heigh
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_max, -self.thickness, finish_bottom_z_top
+            finish_x_max, -self.thickness, -self.heigh
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_max, -self.thickness, finish_bottom_z_bottom
+            finish_x_max, -self.thickness, -self.heigh - 23
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, finish_bottom_z_bottom
+            finish_x_min, -self.thickness, -self.heigh - 23
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, finish_bottom_z_top
+            finish_x_min, -self.thickness, -self.heigh
         )
         error_code, polyhedron_finish_bottom = self.extrude_frame(
             frame_finish_bottom, "frame_finish_bottom"
@@ -10357,8 +10509,8 @@ class PremarcScriptObject(BaseScriptObject):
         frame_finish_top = AllplanGeo.Polygon3D()
         frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
         frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 0)
-        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, finish_profile_mm)
-        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, finish_profile_mm)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 23)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 23)
         frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
         error_code, polyhedron_finish_top = self.extrude_frame(frame_finish_top, "frame_finish_top")
 
@@ -10373,11 +10525,11 @@ class PremarcScriptObject(BaseScriptObject):
         offset_left_z = self.build_ele.PersianaHeight.value if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT" else 0
 
         frame_finish_left = AllplanGeo.Polygon3D()
-        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, finish_bottom_z_top) #1
+        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh) #1
         frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, offset_left_z) #2
         frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, offset_left_z) #3
-        frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, finish_bottom_z_top) #4
-        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, finish_bottom_z_top) #5-1
+        frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, -self.heigh) #4
+        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh) #5-1
         error_code, polyhedron_finish_left = self.extrude_frame(frame_finish_left, "frame_finish_left")
         polyhedron_premarc_list.append(polyhedron_finish_left)
 
@@ -10385,11 +10537,11 @@ class PremarcScriptObject(BaseScriptObject):
         offset_right_z = self.build_ele.PersianaHeight.value if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT" else 0
 
         frame_finish_right = AllplanGeo.Polygon3D()
-        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, finish_bottom_z_top) #1
-        frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, finish_bottom_z_top) #2
+        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh) #1
+        frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, -self.heigh) #2
         frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, offset_right_z) #3
         frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, offset_right_z) #4
-        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, finish_bottom_z_top) #5-1
+        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh) #5-1
         error_code, polyhedron_finish_right = self.extrude_frame(frame_finish_right, "frame_finish_right")
         polyhedron_premarc_list.append(polyhedron_finish_right)
 
@@ -10466,7 +10618,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         ### Encajes
         self.socket_width = 32  # compensa extrude, la medida es 35 medido de afuera.
-        self.socket_height = 30
+        self.socket_height = 27  # compensa extrude, la medida es 30 medido de afuera.
 
         polyedron_sockets = self.create_socket(self.socket_width, self.socket_height)
         error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
@@ -10602,8 +10754,8 @@ class PremarcScriptObject(BaseScriptObject):
             falca = self.create_origin_falca_top()
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
-                -(self.thickness - THICKNESS_MM - THICKNESS_FALCA),
-                0,
+                self._top_falca_y_position_mm(),
+                self._top_falca_z_position_mm(),
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
@@ -10619,7 +10771,7 @@ class PremarcScriptObject(BaseScriptObject):
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
                 -(self.thickness - THICKNESS_MM - THICKNESS_FALCA),
-                -(self.heigh + THICKNESS_MM),
+                self._bottom_falca_z_position_mm(),
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
@@ -10661,12 +10813,33 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Premarc with pendents in bottom
 
-        rotation_axis, rotation_angle = self._bottom_slope_axis_angle(False)
-        polyhedron_bottom_grade = AllplanGeo.Rotate(
-            polyhedron_bottom, rotation_axis, rotation_angle
+        # Copy and extrude top frame
+        # Need expand because after rotate and move, the frame don't close premarc
+        transformation_matrix = AllplanGeo.Matrix3D()
+        transformation_matrix.SetScaling(1, 1.001, 1)
+
+        polyhedron_top_expanded = AllplanGeo.Transform(
+            polyhedron_top, transformation_matrix
         )
-        polyhedron_bottom_grade = self._apply_bottom_slope_bottom_position(
-            polyhedron_bottom_grade
+
+        rotation_axis = AllplanGeo.Axis3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(1, 0, 0)
+        )
+        # Calculate rotation angle based on thickness
+        CO = 10
+        CA = self.thickness_premarc
+
+        angulo_radianes = math.atan2(CO, CA)
+        angulo_grados = math.degrees(angulo_radianes)
+
+        rotation_angle = AllplanGeo.Angle.FromDeg(-angulo_grados)
+
+        rotated_frame_premarc = AllplanGeo.Rotate(
+            polyhedron_top_expanded, rotation_axis, rotation_angle
+        )
+        translation_vector = AllplanGeo.Vector3D(0, -0.1, -(self.heigh + THICKNESS_MM))
+        polyhedron_bottom_grade = AllplanGeo.Move(
+            rotated_frame_premarc, translation_vector
         )
         # polyhedron_bottom_grade = None
 
@@ -10825,38 +10998,38 @@ class PremarcScriptObject(BaseScriptObject):
 
         scale_factor_x = (self.width + THICKNESS_MM * 2) / self.width
         center_x = (self.width * scale_factor_x) / 2 - THICKNESS_MM
-        rotation_axis, rotation_angle = self._bottom_slope_axis_angle(
-            True, center_x
+        axis_point = AllplanGeo.Point3D(
+            center_x, -float(LENGTH_REBAJES_MM), -self.heigh
         )
-        angulo_grados = self._bottom_slope_angle_deg(True)
+        rotation_axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
+        # With REB. BAIX the effective sloped length is the hypotenuse after
+        # removing the rebaje depth, so use asin(opposite / hypotenuse).
+        CO = 10.0
+        hipotenusa = max(float(self.thickness_premarc) - float(LENGTH_REBAJES_MM), abs(CO))
+        angulo_radianes = math.asin(CO / hipotenusa)
+        angulo_grados = math.degrees(angulo_radianes)
         if show_rebajes_debug:
             print(
                 "[Premarc][REB. BAIX][PENDIENTE] "
-                "target_total_z=10.000, "
-                f"axis_y={self._bottom_slope_pivot_y_mm():.3f}, "
+                f"CO={CO:.3f}, hipotenusa={hipotenusa:.3f}, "
+                f"axis_y={-float(LENGTH_REBAJES_MM):.3f}, "
                 f"angulo_grados={angulo_grados:.6f}"
             )
+        rotation_angle = AllplanGeo.Angle.FromDeg(-angulo_grados)
 
-        polyhedron_bottom_grade_raw = AllplanGeo.Rotate(
+        polyhedron_bottom_grade = AllplanGeo.Rotate(
             polyhedron_bottom, rotation_axis, rotation_angle
         )
         error_code, polyhedron_bottom_grade_with_rebaje = AllplanGeo.MakeSubtraction(
-            polyhedron_bottom_grade_raw, substract_rebajes_bottom
-        )
-        polyhedron_bottom_grade = self._apply_bottom_slope_bottom_position(
-            polyhedron_bottom_grade_raw
+            polyhedron_bottom_grade, substract_rebajes_bottom
         )
         if error_code != AllplanGeo.eGeometryErrorCode.eOK:
             print(
                 "[Premarc][REB. BAIX][PENDIENTE] "
                 f"MakeSubtraction tras rotacion fallo: {error_code}; "
-                "se usa fondo inclinado sin rebaje"
+                "se usa fondo rotado sin rebaje"
             )
             polyhedron_bottom_grade_with_rebaje = polyhedron_bottom_grade
-        else:
-            polyhedron_bottom_grade_with_rebaje = self._apply_bottom_slope_bottom_position(
-                polyhedron_bottom_grade_with_rebaje
-            )
 
         # Solids fix corners
 
@@ -10943,8 +11116,8 @@ class PremarcScriptObject(BaseScriptObject):
 
             case (
                 "OBERT PER DALT"
+                | "OBERT PER DALT VARIANT"
                 | "OBERT PER DALT + REA"
-                | "OBERT PER DALT + REA VARIANT"
             ):
                 print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
                 if polyhedron_top in polyhedron_premarc_list:
@@ -10963,8 +11136,8 @@ class PremarcScriptObject(BaseScriptObject):
 
             case (
                 "OBERT PER BAIX"
+                | "OBERT PER BAIX VARIANT"
                 | "OBERT PER BAIX + REA"
-                | "OBERT PER BAIX + REA VARIANT"
             ):
                 print(f"Selected {self.build_ele.ComboBoxAbiertoCerrado.value}")
                 if polyhedron_bottom in polyhedron_premarc_list:
@@ -11622,7 +11795,7 @@ class PremarcScriptObject(BaseScriptObject):
             #     case "35*30":
             #         print("Falca Selected 35*30")
             #         socket_width = 35-3 # 32 compensa extrude, la medida es 35 medido de afuera.
-            #         socket_height = 30 # altura real medida de afuera.
+            #         socket_height = 30-3 # 27  compensa extrude, la medida es 30 medido de afuera.
 
             #         polyedron_sockets = self.create_socket(socket_width, socket_height)
             #         error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
@@ -11630,7 +11803,7 @@ class PremarcScriptObject(BaseScriptObject):
             #     case "70*30":
             #         print("Falca Selected 70*30")
             #         socket_width = 70-3 # 68 compensa extrude, la medida es 70 medido de afuera.
-            #         socket_height = 30 # altura real medida de afuera.
+            #         socket_height = 30-3 # 27  compensa extrude, la medida es 30 medido de afuera.
 
             #         polyedron_sockets = self.create_socket(socket_width, socket_height)
             #         error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
@@ -11741,12 +11914,17 @@ class PremarcScriptObject(BaseScriptObject):
                         print("Error in remove polyhedron finish bottom")
                         pass
                 if polyhedron_socket in polyhedron_other_elements_list:
+                    # fix position socket
                     count_socket = 0
                     for polyhedron in polyhedron_other_elements_list:
                         if polyhedron == polyhedron_socket:
                             count_socket += 1
                     print(f"Count socket: {count_socket}")
-                    polyhedron_socket_fix = polyhedron_socket
+                    FIX_HEIGHT_SOCKET = 9  # 9 mm
+                    translation_vector = AllplanGeo.Vector3D(0, 0, FIX_HEIGHT_SOCKET)
+                    polyhedron_socket_fix = AllplanGeo.Move(
+                        polyhedron_socket, translation_vector
+                    )
                     try:
                         polyhedron_other_elements_list.append(polyhedron_socket_fix)
                         polyhedron_other_elements_list.remove(polyhedron_socket)
@@ -11770,12 +11948,9 @@ class PremarcScriptObject(BaseScriptObject):
         # Union premarc
         # TODO refactor to use method create_union_premarc
         polyhedron_premarc_union = self.create_union_premarc(polyhedron_premarc_list)
-        union_ok = polyhedron_premarc_union is not None
         if polyhedron_premarc_union is None:
-            print(
-                "[Premarc] Error in make union premarc; "
-                "se devuelven piezas de marco separadas para evitar None"
-            )
+            print("Error in make union premarc")
+            # polyhedron_premarc_union = polyhedron_premarc_list
 
         ### Build substract rebajes ###
         # Manage rebajes
@@ -11788,11 +11963,6 @@ class PremarcScriptObject(BaseScriptObject):
 
         for name, option in list_rebajes:
             if option == 1:
-                if not union_ok and name != "NO":
-                    print(
-                        f"[Premarc] Rebaje {name} omitido: union premarc fallida"
-                    )
-                    continue
                 match name:
                     case "NO":
                         print("Rebaje Selected NO. Nothing to do")
@@ -11870,7 +12040,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Fix corners
         # top left corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
             if show_rebajes_debug:
@@ -11886,7 +12056,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect top left corner")
                 pass
         # top right corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
             if show_rebajes_debug:
@@ -11902,7 +12072,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect top right corner")
                 pass
         # bottom left corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
             if show_rebajes_debug:
@@ -11918,7 +12088,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect bottom left corner")
                 pass
         # bottom right corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
             if show_rebajes_debug:
@@ -11935,11 +12105,8 @@ class PremarcScriptObject(BaseScriptObject):
                 pass
 
         elems = []
-        if union_ok:
-            elems.append(polyhedron_premarc_union)
-        else:
-            elems.extend(elem for elem in polyhedron_premarc_list if elem is not None)
-        elems.extend(elem for elem in polyhedron_other_elements_list if elem is not None)
+        elems.append(polyhedron_premarc_union)
+        elems.extend(polyhedron_other_elements_list)
 
         # elems = [
             # polyhedron_premarc_union,
@@ -12097,42 +12264,55 @@ class PremarcScriptObject(BaseScriptObject):
     def is_bottom_open_premarc(self):
         return self.build_ele.ComboBoxAbiertoCerrado.value in (
             "OBERT PER BAIX",
+            "OBERT PER BAIX VARIANT",
             "OBERT PER BAIX + REA",
-            "OBERT PER BAIX + REA VARIANT",
         )
 
     def is_top_open_premarc(self):
         return self.build_ele.ComboBoxAbiertoCerrado.value in (
             "OBERT PER DALT",
+            "OBERT PER DALT VARIANT",
             "OBERT PER DALT + REA",
-            "OBERT PER DALT + REA VARIANT",
         )
+
+    def _is_open_premarc_rea(self) -> bool:
+        return "+ REA" in str(self.build_ele.ComboBoxAbiertoCerrado.value or "")
 
     def get_direction_open_premarc(self):
         direction_open_premarc = self.build_ele.ComboBoxAbiertoCerrado.value
         values_direction_right = [
+            "OBERT FEMELLA DRETA",
             "OBERT FEMELLA DRETA + REA",
+            "OBERT NO FEMELLA DRETA",
             "OBERT NO FEMELLA DRETA + REA",
+            "SUP. FEMELLA / INF NO FEMELLA DRET.",
             "SUP. FEMELLA / INF NO FEMELLA DRET. + REA",
+            "SUP. NO FEMELLA / INF. FEMELLA DRET.",
             "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA",
         ]
         values_direction_left = [
+            "OBERT FEMELLA ESQUERRA",
             "OBERT FEMELLA ESQUERRA + REA",
+            "OBERT NO FEMELLA ESQUERRA",
             "OBERT NO FEMELLA ESQUERRA + REA",
+            "SUP. FEMELLA / INF NO FEMELLA ESQ.",
             "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA",
+            "SUP. NO FEMELLA / INF. FEMELLA ESQ.",
             "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA",
         ]
         values_direction_top = [
+            "OBERT PER DALT",
             "OBERT PER DALT + REA",
         ]
         values_direction_top_variant = [
-            "OBERT PER DALT + REA VARIANT",
+            "OBERT PER DALT VARIANT",
         ]
         values_direction_bottom = [
+            "OBERT PER BAIX",
             "OBERT PER BAIX + REA",
         ]
         values_direction_bottom_variant = [
-            "OBERT PER BAIX + REA VARIANT",
+            "OBERT PER BAIX VARIANT",
         ]
         if direction_open_premarc in values_direction_right:
             return "RIGHT"
@@ -12148,6 +12328,36 @@ class PremarcScriptObject(BaseScriptObject):
             return "BOTTOM_VARIANT"
         else:
             return "NOTHING"
+
+    def _allowed_special_rea_types_for_direction(self, direction_open: str = None) -> set[str]:
+        direction_open = direction_open or self.get_direction_open_premarc()
+        if direction_open in {"TOP_VARIANT", "BOTTOM_VARIANT"}:
+            return {"REAs en C", "REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
+        if direction_open in {"TOP", "BOTTOM"}:
+            return {"REAs en C"}
+        if direction_open in {"RIGHT", "LEFT"}:
+            return {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
+        return set()
+
+    def _default_special_rea_type_for_direction(self, direction_open: str = None) -> str:
+        direction_open = direction_open or self.get_direction_open_premarc()
+        if direction_open in {"TOP", "TOP_VARIANT", "BOTTOM", "BOTTOM_VARIANT"}:
+            return "REAs en C"
+        if direction_open in {"RIGHT", "LEFT"}:
+            return "REAs en L STD CORTA"
+        return ""
+
+    def _normalize_special_rea_type_for_direction(self) -> None:
+        if not hasattr(self.build_ele, "ComboBoxREAEspecial"):
+            return
+
+        direction_open = self.get_direction_open_premarc()
+        allowed_types = self._allowed_special_rea_types_for_direction(direction_open)
+        current_type = str(self.build_ele.ComboBoxREAEspecial.value or "")
+        if allowed_types and current_type not in allowed_types:
+            self.build_ele.ComboBoxREAEspecial.value = (
+                self._default_special_rea_type_for_direction(direction_open)
+            )
 
     def get_direction_retall_ganxo(self):
         direction_retall_ganxo = self.build_ele.ComboBoxAbiertoCerrado.value
@@ -12257,19 +12467,43 @@ class PremarcScriptObject(BaseScriptObject):
         cylinders = []
 
         REA_x_y = 40
-        REA_extra = 200
+        default_rea_extra = self._default_rea_tube_extra_for_special_type()
+        rea_extra_param = getattr(
+            getattr(self.build_ele, "SobresalienteTubosREA", None),
+            "value",
+            default_rea_extra,
+        )
+        try:
+            REA_extra = float(rea_extra_param)
+        except (TypeError, ValueError):
+            REA_extra = default_rea_extra
+
+        if REA_extra < 0:
+            REA_extra = default_rea_extra
+
+        tube_sheet_extension = THICKNESS_MM
         # Firts
-        pos_REA = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(0, 0, REA_extra))
+        pos_REA = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(0, 0, REA_extra + tube_sheet_extension)
+        )
         first_cuboid_REA = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_REA, REA_x_y, -REA_x_y, -(self.heigh + REA_extra * 2)
+            pos_REA,
+            REA_x_y,
+            -REA_x_y,
+            -(self.heigh + REA_extra * 2 + tube_sheet_extension * 2),
         )
         # elems.append(first_cuboid_REA)
         cuboids.append(first_cuboid_REA)
 
         # Second cuboid
-        pos_REA = AllplanGeo.AxisPlacement3D(AllplanGeo.Point3D(REA_x_y, 0, REA_extra))
+        pos_REA = AllplanGeo.AxisPlacement3D(
+            AllplanGeo.Point3D(REA_x_y, 0, REA_extra + tube_sheet_extension)
+        )
         second_cuboid_REA = AllplanGeo.Polyhedron3D.CreateCuboid(
-            pos_REA, REA_x_y, -REA_x_y, -(self.heigh + REA_extra * 2)
+            pos_REA,
+            REA_x_y,
+            -REA_x_y,
+            -(self.heigh + REA_extra * 2 + tube_sheet_extension * 2),
         )
         # elems.append(second_cuboid_REA)
         cuboids.append(second_cuboid_REA)
@@ -12467,36 +12701,49 @@ class PremarcScriptObject(BaseScriptObject):
 
         ### manage config UI
         offset_rea = 250
-        space_y = 60
-        translation_vector_rigth = AllplanGeo.Vector3D(
-            self.width - offset_rea - REA_x_y * 2, -space_y, 0
-        )
-        translation_vector_left = AllplanGeo.Vector3D(offset_rea, -space_y, 0)
         elems_moved = []
         cuboids_moved = []
         cylinders_moved = []
+        special_rea_moved = []
         direction_open = self.get_direction_open_premarc()
+        include_rea_cylinders = self._is_open_premarc_rea()
+        include_base_rea = direction_open != "NOTHING"
+        include_variant_rea_cylinders = direction_open in {"TOP_VARIANT", "BOTTOM_VARIANT"}
+        enable_special_rea = bool(
+            getattr(getattr(self.build_ele, "EnableREAEspecial", None), "value", False)
+        )
 
-        def create_horizontal_rea(z_positions, variant=False):
-            rea_length = self.width + REA_extra * 2
-            rea_x = -REA_extra
-            try:
-                wall_thickness = float(self.build_ele.thickness_wall.value or 0.0)
-            except Exception:
-                wall_thickness = 0.0
-            if wall_thickness <= 0:
-                wall_thickness = float(self.detected_wall_thickness or 0.0)
-            wall_center_y = -wall_thickness / 2
+        if not include_rea_cylinders and not enable_special_rea and not include_base_rea:
+            return [], [], []
+        if enable_special_rea and not include_rea_cylinders:
+            self._normalize_special_rea_type_for_direction()
+
+        def get_wall_center_y():
+            return -self._wall_thickness_for_tube_centering() / 2
+
+        wall_center_y = get_wall_center_y()
+        side_tub_y = wall_center_y + REA_x_y / 2
+        translation_vector_rigth = AllplanGeo.Vector3D(
+            self.width - offset_rea - REA_x_y * 2, side_tub_y, 0
+        )
+        translation_vector_left = AllplanGeo.Vector3D(offset_rea, side_tub_y, 0)
+
+        def horizontal_tube_positions(z_positions, variant=False):
             # Cuboids are created with a negative Y depth (-REA_x_y). For a
             # single tube, start Y must be center + half depth. For variant,
             # center the two adjacent tubes as one 2*REA_x_y package.
-            y_positions = (
-                (wall_center_y + REA_x_y, wall_center_y)
-                if variant
-                else (wall_center_y + REA_x_y / 2, wall_center_y + REA_x_y / 2)
-            )
+            if variant:
+                y_positions = (wall_center_y + REA_x_y, wall_center_y)
+                return list(zip(z_positions, y_positions))
+
+            y_pos = wall_center_y + REA_x_y / 2
+            return [(z_pos, y_pos) for z_pos in z_positions]
+
+        def create_horizontal_rea(z_positions, variant=False):
+            rea_length = self.width + REA_extra * 2 + tube_sheet_extension * 2
+            rea_x = -REA_extra - tube_sheet_extension
             result = []
-            for z_pos, y_pos in zip(z_positions, y_positions):
+            for z_pos, y_pos in horizontal_tube_positions(z_positions, variant):
                 pos_rea = AllplanGeo.AxisPlacement3D(
                     AllplanGeo.Point3D(rea_x, y_pos, z_pos)
                 )
@@ -12507,6 +12754,597 @@ class PremarcScriptObject(BaseScriptObject):
                 )
             return result
 
+        rea_cylinder_radius = 6
+
+        def create_z_rea_cylinder(x_pos, y_pos, z_pos, length):
+            cylinder = AllplanGeo.Cylinder3D(
+                rea_cylinder_radius,
+                rea_cylinder_radius,
+                AllplanGeo.Point3D(0, 0, length),
+            )
+            error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
+                cylinder, 36
+            )
+            return AllplanGeo.Move(
+                polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
+            )
+
+        def create_x_rea_cylinder(x_pos, y_pos, z_pos, length):
+            cylinder = AllplanGeo.Cylinder3D(
+                rea_cylinder_radius,
+                rea_cylinder_radius,
+                AllplanGeo.Point3D(0, 0, length),
+            )
+            error_code, polyhedron_cylinder = AllplanGeo.CreatePolyhedron(
+                cylinder, 36
+            )
+            rotation_axis = AllplanGeo.Axis3D(
+                AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(0, 1, 0)
+            )
+            polyhedron_cylinder = AllplanGeo.Rotate(
+                polyhedron_cylinder, rotation_axis, AllplanGeo.Angle.FromDeg(90)
+            )
+            return AllplanGeo.Move(
+                polyhedron_cylinder, AllplanGeo.Vector3D(x_pos, y_pos, z_pos)
+            )
+
+        def create_rea_l_shape(
+            x_side, y_pos, z_joint, x_direction, z_direction, x_leg, z_leg
+        ):
+            x_outer = x_side + x_direction * x_leg
+            x_start = min(x_side, x_outer)
+            z_end = z_joint + z_direction * z_leg
+            z_start = min(z_joint, z_end)
+            l_elements = [
+                create_x_rea_cylinder(x_start, y_pos, z_joint, x_leg),
+                create_z_rea_cylinder(x_outer - x_direction * 6, y_pos, z_start - 6, z_leg),
+            ]
+            rotation_axis = AllplanGeo.Axis3D(
+                AllplanGeo.Point3D(x_side, y_pos, z_joint),
+                AllplanGeo.Vector3D(0, 1, 0),
+            )
+            rotation_angle = AllplanGeo.Angle.FromDeg(180)
+            return [
+                AllplanGeo.Rotate(element, rotation_axis, rotation_angle)
+                for element in l_elements
+            ]
+
+        def create_rea_c_shape(x_inner, y_pos, z_bar, offset_z_pos, x_direction, z_leg_direction):
+            """Para cambiar la geometría interna de la C"""
+            offset_z_pos_horizontal_cylinder = 6
+            offset_x_pos_vertical_cylinder = 6
+            offset_z_pos_vertical_cylinder = 12
+
+            c_leg_z = 150
+            c_span_x = 240
+            x_outer = x_inner + x_direction * c_span_x
+            x_start = min(x_inner, x_outer)
+            x_end = max(x_inner, x_outer)
+            z_leg_end = z_bar + z_leg_direction * c_leg_z
+            z_start = min(z_bar, z_leg_end)
+            return [
+                create_z_rea_cylinder(x_start + offset_x_pos_vertical_cylinder, y_pos, z_start + offset_z_pos_vertical_cylinder + offset_z_pos, c_leg_z),
+                create_z_rea_cylinder(x_end - offset_x_pos_vertical_cylinder, y_pos, z_start + offset_z_pos_vertical_cylinder + offset_z_pos, c_leg_z),
+                create_x_rea_cylinder(x_start, y_pos, z_bar + offset_z_pos_horizontal_cylinder, c_span_x),
+            ]
+
+        def create_horizontal_rea_cylinders(z_positions, variant=False):
+            tube_positions = horizontal_tube_positions(z_positions, variant)
+            if not tube_positions:
+                return []
+
+            rea_radius = 6
+            rea_length = 280
+            rea_offset_from_tube_end = 23
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            x_positions = (
+                tube_x_start + rea_offset_from_tube_end,
+                tube_x_end - rea_offset_from_tube_end,
+            )
+
+            y_min = min(y_pos - REA_x_y for _, y_pos in tube_positions)
+            y_max = max(y_pos for _, y_pos in tube_positions)
+            z_min = min(z_pos - REA_x_y for z_pos, _ in tube_positions)
+            z_max = max(z_pos for z_pos, _ in tube_positions)
+            y_positions = (y_max + rea_radius, y_min - rea_radius)
+            z_center = (z_min + z_max) / 2
+            z_start = z_center - rea_length / 2
+
+            result = []
+            for x_pos in x_positions:
+                for y_pos in y_positions:
+                    result.append(
+                        create_z_rea_cylinder(x_pos, y_pos, z_start, rea_length)
+                    )
+            return result
+
+        def create_horizontal_variant_rea_cylinders(z_positions):
+            tube_positions = horizontal_tube_positions(z_positions, True)
+            if not tube_positions:
+                return []
+
+            rea_length = 280
+            rea_offset_from_tube_end = 23
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            x_positions = (
+                tube_x_start + rea_offset_from_tube_end - rea_length / 2,
+                tube_x_end - rea_offset_from_tube_end + rea_length / 2,
+            )
+
+            result = []
+            for z_pos, y_pos in tube_positions:
+                y_center = y_pos - REA_x_y / 2
+                z_center = z_pos - REA_x_y / 2
+                z_start = z_center - rea_length / 2
+                for x_pos in x_positions:
+                    cylinder = create_z_rea_cylinder(
+                        x_pos, y_center, z_start, rea_length
+                    )
+                    rotation_axis = AllplanGeo.Axis3D(
+                        AllplanGeo.Point3D(x_pos, y_center, z_center),
+                        AllplanGeo.Vector3D(0, 1, 0),
+                    )
+                    result.append(
+                        AllplanGeo.Rotate(
+                            cylinder, rotation_axis, AllplanGeo.Angle.FromDeg(90)
+                        )
+                    )
+            return result
+
+        def create_horizontal_special_c_reas(z_positions, variant=False):
+            """Para cambiar dónde aparece cada C"""
+            tube_positions = horizontal_tube_positions(z_positions, variant)
+            if not tube_positions:
+                return []
+
+            c_offset_from_tube_end = 75
+            horizontal_cylinder_diameter = 12
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            left_x_inner = tube_x_start - c_offset_from_tube_end
+            right_x_inner = tube_x_end + c_offset_from_tube_end
+
+            upper_tube = max(tube_positions, key=lambda item: item[0])
+            lower_tube = min(tube_positions, key=lambda item: item[0])
+
+            upper_z_pos, upper_y_pos = upper_tube
+            lower_z_pos, lower_y_pos = lower_tube
+            upper_y_center = upper_y_pos - REA_x_y / 2
+            lower_y_center = lower_y_pos - REA_x_y / 2
+            z_min = min(z_pos - REA_x_y for z_pos, _ in tube_positions)
+            z_max = max(z_pos for z_pos, _ in tube_positions)
+            z_center = (z_min + z_max) / 2
+            upper_u_bar_z = z_center + REA_x_y
+            lower_n_bar_z = z_center - REA_x_y - horizontal_cylinder_diameter
+
+            result = []
+            result.extend(
+                create_rea_c_shape(left_x_inner, upper_y_center, upper_u_bar_z, -12, 1, 1)
+            )
+            result.extend(
+                create_rea_c_shape(left_x_inner, lower_y_center, lower_n_bar_z, 0, 1, -1)
+            )
+            result.extend(
+                create_rea_c_shape(right_x_inner, upper_y_center, upper_u_bar_z, -12, -1, 1)
+            )
+            result.extend(
+                create_rea_c_shape(right_x_inner, lower_y_center, lower_n_bar_z, 0, -1, -1)
+            )
+            return result
+
+        def create_horizontal_variant_special_c_reas(z_positions, open_direction):
+            result = []
+            for index, element in enumerate(
+                create_horizontal_special_c_reas(z_positions, True)
+            ):
+                is_lower_c = 3 <= index % 6 <= 5
+                z_fix = REA_x_y / 2 if is_lower_c else -REA_x_y / 2
+                position_fix = AllplanGeo.Vector3D(0, -REA_x_y / 2, z_fix)
+                result.append(AllplanGeo.Move(element, position_fix))
+            return result
+
+        def create_horizontal_standard_l_reas(z_positions, open_direction):
+            tube_positions = horizontal_tube_positions(z_positions)
+            if len(tube_positions) < 2:
+                return []
+
+            special_type = selected_special_rea_type()
+            if special_type not in {
+                "REAs en L STD",
+                "REAs en L STD CORTA",
+                "REAs en L (Estandar)",
+            }:
+                return []
+
+            default_open_tube_x_leg, default_inner_tube_x_leg = (
+                self._default_rea_l_x_lengths_for_special_type(special_type)
+            )
+
+            def rea_l_x_length(param_name, default_value):
+                length_param = getattr(
+                    getattr(self.build_ele, param_name, None),
+                    "value",
+                    default_value,
+                )
+                try:
+                    length = float(length_param)
+                except (TypeError, ValueError):
+                    return default_value
+
+                if length <= 0:
+                    return default_value
+                return length
+
+            open_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoAbierto",
+                default_open_tube_x_leg,
+            )
+            inner_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoInterior",
+                default_inner_tube_x_leg,
+            )
+            z_leg = 300
+            l_offset_from_tube_end = -REA_extra
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            x_sides = (
+                (tube_x_start - l_offset_from_tube_end, 1),
+                (tube_x_end + l_offset_from_tube_end, -1),
+            )
+
+            if open_direction == "TOP":
+                open_tube = max(tube_positions, key=lambda item: item[0])
+                inner_tube = min(tube_positions, key=lambda item: item[0])
+                open_tube_z_direction = 1
+                inner_tube_z_direction = 1
+            else:
+                open_tube = min(tube_positions, key=lambda item: item[0])
+                inner_tube = max(tube_positions, key=lambda item: item[0])
+                open_tube_z_direction = -1
+                inner_tube_z_direction = -1
+
+            upper_tube_z = max(z_pos for z_pos, _ in tube_positions)
+
+            def tube_l_z_joint(z_pos):
+                if z_pos == upper_tube_z:
+                    return z_pos + REA_x_y - 34
+                return z_pos - REA_x_y - 6
+
+            result = []
+            for z_pos, y_pos, x_leg, z_direction in (
+                (*open_tube, open_tube_x_leg, open_tube_z_direction),
+                (*inner_tube, inner_tube_x_leg, inner_tube_z_direction),
+            ):
+                y_center = y_pos - REA_x_y / 2
+                z_joint = tube_l_z_joint(z_pos)
+                rotation_angle_deg = -90 if z_pos == upper_tube_z else 90
+                for x_side, x_direction in x_sides:
+                    l_elements = create_rea_l_shape(
+                        x_side,
+                        y_center,
+                        z_joint,
+                        x_direction,
+                        z_direction,
+                        x_leg,
+                        z_leg,
+                    )
+                    y_rotation_axis = AllplanGeo.Axis3D(
+                        AllplanGeo.Point3D(x_side, y_center, z_joint),
+                        AllplanGeo.Vector3D(0, 1, 0),
+                    )
+                    y_rotation_angle = AllplanGeo.Angle.FromDeg(rotation_angle_deg)
+                    result.extend(
+                        AllplanGeo.Rotate(
+                            element,
+                            y_rotation_axis,
+                            y_rotation_angle,
+                        )
+                        for element in l_elements
+                    )
+            return result
+
+        def create_horizontal_variant_standard_l_reas(z_positions, open_direction):
+            tube_positions = horizontal_tube_positions(z_positions, True)
+            if not tube_positions or not is_l_special_type():
+                return []
+
+            default_open_tube_x_leg, default_inner_tube_x_leg = (
+                self._default_rea_l_x_lengths_for_current_context(
+                    selected_special_rea_type()
+                )
+            )
+            open_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoAbierto",
+                default_open_tube_x_leg,
+            )
+            inner_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoInterior",
+                default_inner_tube_x_leg,
+            )
+
+            z_leg = 300
+            z_direction = 1 if open_direction == "TOP" else -1
+            try:
+                variant_l_offset_from_tube_end = min(float(REA_extra), 150)
+            except (TypeError, ValueError):
+                variant_l_offset_from_tube_end = 150
+            tube_x_start = -REA_extra - tube_sheet_extension
+            tube_x_end = self.width + REA_extra + tube_sheet_extension
+            x_sides = (
+                (tube_x_start + variant_l_offset_from_tube_end, 1),
+                (tube_x_end - variant_l_offset_from_tube_end, -1),
+            )
+
+            result = []
+            for tube_index, (z_pos, y_pos) in enumerate(tube_positions):
+                y_center = y_pos - REA_x_y / 2
+                z_center = z_pos - REA_x_y / 2
+                x_leg = open_tube_x_leg if tube_index == 0 else inner_tube_x_leg
+                z_start = z_center if z_direction > 0 else z_center - z_leg
+                for x_joint, x_direction in x_sides:
+                    x_start = x_joint if x_direction > 0 else x_joint - x_leg
+                    x_end = x_joint + x_direction * x_leg
+                    for element in (
+                        create_x_rea_cylinder(x_start, y_center, z_center, x_leg),
+                        create_z_rea_cylinder(
+                            x_end - x_direction * 6, y_center, z_start, z_leg
+                        )
+                    ):
+                        y_rotation_axis = AllplanGeo.Axis3D(
+                            AllplanGeo.Point3D(x_joint, y_center, z_center),
+                            AllplanGeo.Vector3D(0, 1, 0),
+                        )
+                        result.append(
+                            AllplanGeo.Rotate(
+                                element, y_rotation_axis, AllplanGeo.Angle.FromDeg(180)
+                            )
+                        )
+            return result
+
+        def create_horizontal_special_c_reas_for_groups(z_position_groups):
+            result = []
+            for z_positions in z_position_groups:
+                result.extend(create_horizontal_special_c_reas(z_positions))
+            return result
+
+        def flatten_z_position_groups(z_position_groups):
+            return [
+                z_pos
+                for z_positions in z_position_groups
+                for z_pos in z_positions
+            ]
+
+        def rea_c_open_group_distances():
+            gap_source = getattr(
+                self.build_ele, "SeparacionLibreEntreREAC", None
+            ) or getattr(self.build_ele, "DistanciaEntreGruposREAC", None)
+            gap_param = getattr(
+                gap_source,
+                "value",
+                REA_C_OPEN_DEFAULT_FREE_GAP_MM,
+            )
+            try:
+                free_gap = float(gap_param)
+            except (TypeError, ValueError):
+                free_gap = REA_C_OPEN_DEFAULT_FREE_GAP_MM
+
+            if free_gap < 0:
+                free_gap = REA_C_OPEN_DEFAULT_FREE_GAP_MM
+
+            first_distance = float(REA_C_OPEN_FIRST_GROUP_DISTANCE_MM)
+            group_spacing = REA_C_OPEN_C_TO_C_GROUP_OFFSET_MM + free_gap
+            return (first_distance, first_distance + group_spacing)
+
+        def rea_c_open_top_z_position_groups():
+            return [
+                (-distance, -(distance + REA_x_y))
+                for distance in rea_c_open_group_distances()
+            ]
+
+        def rea_c_open_bottom_z_position_groups():
+            return [
+                (
+                    -self.heigh + distance + REA_x_y,
+                    -self.heigh + distance + REA_x_y * 2,
+                )
+                for distance in rea_c_open_group_distances()
+            ]
+
+        def selected_special_rea_type():
+            return str(
+                getattr(getattr(self.build_ele, "ComboBoxREAEspecial", None), "value", "")
+                or ""
+            )
+
+        def is_l_special_type():
+            return selected_special_rea_type() in {
+                "REAs en L STD CORTA",
+                "REAs en L STD",
+                "REAs en L (Estandar)",
+            }
+
+        def rea_l_x_length(param_name, default_value):
+            length_param = getattr(
+                getattr(self.build_ele, param_name, None),
+                "value",
+                default_value,
+            )
+            try:
+                length = float(length_param)
+            except (TypeError, ValueError):
+                return default_value
+
+            if length <= 0:
+                return default_value
+            return length
+
+        def create_side_standard_l_reas(open_direction):
+            if not is_l_special_type():
+                return []
+
+            default_open_tube_x_leg, default_inner_tube_x_leg = (
+                self._default_rea_l_x_lengths_for_special_type(
+                    selected_special_rea_type()
+                )
+            )
+            open_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoAbierto",
+                default_open_tube_x_leg,
+            )
+            inner_tube_x_leg = rea_l_x_length(
+                "LongitudREALXLadoInterior",
+                default_inner_tube_x_leg,
+            )
+
+            z_leg = 300
+            l_pair_spacing = 86
+            top_z_joint = REA_extra + tube_sheet_extension - 150
+            bottom_z_joint = -self.heigh - REA_extra - tube_sheet_extension + 150
+            y_center = wall_center_y
+
+            if open_direction == "RIGHT":
+                x_direction = -1
+                x_base = self.width - offset_rea
+                x_joints = (
+                    (x_base + 6, open_tube_x_leg),
+                    (x_base - l_pair_spacing, inner_tube_x_leg),
+                )
+            else:
+                x_direction = 1
+                x_base = offset_rea
+                x_joints = (
+                    (x_base - 6, open_tube_x_leg),
+                    (x_base + l_pair_spacing, inner_tube_x_leg),
+                )
+
+            result = []
+            for x_side, x_leg in x_joints:
+                top_l_elements = create_rea_l_shape(
+                    x_side,
+                    y_center,
+                    top_z_joint,
+                    x_direction,
+                    1,
+                    x_leg,
+                    z_leg,
+                )
+                top_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, top_z_joint),
+                    AllplanGeo.Vector3D(0, 1, 0),
+                )
+                top_z_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, top_z_joint),
+                    AllplanGeo.Vector3D(0, 0, 1),
+                )
+                top_x_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, top_z_joint),
+                    AllplanGeo.Vector3D(1, 0, 0),
+                )
+                top_rotation_angle = AllplanGeo.Angle.FromDeg(-90)
+                top_rotated_elements = [
+                    AllplanGeo.Rotate(
+                        element,
+                        top_rotation_axis,
+                        top_rotation_angle,
+                    )
+                    for element in top_l_elements
+                ]
+                if open_direction == "RIGHT":
+                    top_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            top_z_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in top_rotated_elements
+                    ]
+                elif open_direction == "LEFT":
+                    top_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            top_x_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in top_rotated_elements
+                    ]
+                result.extend(
+                    top_rotated_elements
+                )
+
+                bottom_l_elements = create_rea_l_shape(
+                    x_side,
+                    y_center,
+                    bottom_z_joint,
+                    x_direction,
+                    -1,
+                    x_leg,
+                    z_leg,
+                )
+                bottom_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, bottom_z_joint),
+                    AllplanGeo.Vector3D(0, 1, 0),
+                )
+                bottom_z_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, bottom_z_joint),
+                    AllplanGeo.Vector3D(0, 0, 1),
+                )
+                bottom_x_rotation_axis = AllplanGeo.Axis3D(
+                    AllplanGeo.Point3D(x_side, y_center, bottom_z_joint),
+                    AllplanGeo.Vector3D(1, 0, 0),
+                )
+                bottom_rotation_angle = AllplanGeo.Angle.FromDeg(90)
+                bottom_rotated_elements = [
+                    AllplanGeo.Rotate(
+                        element,
+                        bottom_rotation_axis,
+                        bottom_rotation_angle,
+                    )
+                    for element in bottom_l_elements
+                ]
+                if open_direction == "RIGHT":
+                    bottom_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            bottom_z_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in bottom_rotated_elements
+                    ]
+                elif open_direction == "LEFT":
+                    bottom_rotated_elements = [
+                        AllplanGeo.Rotate(
+                            element,
+                            bottom_x_rotation_axis,
+                            AllplanGeo.Angle.FromDeg(180),
+                        )
+                        for element in bottom_rotated_elements
+                    ]
+                result.extend(
+                    bottom_rotated_elements
+                )
+            return result
+
+        allowed_special_rea_types = self._allowed_special_rea_types_for_direction(
+            direction_open
+        )
+        use_special_c_rea = (
+            enable_special_rea
+            and not include_rea_cylinders
+            and selected_special_rea_type() == "REAs en C"
+            and "REAs en C" in allowed_special_rea_types
+        )
+        use_standard_l_rea = (
+            enable_special_rea
+            and not include_rea_cylinders
+            and is_l_special_type()
+            and bool(
+                allowed_special_rea_types
+                & {"REAs en L STD CORTA", "REAs en L STD", "REAs en L (Estandar)"}
+            )
+        )
+
         if direction_open == "RIGHT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
@@ -12514,9 +13352,12 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cuboids:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
                 cuboids_moved.append(elem_moved)
-            for elem in cylinders:
-                elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
-                cylinders_moved.append(elem_moved)
+            if include_rea_cylinders:
+                for elem in cylinders:
+                    elem_moved = AllplanGeo.Move(elem, translation_vector_rigth)
+                    cylinders_moved.append(elem_moved)
+            elif use_standard_l_rea:
+                cylinders_moved = create_side_standard_l_reas("RIGHT")
         elif self.get_direction_open_premarc() == "LEFT":
             # for elem in elems:
             #     elem_moved = AllplanGeo.Move(elem, translation_vector_left)
@@ -12524,39 +13365,89 @@ class PremarcScriptObject(BaseScriptObject):
             for elem in cuboids:
                 elem_moved = AllplanGeo.Move(elem, translation_vector_left)
                 cuboids_moved.append(elem_moved)
-            for elem in cylinders:
-                elem_moved = AllplanGeo.Move(elem, translation_vector_left)
-                cylinders_moved.append(elem_moved)
+            if include_rea_cylinders:
+                for elem in cylinders:
+                    elem_moved = AllplanGeo.Move(elem, translation_vector_left)
+                    cylinders_moved.append(elem_moved)
+            elif use_standard_l_rea:
+                cylinders_moved = create_side_standard_l_reas("LEFT")
         elif direction_open == "TOP":
-            cuboids_moved = create_horizontal_rea(
-                (-offset_rea, -(offset_rea + REA_x_y))
-            )
-            cylinders_moved = []
-        elif direction_open == "TOP_VARIANT":
-            cuboids_moved = create_horizontal_rea((-offset_rea, -offset_rea), True)
-            cylinders_moved = []
-        elif direction_open == "BOTTOM":
-            cuboids_moved = create_horizontal_rea(
-                (
-                    -self.heigh + offset_rea + REA_x_y,
-                    -self.heigh + offset_rea + REA_x_y * 2,
+            z_positions = (-offset_rea, -(offset_rea + REA_x_y))
+            if use_special_c_rea:
+                z_position_groups = rea_c_open_top_z_position_groups()
+                z_positions = flatten_z_position_groups(z_position_groups)
+            cuboids_moved = create_horizontal_rea(z_positions)
+            if include_rea_cylinders:
+                cylinders_moved = create_horizontal_rea_cylinders(z_positions)
+            elif use_special_c_rea:
+                cylinders_moved = create_horizontal_special_c_reas_for_groups(
+                    z_position_groups
                 )
+            elif use_standard_l_rea:
+                cylinders_moved = create_horizontal_standard_l_reas(z_positions, "TOP")
+            else:
+                cylinders_moved = []
+        elif direction_open == "TOP_VARIANT":
+            z_positions = (-offset_rea, -offset_rea)
+            cuboids_moved = create_horizontal_rea(z_positions, True)
+            if enable_special_rea:
+                if use_special_c_rea:
+                    special_rea_moved = create_horizontal_variant_special_c_reas(
+                        z_positions, "TOP"
+                    )
+                elif use_standard_l_rea:
+                    special_rea_moved = create_horizontal_variant_standard_l_reas(
+                        z_positions, "TOP"
+                    )
+            else:
+                cylinders_moved = create_horizontal_variant_rea_cylinders(z_positions)
+        elif direction_open == "BOTTOM":
+            z_positions = (
+                -self.heigh + offset_rea + REA_x_y,
+                -self.heigh + offset_rea + REA_x_y * 2,
             )
-            cylinders_moved = []
+            if use_special_c_rea:
+                z_position_groups = rea_c_open_bottom_z_position_groups()
+                z_positions = flatten_z_position_groups(z_position_groups)
+            cuboids_moved = create_horizontal_rea(z_positions)
+            if include_rea_cylinders:
+                cylinders_moved = create_horizontal_rea_cylinders(z_positions)
+            elif use_special_c_rea:
+                cylinders_moved = create_horizontal_special_c_reas_for_groups(
+                    z_position_groups
+                )
+            elif use_standard_l_rea:
+                cylinders_moved = create_horizontal_standard_l_reas(
+                    z_positions, "BOTTOM"
+                )
+            else:
+                cylinders_moved = []
         elif direction_open == "BOTTOM_VARIANT":
-            cuboids_moved = create_horizontal_rea(
-                (
-                    -self.heigh + offset_rea + REA_x_y,
-                    -self.heigh + offset_rea + REA_x_y,
-                ),
-                True,
+            z_positions = (
+                -self.heigh + offset_rea + REA_x_y,
+                -self.heigh + offset_rea + REA_x_y,
             )
-            cylinders_moved = []
+            cuboids_moved = create_horizontal_rea(z_positions, True)
+            if enable_special_rea:
+                if use_special_c_rea:
+                    special_rea_moved = create_horizontal_variant_special_c_reas(
+                        z_positions, "BOTTOM"
+                    )
+                elif use_standard_l_rea:
+                    special_rea_moved = create_horizontal_variant_standard_l_reas(
+                        z_positions, "BOTTOM"
+                    )
+            else:
+                cylinders_moved = create_horizontal_variant_rea_cylinders(z_positions)
         else:
             cuboids_moved = []
             cylinders_moved = []
+            special_rea_moved = []
 
-        return cuboids_moved, cylinders_moved
+        if include_rea_cylinders or include_variant_rea_cylinders:
+            return cuboids_moved, cylinders_moved, special_rea_moved
+
+        return cuboids_moved, [], cylinders_moved
 
     ##### Squares #######
 
@@ -12749,14 +13640,14 @@ class PremarcScriptObject(BaseScriptObject):
         match self.build_ele.ComboBoxAbiertoCerrado.value:
             case (
                 "OBERT PER DALT"
+                | "OBERT PER DALT VARIANT"
                 | "OBERT PER DALT + REA"
-                | "OBERT PER DALT + REA VARIANT"
             ):
                 open_square_positions.update(("left_top", "right_top"))
             case (
                 "OBERT PER BAIX"
+                | "OBERT PER BAIX VARIANT"
                 | "OBERT PER BAIX + REA"
-                | "OBERT PER BAIX + REA VARIANT"
             ):
                 open_square_positions.update(("left_bottom", "right_bottom"))
             case (
@@ -12821,11 +13712,7 @@ class PremarcScriptObject(BaseScriptObject):
         # en y=0 (front-aligned). Para centrarlo en el espesor del muro lo
         # movemos -(grosor_muro - SQUARE_THICKNESS)/2. Reemplaza la regla vieja
         # "al final de la pared" que dependia del fondo del premarco.
-        wall_concrete = (
-            self.detected_wall_thickness
-            if self.detected_wall_thickness
-            else self.build_ele.thickness_wall.value
-        )
+        wall_concrete = (self.build_ele.thickness_wall.value)
         vector_move = AllplanGeo.Vector3D(
             0, -(wall_concrete - SQUARE_THICKNESS) / 2.0, 0
         )
@@ -12902,10 +13789,12 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_width = (
                     35 - 3
                 )  # 32 compensa extrude, la medida es 35 medido de afuera.
-                self.socket_height = 30
+                self.socket_height = (
+                    30 - 3
+                )  # 27  compensa extrude, la medida es 30 medido de afuera.
 
                 polyedron_sockets = self.create_socket(
-                    self.socket_width, self.socket_height, 35
+                    self.socket_width, self.socket_height
                 )
                 error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                     polyedron_sockets
@@ -12918,10 +13807,12 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_width = (
                     70 - 3
                 )  # 68 compensa extrude, la medida es 70 medido de afuera.
-                self.socket_height = 30
+                self.socket_height = (
+                    30 - 3
+                )  # 27  compensa extrude, la medida es 30 medido de afuera.
 
                 polyedron_sockets = self.create_socket(
-                    self.socket_width, self.socket_height, 70
+                    self.socket_width, self.socket_height
                 )
                 error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                     polyedron_sockets
@@ -12943,18 +13834,15 @@ class PremarcScriptObject(BaseScriptObject):
             socket_width = (
                 self.build_ele.EncajeBase.value - 3
             )  # compensa extrude, la medida es medida de afuera.
-            socket_height = self.build_ele.EncajeAltura.value
+            socket_height = (
+                self.build_ele.EncajeAltura.value - 3
+            )  # compensa extrude, la medida es medido de afuera.
 
-            polyedron_sockets = self.create_socket(
-                socket_width, socket_height, self.build_ele.EncajeBase.value
-            )
+            polyedron_sockets = self.create_socket(socket_width, socket_height)
             error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                 polyedron_sockets
             )
-            self.prem_encaje = (
-                f"{self.build_ele.EncajeBase.value} * "
-                f"{self.build_ele.EncajeAltura.value}"
-            )
+            self.prem_encaje = f"{socket_width} * {socket_height}"
             self.prem_encaje_base = self.build_ele.EncajeBase.value
             self.prem_encaje_altura = self.build_ele.EncajeAltura.value
         else:
@@ -12971,13 +13859,23 @@ class PremarcScriptObject(BaseScriptObject):
         # error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
 
         pendent_selected = self.build_ele.ComboBoxPendiente.value
+        FIX_HEIGHT_SOCKET = 7.5  # Defaul to 295 mm thickness
+        if self.thickness_premarc == 160:
+            FIX_HEIGHT_SOCKET = 5.60
         match pendent_selected:
             # case "NO":
             #     print("Pendent Selected NO")
             case "SI":
                 print("Pendent Selected SI - Manage only in socket")
                 if polyhedron_socket:
-                    print("Socket bottom follows pendiente with dynamic side height")
+                    # fix position socket
+                    count_socket = 0
+                    print(f"Count socket: {count_socket}")
+
+                    translation_vector = AllplanGeo.Vector3D(0, 0, FIX_HEIGHT_SOCKET)
+                    polyhedron_socket = AllplanGeo.Move(
+                        polyhedron_socket, translation_vector
+                    )
                     # try:
 
                     #     # other_elements.append(polyhedron_socket_fix)
@@ -13012,15 +13910,19 @@ class PremarcScriptObject(BaseScriptObject):
             max_falcas = 0
 
         # Top Falcas
-        y_position_top_falcas = -(self.thickness - THICKNESS_MM - THICKNESS_FALCA)
-        if self.build_ele.ComboBoxPersianas.value == "METALUNIC VIST":
-            y_position_top_falcas = -(self.detected_wall_thickness + self.build_ele.PersianaWidth.value)
+        y_position_top_falcas = self._top_falca_y_position_mm()
+        # Con cajon LAMISOL/METALUNIC la falca superior se ubica respecto al
+        # cajon (adaptativa), no en la posicion fija.
+        # MONOBLOCK / FALS CALAIX (cajon OCULTO): subir la falca superior en Z
+        # para salvar (esquivar) el cajon, que queda dentro del muro. Se eleva
+        # la altura del cajon (PersianaHeight). Tuneable en iteracion visual.
+        z_position_top_falcas = self._top_falca_z_position_mm()
         for i in range(max_falcas+1):
             falca = self.create_origin_falca_top()
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
                 y_position_top_falcas,
-                0
+                z_position_top_falcas,
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
@@ -13034,7 +13936,7 @@ class PremarcScriptObject(BaseScriptObject):
             translation_vector = AllplanGeo.Vector3D(
                 adjusted_offset + DISTANCE_BETWEEN_FALCAS * i - THICKNESS_MM / 2,
                 -(self.thickness - THICKNESS_MM - THICKNESS_FALCA),
-                -(self.heigh + THICKNESS_MM),
+                self._bottom_falca_z_position_mm(),
             )
             falca_moved = AllplanGeo.Move(falca, translation_vector)
             error_code, polyhedron_falca = self.extrude_frame(
@@ -13380,8 +14282,8 @@ class PremarcScriptObject(BaseScriptObject):
         # priority unless PLEC INFERIOR is selected. The -3 compensates for
         # the extrude that fattens the polygon, so the OUTER measurement
         # matches the palette value.
-        combo = str(self.build_ele.ComboBoxEncajes.value).replace(" ", "")
-        if self.build_ele.EnableManualEncaje.value and combo != "PLECINFERIOR":
+        combo = self.build_ele.ComboBoxEncajes.value
+        if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
             return max(0.0, float(self.build_ele.EncajeBase.value or 0) - 3.0)
         if combo == "35*30":
             return 32.0
@@ -13394,48 +14296,12 @@ class PremarcScriptObject(BaseScriptObject):
         # the manual-encaje branch at ~L6139 reads EncajeAltura into LOCAL
         # vars and never writes self.socket_height — so callers that need
         # the real escalon height must use this helper instead.
-        combo = str(self.build_ele.ComboBoxEncajes.value).replace(" ", "")
-        if self.build_ele.EnableManualEncaje.value and combo != "PLECINFERIOR":
-            return max(0.0, float(self.build_ele.EncajeAltura.value or 0))
+        combo = self.build_ele.ComboBoxEncajes.value
+        if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
+            return max(0.0, float(self.build_ele.EncajeAltura.value or 0) - 3.0)
         if combo in ("35*30", "70*30"):
-            return 30.0
+            return 27.0
         return 0.0
-
-    def _ampit_is_puerta_entrada(self) -> bool:
-        return bool(
-            getattr(self.build_ele.is_puerta_entrada, "value", False)
-            or getattr(self.build_ele.premarc_PE, "value", False)
-        )
-
-    def _ampit_z_base_local_mm(self, ampit_grosor_mm: float = 11.0) -> float:
-        socket_height = self._effective_socket_height_mm()
-        imperm_thickness = self._grosor_imp_mm()
-        if socket_height > 0:
-            target_top_z = max(
-                0.0, socket_height - float(AMPIT_SOCKET_TOP_CLEARANCE_MM)
-            )
-            return max(0.0, target_top_z - float(ampit_grosor_mm)) + imperm_thickness
-        if self._ampit_is_puerta_entrada():
-            return AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM
-        return imperm_thickness
-
-    def _ampit_socket_z_lift_mm(self) -> float:
-        if self._effective_socket_height_mm() <= 0:
-            return 0.0
-        return max(
-            0.0,
-            self._effective_socket_height_mm()
-            - float(AMPIT_SOCKET_TOP_CLEARANCE_MM),
-        )
-
-    def _socket_pendiente_z_lift_mm(self) -> float:
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return 0.0
-        if self._effective_socket_height_mm() <= 0:
-            return 0.0
-        if self.thickness_premarc == 160:
-            return 5.60
-        return 7.5
 
     def _ampit_y_inner_local_mm(self) -> float:
         # Local Y position of the ampit slab INNER face (toward encaje).
@@ -13493,105 +14359,6 @@ class PremarcScriptObject(BaseScriptObject):
             fondo = 0.0
         return fondo
 
-    def _bottom_slope_pivot_y_mm(self) -> float:
-        # Final premarc-local coordinates after the bottom frame has been
-        # placed: Y=0 is the front/interior face and Y=-thickness is the
-        # back/fondo del muro. Keeping the hinge on the real edge prevents
-        # the sloped bottom from drifting away from the reference blue strip.
-        return -float(self.thickness_premarc)
-
-    def _bottom_slope_effective_depth_mm(
-        self, with_bottom_rebaje: bool = False
-    ) -> float:
-        if with_bottom_rebaje:
-            return float(self.thickness_premarc) - float(LENGTH_REBAJES_MM)
-        return float(self.thickness_premarc)
-
-    def _bottom_slope_angle_deg(self, with_bottom_rebaje: bool = False) -> float:
-        # Negative value = inverted slope direction around the local X axis.
-        # The magnitude stays 9.35 mm so the previous 10 mm architectural
-        # target is preserved, but the high edge swaps sides.
-        target_edge_rise_mm = -9.35
-        effective_depth = self._bottom_slope_effective_depth_mm(with_bottom_rebaje)
-        effective_depth = max(effective_depth, abs(target_edge_rise_mm))
-        if effective_depth <= 0:
-            return 0.0
-
-        ratio = max(-1.0, min(1.0, target_edge_rise_mm / effective_depth))
-        return math.degrees(math.asin(ratio))
-
-    def _bottom_slope_z_lift_mm(self) -> float:
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return 0.0
-        return 10.0
-
-    def _bottom_slope_bottom_offset_vector(self):
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return AllplanGeo.Vector3D(0, 0, 0)
-        return AllplanGeo.Vector3D(0, 0.17, self._bottom_slope_z_lift_mm() - 0.01)
-
-    def _apply_bottom_slope_bottom_position(self, element):
-        vector = self._bottom_slope_bottom_offset_vector()
-        if (
-            abs(vector.X) <= 0.001
-            and abs(vector.Y) <= 0.001
-            and abs(vector.Z) <= 0.001
-        ):
-            return element
-        return AllplanGeo.Move(element, vector)
-
-    def _apply_bottom_slope_z_lift(self, element):
-        z_lift = self._bottom_slope_z_lift_mm()
-        if abs(z_lift) <= 0.001:
-            return element
-        vector = AllplanGeo.Vector3D(0, 0, z_lift)
-        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
-            return AllplanGeo.Line3D(
-                AllplanGeo.Point3D(
-                    element.StartPoint.X,
-                    element.StartPoint.Y,
-                    element.StartPoint.Z + z_lift,
-                ),
-                AllplanGeo.Point3D(
-                    element.EndPoint.X,
-                    element.EndPoint.Y,
-                    element.EndPoint.Z + z_lift,
-                ),
-            )
-        return AllplanGeo.Move(element, vector)
-
-    def _bottom_slope_axis_angle(
-        self, with_bottom_rebaje: bool = False, center_x=None
-    ):
-        angle_deg = self._bottom_slope_angle_deg(with_bottom_rebaje)
-        if center_x is None:
-            axis_point = AllplanGeo.Point3D(0, 0, -self.heigh)
-        else:
-            axis_point = AllplanGeo.Point3D(center_x, 0, -self.heigh)
-
-        axis_point.Y = self._bottom_slope_pivot_y_mm()
-        axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
-        return axis, AllplanGeo.Angle.FromDeg(angle_deg)
-
-    def _ampit_bottom_slope_axis_angle(self):
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return None, None
-
-        return self._bottom_slope_axis_angle(self.bottom_rebaje_enabled())
-
-    def _apply_ampit_bottom_slope(self, element):
-        axis, angle = self._ampit_bottom_slope_axis_angle()
-        if axis is None:
-            return element
-        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
-            return self._apply_bottom_slope_z_lift(
-                AllplanGeo.Line3D(
-                    AllplanGeo.Rotate(element.StartPoint, axis, angle),
-                    AllplanGeo.Rotate(element.EndPoint, axis, angle),
-                )
-            )
-        return self._apply_bottom_slope_z_lift(AllplanGeo.Rotate(element, axis, angle))
-
     def create_premarc_ampit(self):
         material = self.build_ele.ampit_material.value or "CERAMIC"
         spec = AMPIT_TYPE_SPECS.get(material, AMPIT_TYPE_SPECS["CERAMIC"])
@@ -13604,10 +14371,11 @@ class PremarcScriptObject(BaseScriptObject):
             print("[Premarc] PAVIMENTO ampit no compatible con REB. BAIX (no sobresale): ampit omitido.")
             return [], [], [], [], [], spec
 
-        # Z base of the ampit slab. With real encaje, the ampit starts at the
-        # encaje top level; PLEC INFERIOR is excluded by the socket helpers.
-        # If impermeabilizacion is active, the slab sits above it.
-        z_base_ampit = self._ampit_z_base_local_mm(float(spec["grosor"]))
+        # Z base of the ampit slab. The bottom sheet thickness now extends
+        # outward below the opening, so the clear opening bottom remains z=0
+        # in premarc-local coordinates. Lift by grosor_imp only when
+        # impermeabilizacion is active.
+        z_base_ampit = self._grosor_imp_mm()
 
         # Encaje-aware slab inner Y (2 mm margin from the encaje back face,
         # or from the 63 mm front assembly when sin encaje / narrow encaje).
@@ -13735,19 +14503,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.retall_ampits_manual = False
         self.afegit_ampits_manual = False
 
-        final_result_3d = [
-            self._apply_ampit_bottom_slope(elem) for elem in final_result_3d
-        ]
-        edge_fg_list = [
-            self._apply_ampit_bottom_slope(elem) for elem in edge_fg_list
-        ]
-        edge_add_list = [
-            self._apply_ampit_bottom_slope(elem) for elem in edge_add_list
-        ]
-        edge_add_cuboid_list = [
-            self._apply_ampit_bottom_slope(elem) for elem in edge_add_cuboid_list
-        ]
-
         return final_result_3d, final_result_2d, edge_fg_list, edge_add_list, edge_add_cuboid_list, spec
 
     def create_ampit(self, init_x, llarg_ampit, y_inner_local, spec):
@@ -13783,9 +14538,10 @@ class PremarcScriptObject(BaseScriptObject):
         tope          = spec["tope"]
         remate        = spec["remate"]
 
-        # Z base lifted to the encaje top level when a real encaje exists.
-        # If impermeabilizacion is active, the slab sits above it.
-        z_base_ampit = self._ampit_z_base_local_mm(float(grosor))
+        # Z base lifted by grosor_imp when impermeabilizacion is enabled
+        # (the ampit slab sits on top of the imp). With the bottom sheet
+        # thickness outside the opening, the base is z=0 when imp is off.
+        z_base_ampit = self._grosor_imp_mm()
 
         y_slab_in  = float(y_inner_local)
         # Slab outer comes from the single source-of-truth helper so the
