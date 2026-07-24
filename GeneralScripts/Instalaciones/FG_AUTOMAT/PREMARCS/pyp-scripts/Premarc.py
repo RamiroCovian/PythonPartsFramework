@@ -9509,44 +9509,78 @@ class PremarcScriptObject(BaseScriptObject):
                 polyhedron_tubs.append(polyhedron_tub_moved)
             return polyhedron_tubs
 
-    def create_socket(self, socket_width, socket_height):
+    def _bottom_slope_z_at_y_mm(self, y_local: float) -> float:
+        if self.build_ele.ComboBoxPendiente.value != "SI":
+            return -float(self.heigh)
+
+        angle_rad = math.radians(
+            self._bottom_slope_angle_deg(self.bottom_rebaje_enabled())
+        )
+        pivot_y = self._bottom_slope_pivot_y_mm()
+        pivot_z = -float(self.heigh)
+        bottom_offset = self._bottom_slope_bottom_offset_vector()
+        cos_angle = math.cos(angle_rad)
+        if abs(cos_angle) <= 0.001:
+            return pivot_z + bottom_offset.Z
+
+        y_from_axis = (float(y_local) - bottom_offset.Y - pivot_y) / cos_angle
+        z_after_rotation = pivot_z + math.sin(angle_rad) * y_from_axis
+        return z_after_rotation + bottom_offset.Z
+
+    def _socket_variable_side_height_mm(self, socket_outer_width, socket_height):
+        if self.build_ele.ComboBoxPendiente.value != "SI":
+            return float(socket_height)
+
+        effective_depth = self._bottom_slope_effective_depth_mm(
+            self.bottom_rebaje_enabled()
+        )
+        if effective_depth <= 0.0:
+            return float(socket_height)
+
+        slope_ratio = abs(self._bottom_slope_z_lift_mm()) / max(
+            effective_depth, abs(self._bottom_slope_z_lift_mm())
+        )
+        return float(socket_height) + float(socket_outer_width) * slope_ratio
+
+    def create_socket(self, socket_width, socket_height, socket_outer_width=None):
         polyhedron_sockets = AllplanGeo.Polyhedron3DList()
+        if socket_outer_width is None:
+            socket_outer_width = float(socket_width) + float(THICKNESS_MM)
+
+        y_front = -float(self.thickness)
+        y_back = -(float(self.thickness) - float(socket_width))
+        z_front_bottom = self._bottom_slope_z_at_y_mm(y_front)
+        z_top = z_front_bottom + float(socket_height)
+        variable_side_height = self._socket_variable_side_height_mm(
+            socket_outer_width, socket_height
+        )
+        z_back_bottom = z_top - variable_side_height
 
         socket_frame_front = AllplanGeo.Polygon3D()
         socket_frame_front += AllplanGeo.Point3D(
-            0, -self.thickness, -self.heigh
+            0, y_front, z_front_bottom
         )  # bottom left point
         socket_frame_front += AllplanGeo.Point3D(
-            self.width, -self.thickness, -self.heigh
+            self.width, y_front, z_front_bottom
         )
         socket_frame_front += AllplanGeo.Point3D(
-            self.width, -self.thickness, -(self.heigh - socket_height)
+            self.width, y_front, z_top
         )
         socket_frame_front += AllplanGeo.Point3D(
-            0, -self.thickness, -(self.heigh - socket_height)
+            0, y_front, z_top
         )
-        socket_frame_front += AllplanGeo.Point3D(0, -self.thickness, -self.heigh)
+        socket_frame_front += AllplanGeo.Point3D(0, y_front, z_front_bottom)
         error_code, polyhedron_socket_front = self.extrude_frame(
             socket_frame_front, "socket_frame_front"
         )
         polyhedron_sockets.append(polyhedron_socket_front)
 
         socket_frame_top = AllplanGeo.Polygon3D()
-        socket_frame_top += AllplanGeo.Point3D(
-            0, -self.thickness, -(self.heigh - socket_height)
-        )
-        socket_frame_top += AllplanGeo.Point3D(
-            0, -(self.thickness - socket_width), -(self.heigh - socket_height)
-        )
-        socket_frame_top += AllplanGeo.Point3D(
-            self.width, -(self.thickness - socket_width), -(self.heigh - socket_height)
-        )
-        socket_frame_top += AllplanGeo.Point3D(
-            self.width, -self.thickness, -(self.heigh - socket_height)
-        )
-        socket_frame_top += AllplanGeo.Point3D(
-            0, -self.thickness, -(self.heigh - socket_height)
-        )
+        socket_frame_top += AllplanGeo.Point3D(0, y_front, z_top)
+        socket_frame_top += AllplanGeo.Point3D(0, y_back, z_top)
+        socket_frame_top += AllplanGeo.Point3D(self.width, y_back, z_top)
+        socket_frame_top += AllplanGeo.Point3D(self.width, y_front, z_top)
+        socket_frame_top += AllplanGeo.Point3D(0, y_front, z_top)
         error_code, polyhedron_socket_top = self.extrude_frame(
             socket_frame_top, "socket_frame_top"
         )
@@ -9554,19 +9588,19 @@ class PremarcScriptObject(BaseScriptObject):
 
         socket_frame_back = AllplanGeo.Polygon3D()
         socket_frame_back += AllplanGeo.Point3D(
-            0, -(self.thickness - socket_width), -self.heigh
+            0, y_back, z_back_bottom
         )  # bottom left point
         socket_frame_back += AllplanGeo.Point3D(
-            self.width, -(self.thickness - socket_width), -self.heigh
+            self.width, y_back, z_back_bottom
         )
         socket_frame_back += AllplanGeo.Point3D(
-            self.width, -(self.thickness - socket_width), -(self.heigh - socket_height)
+            self.width, y_back, z_top
         )
         socket_frame_back += AllplanGeo.Point3D(
-            0, -(self.thickness - socket_width), -(self.heigh - socket_height)
+            0, y_back, z_top
         )
         socket_frame_back += AllplanGeo.Point3D(
-            0, -(self.thickness - socket_width), -self.heigh
+            0, y_back, z_back_bottom
         )
         error_code, polyhedron_socket_back = self.extrude_frame(
             socket_frame_back, "socket_frame_front"
@@ -11616,17 +11650,12 @@ class PremarcScriptObject(BaseScriptObject):
                         print("Error in remove polyhedron finish bottom")
                         pass
                 if polyhedron_socket in polyhedron_other_elements_list:
-                    # fix position socket
                     count_socket = 0
                     for polyhedron in polyhedron_other_elements_list:
                         if polyhedron == polyhedron_socket:
                             count_socket += 1
                     print(f"Count socket: {count_socket}")
-                    FIX_HEIGHT_SOCKET = 9  # 9 mm
-                    translation_vector = AllplanGeo.Vector3D(0, 0, FIX_HEIGHT_SOCKET)
-                    polyhedron_socket_fix = AllplanGeo.Move(
-                        polyhedron_socket, translation_vector
-                    )
+                    polyhedron_socket_fix = polyhedron_socket
                     try:
                         polyhedron_other_elements_list.append(polyhedron_socket_fix)
                         polyhedron_other_elements_list.remove(polyhedron_socket)
@@ -12785,7 +12814,7 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_height = 30
 
                 polyedron_sockets = self.create_socket(
-                    self.socket_width, self.socket_height
+                    self.socket_width, self.socket_height, 35
                 )
                 error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                     polyedron_sockets
@@ -12801,7 +12830,7 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_height = 30
 
                 polyedron_sockets = self.create_socket(
-                    self.socket_width, self.socket_height
+                    self.socket_width, self.socket_height, 70
                 )
                 error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                     polyedron_sockets
@@ -12825,7 +12854,9 @@ class PremarcScriptObject(BaseScriptObject):
             )  # compensa extrude, la medida es medida de afuera.
             socket_height = self.build_ele.EncajeAltura.value
 
-            polyedron_sockets = self.create_socket(socket_width, socket_height)
+            polyedron_sockets = self.create_socket(
+                socket_width, socket_height, self.build_ele.EncajeBase.value
+            )
             error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                 polyedron_sockets
             )
@@ -12855,16 +12886,7 @@ class PremarcScriptObject(BaseScriptObject):
             case "SI":
                 print("Pendent Selected SI - Manage only in socket")
                 if polyhedron_socket:
-                    # fix position socket
-                    count_socket = 0
-                    print(f"Count socket: {count_socket}")
-
-                    translation_vector = AllplanGeo.Vector3D(
-                        0, 0, self._socket_pendiente_z_lift_mm()
-                    )
-                    polyhedron_socket = AllplanGeo.Move(
-                        polyhedron_socket, translation_vector
-                    )
+                    print("Socket bottom follows pendiente with dynamic side height")
                     # try:
 
                     #     # other_elements.append(polyhedron_socket_fix)
@@ -13379,16 +13401,19 @@ class PremarcScriptObject(BaseScriptObject):
         # the sloped bottom from drifting away from the reference blue strip.
         return -float(self.thickness_premarc)
 
+    def _bottom_slope_effective_depth_mm(
+        self, with_bottom_rebaje: bool = False
+    ) -> float:
+        if with_bottom_rebaje:
+            return float(self.thickness_premarc) - float(LENGTH_REBAJES_MM)
+        return float(self.thickness_premarc)
+
     def _bottom_slope_angle_deg(self, with_bottom_rebaje: bool = False) -> float:
         # Negative value = inverted slope direction around the local X axis.
         # The magnitude stays 9.35 mm so the previous 10 mm architectural
         # target is preserved, but the high edge swaps sides.
         target_edge_rise_mm = -9.35
-        if with_bottom_rebaje:
-            effective_depth = float(self.thickness_premarc) - float(LENGTH_REBAJES_MM)
-        else:
-            effective_depth = float(self.thickness_premarc)
-
+        effective_depth = self._bottom_slope_effective_depth_mm(with_bottom_rebaje)
         effective_depth = max(effective_depth, abs(target_edge_rise_mm))
         if effective_depth <= 0:
             return 0.0
