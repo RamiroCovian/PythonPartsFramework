@@ -9875,20 +9875,21 @@ class PremarcScriptObject(BaseScriptObject):
         z_after_rotation = pivot_z + math.sin(angle_rad) * y_from_axis
         return z_after_rotation + bottom_offset.Z
 
-    def _socket_variable_side_height_mm(self, socket_outer_width, socket_height):
+    def _socket_back_bottom_z_mm(self, socket_outer_width: float) -> float:
+        z_front_bottom = self._bottom_slope_z_at_y_mm(-float(self.thickness))
         if self.build_ele.ComboBoxPendiente.value != "SI":
-            return float(socket_height)
+            return z_front_bottom
 
         effective_depth = self._bottom_slope_effective_depth_mm(
             self.bottom_rebaje_enabled()
         )
         if effective_depth <= 0.0:
-            return float(socket_height)
+            return z_front_bottom
 
         slope_ratio = abs(self._bottom_slope_z_lift_mm()) / max(
             effective_depth, abs(self._bottom_slope_z_lift_mm())
         )
-        return float(socket_height) + float(socket_outer_width) * slope_ratio
+        return z_front_bottom - float(socket_outer_width) * slope_ratio
 
     def create_socket(self, socket_width, socket_height, socket_outer_width=None):
         polyhedron_sockets = AllplanGeo.Polyhedron3DList()
@@ -9897,12 +9898,12 @@ class PremarcScriptObject(BaseScriptObject):
 
         y_front = -float(self.thickness)
         y_back = -(float(self.thickness) - float(socket_width))
+        # The nominal encaje height is measured on the encaje side (y_back).
+        # Its lower edge keeps the same pendiente contact as the previous
+        # geometry; y_front absorbs the resulting height variation.
+        z_back_bottom = self._socket_back_bottom_z_mm(socket_outer_width)
+        z_top = z_back_bottom + float(socket_height)
         z_front_bottom = self._bottom_slope_z_at_y_mm(y_front)
-        z_top = z_front_bottom + float(socket_height)
-        variable_side_height = self._socket_variable_side_height_mm(
-            socket_outer_width, socket_height
-        )
-        z_back_bottom = z_top - variable_side_height
 
         socket_frame_front = AllplanGeo.Polygon3D()
         socket_frame_front += AllplanGeo.Point3D(
