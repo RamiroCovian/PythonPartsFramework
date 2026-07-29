@@ -14584,23 +14584,53 @@ class PremarcScriptObject(BaseScriptObject):
         return axis, AllplanGeo.Angle.FromDeg(angle_deg)
 
     def _ampit_bottom_slope_axis_angle(self):
-        if self.build_ele.ComboBoxPendiente.value != "SI":
+        pendiente_value = self.build_ele.ComboBoxPendiente.value
+        if pendiente_value != "SI":
             return None, None
 
-        return self._bottom_slope_axis_angle(self.bottom_rebaje_enabled())
+        material = self.build_ele.ampit_material.value or "CERAMIC"
+        spec = AMPIT_TYPE_SPECS.get(material, AMPIT_TYPE_SPECS["CERAMIC"])
+        z_base_ampit = self._ampit_z_base_local_mm(float(spec["grosor"]))
+
+        # The ampit is already moved to final premarc coordinates before this
+        # rotation is applied. Keep its irregular section unchanged and only
+        # incline it around the edge where its bottom face contacts the sill
+        # when there is no slope.
+        axis_point = AllplanGeo.Point3D(
+            0,
+            290.0 - float(self.thickness),
+            z_base_ampit - float(self.heigh),
+        )
+        axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
+        angle_deg = (
+            self._bottom_slope_angle_deg(self.bottom_rebaje_enabled())
+            - 0.125332
+        )
+        return axis, AllplanGeo.Angle.FromDeg(angle_deg)
 
     def _apply_ampit_bottom_slope(self, element):
         axis, angle = self._ampit_bottom_slope_axis_angle()
         if axis is None:
             return element
+        z_adjust = AllplanGeo.Vector3D(0, 0, 0.16)
         if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
-            return self._apply_bottom_slope_z_lift(
-                AllplanGeo.Line3D(
-                    AllplanGeo.Rotate(element.StartPoint, axis, angle),
-                    AllplanGeo.Rotate(element.EndPoint, axis, angle),
-                )
+            rotated_line = AllplanGeo.Line3D(
+                AllplanGeo.Rotate(element.StartPoint, axis, angle),
+                AllplanGeo.Rotate(element.EndPoint, axis, angle),
             )
-        return self._apply_bottom_slope_z_lift(AllplanGeo.Rotate(element, axis, angle))
+            return AllplanGeo.Line3D(
+                AllplanGeo.Point3D(
+                    rotated_line.StartPoint.X,
+                    rotated_line.StartPoint.Y,
+                    rotated_line.StartPoint.Z + z_adjust.Z,
+                ),
+                AllplanGeo.Point3D(
+                    rotated_line.EndPoint.X,
+                    rotated_line.EndPoint.Y,
+                    rotated_line.EndPoint.Z + z_adjust.Z,
+                ),
+            )
+        return AllplanGeo.Move(AllplanGeo.Rotate(element, axis, angle), z_adjust)
 
     def create_premarc_ampit(self):
         material = self.build_ele.ampit_material.value or "CERAMIC"
