@@ -14423,24 +14423,30 @@ class PremarcScriptObject(BaseScriptObject):
         imperm_thickness = self._grosor_imp_mm()
         if socket_height > 0:
             if self.build_ele.ComboBoxPendiente.value == "SI":
-                return self._ampit_pendiente_socket_z_base_local_mm()
+                return self._ampit_pendiente_z_base_local_mm(
+                    AMPIT_PENDIENTE_ENCAJE_BOTTOM_CLEARANCE_MM
+                )
             target_top_z = max(
                 0.0, socket_height - float(AMPIT_SOCKET_TOP_CLEARANCE_MM)
             )
             return max(0.0, target_top_z - float(ampit_grosor_mm)) + imperm_thickness
         if self._ampit_is_puerta_entrada():
+            if self.build_ele.ComboBoxPendiente.value == "SI":
+                return self._ampit_pendiente_z_base_local_mm(
+                    AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM
+                )
             return AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM
         return imperm_thickness
 
-    def _ampit_pendiente_socket_z_base_local_mm(self) -> float:
-        # In pendiente + encaje, the reference is not Z=0: it is the sloped
-        # bottom frame at the ampit inner face. Solve the pre-rotation Z so
-        # that after _apply_ampit_bottom_slope() the slab bottom is 30 mm
-        # above that inclined reference.
+    def _ampit_pendiente_z_base_local_mm(self, bottom_clearance_mm: float) -> float:
+        # In pendiente + encaje / puerta entrada, the reference is not Z=0:
+        # it is the sloped bottom frame at the ampit inner face. Solve the
+        # pre-rotation Z so that after _apply_ampit_bottom_slope() the slab
+        # bottom keeps the requested clearance above that inclined reference.
         y_ref_final = self._ampit_y_inner_local_mm() - float(self.thickness)
         target_final_z = (
             self._bottom_slope_z_at_y_mm(y_ref_final)
-            + float(AMPIT_PENDIENTE_ENCAJE_BOTTOM_CLEARANCE_MM)
+            + float(bottom_clearance_mm)
             + self._grosor_imp_mm()
         )
 
