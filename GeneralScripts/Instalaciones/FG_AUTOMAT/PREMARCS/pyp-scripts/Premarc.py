@@ -563,6 +563,8 @@ AMPIT_TYPE_SPECS = {
 }
 AMPIT_SOCKET_TOP_CLEARANCE_MM = 1.0
 AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM = 30.0
+AMPIT_PENDIENTE_ENCAJE_BOTTOM_CLEARANCE_MM = 18.93
+AMPIT_BOTTOM_SLOPE_Z_ADJUST_MM = 0.16
 
 # IMP IMPERMEABILIZACIONES — 3 tipos. grosor en mm (Z), color de la paleta
 # del proyecto Allplan (6=rojo, 4=verde, 3=cyan/turquesa según paleta enviada
@@ -14420,6 +14422,8 @@ class PremarcScriptObject(BaseScriptObject):
         socket_height = self._effective_socket_height_mm()
         imperm_thickness = self._grosor_imp_mm()
         if socket_height > 0:
+            if self.build_ele.ComboBoxPendiente.value == "SI":
+                return self._ampit_pendiente_socket_z_base_local_mm()
             target_top_z = max(
                 0.0, socket_height - float(AMPIT_SOCKET_TOP_CLEARANCE_MM)
             )
@@ -14427,6 +14431,31 @@ class PremarcScriptObject(BaseScriptObject):
         if self._ampit_is_puerta_entrada():
             return AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM
         return imperm_thickness
+
+    def _ampit_pendiente_socket_z_base_local_mm(self) -> float:
+        # In pendiente + encaje, the reference is not Z=0: it is the sloped
+        # bottom frame at the ampit inner face. Solve the pre-rotation Z so
+        # that after _apply_ampit_bottom_slope() the slab bottom is 30 mm
+        # above that inclined reference.
+        y_ref_final = self._ampit_y_inner_local_mm() - float(self.thickness)
+        target_final_z = (
+            self._bottom_slope_z_at_y_mm(y_ref_final)
+            + float(AMPIT_PENDIENTE_ENCAJE_BOTTOM_CLEARANCE_MM)
+            + self._grosor_imp_mm()
+        )
+
+        angle_rad = math.radians(
+            self._bottom_slope_angle_deg(self.bottom_rebaje_enabled())
+            - 0.125332
+        )
+        axis_y = 290.0 - float(self.thickness)
+        rotated_delta_z = math.sin(angle_rad) * (y_ref_final - axis_y)
+        pre_rotation_axis_z = (
+            target_final_z
+            - rotated_delta_z
+            - float(AMPIT_BOTTOM_SLOPE_Z_ADJUST_MM)
+        )
+        return pre_rotation_axis_z + float(self.heigh)
 
     def _ampit_socket_z_lift_mm(self) -> float:
         if self._effective_socket_height_mm() <= 0:
@@ -14612,7 +14641,7 @@ class PremarcScriptObject(BaseScriptObject):
         axis, angle = self._ampit_bottom_slope_axis_angle()
         if axis is None:
             return element
-        z_adjust = AllplanGeo.Vector3D(0, 0, 0.16)
+        z_adjust = AllplanGeo.Vector3D(0, 0, AMPIT_BOTTOM_SLOPE_Z_ADJUST_MM)
         if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
             rotated_line = AllplanGeo.Line3D(
                 AllplanGeo.Rotate(element.StartPoint, axis, angle),
