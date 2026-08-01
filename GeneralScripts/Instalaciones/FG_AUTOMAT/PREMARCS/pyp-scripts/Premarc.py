@@ -561,10 +561,6 @@ AMPIT_TYPE_SPECS = {
     "XAPA":           {"grosor": 2,  "grosor_tope": 2,  "tope": 40, "sobresaliente": 12, "baseline_protrusion": 0,  "remate": 6, "color": 3,  "layer": AMPIT_LAYER},
     "PAVIMENTO":      {"grosor": 11, "grosor_tope": 0,  "tope": 0,  "sobresaliente": 0,  "baseline_protrusion": 0,  "remate": 0, "color": 19, "layer": AMPIT_LAYER},
 }
-AMPIT_SOCKET_TOP_CLEARANCE_MM = 1.0
-AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM = 30.0
-AMPIT_PENDIENTE_ENCAJE_BOTTOM_CLEARANCE_MM = 18.93
-AMPIT_BOTTOM_SLOPE_Z_ADJUST_MM = 0.16
 
 # IMP IMPERMEABILIZACIONES — 3 tipos. grosor en mm (Z), color de la paleta
 # del proyecto Allplan (6=rojo, 4=verde, 3=cyan/turquesa según paleta enviada
@@ -1048,7 +1044,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.selected_wall = None  # guardará el BaseElementAdapter
         self._wall_id_override_value = ""
         self._pmp_pare_override_value = ""
-        self._last_auto_ampit_ref_1_value = ""
         self.detected_wall_thickness = 0
         self._opening_baseline_width = None
         self._opening_baseline_height = None
@@ -1195,7 +1190,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.id_premarc.value = VAL_PMP_ID_PREMARC
         # self.build_ele.wall_id.value                                = VAL_PMP_WALL_NAME
         self.build_ele.wall_id.value = VAL_PMP_PARE
-        self._sync_ampit_reference_fields()
 
         self.build_ele.INPUT_PMP_ID_PREMARC.value = VAL_PMP_ID_PREMARC
 
@@ -1827,52 +1821,6 @@ class PremarcScriptObject(BaseScriptObject):
             return input_value
         return str(getattr(self.build_ele.id_premarc, "value", "") or "").strip()
 
-    def _parse_ampit_ref_1_from_premarc_id(self, premarc_id: str) -> str:
-        """Extrae el ID entre parentesis para PMP_FG_AMPIT_REF_1."""
-        text = str(premarc_id or "").strip()
-        if not text:
-            return ""
-
-        open_idx = text.rfind("(")
-        close_idx = text.find(")", open_idx + 1) if open_idx >= 0 else -1
-        if open_idx < 0 or close_idx <= open_idx + 1:
-            print(
-                "[Premarc][AMPIT_REF_1] No se pudo parsear PremarcoID "
-                f"'{text}'. Se conserva el valor manual o queda vacio."
-            )
-            return ""
-
-        return text[open_idx + 1 : close_idx].strip()
-
-    def _sync_ampit_reference_fields(self, overwrite_ref_1: bool = False) -> None:
-        """Sincroniza los campos de paleta derivados sin pisar REF_1 manual."""
-        if hasattr(self.build_ele, "ampit_ref_2"):
-            self.build_ele.ampit_ref_2.value = self._get_current_pmp_pare_value()
-
-        if not hasattr(self.build_ele, "ampit_ref_1"):
-            return
-
-        current_ref_1 = str(
-            getattr(self.build_ele.ampit_ref_1, "value", "") or ""
-        ).strip()
-        if current_ref_1 and not overwrite_ref_1:
-            return
-
-        parsed_ref_1 = self._parse_ampit_ref_1_from_premarc_id(
-            self._get_current_premarc_id_value()
-        )
-        if parsed_ref_1:
-            self.build_ele.ampit_ref_1.value = parsed_ref_1
-            self._last_auto_ampit_ref_1_value = parsed_ref_1
-        elif overwrite_ref_1:
-            last_auto_ref_1 = str(
-                getattr(self, "_last_auto_ampit_ref_1_value", "") or ""
-            ).strip()
-            if not current_ref_1 or current_ref_1 == last_auto_ref_1:
-                self.build_ele.ampit_ref_1.value = ""
-                self._last_auto_ampit_ref_1_value = ""
-
-
     def _add_shared_generated_element_attributes(
         self, attribute_list: BuildingElementAttributeList
     ) -> None:
@@ -2061,31 +2009,10 @@ class PremarcScriptObject(BaseScriptObject):
     def _get_ampit_parts_value(self) -> str:
         """ID de fusteria definido por el usuario para el ampit."""
         return self._get_build_ele_value(
-            "ampit_parts",
             "INPUT_PMP_FG_AMPIT_PARTS",
-            default="",
+            "INPUT_PMP_FG_FUS_CODI",
+            default=VAL_PMP_FG_AMPIT_PARTS,
         )
-
-    def _get_ampit_ref_1_value(self) -> str:
-        """REF_1 editable: manual si existe; automatico desde PremarcoID si parsea."""
-        manual_value = self._get_build_ele_value(
-            "ampit_ref_1",
-            "INPUT_PMP_FG_AMPIT_REF_1",
-            default="",
-        )
-        if manual_value:
-            return manual_value
-
-        return self._parse_ampit_ref_1_from_premarc_id(
-            self._get_current_premarc_id_value()
-        )
-
-    def _get_ampit_ref_2_value(self) -> str:
-        """REF_2 no editable: valor legible del muro host."""
-        value = self._get_current_pmp_pare_value()
-        if hasattr(self.build_ele, "ampit_ref_2"):
-            self.build_ele.ampit_ref_2.value = value
-        return value
 
     def _get_ampit_muntatge_value(self) -> str:
         """
@@ -2153,10 +2080,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
+            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
+            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
         )
         return attribute_list
 
@@ -2174,10 +2101,10 @@ class PremarcScriptObject(BaseScriptObject):
             self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
+            self.pmp_fg_ampit_ref_1_id, self._get_current_premarc_id_value()
         )
         attribute_list.add_attribute(
-            self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
+            self.pmp_fg_ampit_ref_2_id, self._get_current_pmp_pare_value()
         )
         return attribute_list
 
@@ -2580,7 +2507,6 @@ class PremarcScriptObject(BaseScriptObject):
                             self.selected_wall, getattr(self, "pmp_fg_obra_fabrica_id", 0)
                         )
                         self.build_ele.wall_id.value = f"{pmp_pare_val}{obra_fabrica_val}"
-                        self._sync_ampit_reference_fields()
 
                     except Exception as e:
                         pass
@@ -4091,7 +4017,6 @@ class PremarcScriptObject(BaseScriptObject):
         self._wall_id_override_value = wall_ifc_id
         self._pmp_pare_override_value = pmp_pare
         self.build_ele.wall_id.value = pmp_pare
-        self._sync_ampit_reference_fields()
 
         if hasattr(self.build_ele, "SavedState") and self.placement_pnt != AllplanGeo.Point3D():
             try:
@@ -4416,9 +4341,6 @@ class PremarcScriptObject(BaseScriptObject):
             "llarg_ampits": self.build_ele.llarg_ampits.value,
             "afegit_ampits": self.build_ele.afegit_ampits.value,
             "retall_ampits": self.build_ele.retall_ampits.value,
-            "ampit_parts": self._get_ampit_parts_value(),
-            "ampit_ref_1": self._get_ampit_ref_1_value(),
-            "ampit_ref_2": self._get_ampit_ref_2_value(),
             # Impermeabilizacion: faltaba en el snapshot -> se perdia la config
             # al reabrir (doble-click o seleccionar).
             "EnableImpermeabilizacio": self.build_ele.EnableImpermeabilizacio.value,
@@ -4579,20 +4501,11 @@ class PremarcScriptObject(BaseScriptObject):
         self.build_ele.llarg_ampits.value = state["llarg_ampits"]
         self.build_ele.afegit_ampits.value = state["afegit_ampits"]
         self.build_ele.retall_ampits.value = state["retall_ampits"]
-        if hasattr(self.build_ele, "ampit_parts"):
-            self.build_ele.ampit_parts.value = state.get(
-                "ampit_parts", self._get_ampit_parts_value()
-            )
-        if hasattr(self.build_ele, "ampit_ref_1"):
-            self.build_ele.ampit_ref_1.value = state.get(
-                "ampit_ref_1", self._get_ampit_ref_1_value()
-            )
         self.build_ele.wall_id.value = state.get(
             "pmp_pare", state.get("wall_id", "")
         )
         self._wall_id_override_value = str(state.get("pmp_wall_id", "") or "").strip()
         self._pmp_pare_override_value = str(state.get("pmp_pare", "") or "").strip()
-        self._sync_ampit_reference_fields()
         self.build_ele.opening_guid.value = state.get("opening_guid", "")
         self.build_ele.EnableREAEspecial.value = state.get(
             "EnableREAEspecial", self.build_ele.EnableREAEspecial.value
@@ -5336,13 +5249,11 @@ class PremarcScriptObject(BaseScriptObject):
 
         if name == "id_premarc":
             self.build_ele.INPUT_PMP_ID_PREMARC.value = str(_value).strip()
-            self._sync_ampit_reference_fields(overwrite_ref_1=True)
-            return True
+            return False
 
         if name == "INPUT_PMP_ID_PREMARC":
             self.build_ele.id_premarc.value = str(_value).strip()
-            self._sync_ampit_reference_fields(overwrite_ref_1=True)
-            return True
+            return False
 
         if name == "ComboBoxAbiertoCerrado":
             self.build_ele.ComboBoxAbiertoCerrado.value = _value
@@ -8974,15 +8885,9 @@ class PremarcScriptObject(BaseScriptObject):
                 eix_add_attribute_list.add_attribute(self.pmp_pare_id, pmp_pare_value)
             if pmp_wall_id_value:
                 eix_add_attribute_list.add_attribute(self.pmp_wall_id_attr_id, pmp_wall_id_value)
-            eix_add_attribute_list.add_attribute(
-                self.pmp_fg_ampit_parts_id, self._get_ampit_parts_value()
-            )
-            eix_add_attribute_list.add_attribute(
-                self.pmp_fg_ampit_ref_1_id, self._get_ampit_ref_1_value()
-            )
-            eix_add_attribute_list.add_attribute(
-                self.pmp_fg_ampit_ref_2_id, self._get_ampit_ref_2_value()
-            )
+            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_parts_id, self.build_ele.ampit_parts.value)
+            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_1_id, self.build_ele.ampit_ref_1.value)
+            eix_add_attribute_list.add_attribute(self.pmp_fg_ampit_ref_2_id, pmp_pare_value)
 
             if len(ampit_edge_fg) > 0:
                 model_ele_list.append_geometry_3d(ampit_edge_fg, props_ampit_eix_fg)
@@ -9859,79 +9764,44 @@ class PremarcScriptObject(BaseScriptObject):
                 polyhedron_tubs.append(polyhedron_tub_moved)
             return polyhedron_tubs
 
-    def _bottom_slope_z_at_y_mm(self, y_local: float) -> float:
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return -float(self.heigh)
-
-        angle_rad = math.radians(
-            self._bottom_slope_angle_deg(self.bottom_rebaje_enabled())
-        )
-        pivot_y = self._bottom_slope_pivot_y_mm()
-        pivot_z = -float(self.heigh)
-        bottom_offset = self._bottom_slope_bottom_offset_vector()
-        cos_angle = math.cos(angle_rad)
-        if abs(cos_angle) <= 0.001:
-            return pivot_z + bottom_offset.Z
-
-        y_from_axis = (float(y_local) - bottom_offset.Y - pivot_y) / cos_angle
-        z_after_rotation = pivot_z + math.sin(angle_rad) * y_from_axis
-        return z_after_rotation + bottom_offset.Z
-
-    def _socket_back_bottom_z_mm(self, socket_outer_width: float) -> float:
-        z_front_bottom = self._bottom_slope_z_at_y_mm(-float(self.thickness))
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return z_front_bottom
-
-        effective_depth = self._bottom_slope_effective_depth_mm(
-            self.bottom_rebaje_enabled()
-        )
-        if effective_depth <= 0.0:
-            return z_front_bottom
-
-        slope_ratio = abs(self._bottom_slope_z_lift_mm()) / max(
-            effective_depth, abs(self._bottom_slope_z_lift_mm())
-        )
-        return z_front_bottom - float(socket_outer_width) * slope_ratio
-
-    def create_socket(self, socket_width, socket_height, socket_outer_width=None):
+    def create_socket(self, socket_width, socket_height):
         polyhedron_sockets = AllplanGeo.Polyhedron3DList()
-        if socket_outer_width is None:
-            socket_outer_width = float(socket_width) + float(THICKNESS_MM)
-
-        y_front = -float(self.thickness)
-        y_back = -(float(self.thickness) - float(socket_width))
-        # The nominal encaje height is measured on the encaje side (y_back).
-        # Its lower edge keeps the same pendiente contact as the previous
-        # geometry; y_front absorbs the resulting height variation.
-        z_back_bottom = self._socket_back_bottom_z_mm(socket_outer_width)
-        z_top = z_back_bottom + float(socket_height)
-        z_front_bottom = self._bottom_slope_z_at_y_mm(y_front)
 
         socket_frame_front = AllplanGeo.Polygon3D()
         socket_frame_front += AllplanGeo.Point3D(
-            0, y_front, z_front_bottom
+            0, -self.thickness, -self.heigh
         )  # bottom left point
         socket_frame_front += AllplanGeo.Point3D(
-            self.width, y_front, z_front_bottom
+            self.width, -self.thickness, -self.heigh
         )
         socket_frame_front += AllplanGeo.Point3D(
-            self.width, y_front, z_top
+            self.width, -self.thickness, -(self.heigh - socket_height)
         )
         socket_frame_front += AllplanGeo.Point3D(
-            0, y_front, z_top
+            0, -self.thickness, -(self.heigh - socket_height)
         )
-        socket_frame_front += AllplanGeo.Point3D(0, y_front, z_front_bottom)
+        socket_frame_front += AllplanGeo.Point3D(0, -self.thickness, -self.heigh)
         error_code, polyhedron_socket_front = self.extrude_frame(
             socket_frame_front, "socket_frame_front"
         )
         polyhedron_sockets.append(polyhedron_socket_front)
 
         socket_frame_top = AllplanGeo.Polygon3D()
-        socket_frame_top += AllplanGeo.Point3D(0, y_front, z_top)
-        socket_frame_top += AllplanGeo.Point3D(0, y_back, z_top)
-        socket_frame_top += AllplanGeo.Point3D(self.width, y_back, z_top)
-        socket_frame_top += AllplanGeo.Point3D(self.width, y_front, z_top)
-        socket_frame_top += AllplanGeo.Point3D(0, y_front, z_top)
+        socket_frame_top += AllplanGeo.Point3D(
+            0, -self.thickness, -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            0, -(self.thickness - socket_width), -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            self.width, -(self.thickness - socket_width), -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            self.width, -self.thickness, -(self.heigh - socket_height)
+        )
+        socket_frame_top += AllplanGeo.Point3D(
+            0, -self.thickness, -(self.heigh - socket_height)
+        )
         error_code, polyhedron_socket_top = self.extrude_frame(
             socket_frame_top, "socket_frame_top"
         )
@@ -9939,19 +9809,19 @@ class PremarcScriptObject(BaseScriptObject):
 
         socket_frame_back = AllplanGeo.Polygon3D()
         socket_frame_back += AllplanGeo.Point3D(
-            0, y_back, z_back_bottom
+            0, -(self.thickness - socket_width), -self.heigh
         )  # bottom left point
         socket_frame_back += AllplanGeo.Point3D(
-            self.width, y_back, z_back_bottom
+            self.width, -(self.thickness - socket_width), -self.heigh
         )
         socket_frame_back += AllplanGeo.Point3D(
-            self.width, y_back, z_top
+            self.width, -(self.thickness - socket_width), -(self.heigh - socket_height)
         )
         socket_frame_back += AllplanGeo.Point3D(
-            0, y_back, z_top
+            0, -(self.thickness - socket_width), -(self.heigh - socket_height)
         )
         socket_frame_back += AllplanGeo.Point3D(
-            0, y_back, z_back_bottom
+            0, -(self.thickness - socket_width), -self.heigh
         )
         error_code, polyhedron_socket_back = self.extrude_frame(
             socket_frame_back, "socket_frame_front"
@@ -10614,26 +10484,22 @@ class PremarcScriptObject(BaseScriptObject):
         _right_open = "DRET" in _abierto_val
         finish_x_min = 0 if _left_open else -23
         finish_x_max = self.width if _right_open else self.width + 23
-        finish_profile_mm = 23.0
-        finish_bottom_z_offset = 0.20
-        finish_bottom_z_top = -self.heigh - finish_bottom_z_offset
-        finish_bottom_z_bottom = -self.heigh - finish_profile_mm - finish_bottom_z_offset
 
         frame_finish_bottom = AllplanGeo.Polygon3D()
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, finish_bottom_z_top
+            finish_x_min, -self.thickness, -self.heigh
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_max, -self.thickness, finish_bottom_z_top
+            finish_x_max, -self.thickness, -self.heigh
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_max, -self.thickness, finish_bottom_z_bottom
+            finish_x_max, -self.thickness, -self.heigh - 23
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, finish_bottom_z_bottom
+            finish_x_min, -self.thickness, -self.heigh - 23
         )
         frame_finish_bottom += AllplanGeo.Point3D(
-            finish_x_min, -self.thickness, finish_bottom_z_top
+            finish_x_min, -self.thickness, -self.heigh
         )
         error_code, polyhedron_finish_bottom = self.extrude_frame(
             frame_finish_bottom, "frame_finish_bottom"
@@ -10643,8 +10509,8 @@ class PremarcScriptObject(BaseScriptObject):
         frame_finish_top = AllplanGeo.Polygon3D()
         frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
         frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 0)
-        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, finish_profile_mm)
-        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, finish_profile_mm)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_max, -self.thickness, 23)
+        frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 23)
         frame_finish_top += AllplanGeo.Point3D(finish_x_min, -self.thickness, 0)
         error_code, polyhedron_finish_top = self.extrude_frame(frame_finish_top, "frame_finish_top")
 
@@ -10659,11 +10525,11 @@ class PremarcScriptObject(BaseScriptObject):
         offset_left_z = self.build_ele.PersianaHeight.value if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT" else 0
 
         frame_finish_left = AllplanGeo.Polygon3D()
-        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, finish_bottom_z_top) #1
+        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh) #1
         frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, offset_left_z) #2
         frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, offset_left_z) #3
-        frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, finish_bottom_z_top) #4
-        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, finish_bottom_z_top) #5-1
+        frame_finish_left += AllplanGeo.Point3D(-23, -self.thickness, -self.heigh) #4
+        frame_finish_left += AllplanGeo.Point3D(0, -self.thickness, -self.heigh) #5-1
         error_code, polyhedron_finish_left = self.extrude_frame(frame_finish_left, "frame_finish_left")
         polyhedron_premarc_list.append(polyhedron_finish_left)
 
@@ -10671,11 +10537,11 @@ class PremarcScriptObject(BaseScriptObject):
         offset_right_z = self.build_ele.PersianaHeight.value if self.build_ele.ComboBoxPersianas.value == "MONOBLOCK OCULT" else 0
 
         frame_finish_right = AllplanGeo.Polygon3D()
-        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, finish_bottom_z_top) #1
-        frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, finish_bottom_z_top) #2
+        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh) #1
+        frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, -self.heigh) #2
         frame_finish_right += AllplanGeo.Point3D(self.width + 23, -self.thickness, offset_right_z) #3
         frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, offset_right_z) #4
-        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, finish_bottom_z_top) #5-1
+        frame_finish_right += AllplanGeo.Point3D(self.width, -self.thickness, -self.heigh) #5-1
         error_code, polyhedron_finish_right = self.extrude_frame(frame_finish_right, "frame_finish_right")
         polyhedron_premarc_list.append(polyhedron_finish_right)
 
@@ -10752,7 +10618,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         ### Encajes
         self.socket_width = 32  # compensa extrude, la medida es 35 medido de afuera.
-        self.socket_height = 30
+        self.socket_height = 27  # compensa extrude, la medida es 30 medido de afuera.
 
         polyedron_sockets = self.create_socket(self.socket_width, self.socket_height)
         error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
@@ -10947,12 +10813,33 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Premarc with pendents in bottom
 
-        rotation_axis, rotation_angle = self._bottom_slope_axis_angle(False)
-        polyhedron_bottom_grade = AllplanGeo.Rotate(
-            polyhedron_bottom, rotation_axis, rotation_angle
+        # Copy and extrude top frame
+        # Need expand because after rotate and move, the frame don't close premarc
+        transformation_matrix = AllplanGeo.Matrix3D()
+        transformation_matrix.SetScaling(1, 1.001, 1)
+
+        polyhedron_top_expanded = AllplanGeo.Transform(
+            polyhedron_top, transformation_matrix
         )
-        polyhedron_bottom_grade = self._apply_bottom_slope_bottom_position(
-            polyhedron_bottom_grade
+
+        rotation_axis = AllplanGeo.Axis3D(
+            AllplanGeo.Point3D(0, 0, 0), AllplanGeo.Vector3D(1, 0, 0)
+        )
+        # Calculate rotation angle based on thickness
+        CO = 10
+        CA = self.thickness_premarc
+
+        angulo_radianes = math.atan2(CO, CA)
+        angulo_grados = math.degrees(angulo_radianes)
+
+        rotation_angle = AllplanGeo.Angle.FromDeg(-angulo_grados)
+
+        rotated_frame_premarc = AllplanGeo.Rotate(
+            polyhedron_top_expanded, rotation_axis, rotation_angle
+        )
+        translation_vector = AllplanGeo.Vector3D(0, -0.1, -(self.heigh + THICKNESS_MM))
+        polyhedron_bottom_grade = AllplanGeo.Move(
+            rotated_frame_premarc, translation_vector
         )
         # polyhedron_bottom_grade = None
 
@@ -11111,38 +10998,38 @@ class PremarcScriptObject(BaseScriptObject):
 
         scale_factor_x = (self.width + THICKNESS_MM * 2) / self.width
         center_x = (self.width * scale_factor_x) / 2 - THICKNESS_MM
-        rotation_axis, rotation_angle = self._bottom_slope_axis_angle(
-            True, center_x
+        axis_point = AllplanGeo.Point3D(
+            center_x, -float(LENGTH_REBAJES_MM), -self.heigh
         )
-        angulo_grados = self._bottom_slope_angle_deg(True)
+        rotation_axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
+        # With REB. BAIX the effective sloped length is the hypotenuse after
+        # removing the rebaje depth, so use asin(opposite / hypotenuse).
+        CO = 10.0
+        hipotenusa = max(float(self.thickness_premarc) - float(LENGTH_REBAJES_MM), abs(CO))
+        angulo_radianes = math.asin(CO / hipotenusa)
+        angulo_grados = math.degrees(angulo_radianes)
         if show_rebajes_debug:
             print(
                 "[Premarc][REB. BAIX][PENDIENTE] "
-                "target_total_z=10.000, "
-                f"axis_y={self._bottom_slope_pivot_y_mm():.3f}, "
+                f"CO={CO:.3f}, hipotenusa={hipotenusa:.3f}, "
+                f"axis_y={-float(LENGTH_REBAJES_MM):.3f}, "
                 f"angulo_grados={angulo_grados:.6f}"
             )
+        rotation_angle = AllplanGeo.Angle.FromDeg(-angulo_grados)
 
-        polyhedron_bottom_grade_raw = AllplanGeo.Rotate(
+        polyhedron_bottom_grade = AllplanGeo.Rotate(
             polyhedron_bottom, rotation_axis, rotation_angle
         )
         error_code, polyhedron_bottom_grade_with_rebaje = AllplanGeo.MakeSubtraction(
-            polyhedron_bottom_grade_raw, substract_rebajes_bottom
-        )
-        polyhedron_bottom_grade = self._apply_bottom_slope_bottom_position(
-            polyhedron_bottom_grade_raw
+            polyhedron_bottom_grade, substract_rebajes_bottom
         )
         if error_code != AllplanGeo.eGeometryErrorCode.eOK:
             print(
                 "[Premarc][REB. BAIX][PENDIENTE] "
                 f"MakeSubtraction tras rotacion fallo: {error_code}; "
-                "se usa fondo inclinado sin rebaje"
+                "se usa fondo rotado sin rebaje"
             )
             polyhedron_bottom_grade_with_rebaje = polyhedron_bottom_grade
-        else:
-            polyhedron_bottom_grade_with_rebaje = self._apply_bottom_slope_bottom_position(
-                polyhedron_bottom_grade_with_rebaje
-            )
 
         # Solids fix corners
 
@@ -12033,7 +11920,11 @@ class PremarcScriptObject(BaseScriptObject):
                         if polyhedron == polyhedron_socket:
                             count_socket += 1
                     print(f"Count socket: {count_socket}")
-                    polyhedron_socket_fix = polyhedron_socket
+                    FIX_HEIGHT_SOCKET = 9  # 9 mm
+                    translation_vector = AllplanGeo.Vector3D(0, 0, FIX_HEIGHT_SOCKET)
+                    polyhedron_socket_fix = AllplanGeo.Move(
+                        polyhedron_socket, translation_vector
+                    )
                     try:
                         polyhedron_other_elements_list.append(polyhedron_socket_fix)
                         polyhedron_other_elements_list.remove(polyhedron_socket)
@@ -12057,12 +11948,9 @@ class PremarcScriptObject(BaseScriptObject):
         # Union premarc
         # TODO refactor to use method create_union_premarc
         polyhedron_premarc_union = self.create_union_premarc(polyhedron_premarc_list)
-        union_ok = polyhedron_premarc_union is not None
         if polyhedron_premarc_union is None:
-            print(
-                "[Premarc] Error in make union premarc; "
-                "se devuelven piezas de marco separadas para evitar None"
-            )
+            print("Error in make union premarc")
+            # polyhedron_premarc_union = polyhedron_premarc_list
 
         ### Build substract rebajes ###
         # Manage rebajes
@@ -12075,11 +11963,6 @@ class PremarcScriptObject(BaseScriptObject):
 
         for name, option in list_rebajes:
             if option == 1:
-                if not union_ok and name != "NO":
-                    print(
-                        f"[Premarc] Rebaje {name} omitido: union premarc fallida"
-                    )
-                    continue
                 match name:
                     case "NO":
                         print("Rebaje Selected NO. Nothing to do")
@@ -12157,7 +12040,7 @@ class PremarcScriptObject(BaseScriptObject):
 
         # Fix corners
         # top left corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
             if show_rebajes_debug:
@@ -12173,7 +12056,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect top left corner")
                 pass
         # top right corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. DALT"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
             if show_rebajes_debug:
@@ -12189,7 +12072,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect top right corner")
                 pass
         # bottom left corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. ESQUERRA"):
             if show_rebajes_debug:
@@ -12205,7 +12088,7 @@ class PremarcScriptObject(BaseScriptObject):
                 print("Error in intersect bottom left corner")
                 pass
         # bottom right corner
-        if union_ok and self.get_enabled_rebajes_options(
+        if self.get_enabled_rebajes_options(
             "REB. BAIX"
         ) and self.get_enabled_rebajes_options("REB. DRETA"):
             if show_rebajes_debug:
@@ -12222,11 +12105,8 @@ class PremarcScriptObject(BaseScriptObject):
                 pass
 
         elems = []
-        if union_ok:
-            elems.append(polyhedron_premarc_union)
-        else:
-            elems.extend(elem for elem in polyhedron_premarc_list if elem is not None)
-        elems.extend(elem for elem in polyhedron_other_elements_list if elem is not None)
+        elems.append(polyhedron_premarc_union)
+        elems.extend(polyhedron_other_elements_list)
 
         # elems = [
             # polyhedron_premarc_union,
@@ -13909,10 +13789,12 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_width = (
                     35 - 3
                 )  # 32 compensa extrude, la medida es 35 medido de afuera.
-                self.socket_height = 30
+                self.socket_height = (
+                    30 - 3
+                )  # 27  compensa extrude, la medida es 30 medido de afuera.
 
                 polyedron_sockets = self.create_socket(
-                    self.socket_width, self.socket_height, 35
+                    self.socket_width, self.socket_height
                 )
                 error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                     polyedron_sockets
@@ -13925,10 +13807,12 @@ class PremarcScriptObject(BaseScriptObject):
                 self.socket_width = (
                     70 - 3
                 )  # 68 compensa extrude, la medida es 70 medido de afuera.
-                self.socket_height = 30
+                self.socket_height = (
+                    30 - 3
+                )  # 27  compensa extrude, la medida es 30 medido de afuera.
 
                 polyedron_sockets = self.create_socket(
-                    self.socket_width, self.socket_height, 70
+                    self.socket_width, self.socket_height
                 )
                 error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                     polyedron_sockets
@@ -13950,18 +13834,15 @@ class PremarcScriptObject(BaseScriptObject):
             socket_width = (
                 self.build_ele.EncajeBase.value - 3
             )  # compensa extrude, la medida es medida de afuera.
-            socket_height = self.build_ele.EncajeAltura.value
+            socket_height = (
+                self.build_ele.EncajeAltura.value - 3
+            )  # compensa extrude, la medida es medido de afuera.
 
-            polyedron_sockets = self.create_socket(
-                socket_width, socket_height, self.build_ele.EncajeBase.value
-            )
+            polyedron_sockets = self.create_socket(socket_width, socket_height)
             error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(
                 polyedron_sockets
             )
-            self.prem_encaje = (
-                f"{self.build_ele.EncajeBase.value} * "
-                f"{self.build_ele.EncajeAltura.value}"
-            )
+            self.prem_encaje = f"{socket_width} * {socket_height}"
             self.prem_encaje_base = self.build_ele.EncajeBase.value
             self.prem_encaje_altura = self.build_ele.EncajeAltura.value
         else:
@@ -13978,13 +13859,23 @@ class PremarcScriptObject(BaseScriptObject):
         # error_code_socket, polyhedron_socket = AllplanGeo.MakeUnion(polyedron_sockets)
 
         pendent_selected = self.build_ele.ComboBoxPendiente.value
+        FIX_HEIGHT_SOCKET = 7.5  # Defaul to 295 mm thickness
+        if self.thickness_premarc == 160:
+            FIX_HEIGHT_SOCKET = 5.60
         match pendent_selected:
             # case "NO":
             #     print("Pendent Selected NO")
             case "SI":
                 print("Pendent Selected SI - Manage only in socket")
                 if polyhedron_socket:
-                    print("Socket bottom follows pendiente with dynamic side height")
+                    # fix position socket
+                    count_socket = 0
+                    print(f"Count socket: {count_socket}")
+
+                    translation_vector = AllplanGeo.Vector3D(0, 0, FIX_HEIGHT_SOCKET)
+                    polyhedron_socket = AllplanGeo.Move(
+                        polyhedron_socket, translation_vector
+                    )
                     # try:
 
                     #     # other_elements.append(polyhedron_socket_fix)
@@ -14391,7 +14282,7 @@ class PremarcScriptObject(BaseScriptObject):
         # priority unless PLEC INFERIOR is selected. The -3 compensates for
         # the extrude that fattens the polygon, so the OUTER measurement
         # matches the palette value.
-        combo = str(self.build_ele.ComboBoxEncajes.value).replace(" ", "")
+        combo = self.build_ele.ComboBoxEncajes.value
         if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
             return max(0.0, float(self.build_ele.EncajeBase.value or 0) - 3.0)
         if combo == "35*30":
@@ -14405,81 +14296,12 @@ class PremarcScriptObject(BaseScriptObject):
         # the manual-encaje branch at ~L6139 reads EncajeAltura into LOCAL
         # vars and never writes self.socket_height — so callers that need
         # the real escalon height must use this helper instead.
-        combo = str(self.build_ele.ComboBoxEncajes.value).replace(" ", "")
+        combo = self.build_ele.ComboBoxEncajes.value
         if self.build_ele.EnableManualEncaje.value and combo != "PLEC INFERIOR":
-            return max(0.0, float(self.build_ele.EncajeAltura.value or 0))
+            return max(0.0, float(self.build_ele.EncajeAltura.value or 0) - 3.0)
         if combo in ("35*30", "70*30"):
-            return 30.0
+            return 27.0
         return 0.0
-
-    def _ampit_is_puerta_entrada(self) -> bool:
-        return bool(
-            getattr(self.build_ele.is_puerta_entrada, "value", False)
-            or getattr(self.build_ele.premarc_PE, "value", False)
-        )
-
-    def _ampit_z_base_local_mm(self, ampit_grosor_mm: float = 11.0) -> float:
-        socket_height = self._effective_socket_height_mm()
-        imperm_thickness = self._grosor_imp_mm()
-        if socket_height > 0:
-            if self.build_ele.ComboBoxPendiente.value == "SI":
-                return self._ampit_pendiente_z_base_local_mm(
-                    AMPIT_PENDIENTE_ENCAJE_BOTTOM_CLEARANCE_MM
-                )
-            target_top_z = max(
-                0.0, socket_height - float(AMPIT_SOCKET_TOP_CLEARANCE_MM)
-            )
-            return max(0.0, target_top_z - float(ampit_grosor_mm)) + imperm_thickness
-        if self._ampit_is_puerta_entrada():
-            if self.build_ele.ComboBoxPendiente.value == "SI":
-                return self._ampit_pendiente_z_base_local_mm(
-                    AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM
-                )
-            return AMPIT_PUERTA_ENTRADA_NO_SOCKET_Z_BASE_MM
-        return imperm_thickness
-
-    def _ampit_pendiente_z_base_local_mm(self, bottom_clearance_mm: float) -> float:
-        # In pendiente + encaje / puerta entrada, the reference is not Z=0:
-        # it is the sloped bottom frame at the ampit inner face. Solve the
-        # pre-rotation Z so that after _apply_ampit_bottom_slope() the slab
-        # bottom keeps the requested clearance above that inclined reference.
-        y_ref_final = self._ampit_y_inner_local_mm() - float(self.thickness)
-        target_final_z = (
-            self._bottom_slope_z_at_y_mm(y_ref_final)
-            + float(bottom_clearance_mm)
-            + self._grosor_imp_mm()
-        )
-
-        angle_rad = math.radians(
-            self._bottom_slope_angle_deg(self.bottom_rebaje_enabled())
-            - 0.125332
-        )
-        axis_y = 290.0 - float(self.thickness)
-        rotated_delta_z = math.sin(angle_rad) * (y_ref_final - axis_y)
-        pre_rotation_axis_z = (
-            target_final_z
-            - rotated_delta_z
-            - float(AMPIT_BOTTOM_SLOPE_Z_ADJUST_MM)
-        )
-        return pre_rotation_axis_z + float(self.heigh)
-
-    def _ampit_socket_z_lift_mm(self) -> float:
-        if self._effective_socket_height_mm() <= 0:
-            return 0.0
-        return max(
-            0.0,
-            self._effective_socket_height_mm()
-            - float(AMPIT_SOCKET_TOP_CLEARANCE_MM),
-        )
-
-    def _socket_pendiente_z_lift_mm(self) -> float:
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return 0.0
-        if self._effective_socket_height_mm() <= 0:
-            return 0.0
-        if self.thickness_premarc == 160:
-            return 5.60
-        return 7.5
 
     def _ampit_y_inner_local_mm(self) -> float:
         # Local Y position of the ampit slab INNER face (toward encaje).
@@ -14537,136 +14359,6 @@ class PremarcScriptObject(BaseScriptObject):
             fondo = 0.0
         return fondo
 
-    def _bottom_slope_pivot_y_mm(self) -> float:
-        # Final premarc-local coordinates after the bottom frame has been
-        # placed: Y=0 is the front/interior face and Y=-thickness is the
-        # back/fondo del muro. Keeping the hinge on the real edge prevents
-        # the sloped bottom from drifting away from the reference blue strip.
-        return -float(self.thickness_premarc)
-
-    def _bottom_slope_effective_depth_mm(
-        self, with_bottom_rebaje: bool = False
-    ) -> float:
-        if with_bottom_rebaje:
-            return float(self.thickness_premarc) - float(LENGTH_REBAJES_MM)
-        return float(self.thickness_premarc)
-
-    def _bottom_slope_angle_deg(self, with_bottom_rebaje: bool = False) -> float:
-        # Negative value = inverted slope direction around the local X axis.
-        # The magnitude stays 9.35 mm so the previous 10 mm architectural
-        # target is preserved, but the high edge swaps sides.
-        target_edge_rise_mm = -9.35
-        effective_depth = self._bottom_slope_effective_depth_mm(with_bottom_rebaje)
-
-        effective_depth = max(effective_depth, abs(target_edge_rise_mm))
-        if effective_depth <= 0:
-            return 0.0
-
-        ratio = max(-1.0, min(1.0, target_edge_rise_mm / effective_depth))
-        return math.degrees(math.asin(ratio))
-
-    def _bottom_slope_z_lift_mm(self) -> float:
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return 0.0
-        return 10.0
-
-    def _bottom_slope_bottom_offset_vector(self):
-        if self.build_ele.ComboBoxPendiente.value != "SI":
-            return AllplanGeo.Vector3D(0, 0, 0)
-        return AllplanGeo.Vector3D(0, 0.17, self._bottom_slope_z_lift_mm() - 0.01)
-
-    def _apply_bottom_slope_bottom_position(self, element):
-        vector = self._bottom_slope_bottom_offset_vector()
-        if (
-            abs(vector.X) <= 0.001
-            and abs(vector.Y) <= 0.001
-            and abs(vector.Z) <= 0.001
-        ):
-            return element
-        return AllplanGeo.Move(element, vector)
-
-    def _apply_bottom_slope_z_lift(self, element):
-        z_lift = self._bottom_slope_z_lift_mm()
-        if abs(z_lift) <= 0.001:
-            return element
-        vector = AllplanGeo.Vector3D(0, 0, z_lift)
-        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
-            return AllplanGeo.Line3D(
-                AllplanGeo.Point3D(
-                    element.StartPoint.X,
-                    element.StartPoint.Y,
-                    element.StartPoint.Z + z_lift,
-                ),
-                AllplanGeo.Point3D(
-                    element.EndPoint.X,
-                    element.EndPoint.Y,
-                    element.EndPoint.Z + z_lift,
-                ),
-            )
-        return AllplanGeo.Move(element, vector)
-
-    def _bottom_slope_axis_angle(
-        self, with_bottom_rebaje: bool = False, center_x=None
-    ):
-        angle_deg = self._bottom_slope_angle_deg(with_bottom_rebaje)
-        if center_x is None:
-            axis_point = AllplanGeo.Point3D(0, 0, -self.heigh)
-        else:
-            axis_point = AllplanGeo.Point3D(center_x, 0, -self.heigh)
-
-        axis_point.Y = self._bottom_slope_pivot_y_mm()
-        axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
-        return axis, AllplanGeo.Angle.FromDeg(angle_deg)
-
-    def _ampit_bottom_slope_axis_angle(self):
-        pendiente_value = self.build_ele.ComboBoxPendiente.value
-        if pendiente_value != "SI":
-            return None, None
-
-        material = self.build_ele.ampit_material.value or "CERAMIC"
-        spec = AMPIT_TYPE_SPECS.get(material, AMPIT_TYPE_SPECS["CERAMIC"])
-        z_base_ampit = self._ampit_z_base_local_mm(float(spec["grosor"]))
-
-        # The ampit is already moved to final premarc coordinates before this
-        # rotation is applied. Keep its irregular section unchanged and only
-        # incline it around the edge where its bottom face contacts the sill
-        # when there is no slope.
-        axis_point = AllplanGeo.Point3D(
-            0,
-            290.0 - float(self.thickness),
-            z_base_ampit - float(self.heigh),
-        )
-        axis = AllplanGeo.Axis3D(axis_point, AllplanGeo.Vector3D(1, 0, 0))
-        angle_deg = (
-            self._bottom_slope_angle_deg(self.bottom_rebaje_enabled())
-            - 0.125332
-        )
-        return axis, AllplanGeo.Angle.FromDeg(angle_deg)
-
-    def _apply_ampit_bottom_slope(self, element):
-        axis, angle = self._ampit_bottom_slope_axis_angle()
-        if axis is None:
-            return element
-        z_adjust = AllplanGeo.Vector3D(0, 0, AMPIT_BOTTOM_SLOPE_Z_ADJUST_MM)
-        if hasattr(element, "StartPoint") and hasattr(element, "EndPoint"):
-            rotated_line = AllplanGeo.Line3D(
-                AllplanGeo.Rotate(element.StartPoint, axis, angle),
-                AllplanGeo.Rotate(element.EndPoint, axis, angle),
-            )
-            return AllplanGeo.Line3D(
-                AllplanGeo.Point3D(
-                    rotated_line.StartPoint.X,
-                    rotated_line.StartPoint.Y,
-                    rotated_line.StartPoint.Z + z_adjust.Z,
-                ),
-                AllplanGeo.Point3D(
-                    rotated_line.EndPoint.X,
-                    rotated_line.EndPoint.Y,
-                    rotated_line.EndPoint.Z + z_adjust.Z,
-                ),
-            )
-        return AllplanGeo.Move(AllplanGeo.Rotate(element, axis, angle), z_adjust)
-
     def create_premarc_ampit(self):
         material = self.build_ele.ampit_material.value or "CERAMIC"
         spec = AMPIT_TYPE_SPECS.get(material, AMPIT_TYPE_SPECS["CERAMIC"])
@@ -14679,10 +14371,11 @@ class PremarcScriptObject(BaseScriptObject):
             print("[Premarc] PAVIMENTO ampit no compatible con REB. BAIX (no sobresale): ampit omitido.")
             return [], [], [], [], [], spec
 
-        # Z base of the ampit slab. With real encaje, the ampit starts at the
-        # encaje top level; PLEC INFERIOR is excluded by the socket helpers.
-        # If impermeabilizacion is active, the slab sits above it.
-        z_base_ampit = self._ampit_z_base_local_mm(float(spec["grosor"]))
+        # Z base of the ampit slab. The bottom sheet thickness now extends
+        # outward below the opening, so the clear opening bottom remains z=0
+        # in premarc-local coordinates. Lift by grosor_imp only when
+        # impermeabilizacion is active.
+        z_base_ampit = self._grosor_imp_mm()
 
         # Encaje-aware slab inner Y (2 mm margin from the encaje back face,
         # or from the 63 mm front assembly when sin encaje / narrow encaje).
@@ -14810,19 +14503,6 @@ class PremarcScriptObject(BaseScriptObject):
         self.retall_ampits_manual = False
         self.afegit_ampits_manual = False
 
-        final_result_3d = [
-            self._apply_ampit_bottom_slope(elem) for elem in final_result_3d
-        ]
-        edge_fg_list = [
-            self._apply_ampit_bottom_slope(elem) for elem in edge_fg_list
-        ]
-        edge_add_list = [
-            self._apply_ampit_bottom_slope(elem) for elem in edge_add_list
-        ]
-        edge_add_cuboid_list = [
-            self._apply_ampit_bottom_slope(elem) for elem in edge_add_cuboid_list
-        ]
-
         return final_result_3d, final_result_2d, edge_fg_list, edge_add_list, edge_add_cuboid_list, spec
 
     def create_ampit(self, init_x, llarg_ampit, y_inner_local, spec):
@@ -14858,9 +14538,10 @@ class PremarcScriptObject(BaseScriptObject):
         tope          = spec["tope"]
         remate        = spec["remate"]
 
-        # Z base lifted to the encaje top level when a real encaje exists.
-        # If impermeabilizacion is active, the slab sits above it.
-        z_base_ampit = self._ampit_z_base_local_mm(float(spec["grosor"]))
+        # Z base lifted by grosor_imp when impermeabilizacion is enabled
+        # (the ampit slab sits on top of the imp). With the bottom sheet
+        # thickness outside the opening, the base is z=0 when imp is off.
+        z_base_ampit = self._grosor_imp_mm()
 
         y_slab_in  = float(y_inner_local)
         # Slab outer comes from the single source-of-truth helper so the
