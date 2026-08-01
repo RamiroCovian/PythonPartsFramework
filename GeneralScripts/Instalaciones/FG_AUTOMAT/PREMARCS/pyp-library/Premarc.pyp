@@ -419,12 +419,36 @@
             </Parameter>
 
             <Parameter>
+                <Name>EnableREACombinada</Name>
+                <Text>REAs Combinadas</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>ComboBoxAbiertoCerrado in ("OBERT FEMELLA DRETA + REA", "OBERT NO FEMELLA DRETA + REA", "SUP. FEMELLA / INF NO FEMELLA DRET. + REA", "SUP. NO FEMELLA / INF. FEMELLA DRET. + REA", "OBERT FEMELLA ESQUERRA + REA", "OBERT NO FEMELLA ESQUERRA + REA", "SUP. FEMELLA / INF NO FEMELLA ESQ. + REA", "SUP. NO FEMELLA / INF. FEMELLA ESQ. + REA")</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>EnableREACombinadaSuperior</Name>
+                <Text>REA especial arriba</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>EnableREACombinada</Visible>
+            </Parameter>
+
+            <Parameter>
+                <Name>EnableREACombinadaInferior</Name>
+                <Text>REA especial abajo</Text>
+                <Value>False</Value>
+                <ValueType>CheckBox</ValueType>
+                <Visible>EnableREACombinada</Visible>
+            </Parameter>
+
+            <Parameter>
                 <Name>ComboBoxREAEspecial</Name>
                 <Text>REA especial</Text>
                 <Value>REAs en L STD CORTA</Value>
-                <ValueList>"REAs en C|REAs en L STD CORTA|REAs en L STD" if ComboBoxAbiertoCerrado in ("OBERT PER DALT VARIANT", "OBERT PER BAIX VARIANT") else ("REAs en C" if ComboBoxAbiertoCerrado in ("OBERT PER DALT", "OBERT PER BAIX") else "REAs en L STD CORTA|REAs en L STD")</ValueList>
+                <ValueList>"REAs en L STD CORTA|REAs en L STD" if EnableREACombinada else ("REAs en C|REAs en L STD CORTA|REAs en L STD" if ComboBoxAbiertoCerrado in ("OBERT PER DALT VARIANT", "OBERT PER BAIX VARIANT") else ("REAs en C" if ComboBoxAbiertoCerrado in ("OBERT PER DALT", "OBERT PER BAIX") else "REAs en L STD CORTA|REAs en L STD"))</ValueList>
                 <ValueType>StringComboBox</ValueType>
-                <Visible>EnableREAEspecial and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado</Visible>
+                <Visible>(EnableREAEspecial and ComboBoxAbiertoCerrado != "TANCAT" and "+ REA" not in ComboBoxAbiertoCerrado) or EnableREACombinada</Visible>
             </Parameter>
 
             <Parameter>
@@ -448,7 +472,7 @@
                 <Text>Largo X REA L lado exterior</Text>
                 <Value>390</Value>
                 <ValueType>Double</ValueType>
-                <Visible>EnableREAEspecial and (ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado in ("OBERT PER DALT VARIANT", "OBERT PER BAIX VARIANT", "OBERT FEMELLA DRETA", "OBERT NO FEMELLA DRETA", "SUP. FEMELLA / INF NO FEMELLA DRET.", "SUP. NO FEMELLA / INF. FEMELLA DRET.", "OBERT FEMELLA ESQUERRA", "OBERT NO FEMELLA ESQUERRA", "SUP. FEMELLA / INF NO FEMELLA ESQ.", "SUP. NO FEMELLA / INF. FEMELLA ESQ.")</Visible>
+                <Visible>((EnableREAEspecial and ComboBoxAbiertoCerrado in ("OBERT PER DALT VARIANT", "OBERT PER BAIX VARIANT", "OBERT FEMELLA DRETA", "OBERT NO FEMELLA DRETA", "SUP. FEMELLA / INF NO FEMELLA DRET.", "SUP. NO FEMELLA / INF. FEMELLA DRET.", "OBERT FEMELLA ESQUERRA", "OBERT NO FEMELLA ESQUERRA", "SUP. FEMELLA / INF NO FEMELLA ESQ.", "SUP. NO FEMELLA / INF. FEMELLA ESQ.")) or EnableREACombinada) and (ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD")</Visible>
             </Parameter>
 
             <Parameter>
@@ -456,7 +480,7 @@
                 <Text>Largo X REA L lado interior</Text>
                 <Value>340</Value>
                 <ValueType>Double</ValueType>
-                <Visible>EnableREAEspecial and (ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD") and ComboBoxAbiertoCerrado in ("OBERT PER DALT VARIANT", "OBERT PER BAIX VARIANT", "OBERT FEMELLA DRETA", "OBERT NO FEMELLA DRETA", "SUP. FEMELLA / INF NO FEMELLA DRET.", "SUP. NO FEMELLA / INF. FEMELLA DRET.", "OBERT FEMELLA ESQUERRA", "OBERT NO FEMELLA ESQUERRA", "SUP. FEMELLA / INF NO FEMELLA ESQ.", "SUP. NO FEMELLA / INF. FEMELLA ESQ.")</Visible>
+                <Visible>((EnableREAEspecial and ComboBoxAbiertoCerrado in ("OBERT PER DALT VARIANT", "OBERT PER BAIX VARIANT", "OBERT FEMELLA DRETA", "OBERT NO FEMELLA DRETA", "SUP. FEMELLA / INF NO FEMELLA DRET.", "SUP. NO FEMELLA / INF. FEMELLA DRET.", "OBERT FEMELLA ESQUERRA", "OBERT NO FEMELLA ESQUERRA", "SUP. FEMELLA / INF NO FEMELLA ESQ.", "SUP. NO FEMELLA / INF. FEMELLA ESQ.")) or EnableREACombinada) and (ComboBoxREAEspecial == "REAs en L STD CORTA" or ComboBoxREAEspecial == "REAs en L STD")</Visible>
             </Parameter>
 
             <Parameter>
